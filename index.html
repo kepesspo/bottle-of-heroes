@@ -33409,9 +33409,8 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
     appId:"1:568962707863:web:d10e5fadea2e44402554d2"
   });
   var db = firebase.firestore();
-  var CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   window.generateRoomCode = function() {
-    var c=''; for(var i=0;i<6;i++) c+=CHARS[Math.floor(Math.random()*CHARS.length)]; return c;
+    var c=''; for(var i=0;i<6;i++) c+=Math.floor(Math.random()*10); return c;
   };
   window.createRoom = function(code, players, games, meta) {
     return db.collection('rooms').doc(code).set({
@@ -34108,17 +34107,6 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
   const [showInfo, setShowInfo] = useState(false);
   const transRef = React.useRef(false);
 
-  // Sync incoming observer drink changes to local state
-  useEffect(() => {
-    if (!roomCode || mode !== 'Online' || typeof subscribeRoom !== 'function') return;
-    const unsub = subscribeRoom(roomCode, data => {
-      if (data && data.players && !transRef.current) {
-        setPlayers(data.players);
-      }
-    });
-    return unsub;
-  }, [roomCode]);
-
   const games = selectedGames.length ? selectedGames : GAMES.slice(0,6).map(g=>g.id);
   const currentGameId = games[gameIdx % games.length];
   const currentGame = GAMES.find(g=>g.id===currentGameId) || GAMES[0];
@@ -34309,7 +34297,7 @@ function ObserverScreen({ go }) {
   const [code, setCode] = useState('');
   const [status, setStatus] = useState('enter');
 
-  const push = d => { if (status!=='enter') return; setCode(c => (c+d.toUpperCase()).slice(0,CODE_LEN)); };
+  const push = d => { if (status!=='enter') return; setCode(c => (c+d).slice(0,CODE_LEN)); };
   const back = () => setCode(c => c.slice(0,-1));
   const submit = () => {
     if (code.length < CODE_LEN) return;
@@ -34335,7 +34323,7 @@ function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste }) {
   const ready = code.length === codeLen;
   useEffect(() => {
     const onKey = e => {
-      if (/^[A-Za-z0-9]$/.test(e.key)) onDigit(e.key.toUpperCase());
+      if (/^[0-9]$/.test(e.key)) onDigit(e.key);
       else if (e.key==='Backspace') onBack();
       else if (e.key==='Enter') onSubmit();
     };
@@ -34648,6 +34636,15 @@ function BottleApp() {
 
   const [roomCode, setRoomCode] = React.useState(null);
   const [creatingRoom, setCreatingRoom] = React.useState(false);
+
+  // Sync observer drink changes → host sees it live
+  useEffect(() => {
+    if (!roomCode || mode !== 'Online' || typeof subscribeRoom !== 'function') return;
+    const unsub = subscribeRoom(roomCode, data => {
+      if (data && data.players) setPlayers(data.players);
+    });
+    return unsub;
+  }, [roomCode]);
 
   const go = (next) => {
     if (next === 'play' && mode === 'Online') {
