@@ -34106,6 +34106,18 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
   const [feedback, setFeedback] = useState(null);
   const [transitioning, setTransitioning] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const transRef = React.useRef(false);
+
+  // Sync incoming observer drink changes to local state
+  useEffect(() => {
+    if (!roomCode || mode !== 'Online' || typeof subscribeRoom !== 'function') return;
+    const unsub = subscribeRoom(roomCode, data => {
+      if (data && data.players && !transRef.current) {
+        setPlayers(data.players);
+      }
+    });
+    return unsub;
+  }, [roomCode]);
 
   const games = selectedGames.length ? selectedGames : GAMES.slice(0,6).map(g=>g.id);
   const currentGameId = games[gameIdx % games.length];
@@ -34116,6 +34128,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
 
   const advance = success => {
     if (transitioning) return;
+    transRef.current = true;
     setTransitioning(true);
     setFeedback(success ? 'win' : 'lose');
     const newPlayers = players.map((p,i) => i===turn
@@ -34135,6 +34148,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
       setGameIdx(newGameIdx);
       setRound(newRound);
       setTransitioning(false);
+      transRef.current = false;
     }, 700);
   };
 
