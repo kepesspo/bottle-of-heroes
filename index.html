@@ -33428,6 +33428,19 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   window.subscribeRoom = function(code, cb) {
     return db.collection('rooms').doc(code).onSnapshot(function(d){ cb(d.exists ? d.data() : null); });
   };
+  window.addPendingDrink = function(code, data) {
+    return db.collection('rooms').doc(code).collection('pendingDrinks').add(data).catch(function(e){ console.warn('addPendingDrink', e); });
+  };
+  window.popPendingDrinks = function(code) {
+    return db.collection('rooms').doc(code).collection('pendingDrinks').get().then(function(snap) {
+      var items = [];
+      snap.forEach(function(doc) { items.push(doc.data()); });
+      if (items.length === 0) return [];
+      var batch = db.batch();
+      snap.forEach(function(doc) { batch.delete(doc.ref); });
+      return batch.commit().then(function() { return items; });
+    }).catch(function(e){ console.warn('popPendingDrinks', e); return []; });
+  };
 })();
 </script>
 <script type="text/babel">
@@ -33492,7 +33505,7 @@ const IMGS = {
 };
 const IMG = '';  // images embedded below
 const GAMES = [
-  { id:'busz',      name:'Busz',                  difficulty:'nehéz',   category:'Csapat', emoji:'🚌', img:'',                                         color:'#F4A04A', desc:'Mindenki Tudja' },
+  { id:'busz',      name:'Busz',                  difficulty:'nehéz',   category:'Csapat', emoji:'🚌', img:'036-toast.png',                             color:'#F4A04A', desc:'Mindenki Tudja' },
   { id:'memoria',   name:'Memória',               difficulty:'nehéz',   category:'Csapat', emoji:'🧩', img:IMGS['c08054bde_008-puzzle.png'],              color:'#22D096', desc:'Egy kategóriába el kell kezdeni mondani szavakat és utána ismételni kell az előzőeket, aki elrontja az iszik. A játék választja ki ki kezd.' },
   { id:'erem',      name:'Érem dobás',            difficulty:'könnyű',  category:'Páros',  emoji:'🪙', img:IMGS['b2b517b2a_005-promise.png'],             color:'#F4C95A', desc:'Az app kiválaszt egy játékost aki kihivhat valakit hogy játsszon vele. A két játékosnak választani kell a Fej és az Írás között. Ez után a kihívó feldobja az érmét és amelyik oldalára esik az a játékos nyert és a másiknak innia kell.' },
   { id:'ticktak',   name:'Tick Tak',              difficulty:'közepes', category:'Csapat', emoji:'⏰', img:IMGS['e20faaaa0_048-letter.png'],              color:'#FF6B6B', desc:'A játék inditásával elindul egy számláló a háttérben, ekkor el kell kezdeni körbeadni egy tárgyat a játékosok között. Mikor az időzitő megszólal annál az embernél akinél épp az adott tárgy van ő vesztett és neki kell a büntetést meginnia.' },
@@ -33689,7 +33702,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.0 · DNR · 2026.05.27 21:19
+              Verzió 3.0 · DNR · 2026.05.27 21:33
             </div>
           </div>
         </div>
@@ -33786,9 +33799,9 @@ function PlayerCard({ p, onEdit, onRemove }) {
   return (
     <div onClick={onEdit} style={{
       position:'relative', background:T.surface, borderRadius:18,
-      padding:'14px 8px 12px', boxShadow:T.shadow,
-      display:'flex', flexDirection:'column', alignItems:'center', gap:6,
-      cursor:'pointer', height:110,
+      padding:'10px 8px 10px', boxShadow:T.shadow,
+      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6,
+      cursor:'pointer', aspectRatio:'1/1.18', minHeight:120,
     }}>
       <button onClick={e => { e.stopPropagation(); onRemove(); }} style={{
         position:'absolute', top:-6, right:-6, width:24, height:24,
@@ -33807,27 +33820,27 @@ function PlayerCard({ p, onEdit, onRemove }) {
 function PlayerEditSheet({ player, onClose, onChange, usedColors }) {
   return (
     <SheetOverlay onClose={onClose}>
-      <div style={{ padding:'6px 22px 22px', display:'flex', flexDirection:'column', gap:16 }}>
-        <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Játékos</div>
-        <div style={{ display:'flex', justifyContent:'center' }}>
-          <div style={{ width:86, height:86, borderRadius:'50%', background:player.color, display:'grid', placeItems:'center' }}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+      <div style={{ padding:'4px 18px 18px', display:'flex', flexDirection:'column', gap:10 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:12 }}>
+          <div style={{ width:56, height:56, borderRadius:'50%', background:player.color, display:'grid', placeItems:'center', flexShrink:0 }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="8" r="3.5" stroke="#fff" strokeWidth="2"/>
               <path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
             </svg>
           </div>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Játékos</div>
         </div>
         <input autoFocus value={player.name} onChange={e => onChange({ name:e.target.value.slice(0,14) })}
           placeholder="Név…"
           style={{
             width:'100%', boxSizing:'border-box',
             background:T.bgSoft, border:'none', borderRadius:14,
-            padding:'14px 18px', fontFamily:T.font, fontWeight:T.weightTitle,
-            fontSize:18, color:T.ink, textAlign:'center', outline:'none',
+            padding:'11px 14px', fontFamily:T.font, fontWeight:T.weightTitle,
+            fontSize:16, color:T.ink, textAlign:'center', outline:'none',
           }} />
         <div>
-          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, marginBottom:10, textTransform:'uppercase', letterSpacing:'0.06em' }}>Szín</div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:10 }}>
+          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.06em' }}>Szín</div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:8 }}>
             {PLAYER_COLORS.map(c => {
               const used = usedColors.has(c) && c !== player.color;
               const active = c === player.color;
@@ -33899,7 +33912,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
       </div>
 
       <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
-        <div className="screen-wide screen-pad" style={{ paddingTop:14, paddingBottom:96 }}>
+        <div className="screen-wide screen-pad" style={{ paddingTop:14, paddingBottom:140 }}>
         <div className="grid-games">
           {GAMES.map(g => {
             const isSelected = selectedGames.includes(g.id);
@@ -34107,6 +34120,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
   const [transitioning, setTransitioning] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [hostBurst, setHostBurst] = useState(null);
   const transRef = React.useRef(false);
 
   // Polling fallback: pull latest player state from Firestore every 2s
@@ -34152,6 +34166,26 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
       setRound(newRound);
       setTransitioning(false);
       transRef.current = false;
+      if (roomCode && mode==='Online' && typeof popPendingDrinks==='function') {
+        popPendingDrinks(roomCode).then(items => {
+          if (!items || items.length === 0) return;
+          setPlayers(prev => {
+            let updated = [...prev];
+            items.forEach(item => {
+              if (item.group) {
+                updated = updated.map(p => ({...p, drinks: p.drinks + (item.amount||1)}));
+              } else if (item.playerId) {
+                updated = updated.map(p => p.id===item.playerId ? {...p, drinks: p.drinks + (item.amount||1)} : p);
+              }
+            });
+            if (typeof syncRoom === 'function') syncRoom(roomCode, { players: updated });
+            return updated;
+          });
+          const total = items.reduce((s,i) => s + (i.amount||1), 0);
+          setHostBurst({ icon:'🍺', title:`+${total} korty!`, sub:'A megfigyelőtől érkezett', tone: '#F4A04A' });
+          setTimeout(() => setHostBurst(null), 1400);
+        });
+      }
     }, 700);
   };
 
@@ -34245,21 +34279,22 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
 
       </div>
       {showInfo && <GameInfoModal game={currentGame} onClose={() => setShowInfo(false)} />}
+      {hostBurst && <ActionBurst burst={hostBurst} />}
       {showMenu && (() => {
         const mSorted = [...players].sort((a,b)=>(b.points-a.points)||(a.drinks-b.drinks));
         const mWinner = mSorted[0];
         const mMaxScore = Math.max(1, ...players.map(p=>p.points));
         return (
           <SheetOverlay onClose={() => setShowMenu(false)}>
-            <div style={{ display:'flex', flexDirection:'column', gap:12, padding:'0 16px 16px' }}>
+            <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'0 14px 14px' }}>
               {mWinner && (
-                <div style={{ background:T.bg, borderRadius:18, padding:'16px 14px', display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+                <div style={{ background:T.bg, borderRadius:14, padding:'10px 10px 8px', display:'flex', flexDirection:'column', alignItems:'center', gap:5 }}>
                   <div style={{ color:T.yellow }}>{Icon.trophy(T.yellow)}</div>
-                  <div style={{ width:72, height:72, borderRadius:'50%', background:mWinner.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:28, color:'#fff' }}>{(mWinner.name||'?').charAt(0).toUpperCase()}</div>
-                  <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:24, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, lineHeight:1 }}>{mWinner.name}</div>
-                  <div style={{ display:'flex', gap:12 }}>
-                    <Stat value={mWinner.points} label="pont" tone={T.mint}/>
+                  <div style={{ width:52, height:52, borderRadius:'50%', background:mWinner.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:'#fff' }}>{(mWinner.name||'?').charAt(0).toUpperCase()}</div>
+                  <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, lineHeight:1 }}>{mWinner.name}</div>
+                  <div style={{ display:'flex', gap:10 }}>
                     <Stat value={mWinner.drinks} label="korty" tone={T.coral}/>
+                    <Stat value={mWinner.points} label="pont" tone={T.mint}/>
                   </div>
                 </div>
               )}
@@ -34329,8 +34364,8 @@ function LeaderRow({ p, rank, maxScore }) {
       <div style={{ position:'relative', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.inkSoft, minWidth:22 }}>{rank}</div>
       <div style={{ position:'relative', width:36, height:36, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', color:'#fff', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15 }}>{p.name.charAt(0).toUpperCase()||'?'}</div>
       <div style={{ position:'relative', flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{p.name}</div>
-      <div style={{ position:'relative', display:'flex', alignItems:'center', gap:4, color:T.coral }}>{Icon.beer(T.coral)}<div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, fontVariantNumeric:'tabular-nums', color:T.ink }}>{p.drinks}</div></div>
       <div style={{ position:'relative', display:'flex', alignItems:'center', gap:4 }}>{Icon.star(T.yellow)}<div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, fontVariantNumeric:'tabular-nums', color:T.ink }}>{p.points}</div></div>
+      <div style={{ position:'relative', display:'flex', alignItems:'center', gap:4, color:T.coral }}>{Icon.beer(T.coral)}<div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, fontVariantNumeric:'tabular-nums', color:T.ink }}>{p.drinks}</div></div>
     </div>
   );
 }
@@ -34487,14 +34522,12 @@ function ObserverWatching({ code, onLeave }) {
 
   const fireBurst = b => { setBurst(b); setTimeout(() => setBurst(null), 1400); };
   const giveDrinks = (player, amount) => {
-    const newPlayers = players.map(p => p.id===player.id ? {...p,drinks:p.drinks+amount} : p);
-    if (typeof syncRoom==='function') syncRoom(code, { players:newPlayers });
-    fireBurst({ icon:'🍺', title:`Idd meg, ${player.name}!`, sub:`+${amount} korty osztva`, tone:T.coral });
+    if (typeof addPendingDrink==='function') addPendingDrink(code, { playerId:player.id, amount, group:false });
+    fireBurst({ icon:'🍺', title:`Idd meg, ${player.name}!`, sub:`+${amount} korty elküldve`, tone:T.coral });
   };
   const groupDrink = () => {
-    const newPlayers = players.map(p => ({...p,drinks:p.drinks+1}));
-    if (typeof syncRoom==='function') syncRoom(code, { players:newPlayers });
-    fireBurst({ icon:'🍻', title:'Csoportos ivás!', sub:'Mindenki egyet iszik', tone:T.yellow });
+    if (typeof addPendingDrink==='function') addPendingDrink(code, { group:true, amount:1 });
+    fireBurst({ icon:'🍻', title:'Csoportos ivás!', sub:'Ivás elküldve', tone:T.yellow });
   };
   const sendEmoji = e => {
     setEmojiFly({ char:e, id:Date.now() });
