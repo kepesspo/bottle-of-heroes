@@ -1,0 +1,1321 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"/>
+  <title>Bottle of Heroes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; width: 100%;
+      background: #e8e4dc;
+      font-family: 'Nunito', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior: none;
+    }
+    #root {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── Animations ── */
+    @keyframes fadeIn    { from{opacity:0} to{opacity:1} }
+    @keyframes popIn     { from{transform:scale(.7);opacity:0} to{transform:scale(1);opacity:1} }
+    @keyframes slideUp   { from{transform:translateY(60px);opacity:.6} to{transform:translateY(0);opacity:1} }
+    @keyframes slideIn   { from{transform:translateX(40px);opacity:0} to{transform:translateX(0);opacity:1} }
+    @keyframes slideBack { from{transform:translateX(-40px);opacity:0} to{transform:translateX(0);opacity:1} }
+    @keyframes shakeWin  { 0%{transform:scale(1)} 30%{transform:scale(1.18) rotate(-3deg)} 60%{transform:scale(1.05) rotate(2deg)} 100%{transform:scale(1)} }
+    @keyframes shakeLose { 0%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} 100%{transform:translateX(0)} }
+    @keyframes pulse     { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.08);opacity:.85} }
+    @keyframes dotBounce { 0%,80%,100%{transform:translateY(0);opacity:.4} 40%{transform:translateY(-6px);opacity:1} }
+    @keyframes caretBlink{ 0%,50%{opacity:.85} 51%,100%{opacity:0} }
+    @keyframes burstPop  { from{transform:scale(.5);opacity:0} to{transform:scale(1);opacity:1} }
+    @keyframes burstFade { to{opacity:0;transform:scale(.92) translateY(-8px)} }
+    @keyframes wobble    { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-12deg) scale(1.1)} 75%{transform:rotate(10deg) scale(1.1)} }
+    @keyframes emojiRise { 0%{transform:translateY(20px) rotate(0);opacity:0} 15%{opacity:1} 100%{transform:translateY(-560px) rotate(20deg);opacity:0} }
+
+    /* ── Phone frame (desktop) ── */
+    .phone-frame {
+      width: 390px;
+      height: 844px;
+      border-radius: 48px;
+      overflow: hidden;
+      position: relative;
+      background: #F4C57E;
+      box-shadow: 0 40px 100px rgba(0,0,0,.22), 0 0 0 1px rgba(0,0,0,.10), inset 0 0 0 1px rgba(255,255,255,.12);
+      flex-shrink: 0;
+    }
+    .phone-island {
+      position: absolute;
+      top: 11px; left: 50%;
+      transform: translateX(-50%);
+      width: 120px; height: 34px;
+      border-radius: 20px;
+      background: #000;
+      z-index: 100;
+      pointer-events: none;
+    }
+    .phone-home-bar {
+      position: absolute;
+      bottom: 8px; left: 50%;
+      transform: translateX(-50%);
+      width: 134px; height: 5px;
+      border-radius: 3px;
+      background: rgba(0,0,0,.22);
+      z-index: 100;
+      pointer-events: none;
+    }
+    .phone-content {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ── Mobile: fullscreen ── */
+    @media (max-width: 499px) {
+      html, body { height: 100dvh; }
+      #root { align-items: stretch; justify-content: stretch; }
+      .phone-frame {
+        width: 100%;
+        height: 100dvh;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      .phone-island { display: none; }
+      .phone-home-bar { display: none; }
+    }
+  </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useMemo } = React;
+
+// ─── Theme (Polished · Mint) ───────────────────────────────────
+const T = {
+  bg: '#F4C57E',
+  bgSoft: '#F8D69A',
+  bgDeep: '#E8B260',
+  surface: '#FFFFFF',
+  surfaceMuted: '#FBEFD8',
+  ink: '#1A2A4A',
+  inkSoft: '#4A5878',
+  inkMute: '#8A93A8',
+  mint: '#4FC2A0',
+  mintSoft: '#D9F1E8',
+  mintDeep: '#3DA888',
+  coral: '#F2A0A0',
+  coralSoft: '#FBDADA',
+  purple: '#A88AE8',
+  yellow: '#F4C95A',
+  blue: '#5BA0DB',
+  pink: '#E985B8',
+  font: '"Nunito", -apple-system, system-ui, sans-serif',
+  weightDisplay: 900,
+  weightTitle: 800,
+  weightBody: 600,
+  letter: '-0.01em',
+  letterDisplay: '-0.02em',
+  shadow: '0 2px 0 rgba(20,30,50,0.04), 0 6px 20px rgba(20,30,50,0.06)',
+  shadowLift: '0 4px 0 rgba(20,30,50,0.06), 0 12px 32px rgba(20,30,50,0.10)',
+};
+
+const R = (base) => Math.round(base); // radius at scale 1
+
+// ─── Game catalog ─────────────────────────────────────────────
+const IMG = 'https://media.base44.com/images/public/6a13fd728a0d72caf4de8c08/';
+const GAMES = [
+  { id:'busz',      name:'Busz',                  difficulty:'nehéz',   category:'Csapat', emoji:'🚌', img:'',                                         color:'#F4A04A', desc:'Mindenki Tudja' },
+  { id:'memoria',   name:'Memória',               difficulty:'nehéz',   category:'Csapat', emoji:'🧩', img:IMG+'c08054bde_008-puzzle.png',              color:'#22D096', desc:'Egy kategóriába el kell kezdeni mondani szavakat és utána ismételni kell az előzőeket, aki elrontja az iszik. A játék választja ki ki kezd.' },
+  { id:'erem',      name:'Érem dobás',            difficulty:'könnyű',  category:'Páros',  emoji:'🪙', img:IMG+'b2b517b2a_005-promise.png',             color:'#F4C95A', desc:'Az app kiválaszt egy játékost aki kihivhat valakit hogy játsszon vele. A két játékosnak választani kell a Fej és az Írás között. Ez után a kihívó feldobja az érmét és amelyik oldalára esik az a játékos nyert és a másiknak innia kell.' },
+  { id:'ticktak',   name:'Tick Tak',              difficulty:'közepes', category:'Csapat', emoji:'⏰', img:IMG+'e20faaaa0_048-letter.png',              color:'#FF6B6B', desc:'A játék inditásával elindul egy számláló a háttérben, ekkor el kell kezdeni körbeadni egy tárgyat a játékosok között. Mikor az időzitő megszólal annál az embernél akinél épp az adott tárgy van ő vesztett és neki kell a büntetést meginnia.' },
+  { id:'kezcsere',  name:'Kéz csere',             difficulty:'nehéz',   category:'Csapat', emoji:'🤙', img:IMG+'1b1a4e166_041-shaka.png',               color:'#5BA0DB', desc:'A játék úgy kezdődik hogy keresztbe rakjátok a kezeteket az asztalon. Egyik egyénileg választott irányba indul a kör.\n1 Koppintás = Abba az irányba megy tovább.\n2 Koppintás = Fordított irányba indul.\n3 Koppintás = A soron következőnek nem szabad koppintania.\nAki ront az iszik.' },
+  { id:'anagramma', name:'Anagramma',             difficulty:'könnyű',  category:'Egyéni', emoji:'💬', img:IMG+'c7dd9fd19_018-social-media.png',        color:'#FF3DA1', desc:'Az applikáció kisorsol egy játékost aki játszani fog. A Start gombra nyomva megjelenik a képernyőn 4 betű amiből 5 mp alatt egy értelmes magyar szót kell kiraknia. Amennyiben ez nem sikerül úgy innia kell a játékosnak.' },
+  { id:'ringfire',  name:'Ring of Fire',          difficulty:'közepes', category:'Egyéni', emoji:'🔥', img:IMG+'30be0a7f6_022-bracelet.png',            color:'#F97316', desc:'Választani kell a kártyák közül és a kártyának a leírását kell megcsinálni.\n2 — Choose: válassz valakit aki iszik\n3 — Me: én iszok\n4 — Whore: összes lány iszik\n5 — Thumb Master: aki kihúzza ő lesz a játékmester\n6 — Dicks: összes fiú iszik\n7 — Heaven: fel kell mutatni az égre\n8 — Mate: válassz valakit aki iszik veled\n9 — Rhyme: rímelni kell\n10 — Categories: kategóriákat kell mondani\nJack — Make a Rule: hozni kell egy szabályt\nQueen — Questions: kérdésekkel kell beszélni\nKing — Pour: össze kell önteni a piákat\nA — Waterfall: addig kell inni amíg az ászt húzó iszik.' },
+  { id:'rulett',    name:'Orosz Rulett',          difficulty:'könnyű',  category:'Egyéni', emoji:'🎯', img:IMG+'00fb8bff7_030-dependable.png',          color:'#A855F7', desc:'Három darab kártya közül kell választani. 2 alatt Tűzjáték van, 1 alatt pia. Egyet kell húzni — ha tűzjátékot húzol akkor megúsztál nem kell innod. Ha piát akkor kell. Ezt a játékot csak egy ember játsza.' },
+  { id:'kisebb',    name:'Kisebb vagy Nagyobb',   difficulty:'közepes', category:'Csapat', emoji:'🚩', img:IMG+'a6501c235_011-friendship.png',          color:'#EF4444', desc:'A játék úgy kezdődik hogy az app kiválaszt egy játékost aki a sort fogja kezdeni. Neki meg kell mondania, hogy a következő szám kisebb, vagy nagyobb lesz mint amit a játék kiír. Ez után a következő játékos jön. Minél tovabb megy a játék annál többet kell innia annak aki hibázik.' },
+  { id:'tapper',    name:'Tapper',                difficulty:'könnyű',  category:'Páros',  emoji:'👇', img:IMG+'4d3e02af9_016-best-friend.png',         color:'#10B981', desc:'Az app kiválaszt egy játékost aki kihivhat valakit hogy játsszon vele. Mind a két játékosnak a kijelölt pontra kell raknia az egyik ujját. Egy visszaszámláló elindul 5-től és minél közelebb a 0-hoz kell elengednie a gombot. Csak a vesztes iszik.' },
+  { id:'kategoria', name:'Kategória',             difficulty:'nehéz',   category:'Csapat', emoji:'🗂️', img:IMG+'21cd10e7c_034-chat.png',                color:'#3B82F6', desc:'A játék választ egy kategóriát és erre az első embernek kell mondani rá egy szót ami abba a kategóriába beleillik. Ez után a következő játékosnak az előző szónak az utolsó betűjével kell egy szót mondania. Az aki először hibázik az iszik. 5 másodperc a megengedett gondolkodási idő.' },
+  { id:'hajime',    name:'Hajime',                difficulty:'nehéz',   category:'Csapat', emoji:'😆', img:IMG+'ed7ba4369_013-laugh.png',               color:'#FACC15', desc:'Számolj helyesen! El kell kezdeni számolni 1-től és ha 5-tel vagy 7-tel osztható a szám vagy szerepel benne az 5 vagy a 7 akkor "hajime"-t kell mondani. Aki eltéveszti az iszik. Egy plusz csavar: minden "hajime" után megfordul a kör.' },
+  { id:'kopapir',   name:'Kő Papír Olló',         difficulty:'nehéz',   category:'Csapat', emoji:'✊', img:IMG+'717d78f62_026-fist.png',                color:'#7C3AED', desc:'Annyi kört kell játszani ahány játékos van. Kell egy kezdő ember aki kihivja a mellette ülőt, ezt a játék választja ki. Ha te nyersz akkor ő iszik és az ő mellette ülővel kell játszania. Ha te vesztesz akkor a te melletted ülővel kell játszanod. Ha döntetlen akkor mind a ketten isztok.' },
+  { id:'fingerit',  name:'Finger It',             difficulty:'könnyű',  category:'Csapat', emoji:'👆', img:IMG+'03d87dd1b_014-sharing.png',             color:'#06B6D4', desc:'Minden játékos az asztalra rakja a mutató ujját. Aztán számolni kezd az első ember akit a játék választ ki: 1, 2, 3 — ekkor hirtelen mindenkinek el kell vennie az ujját az asztalról, vagy rajta hagyja. A lényeg hogy pontosan annyi ujj maradjon az asztalon ahány szám be lett mondva. Ha eltalálod akkor mindenki más iszik. Ha nem találod el akkor te iszol.' },
+  { id:'uveg',      name:'Az üveg',               difficulty:'közepes', category:'Egyéni', emoji:'🍾', img:IMG+'b3ebed6db_012-beer.png',                color:'#F59E0B', desc:'Az app kisorsol egy játékost akinek meg kell pörgetnie az üveget. Akire az üveg az asztalnál mutat annak kell innia.' },
+  { id:'zene',      name:'Zene Felismerés',       difficulty:'közepes', category:'Egyéni', emoji:'🎵', img:IMG+'c6e7b8a7f_021-listener.png',             color:'#8B5CF6', desc:'A játékban egy zenét fog a játékos hallani 5 másodpercig. Ez után ki kell találni hogy ki az előadó és mi a szám címe. Ha a kettőből az egyik sikerül akkor nem kell innia. Ha mind a kettőt sikeresen kitalálja akkor kioszthat egy piát. Ha egyiket sem tudja akkor neki kell innia.' },
+  { id:'loverseny', name:'Lóverseny',             difficulty:'közepes', category:'Csapat', emoji:'🐎', img:IMG+'8892f3ea4_017-origami.png',              color:'#84CC16', desc:'Minden játékos 1–3 egységben fogadhat a négy ló egyikére. A versenylovak a Sárga, a Zöld, a Kék és a Piros. Ha az a ló ér be először akire fogadott, akkor annyi piát kioszthat. Ha nem az nyer akire fogadott, akkor a megtett mennyiséget kell elfogyasztania.' },
+  { id:'otdolog',   name:'5 dolog',               difficulty:'könnyű',  category:'Egyéni', emoji:'5️⃣', img:IMG+'fd5a5b716_007-connection.png',           color:'#EC4899', desc:'Az app kisorsol egy játékost aki játszani fog. Meg fog jelenni a képernyőn egy kategória. Ebben a kategóriában kell a játékosnak 5 mp alatt 5 odatartozó szót mondania. Amennyiben ez nem sikerül innia kell.' },
+  { id:'szerencse', name:'Szerencsekerék',        difficulty:'közepes', category:'Egyéni', emoji:'🎡', img:IMG+'955f768b7_006-loyalty.png',              color:'#14B8A6', desc:'A játék kiválaszt egy játékost akinek meg kell pörgetnie a szerencsekereket. Akit a szerencsekerék kisorsol annak innia kell.' },
+  { id:'sohanem',   name:'Én még soha',           difficulty:'közepes', category:'Egyéni', emoji:'🙅', img:IMG+'6c2a1444c_002-mad.png',                  color:'#D946EF', desc:'Jön egy állítás és ha az igaz rád akkor innod kell, ha nem igaz rád akkor nem kell.' },
+  { id:'collect',   name:'Collect and Boom',      difficulty:'közepes', category:'Csapat', emoji:'💣', img:IMG+'fbae429ac_025-add-friend.png',           color:'#0EA5E9', desc:'Az app kisorsol egy játékost aki el fogja kezdeni a kört. A játéktábláról ki kell választania egy cellát. Utána a tőle jobbra ülő fog választani egyet, addig választanak a játékosok ameddig egy bombát találnak — ekkor a játék véget ért és az addig összegyűjtött egységet kell meginnia a vesztesnek.' },
+  { id:'kivagyok',  name:'Ki Vagyok Én',          difficulty:'közepes', category:'Egyéni', emoji:'🕵️', img:IMG+'0be64fa0c_033-reunion.png',              color:'#F472B6', desc:'Az app mutat egy híresség fotóját és ki kell találni ki van a képen. Ebben a játékban csak egy játékos vesz részt. Ha pontosan meg tudja mondani a híresség életkorát vagy foglalkozását akkor kioszthat egy piát.' },
+  { id:'mindenki',  name:'Mindenki Iszik Egyszer',difficulty:'könnyű',  category:'Egyéni', emoji:'🍻', img:IMG+'7721960ea_024-friendship-1.png',         color:'#F4C95A', desc:'A játék kiválaszt egy játékost akinek innia kell. Ezt az app sorsolja ki, ha elfogyta az emberek akkor előről megy a kör.' },
+  { id:'igazhamis', name:'Igaz Hamis',            difficulty:'könnyű',  category:'Egyéni', emoji:'🤔', img:IMG+'f52ad051b_035-friend.png',               color:'#06B6D4', desc:'A játékban egy állítás fog megjelenni és el kell dönteni, hogy az igaz, vagy hamis. Ha úgy ítéled meg hogy az állítás igaz, akkor az idő lejárta előtt ezt közölnöd kell a többi játékossal akik ez alapján tudjuk eldönteni, hogy jól válaszoltál-e. Ha nem jó a válaszod akkor sajnos innod kell.' },
+];
+
+const DIFFICULTY_META = {
+  'könnyű':  { label:'Könnyű',  tone:'#22D096' },
+  'közepes': { label:'Közepes', tone:'#F4C95A' },
+  'nehéz':   { label:'Nehéz',   tone:'#FF6B6B' },
+};
+const CATEGORY_META = {
+  'Egyéni': { label:'Egyéni', icon:'👤' },
+  'Páros':  { label:'Páros',  icon:'🤝' },
+  'Csapat': { label:'Csapat', icon:'👥' },
+};
+const PLAYER_COLORS = ['#4FC2A0','#E985B8','#F4C95A','#5BA0DB','#1A2A4A','#F2A0A0','#A88AE8','#F97316','#10B981','#EF4444'];
+const INITIAL_PLAYERS = [
+  { id:'p1', name:'Márkó', color:'#4FC2A0', drinks:0, points:0 },
+  { id:'p2', name:'Sanyi', color:'#E985B8', drinks:0, points:0 },
+  { id:'p3', name:'Tibi',  color:'#F4C95A', drinks:0, points:0 },
+  { id:'p4', name:'Réka',  color:'#5BA0DB', drinks:0, points:0 },
+];
+
+// ─── Icons ────────────────────────────────────────────────────
+const Icon = {
+  back:     (c='currentColor') => <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke={c} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  close:    (c='currentColor') => <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke={c} strokeWidth="2.5" strokeLinecap="round"/></svg>,
+  plus:     (c='currentColor') => <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke={c} strokeWidth="2.5" strokeLinecap="round"/></svg>,
+  check:    (c='currentColor') => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5L20 7" stroke={c} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  user:     (c='currentColor') => <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke={c} strokeWidth="2"/><path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5" stroke={c} strokeWidth="2" strokeLinecap="round"/></svg>,
+  users:    (c='currentColor') => <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="9" r="3" stroke={c} strokeWidth="2"/><circle cx="17" cy="10" r="2.5" stroke={c} strokeWidth="2"/><path d="M3 19c1-3 3-4.5 6-4.5s5 1.5 6 4.5M16 16c2 .3 4 1.5 5 3.5" stroke={c} strokeWidth="2" strokeLinecap="round"/></svg>,
+  controller:(c='currentColor') => <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M7 9h10a5 5 0 015 5v0a4 4 0 01-4 4h-1l-2-2H9l-2 2H6a4 4 0 01-4-4v0a5 5 0 015-5z" stroke={c} strokeWidth="2"/><path d="M9 13v-1M9 13v1M8 13h2M15 13h.01M17 14h.01" stroke={c} strokeWidth="2" strokeLinecap="round"/></svg>,
+  info:     (c='currentColor') => <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke={c} strokeWidth="2"/><path d="M12 11v6M12 8v.01" stroke={c} strokeWidth="2.5" strokeLinecap="round"/></svg>,
+  beer:     (c='currentColor') => <svg width="20" height="22" viewBox="0 0 24 26" fill="none"><path d="M5 7h11v15a2 2 0 01-2 2H7a2 2 0 01-2-2V7z" stroke={c} strokeWidth="2" strokeLinejoin="round"/><path d="M16 10h2.5a2.5 2.5 0 010 5H16" stroke={c} strokeWidth="2"/><path d="M8 11v8M11 11v8M5 5c1-2 3-2 4-1s2 1 3 0 3-1 4 1" stroke={c} strokeWidth="2" strokeLinecap="round"/></svg>,
+  dice:     (c='currentColor') => <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="3" stroke={c} strokeWidth="2"/><circle cx="9" cy="9" r="1.3" fill={c}/><circle cx="15" cy="15" r="1.3" fill={c}/><circle cx="15" cy="9" r="1.3" fill={c}/><circle cx="9" cy="15" r="1.3" fill={c}/></svg>,
+  trash:    (c='currentColor') => <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  shuffle:  (c='currentColor') => <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M16 4l4 4-4 4M16 12l4 4-4 4M4 8h4l8 8h4M4 16h4l2-2M14 10l2-2h4" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  trophy:   (c='currentColor') => <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M7 4h10v5a5 5 0 01-10 0V4z" stroke={c} strokeWidth="2" strokeLinejoin="round"/><path d="M7 6H4v2a3 3 0 003 3M17 6h3v2a3 3 0 01-3 3M9 17h6l1 4H8l1-4zM10 14v3M14 14v3" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  star:     (c='currentColor') => <svg width="16" height="16" viewBox="0 0 24 24" fill={c}><path d="M12 2l2.9 6.9L22 10l-5.5 4.8L18.2 22 12 18l-6.2 4 1.7-7.2L2 10l7.1-1.1L12 2z"/></svg>,
+  settings: (c='currentColor') => <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke={c} strokeWidth="2"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3h0a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8v0a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+};
+
+// ─── Shared UI Components ─────────────────────────────────────
+
+function AppBar({ title, onBack, right }) {
+  return (
+    <div style={{
+      position:'sticky', top:0, zIndex:10,
+      background: T.surface,
+      borderBottomLeftRadius:24, borderBottomRightRadius:24,
+      boxShadow:'0 4px 18px rgba(20,30,50,0.05)',
+      padding:'14px 18px', display:'flex', alignItems:'center', gap:10,
+      minHeight:56,
+    }}>
+      {onBack
+        ? <button onClick={onBack} style={{ width:38, height:38, border:'none', background:'transparent', color:T.ink, cursor:'pointer', display:'grid', placeItems:'center', borderRadius:12 }}>{Icon.back(T.ink)}</button>
+        : <div style={{ width:8 }} />
+      }
+      <div style={{ flex:1, textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, letterSpacing:'0.06em', textTransform:'uppercase', color:T.ink }}>{title}</div>
+      <div style={{ minWidth:38, display:'flex', justifyContent:'flex-end' }}>{right}</div>
+    </div>
+  );
+}
+
+function PrimaryButton({ children, onClick, disabled, tone='mint', big=true, style:sx }) {
+  const bg = disabled
+    ? (tone==='mint' ? T.mintSoft : T.coralSoft)
+    : (tone==='mint' ? T.mint : tone==='coral' ? T.coral : tone);
+  const fg = disabled ? 'rgba(26,42,74,0.4)' : '#fff';
+  return (
+    <button onClick={disabled ? undefined : onClick} style={{
+      width:'100%', minHeight: big ? 60 : 48, border:'none',
+      background:bg, color:fg,
+      fontFamily:T.font, fontWeight:T.weightTitle,
+      fontSize: big ? 20 : 16, letterSpacing:T.letterDisplay,
+      borderRadius: big ? 18 : 12,
+      boxShadow: disabled ? 'none' : T.shadow,
+      cursor: disabled ? 'default' : 'pointer',
+      transition:'transform .08s, box-shadow .08s',
+      padding:'8px 18px', whiteSpace:'nowrap',
+      ...sx
+    }}>{children}</button>
+  );
+}
+
+function BottomBar({ children, anchored, extra }) {
+  const positioning = anchored
+    ? { position:'absolute', left:0, right:0, bottom:0, zIndex:5 }
+    : { flexShrink:0 };
+  return (
+    <div style={{
+      ...positioning,
+      background: T.surface,
+      padding:'14px 16px 14px',
+      boxShadow:'0 -2px 0 rgba(20,30,50,0.04), 0 -14px 32px rgba(20,30,50,0.12)',
+    }}>
+      <div style={{ display:'flex', gap:10, alignItems:'stretch' }}>
+        {extra}
+        <div style={{ flex:1, minWidth:0 }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function SheetOverlay({ onClose, children }) {
+  return (
+    <div onClick={onClose} style={{
+      position:'absolute', inset:0, background:'rgba(14,14,24,0.45)',
+      zIndex:40, display:'flex', alignItems:'flex-end',
+      animation:'fadeIn .2s',
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width:'100%', background:T.surface,
+        borderTopLeftRadius:28, borderTopRightRadius:28,
+        boxShadow:'0 -10px 40px rgba(0,0,0,0.2)',
+        animation:'slideUp .3s cubic-bezier(.2,.9,.3,1)',
+        maxHeight:'85%', overflowY:'auto',
+      }}>
+        <div style={{ display:'flex', justifyContent:'center', padding:'10px 0 6px' }}>
+          <div style={{ width:44, height:5, borderRadius:3, background:T.inkMute, opacity:0.35 }} />
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Tag({ tone, subtle, children }) {
+  return (
+    <span style={{
+      display:'inline-flex', alignItems:'center', gap:4,
+      padding:'3px 9px', borderRadius:999,
+      background: subtle ? 'rgba(20,30,50,0.06)' : `${tone}22`,
+      color: subtle ? T.inkSoft : tone,
+      fontFamily:T.font, fontWeight:T.weightTitle, fontSize:11,
+      letterSpacing:'0.04em', textTransform:'uppercase',
+    }}>{children}</span>
+  );
+}
+
+// ─── Logo ─────────────────────────────────────────────────────
+function Logo({ size=200 }) {
+  return (
+    <img src="project/assets/logo.png" width={size} height={size} alt="Bottle of Heroes"
+      style={{ display:'block', filter:'drop-shadow(0 6px 14px rgba(20,30,50,0.12))', userSelect:'none' }}
+      draggable="false" />
+  );
+}
+
+// ─── Game image component ─────────────────────────────────────
+function GameImg({ g, size='full' }) {
+  const [failed, setFailed] = useState(false);
+  const showImg = g.img && !failed;
+  const style = size==='full'
+    ? { width:'100%', height:'100%', objectFit:'contain' }
+    : { width:size, height:size, objectFit:'contain' };
+  return showImg
+    ? <img src={g.img} alt={g.name} referrerPolicy="no-referrer" onError={() => setFailed(true)}
+        style={{ ...style, filter:'drop-shadow(0 2px 4px rgba(20,30,50,0.08))', userSelect:'none' }} draggable="false" />
+    : <span style={{ fontSize: size==='full' ? 44 : Math.round(size*0.6), lineHeight:1 }}>{g.emoji}</span>;
+}
+
+// ─── HOME SCREEN ──────────────────────────────────────────────
+function HomeScreen({ go, mode, setMode }) {
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', padding:'24px 22px 28px', gap:22, background:T.bg }}>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:18, paddingTop:10 }}>
+        <Logo size={200} />
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:28, lineHeight:1, letterSpacing:'0.05em', color:T.ink, textAlign:'center', textTransform:'uppercase' }}>
+            Bottle of Heroes
+          </div>
+          <div style={{
+            display:'inline-flex', alignItems:'center', gap:6,
+            padding:'5px 12px', background:T.surface,
+            borderRadius:999, boxShadow:T.shadow,
+            fontFamily:T.font, fontWeight:700, fontSize:11,
+            color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
+          }}>
+            <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
+            Verzió 3.0 · DNR
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display:'flex', padding:6, background:T.surface, borderRadius:999, boxShadow:T.shadow }}>
+        {['Online','Offline'].map(m => {
+          const active = mode === m;
+          return (
+            <button key={m} onClick={() => setMode(m)} style={{
+              flex:1, minHeight:46, border:'none', cursor:'pointer',
+              background: active ? T.mint : 'transparent',
+              color: active ? '#fff' : T.mint,
+              fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16,
+              borderRadius:999, transition:'all .2s',
+            }}>{m}</button>
+          );
+        })}
+      </div>
+
+      <PrimaryButton onClick={() => go('players')} tone="mint">Játék</PrimaryButton>
+      <PrimaryButton onClick={() => go('observer')} tone="coral">Megfigyelő</PrimaryButton>
+    </div>
+  );
+}
+
+// ─── PLAYERS SCREEN ───────────────────────────────────────────
+function PlayersScreen({ players, setPlayers, go }) {
+  const [editing, setEditing] = useState(null);
+
+  const addPlayer = () => {
+    const used = new Set(players.map(p => p.color));
+    const color = PLAYER_COLORS.find(c => !used.has(c)) || PLAYER_COLORS[0];
+    const np = { id:'p'+Date.now(), name:'', color, drinks:0, points:0 };
+    setPlayers([...players, np]);
+    setEditing(np.id);
+  };
+  const removePlayer = id => setPlayers(players.filter(p => p.id !== id));
+  const updatePlayer = (id, patch) => setPlayers(players.map(p => p.id===id ? {...p,...patch} : p));
+
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg }}>
+      <AppBar title={`Játékosok (${players.length})`} onBack={() => go('home')}
+        right={
+          <div style={{ display:'flex', gap:6, padding:4, background:T.mintSoft, borderRadius:999 }}>
+            <div style={{ width:34, height:34, borderRadius:999, background:T.mint, display:'grid', placeItems:'center' }}>{Icon.users('#fff')}</div>
+            <div style={{ width:34, height:34, display:'grid', placeItems:'center', color:T.mintDeep }}>{Icon.controller(T.mintDeep)}</div>
+          </div>
+        }
+      />
+
+      <div style={{ flex:1, padding:'20px 18px', overflowY:'auto' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
+          {players.map(p =>
+            <PlayerCard key={p.id} p={p} onEdit={() => setEditing(p.id)} onRemove={() => removePlayer(p.id)} />
+          )}
+          <button onClick={addPlayer} style={{
+            aspectRatio:'1/1.18', minHeight:120,
+            border:`2.5px dashed ${T.mint}`, borderRadius:18, background:T.surfaceMuted,
+            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+            gap:8, cursor:'pointer', color:T.mint, padding:6,
+          }}>
+            <div style={{ width:44, height:44, borderRadius:999, border:`2.5px solid ${T.mint}`, display:'grid', placeItems:'center' }}>{Icon.plus(T.mint)}</div>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.mint, textAlign:'center' }}>{players.length+1}. Játékos</div>
+          </button>
+        </div>
+
+        {players.length < 2 &&
+          <div style={{ marginTop:18, padding:'14px 16px', background:T.coralSoft, borderRadius:14, fontFamily:T.font, fontSize:13, color:T.ink, fontWeight:600 }}>
+            Legalább 2 játékos kell. Adj hozzá még valakit!
+          </div>
+        }
+      </div>
+
+      <BottomBar>
+        <PrimaryButton disabled={players.length < 2} onClick={() => go('games')}>Tovább a játékokhoz</PrimaryButton>
+      </BottomBar>
+
+      {editing &&
+        <PlayerEditSheet
+          player={players.find(p => p.id === editing)}
+          onClose={() => setEditing(null)}
+          onChange={patch => updatePlayer(editing, patch)}
+          usedColors={new Set(players.filter(p => p.id !== editing).map(p => p.color))}
+        />
+      }
+    </div>
+  );
+}
+
+function PlayerCard({ p, onEdit, onRemove }) {
+  return (
+    <div onClick={onEdit} style={{
+      position:'relative', background:T.surface, borderRadius:18,
+      padding:'14px 8px 12px', boxShadow:T.shadow,
+      display:'flex', flexDirection:'column', alignItems:'center', gap:6,
+      cursor:'pointer', height:110,
+    }}>
+      <button onClick={e => { e.stopPropagation(); onRemove(); }} style={{
+        position:'absolute', top:-6, right:-6, width:24, height:24,
+        borderRadius:'50%', background:T.surface, color:T.inkSoft,
+        border:'1.5px solid rgba(20,30,50,0.12)',
+        boxShadow:'0 1px 3px rgba(0,0,0,0.1)',
+        cursor:'pointer', display:'grid', placeItems:'center', padding:0,
+      }}>{Icon.close(T.inkSoft)}</button>
+      <div style={{ width:56, height:56, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center' }}>{Icon.user('#fff')}</div>
+      <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink, textAlign:'center', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'100%' }}>{p.name || 'Új játékos'}</div>
+      <div style={{ width:22, height:2, background:p.color, borderRadius:1, opacity:0.5 }} />
+    </div>
+  );
+}
+
+function PlayerEditSheet({ player, onClose, onChange, usedColors }) {
+  return (
+    <SheetOverlay onClose={onClose}>
+      <div style={{ padding:'6px 22px 22px', display:'flex', flexDirection:'column', gap:16 }}>
+        <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Játékos</div>
+        <div style={{ display:'flex', justifyContent:'center' }}>
+          <div style={{ width:86, height:86, borderRadius:'50%', background:player.color, display:'grid', placeItems:'center' }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="8" r="3.5" stroke="#fff" strokeWidth="2"/>
+              <path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          </div>
+        </div>
+        <input autoFocus value={player.name} onChange={e => onChange({ name:e.target.value.slice(0,14) })}
+          placeholder="Név…"
+          style={{
+            width:'100%', boxSizing:'border-box',
+            background:T.bgSoft, border:'none', borderRadius:14,
+            padding:'14px 18px', fontFamily:T.font, fontWeight:T.weightTitle,
+            fontSize:18, color:T.ink, textAlign:'center', outline:'none',
+          }} />
+        <div>
+          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, marginBottom:10, textTransform:'uppercase', letterSpacing:'0.06em' }}>Szín</div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:10 }}>
+            {PLAYER_COLORS.map(c => {
+              const used = usedColors.has(c) && c !== player.color;
+              const active = c === player.color;
+              return (
+                <button key={c} disabled={used} onClick={() => onChange({ color:c })} style={{
+                  aspectRatio:'1/1', borderRadius:'50%', background:c,
+                  border: active ? `3px solid ${T.ink}` : '2px solid transparent',
+                  cursor: used ? 'default' : 'pointer',
+                  opacity: used ? 0.25 : 1,
+                  transform: active ? 'scale(1.08)' : 'scale(1)',
+                  transition:'transform .15s',
+                }} />
+              );
+            })}
+          </div>
+        </div>
+        <PrimaryButton onClick={onClose} disabled={!player.name.trim()}>Mehet</PrimaryButton>
+      </div>
+    </SheetOverlay>
+  );
+}
+
+// ─── GAMES SCREEN ─────────────────────────────────────────────
+const DIM_STYLES = {
+  fade: { opacity:0.4 },
+  none: { opacity:1 },
+};
+
+function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, go }) {
+  const [info, setInfo] = useState(null);
+  const [sheet, setSheet] = useState(false);
+
+  const allOn = selectedGames.length === GAMES.length;
+  const anySelected = selectedGames.length > 0;
+  const buszSelected = selectedGames.includes('busz');
+  const otherSelected = selectedGames.some(id => id !== 'busz');
+  const isLocked = id => id==='busz' ? otherSelected : buszSelected;
+
+  const toggle = id => {
+    if (isLocked(id)) return;
+    setSelectedGames(selectedGames.includes(id) ? selectedGames.filter(x=>x!==id) : [...selectedGames, id]);
+  };
+  const selectAll = () => setSelectedGames(GAMES.filter(g=>g.id!=='busz').map(g=>g.id));
+  const clearAll = () => setSelectedGames([]);
+  const shuffle = () => {
+    const pool = GAMES.filter(g=>g.id!=='busz');
+    const n = 4 + Math.floor(Math.random()*4);
+    setSelectedGames([...pool].sort(()=>Math.random()-.5).slice(0,n).map(g=>g.id));
+  };
+
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg }}>
+      <AppBar title="Játékok" onBack={() => go('players')}
+        right={
+          <div style={{ display:'flex', gap:6, padding:4, background:T.mintSoft, borderRadius:999 }}>
+            <div style={{ width:34, height:34, display:'grid', placeItems:'center', color:T.mintDeep }}>{Icon.users(T.mintDeep)}</div>
+            <div style={{ width:34, height:34, borderRadius:999, background:T.mint, display:'grid', placeItems:'center' }}>{Icon.controller('#fff')}</div>
+          </div>
+        }
+      />
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, padding:'14px 18px 8px' }}>
+        <Chip label="Összes" active={allOn} onClick={selectAll} />
+        <Chip label="Törlés" onClick={clearAll} />
+        <Chip label="Véletlen" onClick={shuffle} tone="purple" icon={Icon.dice('#fff')} />
+        <Chip label="+ Saját" disabled tone="muted" />
+      </div>
+
+      <div style={{ flex:1, minHeight:0, overflowY:'auto', padding:'14px 18px 96px' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
+          {GAMES.map(g => {
+            const isSelected = selectedGames.includes(g.id);
+            const locked = isLocked(g.id);
+            const dim = locked || (anySelected && !isSelected);
+            return (
+              <GameTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked}
+                onClick={() => toggle(g.id)} onInfo={() => setInfo(g.id)} />
+            );
+          })}
+        </div>
+      </div>
+
+      <BottomBar anchored extra={
+        <button onClick={() => setSheet(true)} style={{
+          width:56, height:60, minHeight:60, flexShrink:0,
+          background:T.surfaceMuted, border:'none', borderRadius:16,
+          color:T.ink, cursor:'pointer', display:'grid', placeItems:'center', boxShadow:T.shadow,
+        }}>{Icon.settings(T.ink)}</button>
+      }>
+        <PrimaryButton disabled={selectedGames.length < 1} onClick={() => go('play')}>
+          Játék indítása! ({selectedGames.length})
+        </PrimaryButton>
+      </BottomBar>
+
+      {sheet && <SheetOverlay onClose={() => setSheet(false)}>
+        <GameSettingsContent meta={gameMeta} setMeta={setGameMeta} onDone={() => setSheet(false)} go={go} />
+      </SheetOverlay>}
+      {info && <GameInfoModal game={GAMES.find(g=>g.id===info)} onClose={() => setInfo(null)} />}
+    </div>
+  );
+}
+
+function Chip({ label, active, onClick, tone, icon, disabled }) {
+  const bg = disabled ? T.surfaceMuted : tone==='purple' ? T.purple : active ? T.surface : T.surfaceMuted;
+  const fg = disabled ? T.inkMute : tone==='purple' ? '#fff' : T.ink;
+  return (
+    <button onClick={disabled ? undefined : onClick} style={{
+      minHeight:44, padding:'0 6px', background:bg, color:fg, border:'none',
+      borderRadius:14, boxShadow: tone==='purple' ? '0 4px 14px rgba(124,58,237,0.3)' : 'none',
+      fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13,
+      display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+      cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.7 : 1,
+    }}>
+      {icon && <span style={{ display:'flex' }}>{icon}</span>}
+      {label}
+    </button>
+  );
+}
+
+function GameTile({ g, selected, dim, locked, onClick, onInfo }) {
+  const diff = DIFFICULTY_META[g.difficulty];
+  const selColor = diff.tone;
+  const dimCss = dim ? DIM_STYLES.fade : DIM_STYLES.none;
+  return (
+    <div onClick={onClick} style={{
+      position:'relative', cursor: locked ? 'not-allowed' : 'pointer',
+      minWidth:0, boxSizing:'border-box',
+      background:T.surface, borderRadius:18,
+      boxShadow: selected ? `inset 0 0 0 3px ${selColor}, 0 8px 22px ${selColor}55` : T.shadow,
+      padding:'10px 6px 8px',
+      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-start', gap:6,
+      height:125, width:'100%',
+      transition:'box-shadow .2s, opacity .25s',
+      ...dimCss,
+    }}>
+      <div style={{ width:54, height:54, borderRadius:'50%', background:`${g.color}26`, display:'grid', placeItems:'center', padding:7, flexShrink:0, overflow:'hidden' }}>
+        <GameImg g={g} size="full" />
+      </div>
+      <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, color:T.ink, textAlign:'center', lineHeight:1.15, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'100%' }}>{g.name}</div>
+      <div style={{ width:22, height:3, borderRadius:2, background:g.color, opacity:0.85 }} />
+
+      {/* difficulty dot */}
+      <div style={{ position:'absolute', top:8, left:8, width:9, height:9, borderRadius:'50%', background:diff.tone, boxShadow:'0 0 0 1.5px rgba(255,255,255,0.95)', zIndex:2 }} />
+
+      {/* info button */}
+      <button onClick={e => { e.stopPropagation(); onInfo(); }} style={{
+        position:'absolute', top:-8, right:-8, width:30, height:30, zIndex:2,
+        borderRadius:'50%', background:T.surface, border:'none',
+        boxShadow:'0 2px 6px rgba(0,0,0,0.12), 0 0 0 1px rgba(20,30,50,0.04)',
+        cursor:'pointer', display:'grid', placeItems:'center', padding:0, color:T.inkSoft,
+      }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="9" stroke={T.inkSoft} strokeWidth="2"/>
+          <path d="M12 11v6M12 8v.01" stroke={T.inkSoft} strokeWidth="2.5" strokeLinecap="round"/>
+        </svg>
+      </button>
+
+      {/* Busz exclusive badge */}
+      {g.id === 'busz' && (
+        <div style={{
+          position:'absolute', bottom:-5, left:'50%',
+          transform:'translateX(-50%) rotate(-3deg)',
+          padding:'1px 8px 2px',
+          background:'#0E0E18', color:'#FFD23F',
+          border:'1.25px solid #FFD23F', borderRadius:999,
+          fontFamily:T.font, fontWeight:900, fontSize:7.5,
+          letterSpacing:'0.15em', boxShadow:'0 1.5px 4px rgba(14,14,24,0.3)',
+          zIndex:3, whiteSpace:'nowrap', pointerEvents:'none',
+        }}>★ DNR EXKLUZÍV</div>
+      )}
+
+      {/* lock overlay */}
+      {locked && (
+        <div style={{ position:'absolute', inset:0, zIndex:2, borderRadius:'inherit', pointerEvents:'none', display:'flex', alignItems:'flex-end', justifyContent:'flex-start', padding:6 }}>
+          <div style={{ width:22, height:22, borderRadius:'50%', background:'rgba(14,14,24,0.7)', color:'#fff', display:'grid', placeItems:'center', boxShadow:'0 2px 4px rgba(0,0,0,0.2)' }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+              <rect x="5" y="11" width="14" height="9" rx="2" stroke="#fff" strokeWidth="2.2"/>
+              <path d="M8 11V8a4 4 0 018 0v3" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"/>
+            </svg>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GameInfoModal({ game, onClose }) {
+  const diff = DIFFICULTY_META[game.difficulty];
+  const cat = CATEGORY_META[game.category];
+  return (
+    <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(14,14,24,0.5)', zIndex:50, display:'flex', alignItems:'center', justifyContent:'center', padding:22, animation:'fadeIn .2s' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:T.surface, borderRadius:22, padding:'22px 22px 20px', width:'100%', maxWidth:340, maxHeight:'90%', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.25)', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.4)' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:14 }}>
+          <div style={{ width:76, height:76, borderRadius:18, background:`${game.color}26`, display:'grid', placeItems:'center', padding:8, flexShrink:0 }}>
+            <GameImg g={game} size="full" />
+          </div>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, lineHeight:1.05 }}>{game.name}</div>
+            <div style={{ display:'flex', gap:6, marginTop:8, flexWrap:'wrap' }}>
+              <Tag tone={diff.tone}>{diff.label}</Tag>
+              <Tag tone={T.inkSoft} subtle>{cat.icon} {cat.label}</Tag>
+            </div>
+          </div>
+        </div>
+        <div style={{ fontFamily:T.font, fontSize:13.5, lineHeight:1.55, color:T.inkSoft, marginBottom:18, fontWeight:500, whiteSpace:'pre-line' }}>{game.desc}</div>
+        <PrimaryButton onClick={onClose} big={false}>Értem</PrimaryButton>
+      </div>
+    </div>
+  );
+}
+
+function GameSettingsContent({ meta, setMeta, onDone, go }) {
+  const modes = [
+    { id:'points', label:'Pontgyűjtés' },
+    { id:'bonus',  label:'Bonus Képernyő' },
+    { id:'random', label:'Random Pictogram' },
+    { id:'group',  label:'Csoportos Ivás' },
+  ];
+  const diffs = [
+    { id:'easy', label:'Könnyű' },
+    { id:'mid',  label:'Közepes' },
+    { id:'hard', label:'Nehéz' },
+  ];
+  const toggleMode = id => setMeta({ ...meta, modes: meta.modes.includes(id) ? meta.modes.filter(x=>x!==id) : [...meta.modes,id] });
+  return (
+    <div style={{ padding:'6px 22px 22px', display:'flex', flexDirection:'column', gap:18 }}>
+      <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Játékmenet</div>
+      <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+        {modes.map(m => {
+          const on = meta.modes.includes(m.id);
+          return (
+            <button key={m.id} onClick={() => toggleMode(m.id)} style={{ padding:'14px 4px', border:'none', background:'transparent', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', borderBottom:`1px solid rgba(20,30,50,0.06)` }}>
+              <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>{m.label}</span>
+              <div style={{ width:26, height:26, borderRadius:'50%', border: on ? `2.5px solid ${T.mint}` : `2px solid ${T.inkMute}`, background: on ? T.mint : 'transparent', display:'grid', placeItems:'center' }}>{on && Icon.check('#fff')}</div>
+            </button>
+          );
+        })}
+      </div>
+      <div>
+        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:16, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginBottom:10, textAlign:'center' }}>Nehézségi Szint</div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
+          {diffs.map(d => {
+            const on = meta.difficulty===d.id;
+            return <button key={d.id} onClick={() => setMeta({...meta,difficulty:d.id})} style={{ minHeight:46, border:'none', background: on ? T.mint : T.mintSoft, color: on ? '#fff' : T.mintDeep, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:12, cursor:'pointer' }}>{d.label}</button>;
+          })}
+        </div>
+      </div>
+      <PrimaryButton onClick={() => { onDone(); go('play'); }}>Tovább</PrimaryButton>
+    </div>
+  );
+}
+
+// ─── PLAY SCREEN ──────────────────────────────────────────────
+const SCENARIOS = {
+  busz:      { prompt:'Talál ki a következő lapot — piros vagy fekete?', cta:['Piros','Fekete'] },
+  memoria:   { prompt:'Fordíts meg két lapot. Talált párt?', cta:['Nem találtam','Pár!'] },
+  erem:      { prompt:'Érem dobás', cta:['Nem sikerült','Sikerült!'] },
+  ticktak:   { prompt:'A csengő szólt — nálad maradt?', cta:['Tovább adtam','Nálam maradt'] },
+  kezcsere:  { prompt:'Kéz csere — sikerült követni?', cta:['Elrontottam','Megcsináltam'] },
+  anagramma: { prompt:'NÖSÉRH → fejtsd meg!', cta:['Feladom','Megvan!'] },
+  ringfire:  { prompt:'Húzz egy lapot. Megúsztad?', cta:['Iszom','Megúsztam'] },
+  rulett:    { prompt:'Válassz egy poharat — vajon ez a kemény?', cta:['Kemény!','Sima'] },
+  kisebb:    { prompt:'A következő szám kisebb vagy nagyobb 7-nél?', cta:['Kisebb','Nagyobb'] },
+};
+
+function PlayScreen({ players, setPlayers, selectedGames, go }) {
+  const [round, setRound] = useState(1);
+  const [turn, setTurn] = useState(0);
+  const [gameIdx, setGameIdx] = useState(0);
+  const [drinkPulse, setDrinkPulse] = useState(false);
+  const [scorePulse, setScorePulse] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const [transitioning, setTransitioning] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+
+  const games = selectedGames.length ? selectedGames : GAMES.slice(0,6).map(g=>g.id);
+  const currentGameId = games[gameIdx % games.length];
+  const currentGame = GAMES.find(g=>g.id===currentGameId) || GAMES[0];
+  const currentPlayer = players[turn];
+  const scenario = SCENARIOS[currentGameId] || SCENARIOS.erem;
+  const totalDrinks = players.reduce((s,p) => s+p.drinks, 0);
+
+  const advance = success => {
+    if (transitioning) return;
+    setTransitioning(true);
+    setFeedback(success ? 'win' : 'lose');
+    if (success) {
+      setPlayers(players.map((p,i) => i===turn ? {...p,points:p.points+1} : p));
+      setScorePulse(true); setTimeout(() => setScorePulse(false), 600);
+    } else {
+      setPlayers(players.map((p,i) => i===turn ? {...p,drinks:p.drinks+1} : p));
+      setDrinkPulse(true); setTimeout(() => setDrinkPulse(false), 600);
+    }
+    setTimeout(() => {
+      setFeedback(null);
+      setTurn((turn+1) % players.length);
+      setGameIdx(gameIdx+1);
+      setRound(round+1);
+      setTransitioning(false);
+    }, 700);
+  };
+
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, position:'relative', overflow:'hidden' }}>
+      {/* top controls */}
+      <div style={{ position:'absolute', top:16, right:16, zIndex:5 }}>
+        <div style={{
+          minWidth:54, height:54, padding:'0 10px', borderRadius:999,
+          background:T.surface, boxShadow:T.shadow,
+          display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2,
+          transform: drinkPulse ? 'scale(1.15)' : 'scale(1)',
+          transition:'transform .3s cubic-bezier(.2,.9,.3,1.4)',
+        }}>
+          <div style={{ color:T.ink, lineHeight:0 }}>{Icon.beer(T.ink)}</div>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:14, color:T.ink, fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{totalDrinks}</div>
+        </div>
+      </div>
+      <button onClick={() => go('end')} style={{
+        position:'absolute', top:16, left:16, zIndex:5,
+        width:44, height:44, borderRadius:'50%',
+        background:T.surface, border:'none', boxShadow:T.shadow,
+        cursor:'pointer', display:'grid', placeItems:'center', padding:0,
+      }}>{Icon.trophy(T.ink)}</button>
+
+      {/* main area */}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'80px 24px 20px', gap:18 }}>
+        <div key={gameIdx} style={{
+          width:160, height:160, borderRadius:28,
+          background:`${currentGame.color}22`,
+          boxShadow:`0 14px 36px ${currentGame.color}40`,
+          display:'grid', placeItems:'center', padding:18,
+          animation: feedback==='win' ? 'shakeWin .5s' : feedback==='lose' ? 'shakeLose .5s' : 'popIn .4s cubic-bezier(.2,.9,.3,1.4)',
+        }}>
+          <GameImg g={currentGame} size="full" />
+        </div>
+
+        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:28, color:T.ink, textAlign:'center', textTransform:'uppercase', letterSpacing:T.letterDisplay, lineHeight:1, maxWidth:260 }}>
+          {currentGame.name}
+        </div>
+        <div style={{ fontFamily:T.font, fontSize:14, fontWeight:600, color:T.inkSoft, textAlign:'center', maxWidth:280, lineHeight:1.4 }}>
+          {scenario.prompt}
+        </div>
+
+        <div style={{ display:'flex', gap:8, padding:'10px 14px', background:'rgba(255,255,255,0.45)', borderRadius:14, marginTop:6 }}>
+          {players.map((p,i) => (
+            <div key={p.id} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'2px 6px', opacity: i===turn ? 1 : 0.55, transform: i===turn ? 'scale(1.05)' : 'scale(1)', transition:'all .2s' }}>
+              <div style={{ width:8, height:8, borderRadius:'50%', background:p.color }} />
+              <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink, fontVariantNumeric:'tabular-nums' }}>{p.points}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* action buttons */}
+      <div style={{ padding:'0 24px 16px', display:'flex', gap:12 }}>
+        <button onClick={() => advance(false)} disabled={transitioning} style={{ flex:1, minHeight:60, border:'none', background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>{scenario.cta[0]}</button>
+        <button onClick={() => advance(true)} disabled={transitioning} style={{ flex:1, minHeight:60, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>{scenario.cta[1]}</button>
+      </div>
+
+      {/* footer */}
+      <div style={{ background:T.surface, borderTopLeftRadius:24, borderTopRightRadius:24, boxShadow:'0 -4px 18px rgba(20,30,50,0.05)', padding:'14px 18px 22px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+        <div style={{ width:54, height:54, borderRadius:'50%', border:`2px solid ${T.inkMute}40`, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.05em' }}>KÖR</div>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, lineHeight:1, fontVariantNumeric:'tabular-nums' }}>{round}</div>
+        </div>
+        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+          <div key={currentPlayer.id} style={{
+            width:56, height:56, borderRadius:'50%', background:currentPlayer.color,
+            display:'grid', placeItems:'center',
+            fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:'#fff',
+            boxShadow: scorePulse ? `0 0 0 4px ${currentPlayer.color}44` : 'none',
+            animation:'popIn .35s cubic-bezier(.2,.9,.3,1.4)',
+            transition:'box-shadow .3s',
+          }}>{currentPlayer.name.charAt(0).toUpperCase()||'?'}</div>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{currentPlayer.name}</div>
+        </div>
+        <button onClick={() => setShowInfo(true)} style={{ width:54, height:54, borderRadius:'50%', border:`2px solid ${T.inkMute}40`, background:'transparent', cursor:'pointer', display:'grid', placeItems:'center', color:T.inkSoft, padding:0 }}>{Icon.info(T.inkSoft)}</button>
+      </div>
+
+      {showInfo && <GameInfoModal game={currentGame} onClose={() => setShowInfo(false)} />}
+    </div>
+  );
+}
+
+// ─── END SCREEN ───────────────────────────────────────────────
+function EndScreen({ players, go, resetGame }) {
+  const sorted = [...players].sort((a,b) => (b.points-a.points)||(a.drinks-b.drinks));
+  const winner = sorted[0];
+  const maxScore = Math.max(1, ...players.map(p=>p.points));
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg }}>
+      <AppBar title="Vége!" onBack={() => go('play')} />
+      <div style={{ flex:1, padding:'20px 22px 24px', overflowY:'auto', display:'flex', flexDirection:'column', gap:16 }}>
+        <div style={{ background:T.surface, borderRadius:22, boxShadow:T.shadowLift, padding:'22px 18px 20px', display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+          <div style={{ color:T.yellow, filter:'drop-shadow(0 2px 0 rgba(0,0,0,0.15))' }}>{Icon.trophy(T.yellow)}</div>
+          <div style={{ width:92, height:92, borderRadius:'50%', background:winner.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:36, color:'#fff' }}>{winner.name.charAt(0).toUpperCase()||'?'}</div>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:30, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, lineHeight:1 }}>{winner.name}</div>
+          <div style={{ display:'flex', gap:14 }}>
+            <Stat value={winner.points} label="pont" tone={T.mint}/>
+            <Stat value={winner.drinks} label="korty" tone={T.coral}/>
+          </div>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {sorted.map((p,i) => <LeaderRow key={p.id} p={p} rank={i+1} maxScore={maxScore} />)}
+        </div>
+      </div>
+      <BottomBar>
+        <div style={{ display:'flex', gap:10 }}>
+          <button onClick={resetGame} style={{ flex:1, minHeight:56, border:`2px solid ${T.ink}`, background:'transparent', color:T.ink, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor:'pointer' }}>Új meccs</button>
+          <button onClick={() => go('home')} style={{ flex:1, minHeight:56, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>Főmenü</button>
+        </div>
+      </BottomBar>
+    </div>
+  );
+}
+
+function Stat({ value, label, tone }) {
+  return (
+    <div style={{ display:'flex', alignItems:'baseline', gap:6, padding:'6px 14px', borderRadius:999, background:`${tone}22` }}>
+      <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:tone, fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{value}</div>
+      <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, letterSpacing:'0.04em', textTransform:'uppercase' }}>{label}</div>
+    </div>
+  );
+}
+
+function LeaderRow({ p, rank, maxScore }) {
+  const pct = (p.points/maxScore)*100;
+  return (
+    <div style={{ background:T.surface, borderRadius:14, boxShadow:T.shadow, padding:'10px 14px', display:'flex', alignItems:'center', gap:12, position:'relative', overflow:'hidden' }}>
+      <div style={{ position:'absolute', left:0, top:0, bottom:0, width:`${pct}%`, background:`${p.color}1A`, transition:'width .5s' }}/>
+      <div style={{ position:'relative', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.inkSoft, minWidth:22 }}>{rank}</div>
+      <div style={{ position:'relative', width:36, height:36, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', color:'#fff', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15 }}>{p.name.charAt(0).toUpperCase()||'?'}</div>
+      <div style={{ position:'relative', flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{p.name}</div>
+      <div style={{ position:'relative', display:'flex', alignItems:'center', gap:4, color:T.coral }}>{Icon.beer(T.coral)}<div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, fontVariantNumeric:'tabular-nums', color:T.ink }}>{p.drinks}</div></div>
+      <div style={{ position:'relative', display:'flex', alignItems:'center', gap:4 }}>{Icon.star(T.yellow)}<div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, fontVariantNumeric:'tabular-nums', color:T.ink }}>{p.points}</div></div>
+    </div>
+  );
+}
+
+// ─── OBSERVER SCREEN ──────────────────────────────────────────
+function ObserverScreen({ go }) {
+  const CODE_LEN = 6;
+  const [code, setCode] = useState('');
+  const [status, setStatus] = useState('enter');
+
+  const push = d => { if (status!=='enter') return; setCode(c => (c+d).slice(0,CODE_LEN)); };
+  const back = () => setCode(c => c.slice(0,-1));
+  const submit = () => {
+    if (code.length < CODE_LEN) return;
+    setStatus('connecting');
+    setTimeout(() => setStatus(code==='000000' ? 'error' : 'watching'), 1200);
+  };
+  const reset = () => { setCode(''); setStatus('enter'); };
+
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg }}>
+      <AppBar title="Megfigyelő" onBack={() => go('home')} />
+      {status==='enter' && <ObserverEnter code={code} codeLen={CODE_LEN} onDigit={push} onBack={back} onSubmit={submit} onPaste={v => setCode(v.replace(/\D/g,'').slice(0,CODE_LEN))} />}
+      {status==='connecting' && <ObserverStatus icon="📡" title="Csatlakozás…" sub={`Szoba: ${code}`} spinning />}
+      {status==='watching' && <ObserverWatching code={code} onLeave={reset} />}
+      {status==='error' && <ObserverStatus icon="🚫" title="Nincs ilyen szoba" sub={`A ${code} kód nem érvényes, vagy a szoba bezárult.`} actionLabel="Próbáld újra" onAction={reset} />}
+    </div>
+  );
+}
+
+function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste }) {
+  const ready = code.length === codeLen;
+  useEffect(() => {
+    const onKey = e => {
+      if (/^[0-9]$/.test(e.key)) onDigit(e.key);
+      else if (e.key==='Backspace') onBack();
+      else if (e.key==='Enter') onSubmit();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', padding:'12px 22px 22px' }}>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:22, paddingTop:8 }}>
+        <div style={{ fontSize:52, lineHeight:1, filter:'drop-shadow(0 4px 10px rgba(20,30,50,0.15))' }}>👀</div>
+        <div style={{ textAlign:'center', maxWidth:280 }}>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Szoba kód</div>
+          <div style={{ marginTop:6, fontFamily:T.font, fontSize:13, fontWeight:600, color:T.inkSoft, lineHeight:1.4 }}>Add meg a barátaid szobájának kódját, hogy nézd a játékot.</div>
+        </div>
+        <div style={{ display:'flex', gap:8 }} onPaste={e => { onPaste(e.clipboardData.getData('text')); e.preventDefault(); }}>
+          {Array.from({ length:codeLen }).map((_,i) => {
+            const filled = i < code.length;
+            const active = i === code.length;
+            return (
+              <div key={i} style={{
+                width:38, height:52,
+                background: filled ? T.surface : 'rgba(255,255,255,0.5)',
+                borderRadius:12,
+                border: active ? `2px solid ${T.mint}` : `2px solid ${filled ? 'transparent' : 'rgba(20,30,50,0.08)'}`,
+                boxShadow: filled ? T.shadow : 'none',
+                display:'grid', placeItems:'center',
+                fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:24,
+                color:T.ink, fontVariantNumeric:'tabular-nums',
+                transition:'all .15s',
+              }}>
+                {filled ? code[i] : (active ? <span style={{ width:2, height:22, background:T.mint, opacity:0.7, animation:'caretBlink 1s infinite' }}/> : '')}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, fontWeight:600, opacity:0.7 }}>Tipp: a házigazda osztja meg a szoba kódját</div>
+      </div>
+      <NumberPad onDigit={onDigit} onBack={onBack} />
+      <PrimaryButton disabled={!ready} onClick={onSubmit} style={{ marginTop:14 }}>Csatlakozás</PrimaryButton>
+    </div>
+  );
+}
+
+function NumberPad({ onDigit, onBack }) {
+  const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginTop:8 }}>
+      {keys.map((k,i) => {
+        if (!k) return <div key={i}/>;
+        const isBack = k==='⌫';
+        return (
+          <button key={i} onClick={() => isBack ? onBack() : onDigit(k)} style={{
+            height:52, border:'none',
+            background: isBack ? 'transparent' : T.surface,
+            borderRadius:14, boxShadow: isBack ? 'none' : T.shadow,
+            fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22,
+            color:T.ink, cursor:'pointer', transition:'transform .08s',
+          }}
+            onMouseDown={e => e.currentTarget.style.transform='scale(0.95)'}
+            onMouseUp={e => e.currentTarget.style.transform=''}
+            onMouseLeave={e => e.currentTarget.style.transform=''}
+          >{k}</button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ObserverStatus({ icon, title, sub, spinning, actionLabel, onAction }) {
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:28, gap:14, textAlign:'center' }}>
+      <div style={{ fontSize:64, lineHeight:1, animation: spinning ? 'pulse 1.6s ease-in-out infinite' : 'popIn .35s' }}>{icon}</div>
+      <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>{title}</div>
+      <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, fontWeight:600, lineHeight:1.4, maxWidth:260 }}>{sub}</div>
+      {spinning && <div style={{ display:'flex', gap:6, marginTop:6 }}>{[0,1,2].map(i => <span key={i} style={{ width:8, height:8, borderRadius:'50%', background:T.mint, animation:`dotBounce 1.2s ${i*0.15}s infinite ease-in-out` }}/>)}</div>}
+      {actionLabel && <button onClick={onAction} style={{ marginTop:12, padding:'12px 24px', background:T.mint, color:'#fff', border:'none', borderRadius:14, boxShadow:T.shadow, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, cursor:'pointer' }}>{actionLabel}</button>}
+    </div>
+  );
+}
+
+function ObserverWatching({ code, onLeave }) {
+  const seed = [
+    { ...INITIAL_PLAYERS[0], points:4, drinks:2 },
+    { ...INITIAL_PLAYERS[1], points:2, drinks:5 },
+    { ...INITIAL_PLAYERS[2], points:3, drinks:1 },
+    { ...INITIAL_PLAYERS[3], points:5, drinks:3 },
+  ];
+  const [mockPlayers, setMockPlayers] = useState(seed);
+  const [tick, setTick] = useState(0);
+  const [pulseId, setPulseId] = useState(null);
+  const [access, setAccess] = useState('read');
+  const [sheet, setSheet] = useState(null);
+  const [burst, setBurst] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [bonus, setBonus] = useState(false);
+  const [emojiFly, setEmojiFly] = useState(null);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setTick(x => x+1);
+      setMockPlayers(prev => {
+        const i = Math.floor(Math.random()*prev.length);
+        const win = Math.random() > 0.45;
+        const next = prev.map((p,idx) => idx===i ? { ...p, points:p.points+(win?1:0), drinks:p.drinks+(win?0:1) } : p);
+        setPulseId(prev[i].id+':'+(win?'p':'d'));
+        setTimeout(() => setPulseId(null), 700);
+        setHistory(h => [{ kind:'auto', label:`${prev[i].name} ${win?'+1 pont':'+1 korty'}`, undo:() => setMockPlayers(curr => curr.map((p,idx) => idx===i?{...p,points:prev[i].points,drinks:prev[i].drinks}:p)) }, ...h].slice(0,8));
+        return next;
+      });
+    }, 2600);
+    return () => clearInterval(id);
+  }, []);
+
+  const activeIdx = tick % mockPlayers.length;
+  const currentGame = GAMES[tick % GAMES.length];
+  const round = 1 + Math.floor(tick/mockPlayers.length);
+  const sorted = [...mockPlayers].sort((a,b) => (b.points-a.points)||(a.drinks-b.drinks));
+  const maxScore = Math.max(1, ...mockPlayers.map(p=>p.points));
+  const totalDrinks = mockPlayers.reduce((s,p) => s+p.drinks, 0);
+
+  const fireBurst = b => { setBurst(b); setTimeout(() => setBurst(null), 1400); };
+  const giveDrinks = (player, amount) => {
+    const before = player.drinks;
+    setMockPlayers(prev => prev.map(p => p.id===player.id ? {...p,drinks:p.drinks+amount} : p));
+    setHistory(h => [{ kind:'drink', label:`${player.name} +${amount} korty`, undo:() => setMockPlayers(prev => prev.map(p => p.id===player.id?{...p,drinks:before}:p)) }, ...h].slice(0,8));
+    fireBurst({ icon:'🍺', title:`Idd meg, ${player.name}!`, sub:`+${amount} korty osztva`, tone:T.coral });
+  };
+  const groupDrink = () => {
+    const snapshot = mockPlayers.map(p=>p.drinks);
+    setMockPlayers(prev => prev.map(p => ({...p,drinks:p.drinks+1})));
+    setHistory(h => [{ kind:'group', label:'Csoportos ivás (+1 mindenki)', undo:() => setMockPlayers(prev => prev.map((p,i) => ({...p,drinks:snapshot[i]}))) }, ...h].slice(0,8));
+    fireBurst({ icon:'🍻', title:'Csoportos ivás!', sub:'Mindenki egyet iszik', tone:T.yellow });
+  };
+  const triggerBonus = () => {
+    setBonus(true);
+    setHistory(h => [{ kind:'bonus', label:'Bonus képernyő', undo:() => setBonus(false) }, ...h].slice(0,8));
+    fireBurst({ icon:'🎁', title:'Bonus indul!', sub:'Mini-játék a szobába küldve', tone:T.mint });
+    setTimeout(() => setBonus(false), 3200);
+  };
+  const sendEmoji = e => {
+    setEmojiFly({ char:e, id:Date.now() });
+    setTimeout(() => setEmojiFly(null), 2200);
+    fireBurst({ icon:e, title:`${e} elküldve`, sub:'A szoba látja', tone:T.purple });
+  };
+  const undoLast = () => {
+    if (!history.length) return;
+    const last = history[0]; last.undo();
+    setHistory(history.slice(1));
+    fireBurst({ icon:'↩️', title:'Visszavonva', sub:last.label, tone:T.inkSoft });
+  };
+  const requestAccess = () => { setAccess('pending'); setTimeout(() => setAccess('granted'), 1800); };
+
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', position:'relative', overflow:'hidden' }}>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', padding:'12px 18px 12px', gap:12, overflowY:'auto' }}>
+        {/* live banner */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', borderRadius:14, background:T.surface, boxShadow:T.shadow }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ width:9, height:9, borderRadius:'50%', background:'#E03A3A', animation:'pulse 1.4s infinite' }}/>
+            <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, color:T.ink, letterSpacing:'0.1em', textTransform:'uppercase' }}>Élő · Szoba {code}</span>
+          </div>
+          <button onClick={onLeave} style={{ padding:'4px 10px', border:'none', background:T.coralSoft, color:T.coral, borderRadius:999, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:11, cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.06em' }}>Kilépés</button>
+        </div>
+
+        {/* current game */}
+        <div style={{ background:T.surface, borderRadius:18, boxShadow:T.shadow, padding:'14px 14px', display:'flex', alignItems:'center', gap:12 }}>
+          <div key={tick} style={{ width:64, height:64, borderRadius:14, background: bonus ? `${T.purple}30` : `${currentGame.color}26`, display:'grid', placeItems:'center', padding:8, flexShrink:0, animation:'popIn .35s cubic-bezier(.2,.9,.3,1.4)' }}>
+            {bonus ? <span style={{ fontSize:30 }}>🎁</span> : <GameImg g={currentGame} size="full"/>}
+          </div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>{bonus ? 'Bonus képernyő' : 'Most játszik'}</div>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginTop:2 }}>{bonus ? 'BÓNUSZ!' : currentGame.name}</div>
+            <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4 }}>
+              <span style={{ width:8, height:8, borderRadius:'50%', background:mockPlayers[activeIdx].color }}/>
+              <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft }}>{mockPlayers[activeIdx].name} köre</span>
+            </div>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:4 }}>{Icon.dice(T.inkSoft)}<span style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:14, color:T.ink, fontVariantNumeric:'tabular-nums' }}>{round}</span><span style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase' }}>kör</span></div>
+            <div style={{ display:'flex', alignItems:'center', gap:4 }}>{Icon.beer(T.coral)}<span style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:14, color:T.ink, fontVariantNumeric:'tabular-nums' }}>{totalDrinks}</span><span style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase' }}>korty</span></div>
+          </div>
+        </div>
+
+        {/* leaderboard */}
+        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 4px 2px' }}>
+            <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>Élő eredmények</div>
+            <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkMute, letterSpacing:'0.06em' }}>pont · korty</div>
+          </div>
+          {sorted.map((p,i) => {
+            const isActive = p.id===mockPlayers[activeIdx].id;
+            const pct = (p.points/maxScore)*100;
+            const ppulse = pulseId===(p.id+':p');
+            const dpulse = pulseId===(p.id+':d');
+            return (
+              <div key={p.id} style={{ position:'relative', overflow:'hidden', background:T.surface, borderRadius:12, boxShadow:T.shadow, padding:'10px 12px', display:'flex', alignItems:'center', gap:10, transition:'all .35s', outline: isActive ? `2px solid ${p.color}` : '2px solid transparent', transform: isActive ? 'translateX(2px)' : 'translateX(0)' }}>
+                <div style={{ position:'absolute', left:0, top:0, bottom:0, width:`${pct}%`, background:`${p.color}14`, transition:'width .6s cubic-bezier(.2,.9,.3,1)' }}/>
+                <div style={{ position:'relative', width:18, fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:14, color: i===0 ? T.yellow : T.inkSoft, textAlign:'center' }}>{i===0 ? '★' : i+1}</div>
+                <div style={{ position:'relative', width:32, height:32, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', color:'#fff', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:13 }}>{p.name.charAt(0)}</div>
+                <div style={{ position:'relative', flex:1, minWidth:0 }}>
+                  <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.name}</div>
+                  {isActive && <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:p.color, letterSpacing:'0.06em', textTransform:'uppercase', marginTop:1 }}>Most ő játszik</div>}
+                </div>
+                <div style={{ position:'relative', display:'flex', alignItems:'center', gap:12 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:4, minWidth:32, justifyContent:'flex-end', transform: ppulse?'scale(1.25)':'scale(1)', transition:'transform .4s cubic-bezier(.2,.9,.3,1.4)' }}>{Icon.star(T.yellow)}<span style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color: ppulse?T.yellow:T.ink, fontVariantNumeric:'tabular-nums', transition:'color .3s' }}>{p.points}</span></div>
+                  <div style={{ display:'flex', alignItems:'center', gap:4, minWidth:32, justifyContent:'flex-end', transform: dpulse?'scale(1.25)':'scale(1)', transition:'transform .4s cubic-bezier(.2,.9,.3,1.4)' }}>{Icon.beer(T.coral)}<span style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color: dpulse?T.coral:T.ink, fontVariantNumeric:'tabular-nums', transition:'color .3s' }}>{p.drinks}</span></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* GM Panel */}
+      <div style={{ background:T.surface, borderTopLeftRadius:24, borderTopRightRadius:24, boxShadow:'0 -4px 18px rgba(20,30,50,0.06)', padding:'10px 14px 18px', flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:6, padding:'0 4px 6px' }}>
+          <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 8px', borderRadius:999, background: access==='granted' ? T.mintSoft : T.surfaceMuted, color: access==='granted' ? T.mintDeep : T.inkSoft, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:9, letterSpacing:'0.1em', textTransform:'uppercase' }}>
+            <span style={{ width:5, height:5, borderRadius:'50%', background: access==='granted' ? T.mint : T.inkMute }}/>
+            GM Console
+          </span>
+          <span style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.06em', textTransform:'uppercase' }}>
+            {access==='read' && '· csak nézés'}
+            {access==='pending' && '· engedély kérve…'}
+            {access==='granted' && '· vezérlés aktív'}
+          </span>
+        </div>
+        {access==='read' && <button onClick={requestAccess} style={{ width:'100%', minHeight:50, border:`2px dashed ${T.mint}`, background:T.mintSoft, color:T.mintDeep, borderRadius:14, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, letterSpacing:T.letterDisplay, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>🔑 Vezérlés kérése a házigazdától</button>}
+        {access==='pending' && <div style={{ width:'100%', minHeight:50, background:T.surfaceMuted, color:T.inkSoft, borderRadius:14, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>{[0,1,2].map(i => <span key={i} style={{ width:7, height:7, borderRadius:'50%', background:T.inkSoft, animation:`dotBounce 1.2s ${i*0.15}s infinite ease-in-out` }}/>)}<span style={{ marginLeft:4 }}>Várakozás a házigazda engedélyére</span></div>}
+        {access==='granted' && (
+          <div style={{ display:'flex', gap:6 }}>
+            {[
+              { emoji:'🍺', label:'Korty', onClick:() => setSheet('drink') },
+              { emoji:'🍻', label:'Csoport', onClick:groupDrink },
+              { emoji:'🎁', label:'Bonus', onClick:triggerBonus },
+              { emoji:'💬', label:'Emoji', onClick:() => setSheet('emoji') },
+              { emoji:'↩️', label:'Vissza', onClick:undoLast, dim:!history.length },
+            ].map(a => (
+              <button key={a.label} onClick={a.dim ? undefined : a.onClick} style={{ flex:1, minWidth:0, padding:'8px 4px', background:T.surface, border:'none', borderRadius:14, boxShadow:T.shadow, cursor: a.dim?'default':'pointer', opacity: a.dim?0.4:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}
+                onMouseDown={e => !a.dim && (e.currentTarget.style.transform='scale(0.94)')}
+                onMouseUp={e => e.currentTarget.style.transform=''}
+                onMouseLeave={e => e.currentTarget.style.transform=''}
+              >
+                <div style={{ fontSize:24, lineHeight:1 }}>{a.emoji}</div>
+                <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:10, color:T.ink, textAlign:'center', lineHeight:1.15 }}>{a.label}</div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {sheet==='drink' && <SheetOverlay onClose={() => setSheet(null)}>
+        <DrinkSheet players={mockPlayers} onPick={(p,n) => { giveDrinks(p,n); setSheet(null); }} />
+      </SheetOverlay>}
+      {sheet==='emoji' && <SheetOverlay onClose={() => setSheet(null)}>
+        <EmojiSheet onPick={e => { sendEmoji(e); setSheet(null); }} />
+      </SheetOverlay>}
+      {burst && <ActionBurst burst={burst} />}
+      {emojiFly && <EmojiFly char={emojiFly.char} key={emojiFly.id} />}
+    </div>
+  );
+}
+
+function DrinkSheet({ players, onPick }) {
+  const [picked, setPicked] = useState(null);
+  const [amount, setAmount] = useState(1);
+  return (
+    <div style={{ padding:'4px 22px 22px', display:'flex', flexDirection:'column', gap:14 }}>
+      <div style={{ textAlign:'center' }}>
+        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Korty osztás</div>
+        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:600, color:T.inkSoft, marginTop:4 }}>Válassz játékost és kortyszámot</div>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8 }}>
+        {players.map(p => {
+          const on = picked && picked.id===p.id;
+          return <button key={p.id} onClick={() => setPicked(p)} style={{ padding:'10px 4px 8px', border:'none', cursor:'pointer', background: on ? `${p.color}22` : T.surfaceMuted, borderRadius:14, outline: on ? `2px solid ${p.color}` : '2px solid transparent', display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+            <div style={{ width:40, height:40, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', color:'#fff', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:16 }}>{p.name.charAt(0)}</div>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:11, color:T.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'100%' }}>{p.name}</div>
+          </button>;
+        })}
+      </div>
+      <div style={{ display:'flex', gap:8 }}>
+        {[1,2,3].map(n => {
+          const on = amount===n;
+          return <button key={n} onClick={() => setAmount(n)} style={{ flex:1, minHeight:60, border:'none', cursor:'pointer', background: on ? T.coral : T.coralSoft, color: on ? '#fff' : T.coral, borderRadius:14, fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2 }}>
+            <div style={{ fontSize:22, lineHeight:1 }}>{'🍺'.repeat(n)}</div>
+            <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', opacity:0.9 }}>{n} korty</div>
+          </button>;
+        })}
+      </div>
+      <PrimaryButton disabled={!picked} onClick={() => onPick(picked, amount)}>{picked ? `Idd meg, ${picked.name}! (${amount})` : 'Válassz játékost'}</PrimaryButton>
+    </div>
+  );
+}
+
+function EmojiSheet({ onPick }) {
+  const emojis = ['🔥','😂','👏','👎','🍻','💀','🤣','🤝','💩','🎯'];
+  return (
+    <div style={{ padding:'4px 22px 22px', display:'flex', flexDirection:'column', gap:14 }}>
+      <div style={{ textAlign:'center' }}>
+        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Reakció</div>
+        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:600, color:T.inkSoft, marginTop:4 }}>A választott emoji végigrepül a szobán</div>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10 }}>
+        {emojis.map(e => <button key={e} onClick={() => onPick(e)} style={{ aspectRatio:'1/1', border:'none', cursor:'pointer', background:T.surfaceMuted, borderRadius:16, display:'grid', placeItems:'center', fontSize:34 }}>{e}</button>)}
+      </div>
+    </div>
+  );
+}
+
+function ActionBurst({ burst }) {
+  return (
+    <div style={{ position:'absolute', inset:0, zIndex:100, display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none', padding:24 }}>
+      <div style={{ background:T.surface, borderRadius:22, padding:'20px 26px', boxShadow:'0 24px 60px rgba(20,30,50,0.25), 0 0 0 4px rgba(255,255,255,0.5)', display:'flex', flexDirection:'column', alignItems:'center', gap:6, minWidth:200, maxWidth:280, textAlign:'center', animation:'burstPop .35s cubic-bezier(.2,.9,.3,1.5), burstFade .4s 1s forwards', borderTop:`4px solid ${burst.tone}` }}>
+        <div style={{ fontSize:48, lineHeight:1, animation:'wobble .6s' }}>{burst.icon}</div>
+        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, lineHeight:1.1 }}>{burst.title}</div>
+        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:600, color:T.inkSoft }}>{burst.sub}</div>
+      </div>
+    </div>
+  );
+}
+
+function EmojiFly({ char }) {
+  return (
+    <div style={{ position:'absolute', inset:0, zIndex:90, pointerEvents:'none', overflow:'hidden' }}>
+      {[0,1,2,3,4].map(i => <div key={i} style={{ position:'absolute', left:`${15+i*18}%`, bottom:0, fontSize:36, opacity:0, animation:`emojiRise 2.2s ${i*0.15}s ease-out forwards` }}>{char}</div>)}
+    </div>
+  );
+}
+
+// ─── APP ROUTER ───────────────────────────────────────────────
+function BottleApp() {
+  const [screen, setScreen] = useState('home');
+  const [prev, setPrev] = useState(null);
+  const [mode, setMode] = useState('Online');
+  const [players, setPlayers] = useState(INITIAL_PLAYERS);
+  const [selectedGames, setSelectedGames] = useState(['busz','memoria','erem']);
+  const [gameMeta, setGameMeta] = useState({ modes:['points','bonus'], difficulty:'easy' });
+
+  const go = next => { setPrev(screen); setScreen(next); };
+  const resetGame = () => { setPlayers(players.map(p => ({...p,drinks:0,points:0}))); setScreen('play'); };
+
+  const order = ['home','players','games','play','end','observer'];
+  const dir = order.indexOf(screen) >= order.indexOf(prev||'home') ? 1 : -1;
+
+  return (
+    <div style={{ width:'100%', height:'100%', position:'relative', fontFamily:T.font, color:T.ink, WebkitFontSmoothing:'antialiased', overflow:'hidden' }}>
+      {/* status bar spacer */}
+      <div style={{ height:58, flexShrink:0 }} />
+      <div key={screen} style={{ position:'absolute', top:58, left:0, right:0, bottom:0, display:'flex', flexDirection:'column', animation:`slide${dir>0?'In':'Back'} .35s cubic-bezier(.2,.85,.3,1.05)` }}>
+        {screen==='home'     && <HomeScreen     go={go} mode={mode} setMode={setMode} />}
+        {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
+        {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
+        {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} />}
+        {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} />}
+        {screen==='observer' && <ObserverScreen go={go} />}
+      </div>
+    </div>
+  );
+}
+
+// ─── ROOT ─────────────────────────────────────────────────────
+function Root() {
+  return (
+    <div className="phone-frame">
+      <div className="phone-island" />
+      <div className="phone-home-bar" />
+      <div className="phone-content">
+        <BottleApp />
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
+</script>
+</body>
+</html>
