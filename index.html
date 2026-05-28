@@ -33808,7 +33808,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.1 · DNR · 2026.05.28 14:43
+              Verzió 3.1 · DNR · 2026.05.28 15:02
             </div>
           </div>
         </div>
@@ -34963,13 +34963,15 @@ function BuszGame({ players, roomCode, mode, gameIdx }) {
   };
 
   const initGame = async () => {
+    if (isOnline) { try { await firebase.firestore().collection('rooms').doc(roomCode).update({ buszTakenIds: [] }); } catch(e) {} }
     const deckCount=1, cardsPerPlayer=6;
     const deck = shuffleDeck(generateDeck(deckCount));
     let di=0;
     const hands={};
-    for (const p of players) { hands[p.id]=deck.slice(di,di+cardsPerPlayer); di+=cardsPerPlayer; }
+    const initialDrinks={};
+    for (const p of players) { hands[p.id]=deck.slice(di,di+cardsPerPlayer); di+=cardsPerPlayer; initialDrinks[p.id]=p.drinks||0; }
     const pyramid = buildPyramid(deck.slice(di,di+15));
-    await persist({ phase:'pyramid', pyramid, hands, nextFlipIdx:0, valueCounts:{}, busRiders:[], busCards:[], busStep:-1, settings:{deckCount,cardsPerPlayer,busSteps:6} });
+    await persist({ phase:'pyramid', pyramid, hands, nextFlipIdx:0, valueCounts:{}, busRiders:[], busCards:[], busStep:-1, settings:{deckCount,cardsPerPlayer,busSteps:6}, initialDrinks });
   };
 
   const flipCard = async () => {
@@ -35106,7 +35108,9 @@ function BuszGame({ players, roomCode, mode, gameIdx }) {
               <div key={rowIdx} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
                 <div style={{display:'flex',gap:4,padding:'5px 8px',borderRadius:11,background:isActive?`${T.mint}1A`:'transparent',border:`1.5px solid ${isActive?T.mint+'55':'transparent'}`,transition:'all .3s ease'}}>
                   {rowCards.map(card=>(
-                    <PlayingCard key={card.id} card={card} size='sm' faceDown={!card.faceUp} />
+                    <div key={card.id} style={{transform:isActive?'scale(1.12)':'scale(1)',transition:'transform .2s',transformOrigin:'bottom center'}}>
+                      <PlayingCard card={card} size='md' faceDown={!card.faceUp} />
+                    </div>
                   ))}
                 </div>
                 <div style={{fontFamily:T.font,fontSize:9,fontWeight:isActive?700:400,color:isActive?T.mint:T.inkMute,textTransform:'uppercase',letterSpacing:'0.07em',lineHeight:1}}>{drinks} korty</div>
@@ -35149,6 +35153,25 @@ function BuszGame({ players, roomCode, mode, gameIdx }) {
             })}
           </div>
         </div>
+
+        {/* Drinks this round summary */}
+        {buszState.initialDrinks && (
+          <div>
+            <div style={{fontFamily:T.font,fontSize:10,fontWeight:700,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:6}}>Ezen a körön kapott</div>
+            <div style={{display:'flex',gap:7,flexWrap:'wrap'}}>
+              {players.map(p=>{
+                const delta = (p.drinks||0) - (buszState.initialDrinks[p.id]||0);
+                return (
+                  <div key={p.id} style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',background:T.surfaceMuted,borderRadius:10}}>
+                    <div style={{width:24,height:24,borderRadius:'50%',background:p.color,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:700,fontSize:11,color:'#fff',flexShrink:0}}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+                    <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:12,color:T.ink}}>{p.name}</div>
+                    <div style={{fontFamily:'monospace',fontWeight:700,fontSize:15,color:delta>0?T.coral:T.inkSoft,minWidth:18,textAlign:'right'}}>{delta>0?`+${delta}`:'–'}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Action */}
         {allDone ? (
@@ -35628,16 +35651,22 @@ function BuszPlayerView({ room, roomCode }) {
         <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:6 }}>Válaszd ki a neved a listából</div>
       </div>
       <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-        {players.map(p => (
-          <button key={p.id} onClick={() => { localStorage.setItem(`bpid_${roomCode}`, p.id); setPlayerId(p.id); }} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:T.surface, border:'2px solid transparent', borderRadius:16, cursor:'pointer', boxShadow:T.shadow, textAlign:'left', width:'100%' }}>
-            <div style={{ width:42, height:42, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:18, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>{p.name}</div>
-              {buszState && <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>{(buszState.hands?.[p.id]||[]).length} lap a kezében</div>}
-            </div>
-            <div style={{ width:10, height:10, borderRadius:'50%', background:p.color, opacity:0.5, flexShrink:0 }}/>
-          </button>
-        ))}
+        {players.map(p => {
+          const taken = (room.buszTakenIds||[]).includes(p.id);
+          return (
+            <button key={p.id} disabled={taken} onClick={!taken ? () => {
+              setPlayerId(p.id);
+              try { firebase.firestore().collection('rooms').doc(roomCode).update({ buszTakenIds: firebase.firestore.FieldValue.arrayUnion(p.id) }); } catch(e) {}
+            } : undefined} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:T.surface, border:`2px solid ${taken?T.coral+'30':'transparent'}`, borderRadius:16, cursor:taken?'default':'pointer', boxShadow:T.shadow, textAlign:'left', width:'100%', opacity:taken?0.45:1 }}>
+              <div style={{ width:42, height:42, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:18, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>{p.name}</div>
+                <div style={{ fontFamily:T.font, fontSize:12, color:taken?T.coral:T.inkSoft, marginTop:2 }}>{taken ? '🔒 Foglalt' : (buszState ? `${(buszState.hands?.[p.id]||[]).length} lap a kezében` : 'Elérhető')}</div>
+              </div>
+              {!taken && <div style={{ width:10, height:10, borderRadius:'50%', background:p.color, opacity:0.5, flexShrink:0 }}/>}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -35649,7 +35678,7 @@ function BuszPlayerView({ room, roomCode }) {
       <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Helló, {player.name}!</div>
       <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>Várakozás a játék indítására…</div>
       <div style={{ display:'flex', gap:6 }}>{[0,1,2].map(i=><span key={i} style={{ width:8, height:8, borderRadius:'50%', background:T.mint, animation:`dotBounce 1.2s ${i*0.15}s infinite ease-in-out` }}/>)}</div>
-      <button onClick={()=>{ localStorage.removeItem(`bpid_${roomCode}`); setPlayerId(null); }} style={{ marginTop:8, background:'transparent', border:'none', fontFamily:T.font, fontSize:13, color:T.inkSoft, cursor:'pointer', textDecoration:'underline' }}>Mégsem én vagyok</button>
+
     </div>
   );
 
@@ -35807,7 +35836,7 @@ function BuszPlayerView({ room, roomCode }) {
           <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{player.name}</div>
           <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>{myHand.length} lap a kezedben</div>
         </div>
-        <button onClick={()=>{ localStorage.removeItem(`bpid_${roomCode}`); setPlayerId(null); }} style={{ background:'transparent', border:'none', fontFamily:T.font, fontSize:11, color:T.inkSoft, cursor:'pointer', padding:'4px 8px' }}>Csere</button>
+
       </div>
 
       {/* Active pyramid card */}
@@ -35861,8 +35890,8 @@ function BuszPlayerView({ room, roomCode }) {
             {myHand.map(card => {
               const canPlay = playableCards.some(c=>c.id===card.id);
               return (
-                <div key={card.id} onClick={canPlay ? ()=>playCard(card) : undefined} style={{ position:'relative', cursor:canPlay?'pointer':'default', transform:canPlay?'translateY(-5px)':'none', transition:'transform .2s ease' }}>
-                  <PlayingCard card={card} size='md' glow={canPlay} />
+                <div key={card.id} onClick={canPlay ? ()=>playCard(card) : undefined} style={{ position:'relative', cursor:canPlay?'pointer':'default', transform:canPlay?'translateY(-8px) scale(1.08)':'none', transition:'transform .2s ease' }}>
+                  <PlayingCard card={card} size='lg' glow={canPlay} />
                   {canPlay && (
                     <div style={{ position:'absolute', bottom:-10, left:'50%', transform:'translateX(-50%)', fontFamily:T.font, fontSize:9, fontWeight:700, color:'#fff', background:T.mint, borderRadius:999, padding:'2px 6px', boxShadow:T.shadow, whiteSpace:'nowrap', zIndex:2 }}>Lerak!</div>
                   )}
