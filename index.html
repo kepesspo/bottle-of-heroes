@@ -33808,7 +33808,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.1 · DNR · 2026.05.28 15:17
+              Verzió 3.1 · DNR · 2026.05.28 15:25
             </div>
           </div>
         </div>
@@ -34980,7 +34980,9 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
   const [zsulliAnim, setZsulliAnim] = useState(null);
   const [ready, setReady] = useState(false);
   const [guessResult, setGuessResult] = useState(null);
+  const [takenIds, setTakenIds] = useState([]);
   const stRef = useRef(null);
+  const autoStartRef = useRef(false);
 
   useEffect(() => {
     if (!isOnline) { setReady(true); return; }
@@ -34990,10 +34992,19 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
       const bs = d?.buszState || null;
       stRef.current = bs;
       setBuszState(bs);
+      setTakenIds(d?.buszTakenIds || []);
       setReady(true);
     });
     return unsub;
   }, [roomCode, isOnline]);
+
+  useEffect(() => {
+    if (!isOnline || buszState || !ready || autoStartRef.current) return;
+    if (players.length >= 2 && takenIds.length >= players.length) {
+      autoStartRef.current = true;
+      initGame();
+    }
+  }, [takenIds, buszState, ready]);
 
   const persist = async (newState) => {
     stRef.current = newState;
@@ -35111,13 +35122,24 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
         </div>
       )}
       <div style={{width:'100%',display:'flex',flexDirection:'column',gap:6}}>
-        {players.map(p=>(
-          <div key={p.id} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',background:T.surfaceMuted,borderRadius:12}}>
-            <div style={{width:34,height:34,borderRadius:'50%',background:p.color,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:700,fontSize:15,color:'#fff',flexShrink:0}}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-            <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.ink}}>{p.name}</div>
-          </div>
-        ))}
+        {players.map(p=>{
+          const joined = isOnline && takenIds.includes(p.id);
+          return (
+            <div key={p.id} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:12,background:joined?`${T.mint}15`:T.surfaceMuted,border:`1.5px solid ${joined?T.mint+'50':'transparent'}`,transition:'all .3s'}}>
+              <div style={{width:34,height:34,borderRadius:'50%',background:p.color,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:700,fontSize:15,color:'#fff',flexShrink:0}}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+              <div style={{flex:1,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.ink}}>{p.name}</div>
+              {joined
+                ? <div style={{fontFamily:T.font,fontSize:12,fontWeight:700,color:T.mint}}>✓ Kész</div>
+                : <div style={{fontFamily:T.font,fontSize:11,color:T.inkSoft}}>Vár…</div>
+              }
+            </div>
+          );
+        })}
       </div>
+      {isOnline
+        ? <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,textAlign:'center'}}>{takenIds.length}/{players.length} játékos csatlakozott – indul automatikusan</div>
+        : null
+      }
       <PrimaryButton onClick={initGame} disabled={players.length<2}>🚌 Játék indítása</PrimaryButton>
     </div>
   );
