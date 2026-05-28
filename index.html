@@ -35963,44 +35963,61 @@ function BuszPlayerView({ room, roomCode }) {
         </div>
       )}
 
-      {/* Hand of cards — fan/arc layout */}
-      <div>
-        <div style={{ fontFamily:T.font, fontSize:14, fontWeight:700, color:T.ink, marginBottom:6 }}>A te lapjaid</div>
+      {/* Hand of cards — D: active zone + rest */}
+      <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
         {myHand.length === 0 ? (
           <div style={{ padding:'16px', background:T.surfaceMuted, borderRadius:12, textAlign:'center' }}>
             <div style={{ fontFamily:T.font, fontSize:14, color:T.mint, fontWeight:700 }}>🎉 Nincs több lapod!</div>
           </div>
         ) : (()=>{
           const effectiveSel = selectedCardIds.filter(id=>playableCards.some(c=>c.id===id));
+          const restCards = myHand.filter(c=>!playableCards.some(p=>p.id===c.id));
           return (
-            <div>
-              <div style={{ display:'flex', justifyContent:'center', alignItems:'flex-end', paddingTop:36, paddingBottom:18 }}>
-                {myHand.map((card, i) => {
-                  const count = myHand.length;
-                  const mid = (count-1)/2;
-                  const fromCenter = i - mid;
-                  const angle = fromCenter * (count<=3?8:count<=5?6:count<=7?5:4);
-                  const sag = fromCenter*fromCenter*1.8;
-                  const canPlay = playableCards.some(c=>c.id===card.id);
-                  const sel = canPlay && selectedCardIds.includes(card.id);
-                  const lift = sel ? -(32+sag) : canPlay ? -(16+sag) : sag;
-                  const zIdx = sel ? 50+i : Math.round(mid - Math.abs(fromCenter) + 1);
-                  return (
-                    <div key={card.id}
-                      onClick={canPlay ? ()=>setSelectedCardIds(ids=>sel?ids.filter(x=>x!==card.id):[...ids,card.id]) : undefined}
-                      style={{ marginLeft:i>0?-26:0, transform:`rotate(${angle}deg) translateY(${lift}px)`, transformOrigin:'bottom center', zIndex:zIdx, transition:'transform .2s ease', cursor:canPlay?'pointer':'default', userSelect:'none', flexShrink:0, position:'relative' }}>
-                      <PlayingCard card={card} size='xl' glow={sel} />
-                      {canPlay && !sel && <div style={{ position:'absolute', bottom:-11, left:'50%', transform:`translateX(-50%) rotate(${-angle}deg)`, fontFamily:T.font, fontSize:9, fontWeight:700, color:'#fff', background:T.mint, borderRadius:999, padding:'2px 6px', boxShadow:T.shadow, whiteSpace:'nowrap', zIndex:2 }}>+</div>}
-                      {sel && <div style={{ position:'absolute', bottom:-11, left:'50%', transform:`translateX(-50%) rotate(${-angle}deg)`, fontFamily:T.font, fontSize:9, fontWeight:700, color:'#fff', background:T.coral, borderRadius:999, padding:'2px 6px', boxShadow:T.shadow, whiteSpace:'nowrap', zIndex:2 }}>✓</div>}
-                    </div>
-                  );
-                })}
-              </div>
-              {effectiveSel.length > 0 && (
-                <button onClick={()=>playCards(effectiveSel)} style={{ width:'100%', padding:'13px', background:T.mint, color:'#fff', border:'none', borderRadius:14, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, cursor:'pointer', boxShadow:T.shadow }}>
-                  Lerakom ({effectiveSel.length} lap)
-                </button>
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+
+              {/* ── Playable zone ── */}
+              {playableCards.length > 0 && (
+                <div style={{ background:`${T.mint}12`, border:`1.5px solid ${T.mint}55`, borderRadius:16, padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.mint, textTransform:'uppercase', letterSpacing:'0.08em' }}>✓ Lerakható</div>
+                    {lastFlipped && <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.mint }}>{lastFlipped.rowIdx+1} korty kiosztható</div>}
+                  </div>
+                  <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                    {playableCards.map(card => {
+                      const sel = effectiveSel.includes(card.id);
+                      return (
+                        <div key={card.id} onClick={()=>setSelectedCardIds(ids=>sel?ids.filter(x=>x!==card.id):[...ids,card.id])}
+                          style={{ position:'relative', cursor:'pointer', transform:sel?'translateY(-10px) scale(1.06)':'none', transition:'transform .18s ease', userSelect:'none' }}>
+                          <PlayingCard card={card} size='xl' glow={sel} />
+                          <div style={{ position:'absolute', top:-8, right:-8, width:22, height:22, borderRadius:'50%', background:sel?T.coral:T.mint, border:'2px solid #fff', display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:12, color:'#fff', zIndex:2, transition:'background .15s' }}>{sel?'✓':'+'}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {effectiveSel.length > 0 && (
+                    <button onClick={()=>playCards(effectiveSel)} style={{ width:'100%', padding:'12px', background:T.mint, color:'#fff', border:'none', borderRadius:12, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, cursor:'pointer', boxShadow:`0 4px 14px ${T.mint}55` }}>
+                      Lerakom ({effectiveSel.length} lap · {lastFlipped ? (lastFlipped.rowIdx+1)*effectiveSel.length : 0} korty)
+                    </button>
+                  )}
+                </div>
               )}
+
+              {/* ── Rest of hand ── */}
+              {restCards.length > 0 && (
+                <div>
+                  <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginBottom:7 }}>
+                    {playableCards.length > 0 ? 'Többi lapod' : 'A te lapjaid'} · {myHand.length} lap
+                  </div>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                    {restCards.map(card => (
+                      <div key={card.id} style={{ opacity:0.75 }}>
+                        <PlayingCard card={card} size='md' />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             </div>
           );
         })()}
