@@ -33542,8 +33542,12 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
 
   // Init player now if token already exists and SDK loads before React
   if (window.getSpotifyToken()) window.initSpotifyPlayer();
+  // Spotify Iframe API (programmatic play/pause for embed)
+  window._spotifyIFrameAPI = null;
+  window.onSpotifyIframeApiReady = function(IFrameAPI) { window._spotifyIFrameAPI = IFrameAPI; };
 })();
 </script>
+<script src="https://open.spotify.com/embed/iframe-api/v1" async></script>
 <script type="text/babel">
 const { useState, useEffect, useRef, useMemo } = React;
 
@@ -33803,7 +33807,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.0 · DNR · 2026.05.28 09:51
+              Verzió 3.0 · DNR · 2026.05.28 09:59
             </div>
           </div>
         </div>
@@ -34285,36 +34289,68 @@ const KIVAGYOK_CELEBS = [
 
 function ZeneGame({ gameIdx }) {
   const song = ZENE_SONGS[gameIdx % ZENE_SONGS.length];
-  const [embedKey, setEmbedKey] = useState(0);
+  const [playing, setPlaying] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const ctrlRef = useRef(null);
+  const containerRef = useRef(null);
 
-  // Reset (stop music) when game changes
-  useEffect(() => { setEmbedKey(k => k + 1); setRevealed(false); }, [gameIdx]);
+  // Create a new Spotify embed controller whenever the song changes
+  useEffect(() => {
+    setPlaying(false);
+    setRevealed(false);
 
-  const handleStop = () => setEmbedKey(k => k + 1);
+    const setupCtrl = (IFrameAPI) => {
+      // Destroy previous controller
+      try { if (ctrlRef.current) ctrlRef.current.pause(); } catch(e) {}
+      ctrlRef.current = null;
+      if (containerRef.current) containerRef.current.innerHTML = '';
+
+      IFrameAPI.createController(containerRef.current, {
+        uri: `spotify:track:${song.spotifyId}`,
+        width: '100%',
+        height: 80,
+      }, (ctrl) => { ctrlRef.current = ctrl; });
+    };
+
+    if (window._spotifyIFrameAPI) {
+      setupCtrl(window._spotifyIFrameAPI);
+    } else {
+      const iv = setInterval(() => {
+        if (window._spotifyIFrameAPI) { clearInterval(iv); setupCtrl(window._spotifyIFrameAPI); }
+      }, 300);
+      return () => clearInterval(iv);
+    }
+
+    return () => {
+      try { if (ctrlRef.current) ctrlRef.current.pause(); } catch(e) {}
+    };
+  }, [song.spotifyId]);
+
+  const handlePlay = () => {
+    try { ctrlRef.current.play(); setPlaying(true); } catch(e) {}
+  };
+  const handleStop = () => {
+    try { ctrlRef.current.pause(); setPlaying(false); } catch(e) {}
+  };
 
   return (
     <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8, alignItems:'center' }}>
-      {/* Spotify embed with dark overlay hiding track name; play button visible on right */}
+      {/* Spotify embed lives here — covered by our UI overlay */}
       <div style={{ position:'relative', width:'100%', maxWidth:340, height:80, borderRadius:12, overflow:'hidden', boxShadow:T.shadow }}>
-        <iframe
-          key={embedKey}
-          src={`https://open.spotify.com/embed/track/${song.spotifyId}?utm_source=generator&theme=0`}
-          style={{ width:'100%', height:'100%', border:'none' }}
-          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-        />
-        {/* Dark gradient covers album art + track name; last 90px transparent for ▶ button */}
-        <div style={{
-          position:'absolute', inset:0, pointerEvents:'none',
-          background:'linear-gradient(to right, #121212 calc(100% - 90px), transparent calc(100% - 90px))',
-          display:'flex', alignItems:'center', paddingLeft:14, gap:10,
-        }}>
-          <div style={{ fontSize:26 }}>🎵</div>
-          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:'rgba(255,255,255,0.7)', textTransform:'uppercase', letterSpacing:'0.07em', lineHeight:1.3 }}>Nyomd meg<br/>a ▶ gombot!</div>
+        <div ref={containerRef} style={{ width:'100%', height:'100%' }} />
+        {/* Full overlay — completely hides Spotify UI incl. track name */}
+        <div style={{ position:'absolute', inset:0, pointerEvents:'none', background: playing ? 'linear-gradient(135deg,#1a1a2e,#16213e)' : '#121212', display:'flex', alignItems:'center', justifyContent:'center', gap:12 }}>
+          {playing
+            ? <><div style={{ fontSize:32, animation:'pulse 1.4s infinite' }}>🎵</div><div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:'rgba(255,255,255,0.7)', textTransform:'uppercase', letterSpacing:'0.07em' }}>Hallgasd meg!</div></>
+            : <div style={{ fontFamily:T.font, fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:'0.07em' }}>Spotify betöltés…</div>
+          }
         </div>
       </div>
       <div style={{ display:'flex', gap:8 }}>
-        <button onClick={handleStop} style={{ padding:'8px 16px', background:T.coralSoft, border:'none', color:T.coral, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:12, cursor:'pointer' }}>⏹ Stop</button>
+        {!playing
+          ? <button onClick={handlePlay} style={{ padding:'10px 22px', background:`${T.purple}22`, border:`2px solid ${T.purple}`, color:T.purple, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:12, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>▶ Lejátszás</button>
+          : <button onClick={handleStop} style={{ padding:'10px 22px', background:T.coralSoft, border:'none', color:T.coral, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:12, cursor:'pointer' }}>⏹ Stop</button>
+        }
         <button onClick={() => setRevealed(r => !r)} style={{ padding:'8px 20px', background: revealed ? T.mint : T.surface, border:'none', color: revealed ? '#fff' : T.ink, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:12, cursor:'pointer', boxShadow:T.shadow }}>
           {revealed ? '▲ Elrejt' : '🎵 Felfed'}
         </button>
