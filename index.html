@@ -33808,7 +33808,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.1 · DNR · 2026.05.28 15:02
+              Verzió 3.1 · DNR · 2026.05.28 15:12
             </div>
           </div>
         </div>
@@ -34983,7 +34983,9 @@ function BuszGame({ players, roomCode, mode, gameIdx }) {
     const newCounts = {...st.valueCounts, [card.value]:(st.valueCounts[card.value]||0)+1};
     const isZsulli = newCounts[card.value] >= 4;
     if (isZsulli) { setZsulliAnim(card.value); setTimeout(()=>setZsulliAnim(null),2800); }
-    await persist({...st, pyramid:newPyramid, nextFlipIdx:idx+1, valueCounts:newCounts});
+    const flipInitialDrinks = {};
+    players.forEach(p => { flipInitialDrinks[p.id] = p.drinks || 0; });
+    await persist({...st, pyramid:newPyramid, nextFlipIdx:idx+1, valueCounts:newCounts, flipInitialDrinks});
   };
 
   const endPyramid = async () => {
@@ -35155,12 +35157,13 @@ function BuszGame({ players, roomCode, mode, gameIdx }) {
         </div>
 
         {/* Drinks this round summary */}
-        {buszState.initialDrinks && (
+        {(buszState.flipInitialDrinks || buszState.initialDrinks) && (
           <div>
-            <div style={{fontFamily:T.font,fontSize:10,fontWeight:700,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:6}}>Ezen a körön kapott</div>
+            <div style={{fontFamily:T.font,fontSize:10,fontWeight:700,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:6}}>Ezen a lapnál kapott</div>
             <div style={{display:'flex',gap:7,flexWrap:'wrap'}}>
               {players.map(p=>{
-                const delta = (p.drinks||0) - (buszState.initialDrinks[p.id]||0);
+                const ref = buszState.flipInitialDrinks || buszState.initialDrinks;
+                const delta = (p.drinks||0) - (ref[p.id]||0);
                 return (
                   <div key={p.id} style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',background:T.surfaceMuted,borderRadius:10}}>
                     <div style={{width:24,height:24,borderRadius:'50%',background:p.color,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:700,fontSize:11,color:'#fff',flexShrink:0}}>{(p.name||'?').charAt(0).toUpperCase()}</div>
@@ -35397,7 +35400,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
         </div>
         {/* game name center */}
         <div style={{ flex:1, textAlign:'center', overflow:'hidden' }}>
-          <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink, textTransform:'uppercase', letterSpacing:'0.09em', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{currentGame.name}</div>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{currentGame.name}</div>
         </div>
         {/* info + drinks right – stacked vertically */}
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, flexShrink:0 }}>
@@ -35416,9 +35419,6 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'8px 24px 20px', gap:18, maxWidth:680, margin:'0 auto' }}>
         <div className="content-box" style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:18, width:'100%' }}>
 
-        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textAlign:'center', textTransform:'uppercase', letterSpacing:T.letterDisplay, lineHeight:1, maxWidth:260 }}>
-          {currentGame.name}
-        </div>
         <div style={{ fontFamily:T.font, fontSize:14, fontWeight:600, color:T.inkSoft, textAlign:'center', maxWidth:280, lineHeight:1.4 }}>
           {scenario.prompt}
         </div>
@@ -35880,7 +35880,7 @@ function BuszPlayerView({ room, roomCode }) {
 
       {/* Hand of cards */}
       <div>
-        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>A te lapjaid</div>
+        <div style={{ fontFamily:T.font, fontSize:14, fontWeight:700, color:T.ink, marginBottom:10 }}>A te lapjaid</div>
         {myHand.length === 0 ? (
           <div style={{ padding:'16px', background:T.surfaceMuted, borderRadius:12, textAlign:'center' }}>
             <div style={{ fontFamily:T.font, fontSize:14, color:T.mint, fontWeight:700 }}>🎉 Nincs több lapod!</div>
