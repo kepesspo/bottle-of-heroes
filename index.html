@@ -34156,8 +34156,6 @@ function GameTile({ g, selected, dim, locked, onClick, onInfo, onLongPress }) {
       <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, color:T.ink, textAlign:'center', lineHeight:1.15, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'100%' }}>{g.name}</div>
       <div style={{ width:22, height:3, borderRadius:2, background:diff.tone }} />
 
-      {/* difficulty dot */}
-      <div style={{ position:'absolute', top:8, left:8, width:9, height:9, borderRadius:'50%', background:diff.tone, boxShadow:'0 0 0 1.5px rgba(255,255,255,0.95)', zIndex:2 }} />
       {/* busz configurable gear badge */}
       {g.id === 'busz' && onLongPress && (
         <div style={{ position:'absolute', top:5, left:6, width:16, height:16, borderRadius:'50%', background:T.surface, border:`1.5px solid ${g.color}`, display:'grid', placeItems:'center', zIndex:3, boxShadow:'0 1px 4px rgba(0,0,0,0.18)', fontSize:9 }}>⚙️</div>
@@ -35046,7 +35044,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
     const newPyramid = st.pyramid.map((c,i) => i===idx ? {...c,faceUp:true} : c);
     const newCounts = {...st.valueCounts, [card.value]:(st.valueCounts[card.value]||0)+1};
     const isZsulli = newCounts[card.value] >= 4;
-    if (isZsulli && gameMeta?.buszConfig?.zsulliEnabled !== false) { setZsulliAnim(card.value); }
+    if (isZsulli) { setZsulliAnim(card.value); }
     const flipInitialDrinks = {};
     players.forEach(p => { flipInitialDrinks[p.id] = p.drinks || 0; });
     await persist({...st, pyramid:newPyramid, nextFlipIdx:idx+1, valueCounts:newCounts, flipInitialDrinks});
@@ -35195,6 +35193,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
             const rowCards = pyramid.filter(c=>c.rowIdx===rowIdx).sort((a,b)=>a.posIdx-b.posIdx);
             return (
               <div key={rowIdx} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
+                {isActive && <div style={{width:24,height:4,borderRadius:2,background:T.mint,marginBottom:1,transition:'opacity .3s'}}/>}
                 <div style={{display:'flex',gap:6,padding:'5px 10px',borderRadius:11,background:isActive?`${T.mint}1A`:'transparent',border:`1.5px solid ${isActive?T.mint+'55':'transparent'}`,transition:'all .3s ease'}}>
                   {rowCards.map(card=>{
                     const cnt = card.faceUp ? (buszState.valueCounts?.[card.value]||0) : 0;
@@ -35227,7 +35226,9 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
 
         {/* Drinks this flip — full player list */}
         {(buszState.flipInitialDrinks || buszState.initialDrinks) && (
-          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+          <div style={{display:'flex',flexDirection:'column',gap:5}}>
+            <div style={{fontFamily:T.font,fontSize:10,fontWeight:700,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em'}}>Ezen a lapnál kapott</div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
             {players.map(p=>{
               const ref = buszState.flipInitialDrinks || buszState.initialDrinks;
               const delta = (p.drinks||0) - (ref[p.id]||0);
@@ -35239,23 +35240,9 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
                 </div>
               );
             })}
+            </div>
           </div>
         )}
-
-        {/* Player hand counts — compact chips */}
-        <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
-          {players.map(p=>{
-            const n=(hands[p.id]||[]).length;
-            const isMost = allDone && n===Math.max(...players.map(x=>(hands[x.id]||[]).length));
-            return (
-              <div key={p.id} style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',background:isMost?T.coralSoft:T.surfaceMuted,borderRadius:8,border:`1px solid ${isMost?T.coral+'50':'transparent'}`,transition:'all .3s'}}>
-                <div style={{width:18,height:18,borderRadius:'50%',background:p.color,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:700,fontSize:9,color:'#fff',flexShrink:0}}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-                <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:12,color:T.ink}}>{p.name}</span>
-                <span style={{fontFamily:'monospace',fontWeight:700,fontSize:13,color:isMost?T.coral:n>3?T.coral:T.mint}}>{n}</span>
-              </div>
-            );
-          })}
-        </div>
 
         {/* Action */}
         {allDone ? (
@@ -36018,8 +36005,8 @@ function BuszPlayerView({ room, roomCode }) {
                   </div>
                   <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
                     {restCards.map(card => (
-                      <div key={card.id} style={{ opacity:0.75 }}>
-                        <PlayingCard card={card} size='md' />
+                      <div key={card.id} style={{ opacity:0.72 }}>
+                        <PlayingCard card={card} size='xl' />
                       </div>
                     ))}
                   </div>
