@@ -34937,6 +34937,7 @@ function BuszGame({ players, roomCode, mode, gameIdx }) {
   const [buszState, setBuszState] = useState(null);
   const [zsulliAnim, setZsulliAnim] = useState(null);
   const [ready, setReady] = useState(false);
+  const [guessResult, setGuessResult] = useState(null);
   const stRef = useRef(null);
 
   useEffect(() => {
@@ -34990,8 +34991,55 @@ function BuszGame({ players, roomCode, mode, gameIdx }) {
     const riders = players.filter(p=>(st.hands[p.id]||[]).length===max).map(p=>p.id);
     const busCards = shuffleDeck(generateDeck(st.settings.deckCount))
       .slice(0, st.settings.busSteps)
-      .map((c,i)=>({...c, faceUp: i===1||i===3}));
+      .map((c,i)=>({...c, faceUp: i===0||i===1||i===3}));
     await persist({...st, phase:'bus', busRiders:riders, busCards, busStep:0, currentRiderIdx:0});
+  };
+
+  const makeGuess = async (guess) => {
+    const st = stRef.current;
+    if (!st || st.phase !== 'bus') return;
+    const { busCards, busStep, busRiders, currentRiderIdx, settings } = st;
+    const busStepsCount = settings?.busSteps || 6;
+    if (busStep >= busStepsCount - 1) return;
+    const leftCard = busCards[busStep];
+    const rightCard = busCards[busStep + 1];
+    const leftRank = CARD_VALUES.indexOf(leftCard.value);
+    const rightRank = CARD_VALUES.indexOf(rightCard.value);
+    const correct = (guess === 'K' && rightRank <= leftRank) || (guess === 'N' && rightRank >= leftRank);
+    const newBusCards = busCards.map((c,i) => i === busStep + 1 ? {...c, faceUp:true} : c);
+    if (!correct) {
+      const drinks = busStep + 1;
+      setGuessResult({correct:false, drinks});
+      setTimeout(() => setGuessResult(null), 2200);
+      if (roomCode && mode === 'Online') {
+        try {
+          const snap = await firebase.firestore().collection('rooms').doc(roomCode).get();
+          const rPlayers = snap.data()?.players || [];
+          const riderId = busRiders[currentRiderIdx];
+          const updated = rPlayers.map(p => p.id===riderId ? {...p, drinks:(p.drinks||0)+drinks} : p);
+          await firebase.firestore().collection('rooms').doc(roomCode).update({ players: updated });
+        } catch(e){}
+      }
+      await persist({...st, busCards: newBusCards, busStep: 0});
+    } else {
+      const newStep = busStep + 1;
+      const isDone = newStep >= busStepsCount - 1;
+      setGuessResult({correct:true, done:isDone});
+      setTimeout(() => setGuessResult(null), 1800);
+      if (isDone) {
+        const nextRiderIdx = currentRiderIdx + 1;
+        if (nextRiderIdx >= busRiders.length) {
+          await persist({...st, busCards: newBusCards, phase:'done'});
+        } else {
+          const freshCards = shuffleDeck(generateDeck(settings.deckCount||1))
+            .slice(0, busStepsCount)
+            .map((c,i)=>({...c, faceUp: i===0||i===1||i===3}));
+          await persist({...st, busCards: freshCards, busStep: 0, currentRiderIdx: nextRiderIdx});
+        }
+      } else {
+        await persist({...st, busCards: newBusCards, busStep: newStep});
+      }
+    }
   };
 
   if (!ready) return (
@@ -35112,25 +35160,82 @@ function BuszGame({ players, roomCode, mode, gameIdx }) {
     );
   }
 
-  // ── Bus phase (stub — Phase 3) ────────────────────────────────────────────
-  if (buszState.phase === 'bus') {
-    const riders = players.filter(p=>buszState.busRiders.includes(p.id));
+  // ── Done phase ───────────────────────────────────────────────────────────
+  if (buszState.phase === 'done') {
     return (
-      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16,paddingTop:8,width:'100%'}}>
-        <div style={{fontSize:52}}>🚌</div>
-        <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:22,color:T.ink,textTransform:'uppercase',letterSpacing:T.letterDisplay}}>Buszra szállás</div>
-        <div style={{display:'flex',gap:10,flexWrap:'wrap',justifyContent:'center'}}>
-          {riders.map(p=>(
-            <div key={p.id} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:6,padding:'12px 18px',background:T.coralSoft,borderRadius:14,border:`1.5px solid ${T.coral}40`}}>
-              <div style={{width:46,height:46,borderRadius:'50%',background:p.color,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:700,fontSize:20,color:'#fff'}}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-              <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:14,color:T.ink}}>{p.name}</div>
-              <div style={{fontFamily:T.font,fontSize:12,color:T.coral,fontWeight:700}}>{(buszState.hands[p.id]||[]).length} lap maradt</div>
-            </div>
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:14,paddingTop:8,width:'100%'}}>
+        <div style={{fontSize:52}}>🎉</div>
+        <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:22,color:T.mint,textTransform:'uppercase',letterSpacing:T.letterDisplay}}>Busz kész!</div>
+        <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,textAlign:'center',lineHeight:1.6}}>Mindenki teljesítette a buszjáratot!</div>
+      </div>
+    );
+  }
+
+  // ── Bus phase ────────────────────────────────────────────────────────────
+  if (buszState.phase === 'bus') {
+    const busStepsCount = buszState.settings?.busSteps || 6;
+    const totalGuesses = busStepsCount - 1;
+    const { busCards, busStep, busRiders, currentRiderIdx } = buszState;
+    const currentRider = players.find(p => p.id === busRiders[currentRiderIdx]);
+    const nextCard = busStep < totalGuesses ? busCards[busStep + 1] : null;
+    const nextVisible = !!nextCard && nextCard.faceUp;
+    return (
+      <div style={{display:'flex',flexDirection:'column',gap:14,paddingTop:8,width:'100%'}}>
+        {/* current rider header */}
+        <div style={{textAlign:'center'}}>
+          <div style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:6}}>Buszrajáraton</div>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+            <div style={{width:38,height:38,borderRadius:'50%',background:currentRider?.color||T.coral,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:700,fontSize:17,color:'#fff'}}>{(currentRider?.name||'?').charAt(0).toUpperCase()}</div>
+            <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:17,color:T.ink}}>{currentRider?.name||'?'}</div>
+          </div>
+          <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:4}}>{busStep}/{totalGuesses}. lépés</div>
+        </div>
+        {/* cards row */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:3}}>
+          {busCards.map((card, i) => (
+            <React.Fragment key={i}>
+              <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
+                <PlayingCard card={card} size='sm' faceDown={!card.faceUp} glow={i===busStep+1&&!card.faceUp} />
+                {i===busStep && <div style={{width:5,height:5,borderRadius:'50%',background:T.mint,marginTop:1}}/>}
+              </div>
+              {i < busCards.length-1 && (
+                <div style={{color:i===busStep?T.mint:T.inkSoft,fontSize:14,fontWeight:'bold',marginBottom:8,flexShrink:0}}>›</div>
+              )}
+            </React.Fragment>
           ))}
         </div>
-        <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,textAlign:'center',lineHeight:1.6,padding:'0 16px'}}>
-          A kisebb/nagyobb buszjáték a következő fázisban érkezik.
+        {/* guess result feedback */}
+        {guessResult && (
+          <div style={{textAlign:'center',padding:'10px 16px',borderRadius:14,background:guessResult.correct?`${T.mint}22`:`${T.coral}22`,border:`2px solid ${guessResult.correct?T.mint:T.coral}`,animation:'popIn .3s'}}>
+            <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:15,color:guessResult.correct?T.mint:T.coral}}>
+              {guessResult.correct ? (guessResult.done ? '🎉 Teljesítve!' : '✓ Helyes!') : `✗ Rossz! ${guessResult.drinks} kortynyi!`}
+            </div>
+          </div>
+        )}
+        {/* K/N buttons */}
+        <div style={{display:'flex',gap:10}}>
+          <button onClick={()=>makeGuess('K')} disabled={nextVisible} style={{flex:1,minHeight:52,border:`2px solid ${T.coral}`,background:'transparent',color:T.coral,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:16,borderRadius:14,cursor:nextVisible?'default':'pointer',opacity:nextVisible?0.35:1}}>▼ Kisebb</button>
+          <button onClick={()=>makeGuess('N')} disabled={nextVisible} style={{flex:1,minHeight:52,border:`2px solid ${T.mint}`,background:'transparent',color:T.mint,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:16,borderRadius:14,cursor:nextVisible?'default':'pointer',opacity:nextVisible?0.35:1}}>▲ Nagyobb</button>
         </div>
+        {nextVisible && (
+          <button onClick={()=>{ const lr=CARD_VALUES.indexOf(busCards[busStep].value),rr=CARD_VALUES.indexOf(busCards[busStep+1].value); makeGuess(rr<=lr?'K':'N'); }} style={{width:'100%',minHeight:52,border:'none',background:T.mint,color:'#fff',fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,borderRadius:14,cursor:'pointer',boxShadow:T.shadow}}>
+            Tovább ▶
+          </button>
+        )}
+        {/* other riders */}
+        {busRiders.length > 1 && (
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center'}}>
+            {busRiders.map((rid, i) => {
+              const rp = players.find(p=>p.id===rid);
+              return (
+                <div key={rid} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',borderRadius:999,background:T.surface,border:`1.5px solid ${i===currentRiderIdx?T.mint:'transparent'}`}}>
+                  <div style={{width:20,height:20,borderRadius:'50%',background:rp?.color,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:700,fontSize:9,color:'#fff'}}>{(rp?.name||'?').charAt(0).toUpperCase()}</div>
+                  <div style={{fontFamily:T.font,fontSize:12,fontWeight:600,color:i===currentRiderIdx?T.mint:T.inkSoft}}>{rp?.name||'?'}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }
@@ -35513,6 +35618,7 @@ function BuszPlayerView({ room, roomCode }) {
     return players.find(p => p.id === saved) ? saved : null;
   });
   const [giftTarget, setGiftTarget] = useState(null); // { pool, assigned:{} }
+  const [busGuessResult, setBusGuessResult] = useState(null);
 
   const player = players.find(p => p.id === playerId);
   const myHand = buszState ? (buszState.hands?.[playerId] || []) : [];
@@ -35545,7 +35651,7 @@ function BuszPlayerView({ room, roomCode }) {
   );
 
   // ── Waiting for game to start ────────────────────────────────────────────
-  if (!buszState || !['pyramid','bus'].includes(buszState.phase)) return (
+  if (!buszState || !['pyramid','bus','done'].includes(buszState.phase)) return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:14, padding:24 }}>
       <div style={{ width:54, height:54, borderRadius:'50%', background:player.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:22, color:'#fff' }}>{(player.name||'?').charAt(0).toUpperCase()}</div>
       <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Helló, {player.name}!</div>
@@ -35555,18 +35661,119 @@ function BuszPlayerView({ room, roomCode }) {
     </div>
   );
 
+  // ── Done phase ───────────────────────────────────────────────────────────
+  if (buszState.phase === 'done') {
+    return (
+      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:14, padding:24 }}>
+        <div style={{ fontSize:52 }}>🎉</div>
+        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.mint, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Busz kész!</div>
+        <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center' }}>A buszjárat véget ért!</div>
+      </div>
+    );
+  }
+
   // ── Bus phase ────────────────────────────────────────────────────────────
   if (buszState.phase === 'bus') {
     const onBus = buszState.busRiders?.includes(playerId);
+    if (!onBus) return (
+      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:14, padding:24 }}>
+        <div style={{ fontSize:52 }}>🎉</div>
+        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.mint, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Megúsztad!</div>
+        <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center' }}>Nem nálad volt a legtöbb lap — szerencsés vagy!</div>
+      </div>
+    );
+
+    const makeGuessPlayer = async (guess) => {
+      try {
+        const snap = await firebase.firestore().collection('rooms').doc(roomCode).get();
+        const st = snap.data()?.buszState;
+        if (!st || st.phase !== 'bus') return;
+        const { busCards, busStep, busRiders, currentRiderIdx, settings } = st;
+        const busStepsCount = settings?.busSteps || 6;
+        if (busStep >= busStepsCount - 1) return;
+        if (busRiders[currentRiderIdx] !== playerId) return;
+        const leftRank = CARD_VALUES.indexOf(busCards[busStep].value);
+        const rightRank = CARD_VALUES.indexOf(busCards[busStep + 1].value);
+        const correct = (guess === 'K' && rightRank <= leftRank) || (guess === 'N' && rightRank >= leftRank);
+        const newBusCards = busCards.map((c,i) => i === busStep + 1 ? {...c, faceUp:true} : c);
+        if (!correct) {
+          const drinks = busStep + 1;
+          setBusGuessResult({correct:false, drinks});
+          setTimeout(() => setBusGuessResult(null), 2200);
+          const rPlayers = snap.data()?.players || [];
+          const updated = rPlayers.map(p => p.id===playerId ? {...p, drinks:(p.drinks||0)+drinks} : p);
+          await firebase.firestore().collection('rooms').doc(roomCode).update({ players: updated, buszState: {...st, busCards: newBusCards, busStep: 0} });
+        } else {
+          const newStep = busStep + 1;
+          const isDone = newStep >= busStepsCount - 1;
+          setBusGuessResult({correct:true, done:isDone});
+          setTimeout(() => setBusGuessResult(null), 1800);
+          if (isDone) {
+            const nextRiderIdx = currentRiderIdx + 1;
+            if (nextRiderIdx >= busRiders.length) {
+              await firebase.firestore().collection('rooms').doc(roomCode).update({ buszState: {...st, busCards: newBusCards, phase:'done'} });
+            } else {
+              const freshCards = shuffleDeck(generateDeck(settings.deckCount||1))
+                .slice(0, busStepsCount)
+                .map((c,i)=>({...c, faceUp: i===0||i===1||i===3}));
+              await firebase.firestore().collection('rooms').doc(roomCode).update({ buszState: {...st, busCards: freshCards, busStep: 0, currentRiderIdx: nextRiderIdx} });
+            }
+          } else {
+            await firebase.firestore().collection('rooms').doc(roomCode).update({ buszState: {...st, busCards: newBusCards, busStep: newStep} });
+          }
+        }
+      } catch(e) { console.error(e); }
+    };
+
+    const { busCards, busStep, busRiders, currentRiderIdx } = buszState;
+    const busStepsCount = buszState.settings?.busSteps || 6;
+    const totalGuesses = busStepsCount - 1;
+    const isMyTurn = busRiders[currentRiderIdx] === playerId;
+    const nextCard = busStep < totalGuesses ? busCards[busStep + 1] : null;
+    const nextVisible = !!nextCard && nextCard.faceUp;
     return (
-      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, padding:24 }}>
-        <div style={{ fontSize:60 }}>{onBus ? '🚌' : '🎉'}</div>
-        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:onBus?T.coral:T.mint, textTransform:'uppercase', letterSpacing:T.letterDisplay, textAlign:'center' }}>
-          {onBus ? 'Felszálltál a buszra!' : 'Megúsztad!'}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', gap:16, padding:'16px 18px', overflowY:'auto' }}>
+        {/* my turn indicator */}
+        <div style={{ textAlign:'center', padding:'8px 0' }}>
+          <div style={{ fontFamily:T.font, fontSize:12, color:isMyTurn?T.mint:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>
+            {isMyTurn ? '🚌 A te sorod!' : 'Várd meg a sorodat…'}
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:4 }}>{busStep}/{totalGuesses}. lépés</div>
         </div>
-        <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center', lineHeight:1.6, maxWidth:280 }}>
-          {onBus ? `${myHand.length} lap maradt a kezedben. Kisebb/Nagyobb következik!` : 'Nem nálad volt a legtöbb lap — szerencsés vagy!'}
+        {/* cards row */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:3 }}>
+          {busCards.map((card, i) => (
+            <React.Fragment key={i}>
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
+                <PlayingCard card={card} size='sm' faceDown={!card.faceUp} glow={i===busStep+1&&!card.faceUp&&isMyTurn} />
+                {i===busStep && <div style={{ width:5, height:5, borderRadius:'50%', background:T.mint, marginTop:1 }}/>}
+              </div>
+              {i < busCards.length-1 && (
+                <div style={{ color:i===busStep?T.mint:T.inkSoft, fontSize:14, fontWeight:'bold', marginBottom:8, flexShrink:0 }}>›</div>
+              )}
+            </React.Fragment>
+          ))}
         </div>
+        {/* guess result feedback */}
+        {busGuessResult && (
+          <div style={{ textAlign:'center', padding:'10px 16px', borderRadius:14, background:busGuessResult.correct?`${T.mint}22`:`${T.coral}22`, border:`2px solid ${busGuessResult.correct?T.mint:T.coral}`, animation:'popIn .3s' }}>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color:busGuessResult.correct?T.mint:T.coral }}>
+              {busGuessResult.correct ? (busGuessResult.done ? '🎉 Teljesítve!' : '✓ Helyes!') : `✗ Rossz! ${busGuessResult.drinks} kortynyi!`}
+            </div>
+          </div>
+        )}
+        {/* K/N buttons - only shown if it's my turn */}
+        {isMyTurn && !nextVisible && (
+          <div style={{ display:'flex', gap:10 }}>
+            <button onClick={()=>makeGuessPlayer('K')} style={{ flex:1, minHeight:56, border:`2px solid ${T.coral}`, background:'transparent', color:T.coral, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor:'pointer' }}>▼ Kisebb</button>
+            <button onClick={()=>makeGuessPlayer('N')} style={{ flex:1, minHeight:56, border:`2px solid ${T.mint}`, background:'transparent', color:T.mint, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor:'pointer' }}>▲ Nagyobb</button>
+          </div>
+        )}
+        {isMyTurn && nextVisible && (
+          <button onClick={()=>{ const lr=CARD_VALUES.indexOf(busCards[busStep].value),rr=CARD_VALUES.indexOf(busCards[busStep+1].value); makeGuessPlayer(rr<=lr?'K':'N'); }} style={{ width:'100%', minHeight:56, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>
+            Tovább ▶
+          </button>
+        )}
       </div>
     );
   }
