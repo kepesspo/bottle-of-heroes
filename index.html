@@ -33807,7 +33807,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.0 · DNR · 2026.05.28 09:59
+              Verzió 3.0 · DNR · 2026.05.28 10:20
             </div>
           </div>
         </div>
@@ -33923,48 +33923,63 @@ function PlayerCard({ p, onEdit, onRemove }) {
 }
 
 function PlayerEditSheet({ player, onClose, onChange, usedColors }) {
+  const [kbH, setKbH] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const upd = () => setKbH(Math.max(0, window.innerHeight - vv.height));
+    vv.addEventListener('resize', upd);
+    vv.addEventListener('scroll', upd);
+    upd();
+    return () => { vv.removeEventListener('resize', upd); vv.removeEventListener('scroll', upd); };
+  }, []);
   return (
-    <SheetOverlay onClose={onClose}>
-      <div style={{ padding:'4px 18px 18px', display:'flex', flexDirection:'column', gap:10 }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:12 }}>
-          <div style={{ width:56, height:56, borderRadius:'50%', background:player.color, display:'grid', placeItems:'center', flexShrink:0 }}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="8" r="3.5" stroke="#fff" strokeWidth="2"/>
-              <path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Játékos</div>
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.45)', zIndex:40, display:'flex', alignItems:'flex-end', animation:'fadeIn .2s' }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width:'100%', background:T.surface, borderTopLeftRadius:28, borderTopRightRadius:28,
+        boxShadow:'0 -10px 40px rgba(0,0,0,0.2)', animation:'slideUp .3s cubic-bezier(.2,.9,.3,1)',
+        transform:`translateY(-${kbH}px)`, transition:'transform .15s ease-out',
+      }}>
+        <div style={{ display:'flex', justifyContent:'center', padding:'8px 0 4px' }}>
+          <div style={{ width:44, height:5, borderRadius:3, background:T.inkMute, opacity:0.35 }} />
         </div>
-        <input autoFocus value={player.name} onChange={e => onChange({ name:e.target.value.slice(0,14) })}
-          placeholder="Név…"
-          style={{
-            width:'100%', boxSizing:'border-box',
-            background:T.bgSoft, border:'none', borderRadius:14,
-            padding:'11px 14px', fontFamily:T.font, fontWeight:T.weightTitle,
-            fontSize:16, color:T.ink, textAlign:'center', outline:'none',
-          }} />
-        <div>
-          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.06em' }}>Szín</div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:8 }}>
+        <div style={{ padding:'0 14px 12px', display:'flex', flexDirection:'column', gap:8 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ width:44, height:44, borderRadius:'50%', background:player.color, flexShrink:0, display:'grid', placeItems:'center' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="8" r="3.5" stroke="#fff" strokeWidth="2"/>
+                <path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <input autoFocus value={player.name} onChange={e => onChange({ name:e.target.value.slice(0,14) })}
+              placeholder="Játékos neve…"
+              style={{
+                flex:1, boxSizing:'border-box',
+                background:T.bgSoft, border:'none', borderRadius:12,
+                padding:'10px 12px', fontFamily:T.font, fontWeight:T.weightTitle,
+                fontSize:16, color:T.ink, outline:'none',
+              }} />
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(10, 1fr)', gap:5 }}>
             {PLAYER_COLORS.map(c => {
               const used = usedColors.has(c) && c !== player.color;
               const active = c === player.color;
               return (
                 <button key={c} disabled={used} onClick={() => onChange({ color:c })} style={{
-                  aspectRatio:'1/1', borderRadius:'50%', background:c,
+                  height:28, borderRadius:'50%', background:c, padding:0,
                   border: active ? `3px solid ${T.ink}` : '2px solid transparent',
                   cursor: used ? 'default' : 'pointer',
                   opacity: used ? 0.25 : 1,
-                  transform: active ? 'scale(1.08)' : 'scale(1)',
+                  transform: active ? 'scale(1.15)' : 'scale(1)',
                   transition:'transform .15s',
                 }} />
               );
             })}
           </div>
+          <PrimaryButton onClick={onClose} disabled={!player.name.trim()}>Mehet</PrimaryButton>
         </div>
-        <PrimaryButton onClick={onClose} disabled={!player.name.trim()}>Mehet</PrimaryButton>
       </div>
-    </SheetOverlay>
+    </div>
   );
 }
 
@@ -34221,7 +34236,7 @@ const SCENARIOS = {
   szerencse: { prompt:'Pörgesd meg a kereket — akire mutat, az iszik.', cta:['Rám mutatott','Másra mutatott'] },
   sohanem:   { prompt:'Én még soha — igaz rád?', cta:['Igaz rám — iszom','Nem igaz rám'] },
   mindenki:  { prompt:'A kisorsolt játékosnak innia kell.', cta:['Iszom','Tovább'] },
-  igazhamis: { prompt:'Igaz vagy hamis az állítás?', cta:['Hamis — nem iszom','Igaz — iszom'] },
+  igazhamis: { prompt:'Igaz vagy hamis az állítás?', cta:['Tévedtem — iszom','Eltaláltam!'] },
   kivagyok:  { prompt:'Ki van a képen? Tippelj rá az életkorára vagy foglalkozására!', cta:['Nem ismertem meg','Megismertem!'] },
   // Páros
   erem:      { prompt:'Fej vagy írás — döntsétek el, ki iszik!', cta:['Vesztettem','Nyertem!'] },
@@ -34386,9 +34401,291 @@ function KivagyokGame({ gameIdx }) {
   );
 }
 
-function GameContent({ gameId, gameIdx }) {
+const IGAZ_HAMIS = [
+  { text:'Az ember szíve percenként átlagosan 60–100-szor ver.', igaz:true },
+  { text:'Magyarország fővárosa Debrecen.', igaz:false },
+  { text:'A gyémánt a legeményebb természetes anyag a Földön.', igaz:true },
+  { text:'A cápa emlős állat.', igaz:false },
+  { text:'A Nílus a világ leghosszabb folyója.', igaz:true },
+  { text:'A kávé Kínából ered.', igaz:false },
+  { text:'Az alkohol valójában melegít a hidegtől.', igaz:false },
+  { text:'A csimpánz az ember legközelebbi élő rokona.', igaz:true },
+  { text:'A Hold saját fényt bocsát ki.', igaz:false },
+  { text:'Az oktopusznak három szíve van.', igaz:true },
+  { text:'A denevér teljesen vak állat.', igaz:false },
+  { text:'A víz pontosan 0°C-on fagy meg normál légnyomáson.', igaz:true },
+  { text:'Mozart 35 éves korában halt meg.', igaz:true },
+  { text:'A Titanic 1912-ben süllyedt el.', igaz:true },
+  { text:'Az emberi testnek 206 csontja van felnőttkorban.', igaz:true },
+  { text:'Európa a világ legkisebb kontinense.', igaz:false },
+  { text:'A fény sebessége kb. 300 000 km/s.', igaz:true },
+  { text:'A struccok homokba dugják a fejüket, ha megijednek.', igaz:false },
+  { text:'A méhek elpusztulnak, miután egyszer megcsíptek valakit.', igaz:true },
+  { text:'Az arany nem oldódik sósavban.', igaz:true },
+];
+
+const HORSES = [
+  { id:1, color:'#EF4444', emoji:'🔴', name:'Vörös' },
+  { id:2, color:'#F4C95A', emoji:'🟡', name:'Sárga' },
+  { id:3, color:'#4FC2A0', emoji:'🟢', name:'Zöld' },
+  { id:4, color:'#5BA0DB', emoji:'🔵', name:'Kék' },
+];
+
+function IgazHamisGame({ gameIdx }) {
+  const item = IGAZ_HAMIS[gameIdx % IGAZ_HAMIS.length];
+  const [guess, setGuess] = useState(null);
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => { setGuess(null); setRevealed(false); }, [gameIdx]);
+  const correct = guess !== null && guess === item.igaz;
+  return (
+    <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
+      <div style={{ background:T.surface, borderRadius:16, padding:'14px 18px', width:'100%', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontSize:16, fontWeight:700, color:T.ink, lineHeight:1.5, textAlign:'center' }}>{item.text}</div>
+      </div>
+      {!revealed ? (
+        <div style={{ display:'flex', gap:10 }}>
+          <button onClick={() => { setGuess(true); setRevealed(true); }} style={{ padding:'10px 22px', background:`${T.mint}22`, border:`2px solid ${T.mint}`, color:T.mint, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer' }}>✓ Igaz</button>
+          <button onClick={() => { setGuess(false); setRevealed(true); }} style={{ padding:'10px 22px', background:`${T.coral}22`, border:`2px solid ${T.coral}`, color:T.coral, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer' }}>✗ Hamis</button>
+        </div>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, animation:'popIn .3s' }}>
+          <div style={{ padding:'8px 20px', borderRadius:14, background: item.igaz ? `${T.mint}22` : `${T.coral}22`, border:`2px solid ${item.igaz ? T.mint : T.coral}` }}>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color: item.igaz ? T.mint : T.coral }}>{item.igaz ? '✓ IGAZ' : '✗ HAMIS'}</div>
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:14, fontWeight:700, color: correct ? T.mint : T.coral }}>
+            {correct ? 'Helyes! Nem iszol 🎉' : 'Tévedtél! Iszol 🍺'}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SzerencsekerékGame({ gameIdx, players }) {
+  const [rotation, setRotation] = useState(0);
+  const [spinning, setSpinning] = useState(false);
+  const [winner, setWinner] = useState(null);
+  useEffect(() => { setRotation(0); setSpinning(false); setWinner(null); }, [gameIdx]);
+
+  const n = players.length || 1;
+  const segDeg = 360 / n;
+
+  const spin = () => {
+    if (spinning || winner) return;
+    const extra = 5 + Math.floor(Math.random() * 5);
+    const finalAngle = Math.random() * 360;
+    const total = rotation + extra * 360 + finalAngle;
+    setSpinning(true);
+    setWinner(null);
+    setRotation(total);
+    setTimeout(() => {
+      const norm = ((total % 360) + 360) % 360;
+      const idx = Math.floor(((360 - norm) % 360) / segDeg) % n;
+      setWinner(players[idx]);
+      setSpinning(false);
+    }, 3200);
+  };
+
+  const paths = players.map((p, i) => {
+    const a1 = (i * segDeg - 90) * Math.PI / 180;
+    const a2 = ((i + 1) * segDeg - 90) * Math.PI / 180;
+    const x1 = 100 + 90 * Math.cos(a1), y1 = 100 + 90 * Math.sin(a1);
+    const x2 = 100 + 90 * Math.cos(a2), y2 = 100 + 90 * Math.sin(a2);
+    const large = segDeg > 180 ? 1 : 0;
+    const mid = ((i + 0.5) * segDeg - 90) * Math.PI / 180;
+    const lx = 100 + 58 * Math.cos(mid), ly = 100 + 58 * Math.sin(mid);
+    return { p:p, path:`M 100 100 L ${x1.toFixed(2)} ${y1.toFixed(2)} A 90 90 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`, lx, ly, label:(p.name||'?').slice(0,6) };
+  });
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+      <div style={{ fontSize:20, lineHeight:1, color:T.ink }}>▼</div>
+      <div style={{ position:'relative', width:200, height:200 }}>
+        <svg width="200" height="200" viewBox="0 0 200 200"
+          style={{ display:'block', transform:`rotate(${rotation}deg)`, transition: spinning ? 'transform 3.2s cubic-bezier(0.17,0.67,0.12,0.99)' : 'none' }}>
+          {paths.map(({ p, path, lx, ly, label }, i) => (
+            <g key={p.id || i}>
+              <path d={path} fill={p.color || '#ccc'} stroke="white" strokeWidth="2"/>
+              <text x={lx.toFixed(1)} y={ly.toFixed(1)} textAnchor="middle" dominantBaseline="middle"
+                fill="white" fontSize="11" fontWeight="bold" style={{ userSelect:'none', pointerEvents:'none' }}>{label}</text>
+            </g>
+          ))}
+          <circle cx="100" cy="100" r="10" fill="white" stroke="#ccc" strokeWidth="1.5"/>
+        </svg>
+      </div>
+      {!winner ? (
+        <button onClick={spin} disabled={spinning} style={{ padding:'10px 28px', background:`${T.purple}22`, border:`2px solid ${T.purple}`, color:T.purple, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor: spinning ? 'default' : 'pointer', opacity: spinning ? 0.6 : 1 }}>
+          {spinning ? '🌀 Pörög…' : '🎡 Pörgetés!'}
+        </button>
+      ) : (
+        <div style={{ background:T.surface, borderRadius:16, padding:'10px 20px', textAlign:'center', boxShadow:T.shadow, animation:'popIn .35s' }}>
+          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Iszik</div>
+          <div style={{ display:'flex', alignItems:'center', gap:8, justifyContent:'center' }}>
+            <div style={{ width:34, height:34, borderRadius:'50%', background:winner.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color:'#fff' }}>{(winner.name||'?').charAt(0).toUpperCase()}</div>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.ink }}>{winner.name}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LóversenyGame({ gameIdx, players, onAdvance }) {
+  const [phase, setPhase] = useState('bet');
+  const [bets, setBets] = useState({});
+  const [betStep, setBetStep] = useState(0);
+  const [positions, setPositions] = useState([0,0,0,0]);
+  const [raceWinner, setRaceWinner] = useState(null);
+  const ivRef = useRef(null);
+  const posRef = useRef([0,0,0,0]);
+  const FINISH = 8;
+
+  useEffect(() => {
+    return () => { if (ivRef.current) clearInterval(ivRef.current); };
+  }, []);
+  useEffect(() => {
+    setPhase('bet'); setBets({}); setBetStep(0);
+    setPositions([0,0,0,0]); setRaceWinner(null);
+    posRef.current = [0,0,0,0];
+    if (ivRef.current) { clearInterval(ivRef.current); ivRef.current = null; }
+  }, [gameIdx]);
+
+  const startRace = () => {
+    setPhase('race');
+    posRef.current = [0,0,0,0];
+    ivRef.current = setInterval(() => {
+      const idx = Math.floor(Math.random() * 4);
+      posRef.current[idx]++;
+      setPositions([...posRef.current]);
+      if (posRef.current[idx] >= FINISH) {
+        clearInterval(ivRef.current); ivRef.current = null;
+        setRaceWinner(HORSES[idx].id);
+        setPhase('result');
+      }
+    }, 450);
+  };
+
+  const finishGame = () => {
+    const drinkMap = {};
+    players.forEach(p => {
+      const b = bets[p.id];
+      if (b && b.horseId !== raceWinner) drinkMap[p.id] = b.amount;
+    });
+    if (onAdvance) onAdvance(drinkMap);
+  };
+
+  // ── Betting phase ──
+  if (phase === 'bet') {
+    const cp = players[betStep];
+    if (!cp) return null;
+    const myBet = bets[cp.id] || {};
+    const isLast = betStep === players.length - 1;
+    return (
+      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ width:34, height:34, borderRadius:'50%', background:cp.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color:'#fff' }}>{(cp.name||'?').charAt(0).toUpperCase()}</div>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{cp.name} tétje</div>
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{betStep+1}/{players.length}</div>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6, width:'100%' }}>
+          {HORSES.map(h => {
+            const sel = myBet.horseId === h.id;
+            return (
+              <button key={h.id} onClick={() => setBets({...bets,[cp.id]:{...myBet,horseId:h.id}})} style={{
+                padding:'8px 4px', borderRadius:12, border:`2px solid ${sel ? h.color : 'transparent'}`,
+                background: sel ? `${h.color}22` : T.surfaceMuted, cursor:'pointer',
+                display:'flex', flexDirection:'column', alignItems:'center', gap:3,
+              }}>
+                <div style={{ fontSize:20 }}>{h.emoji}</div>
+                <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color: sel ? h.color : T.inkSoft }}>{h.name}</div>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display:'flex', gap:6 }}>
+          {[1,2,3,4,5].map(n => {
+            const sel = myBet.amount === n;
+            return (
+              <button key={n} onClick={() => setBets({...bets,[cp.id]:{...myBet,amount:n}})} style={{
+                width:44, height:44, borderRadius:12, border:`2px solid ${sel ? T.coral : 'transparent'}`,
+                background: sel ? T.coralSoft : T.surfaceMuted, cursor:'pointer',
+                fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color: sel ? T.coral : T.inkSoft,
+                display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:0,
+              }}>
+                <div>{n}</div>
+                <div style={{ fontSize:10 }}>🍺</div>
+              </button>
+            );
+          })}
+        </div>
+        <button disabled={!myBet.horseId || !myBet.amount} onClick={() => isLast ? startRace() : setBetStep(betStep+1)}
+          style={{ padding:'10px 24px', background: (!myBet.horseId||!myBet.amount) ? T.surfaceMuted : T.mint, border:'none', color: (!myBet.horseId||!myBet.amount) ? T.inkSoft : '#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:14, cursor: (!myBet.horseId||!myBet.amount) ? 'default' : 'pointer' }}>
+          {isLast ? '🏁 Rajt!' : 'Következő →'}
+        </button>
+      </div>
+    );
+  }
+
+  // ── Race phase ──
+  if (phase === 'race' || (phase === 'result' && raceWinner)) {
+    const winnerHorse = HORSES.find(h => h.id === raceWinner);
+    return (
+      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8 }}>
+        {phase === 'result' && winnerHorse && (
+          <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, animation:'popIn .4s' }}>
+            🏆 {winnerHorse.emoji} {winnerHorse.name} nyert!
+          </div>
+        )}
+        {HORSES.map((h, idx) => {
+          const pct = Math.min(positions[idx] / FINISH, 1);
+          const won = raceWinner === h.id;
+          return (
+            <div key={h.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <div style={{ width:22, textAlign:'center', fontSize:16 }}>{h.emoji}</div>
+              <div style={{ flex:1, height:24, background:T.surfaceMuted, borderRadius:12, overflow:'hidden', position:'relative' }}>
+                <div style={{ width:`${pct*100}%`, height:'100%', background:h.color, borderRadius:12, transition:'width .35s', display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:4 }}>
+                  {pct > 0.1 && <div style={{ fontSize:14 }}>🏇</div>}
+                </div>
+              </div>
+              {won && <div style={{ fontSize:16 }}>🏆</div>}
+            </div>
+          );
+        })}
+        {phase === 'result' && (
+          <div style={{ marginTop:4, display:'flex', flexDirection:'column', gap:4 }}>
+            {players.map(p => {
+              const b = bets[p.id];
+              const horse = HORSES.find(h => h.id === b?.horseId);
+              const won = b?.horseId === raceWinner;
+              return (
+                <div key={p.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px', background:T.surface, borderRadius:10, boxShadow:T.shadow }}>
+                  <div style={{ width:28, height:28, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:12, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+                  <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink }}>{p.name}</div>
+                  <div style={{ fontSize:13 }}>{horse?.emoji}</div>
+                  <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color: won ? T.mint : T.coral }}>
+                    {won ? '🎉 Nyert' : `🍺 ×${b?.amount||0}`}
+                  </div>
+                </div>
+              );
+            })}
+            <button onClick={finishGame} style={{ marginTop:4, padding:'10px 0', background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>
+              Következő ▶
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function GameContent({ gameId, gameIdx, players, onAdvance }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} />;
+  if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} />;
+  if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} />;
+  if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   return null;
 }
 
@@ -34489,6 +34786,12 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
     commitRound(newPlayers, currentPlayerWon?'win':'lose', (turn+1)%players.length, gameIdx+1, round+1);
   };
 
+  const advanceLoverseny = (drinkMap) => {
+    if (transitioning) return;
+    const newPlayers = players.map(p => ({ ...p, drinks: p.drinks + (drinkMap[p.id] || 0) }));
+    commitRound(newPlayers, null, (turn+1)%players.length, gameIdx+1, round+1);
+  };
+
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg }}>
       <div style={{ flex:1, display:'flex', flexDirection:'column', maxWidth:680, width:'100%', margin:'0 auto', position:'relative', overflow:'hidden' }}>
@@ -34538,7 +34841,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
           {scenario.prompt}
         </div>
 
-        <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} />
+        <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} />
       </div>
       </div>
       </div>{/* end centered container */}
@@ -34582,7 +34885,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
           </div>
         </div>
       )}
-      {currentGame.category === 'Csapat' && (
+      {currentGame.category === 'Csapat' && currentGameId !== 'loverseny' && (
         <div style={{ padding:'0 18px 14px', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
           <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>Ki nyert?</div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center' }}>
