@@ -34999,6 +34999,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
   const [ready, setReady] = useState(false);
   const [guessResult, setGuessResult] = useState(null);
   const [takenIds, setTakenIds] = useState([]);
+  const [showQR, setShowQR] = useState(false);
   const stRef = useRef(null);
   const autoStartRef = useRef(false);
 
@@ -35173,10 +35174,22 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
     <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:18,width:'100%',paddingTop:4}}>
       <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:22,color:T.ink,textTransform:'uppercase',letterSpacing:T.letterDisplay}}>🚌 Busz</div>
       {isOnline && roomCode && (
-        <div style={{background:T.surfaceMuted,borderRadius:16,padding:'16px 24px',textAlign:'center',width:'100%',boxSizing:'border-box'}}>
+        <div style={{background:T.surfaceMuted,borderRadius:16,padding:'16px 24px',textAlign:'center',width:'100%',boxSizing:'border-box',position:'relative'}}>
+          <button onClick={()=>setShowQR(true)} style={{position:'absolute',top:10,right:10,width:34,height:34,borderRadius:10,background:'transparent',border:`1.5px solid ${T.inkMute}50`,cursor:'pointer',display:'grid',placeItems:'center',fontSize:17}} title="QR kód">⬛</button>
           <div style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,marginBottom:4,textTransform:'uppercase',letterSpacing:'0.09em'}}>Szobakód</div>
           <div style={{fontFamily:'monospace',fontWeight:700,fontSize:34,color:T.mint,letterSpacing:'0.18em'}}>{roomCode}</div>
           <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:4}}>Ezen a kódon csatlakozzanak a játékosok</div>
+        </div>
+      )}
+      {showQR && roomCode && (
+        <div onClick={()=>setShowQR(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.72)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:24}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:T.surface,borderRadius:24,padding:28,display:'flex',flexDirection:'column',alignItems:'center',gap:14,width:'100%',maxWidth:300,boxShadow:'0 8px 40px rgba(0,0,0,0.4)'}}>
+            <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:17,color:T.ink}}>Csatlakozási QR kód</div>
+            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&color=141424&bgcolor=FBEFD8&data=${encodeURIComponent(window.location.href.split('?')[0]+'?room='+roomCode)}`} width={200} height={200} style={{borderRadius:12,border:`2px solid ${T.surfaceMuted}`}} alt="QR" />
+            <div style={{fontFamily:'monospace',fontWeight:700,fontSize:26,color:T.mint,letterSpacing:'0.18em'}}>{roomCode}</div>
+            <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,textAlign:'center',lineHeight:1.5}}>Szkenneld be a kamerával,<br/>egyből a csatlakozó oldalra dob</div>
+            <button onClick={()=>setShowQR(false)} style={{width:'100%',padding:'12px',background:T.mint,color:'#fff',border:'none',borderRadius:12,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,cursor:'pointer'}}>Bezár</button>
+          </div>
         </div>
       )}
       <div style={{width:'100%',display:'flex',flexDirection:'column',gap:6}}>
@@ -36612,13 +36625,17 @@ function BuszPlayerView({ room, roomCode }) {
   );
 }
 
-function ObserverScreen({ go }) {
+function ObserverScreen({ go, initialCode }) {
   const CODE_LEN = 6;
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(() => (initialCode||'').slice(0,6));
   const [name, setName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [observerId] = useState(() => 'obs_' + Date.now());
   const [status, setStatus] = useState('enter');
+
+  React.useEffect(() => {
+    if (initialCode) window.history.replaceState({}, document.title, window.location.pathname);
+  }, []);
 
   const push = d => { if (status!=='enter') return; setCode(c => (c+d).slice(0,CODE_LEN)); };
   const back = () => setCode(c => c.slice(0,-1));
@@ -36991,7 +37008,8 @@ function EmojiFly({ char }) {
 
 // ─── APP ROUTER ───────────────────────────────────────────────
 function BottleApp() {
-  const [screen, setScreen] = useState('home');
+  const _initRoom = React.useMemo(() => { try { return new URLSearchParams(window.location.search).get('room') || ''; } catch(e) { return ''; } }, []);
+  const [screen, setScreen] = useState(() => _initRoom ? 'observer' : 'home');
   const [prev, setPrev] = useState(null);
   const [mode, setMode] = useState('Online');
   const [players, setPlayers] = useState(INITIAL_PLAYERS);
@@ -37039,7 +37057,7 @@ function BottleApp() {
         {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} mode={mode} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} />}
-        {screen==='observer' && <ObserverScreen go={go} />}
+        {screen==='observer' && <ObserverScreen go={go} initialCode={_initRoom} />}
       </div>
       {creatingRoom && (
         <div style={{ position:'fixed', inset:0, background:'rgba(244,197,126,0.95)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, zIndex:100 }}>
