@@ -33416,6 +33416,8 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
     return db.collection('rooms').doc(code).set({
       code:code, players:players, selectedGames:games, gameMeta:meta,
       turn:0, gameIdx:0, round:1, active:true,
+      observerAllowed: meta.observerAllowed || false,
+      observers: [],
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
   };
@@ -33427,6 +33429,11 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   };
   window.subscribeRoom = function(code, cb) {
     return db.collection('rooms').doc(code).onSnapshot(function(d){ cb(d.exists ? d.data() : null); });
+  };
+  window.joinRoom = function(code, observer) {
+    return db.collection('rooms').doc(code).update({
+      observers: firebase.firestore.FieldValue.arrayUnion(observer)
+    }).catch(function(e){ console.warn('joinRoom', e); });
   };
   window.addPendingDrink = function(code, data) {
     return db.collection('rooms').doc(code).collection('pendingDrinks').add(data).catch(function(e){ console.warn('addPendingDrink', e); });
@@ -33702,7 +33709,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.0 · DNR · 2026.05.27 21:33
+              Verzió 3.0 · DNR · 2026.05.28 06:01
             </div>
           </div>
         </div>
@@ -34092,6 +34099,13 @@ function GameSettingsContent({ meta, setMeta, onDone, go }) {
           })}
         </div>
       </div>
+      <div>
+        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:16, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginBottom:4, textAlign:'center' }}>Megfigyelők</div>
+        <button onClick={() => setMeta({...meta, observerAllowed: !meta.observerAllowed})} style={{ width:'100%', padding:'14px 4px', border:'none', background:'transparent', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', borderBottom:`1px solid rgba(20,30,50,0.06)` }}>
+          <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>Megfigyelők engedélyezve</span>
+          <div style={{ width:26, height:26, borderRadius:'50%', border: meta.observerAllowed ? `2.5px solid ${T.mint}` : `2px solid ${T.inkMute}`, background: meta.observerAllowed ? T.mint : 'transparent', display:'grid', placeItems:'center' }}>{meta.observerAllowed && Icon.check('#fff')}</div>
+        </button>
+      </div>
       <PrimaryButton onClick={() => { onDone(); go('play'); }}>Tovább</PrimaryButton>
     </div>
   );
@@ -34374,32 +34388,42 @@ function LeaderRow({ p, rank, maxScore }) {
 function ObserverScreen({ go }) {
   const CODE_LEN = 6;
   const [code, setCode] = useState('');
+  const [name, setName] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [observerId] = useState(() => 'obs_' + Date.now());
   const [status, setStatus] = useState('enter');
 
   const push = d => { if (status!=='enter') return; setCode(c => (c+d).slice(0,CODE_LEN)); };
   const back = () => setCode(c => c.slice(0,-1));
   const submit = () => {
-    if (code.length < CODE_LEN) return;
+    if (code.length < CODE_LEN || !name.trim()) return;
     setStatus('connecting');
-    checkRoom(code.toUpperCase())
-      .then(room => { if (room && room.active) setStatus('watching'); else setStatus('error'); })
-      .catch(() => setStatus('error'));
+    checkRoom(code)
+      .then(room => {
+        if (!room || !room.active) { setErrorMsg(`A ${code} kód nem érvényes, vagy a szoba bezárult.`); setStatus('error'); return; }
+        if (!room.observerAllowed) { setErrorMsg('A házigazda nem engedélyezte a megfigyelőket ennél a szobánál.'); setStatus('error'); return; }
+        const obs = room.observers || [];
+        if (obs.length >= 3) { setErrorMsg('A szoba tele van – már 3 megfigyelő csatlakozott.'); setStatus('error'); return; }
+        return (typeof joinRoom==='function' ? joinRoom(code, { id:observerId, name:name.trim() }) : Promise.resolve())
+          .then(() => setStatus('watching'));
+      })
+      .catch(() => { setErrorMsg('Hálózati hiba – próbáld újra.'); setStatus('error'); });
   };
-  const reset = () => { setCode(''); setStatus('enter'); };
+  const reset = () => { setCode(''); setStatus('enter'); setErrorMsg(''); };
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg }}>
       <AppBar title="Megfigyelő" onBack={() => go('home')} />
-      {status==='enter' && <ObserverEnter code={code} codeLen={CODE_LEN} onDigit={push} onBack={back} onSubmit={submit} onPaste={v => setCode(v.replace(/\D/g,'').slice(0,CODE_LEN))} />}
+      {status==='enter' && <ObserverEnter code={code} name={name} onName={setName} codeLen={CODE_LEN} onDigit={push} onBack={back} onSubmit={submit} onPaste={v => setCode(v.replace(/\D/g,'').slice(0,CODE_LEN))} />}
       {status==='connecting' && <ObserverStatus icon="📡" title="Csatlakozás…" sub={`Szoba: ${code}`} spinning />}
-      {status==='watching' && <ObserverWatching code={code} onLeave={reset} />}
-      {status==='error' && <ObserverStatus icon="🚫" title="Nincs ilyen szoba" sub={`A ${code} kód nem érvényes, vagy a szoba bezárult.`} actionLabel="Próbáld újra" onAction={reset} />}
+      {status==='watching' && <ObserverWatching code={code} observerName={name} onLeave={reset} />}
+      {status==='error' && <ObserverStatus icon="🚫" title="Hiba" sub={errorMsg} actionLabel="Próbáld újra" onAction={reset} />}
     </div>
   );
 }
 
-function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste }) {
-  const ready = code.length === codeLen;
+function ObserverEnter({ code, name, onName, codeLen, onDigit, onBack, onSubmit, onPaste }) {
+  const ready = code.length === codeLen && name.trim().length > 0;
   useEffect(() => {
     const onKey = e => {
       if (/^[0-9]$/.test(e.key)) onDigit(e.key);
@@ -34411,11 +34435,16 @@ function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste }) {
   });
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', padding:'12px 22px 22px' }}>
-      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:22, paddingTop:8 }}>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:16, paddingTop:8 }}>
         <div style={{ fontSize:52, lineHeight:1, filter:'drop-shadow(0 4px 10px rgba(20,30,50,0.15))' }}>👀</div>
+        <input
+          value={name} onChange={e => onName(e.target.value.slice(0,16))}
+          placeholder="A neved…"
+          style={{ width:'100%', boxSizing:'border-box', background:T.surface, border:'none', borderRadius:14, padding:'12px 16px', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink, textAlign:'center', outline:'none', boxShadow:T.shadow }}
+        />
         <div style={{ textAlign:'center', maxWidth:280 }}>
-          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Szoba kód</div>
-          <div style={{ marginTop:6, fontFamily:T.font, fontSize:13, fontWeight:600, color:T.inkSoft, lineHeight:1.4 }}>Add meg a barátaid szobájának kódját, hogy nézd a játékot.</div>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Szoba kód</div>
+          <div style={{ marginTop:4, fontFamily:T.font, fontSize:12, fontWeight:600, color:T.inkSoft, lineHeight:1.4 }}>Add meg a házigazda szobakódját.</div>
         </div>
         <div style={{ display:'flex', gap:8 }} onPaste={e => { onPaste(e.clipboardData.getData('text')); e.preventDefault(); }}>
           {Array.from({ length:codeLen }).map((_,i) => {
@@ -34483,12 +34512,13 @@ function ObserverStatus({ icon, title, sub, spinning, actionLabel, onAction }) {
   );
 }
 
-function ObserverWatching({ code, onLeave }) {
+function ObserverWatching({ code, observerName, onLeave }) {
   const [room, setRoom] = useState(null);
   const [pulseId, setPulseId] = useState(null);
   const [sheet, setSheet] = useState(null);
   const [burst, setBurst] = useState(null);
   const [emojiFly, setEmojiFly] = useState(null);
+  const [drinkUsed, setDrinkUsed] = useState(false);
 
   useEffect(() => {
     const unsub = subscribeRoom(code, data => {
@@ -34522,11 +34552,15 @@ function ObserverWatching({ code, onLeave }) {
 
   const fireBurst = b => { setBurst(b); setTimeout(() => setBurst(null), 1400); };
   const giveDrinks = (player, amount) => {
-    if (typeof addPendingDrink==='function') addPendingDrink(code, { playerId:player.id, amount, group:false });
+    if (drinkUsed) return;
+    if (typeof addPendingDrink==='function') addPendingDrink(code, { playerId:player.id, amount, group:false, observerName });
+    setDrinkUsed(true);
     fireBurst({ icon:'🍺', title:`Idd meg, ${player.name}!`, sub:`+${amount} korty elküldve`, tone:T.coral });
   };
   const groupDrink = () => {
-    if (typeof addPendingDrink==='function') addPendingDrink(code, { group:true, amount:1 });
+    if (drinkUsed) return;
+    if (typeof addPendingDrink==='function') addPendingDrink(code, { group:true, amount:1, observerName });
+    setDrinkUsed(true);
     fireBurst({ icon:'🍻', title:'Csoportos ivás!', sub:'Ivás elküldve', tone:T.yellow });
   };
   const sendEmoji = e => {
@@ -34598,21 +34632,24 @@ function ObserverWatching({ code, onLeave }) {
 
       {/* Megfigyelő panel */}
       <div style={{ background:T.surface, borderTopLeftRadius:24, borderTopRightRadius:24, boxShadow:'0 -4px 18px rgba(20,30,50,0.06)', padding:'10px 14px max(18px,calc(env(safe-area-inset-bottom)+10px))', flexShrink:0 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:6, padding:'0 4px 8px' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6, padding:'0 4px 8px' }}>
           <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 8px', borderRadius:999, background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:9, letterSpacing:'0.1em', textTransform:'uppercase' }}>
             <span style={{ width:5, height:5, borderRadius:'50%', background:T.mint }}/>
-            Megfigyelő
+            {observerName || 'Megfigyelő'}
           </span>
-          <span style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.06em', textTransform:'uppercase' }}>· küldj ivást a játékosoknak</span>
+          {drinkUsed
+            ? <span style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.mint, letterSpacing:'0.06em', textTransform:'uppercase' }}>✓ Ivás elküldve</span>
+            : <span style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkSoft, letterSpacing:'0.06em', textTransform:'uppercase' }}>küldj ivást</span>
+          }
         </div>
         <div style={{ display:'flex', gap:6 }}>
           {[
-            { emoji:'🍺', label:'Korty', onClick:() => setSheet('drink') },
-            { emoji:'🍻', label:'Csoport', onClick:groupDrink },
-            { emoji:'💬', label:'Emoji', onClick:() => setSheet('emoji') },
+            { emoji:'🍺', label:'Korty', onClick:() => { if (!drinkUsed) setSheet('drink'); }, off: drinkUsed },
+            { emoji:'🍻', label:'Csoport', onClick:() => { if (!drinkUsed) groupDrink(); }, off: drinkUsed },
+            { emoji:'💬', label:'Emoji', onClick:() => setSheet('emoji'), off: false },
           ].map(a => (
-            <button key={a.label} onClick={a.onClick} style={{ flex:1, minWidth:0, padding:'8px 4px', background:T.surface, border:'none', borderRadius:14, boxShadow:T.shadow, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}
-              onMouseDown={e => e.currentTarget.style.transform='scale(0.94)'}
+            <button key={a.label} onClick={a.onClick} style={{ flex:1, minWidth:0, padding:'8px 4px', background: a.off ? T.surfaceMuted : T.surface, border:'none', borderRadius:14, boxShadow: a.off ? 'none' : T.shadow, cursor: a.off ? 'default' : 'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:4, opacity: a.off ? 0.38 : 1, transition:'opacity .25s' }}
+              onMouseDown={e => !a.off && (e.currentTarget.style.transform='scale(0.94)')}
               onMouseUp={e => e.currentTarget.style.transform=''}
               onMouseLeave={e => e.currentTarget.style.transform=''}
             >
@@ -34709,7 +34746,7 @@ function BottleApp() {
   const [mode, setMode] = useState('Online');
   const [players, setPlayers] = useState(INITIAL_PLAYERS);
   const [selectedGames, setSelectedGames] = useState(['busz','memoria','erem']);
-  const [gameMeta, setGameMeta] = useState({ modes:['points','bonus'], difficulty:'easy' });
+  const [gameMeta, setGameMeta] = useState({ modes:['points','bonus'], difficulty:'easy', observerAllowed:false });
 
   const [roomCode, setRoomCode] = React.useState(null);
   const [creatingRoom, setCreatingRoom] = React.useState(false);
