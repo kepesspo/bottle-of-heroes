@@ -33808,7 +33808,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.1 · DNR · 2026.05.28 15:12
+              Verzió 3.1 · DNR · 2026.05.28 15:17
             </div>
           </div>
         </div>
@@ -33991,9 +33991,44 @@ const DIM_STYLES = {
   none: { opacity:1 },
 };
 
+function BuszConfigSheet({ config, setConfig, onClose }) {
+  const CFG = [
+    { key:'deckCount',      label:'Paklik száma',           min:1, max:3 },
+    { key:'cardsPerPlayer', label:'Lapok játékosonként',    min:4, max:8 },
+    { key:'pyramidRows',    label:'Piramis sorok',          min:3, max:6 },
+    { key:'busSteps',       label:'Busz lépések',           min:4, max:8 },
+  ];
+  return (
+    <SheetOverlay onClose={onClose}>
+      <div style={{ padding:'6px 22px 22px', display:'flex', flexDirection:'column', gap:4 }}>
+        <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginBottom:8 }}>🚌 Busz beállítások</div>
+        {CFG.map(s => {
+          const val = config[s.key] ?? (s.key==='deckCount'?1:s.key==='cardsPerPlayer'?6:s.key==='pyramidRows'?5:6);
+          return (
+            <div key={s.key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 0', borderBottom:`1px solid rgba(20,30,50,0.06)` }}>
+              <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>{s.label}</span>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <button onClick={() => setConfig(c => ({...c, [s.key]: Math.max(s.min, (c[s.key]||val)-1)}))} style={{ width:38, height:38, borderRadius:10, background:T.surface, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:22, color:T.coral, boxShadow:T.shadow, display:'grid', placeItems:'center' }}>−</button>
+                <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:22, color:T.ink, minWidth:28, textAlign:'center' }}>{val}</span>
+                <button onClick={() => setConfig(c => ({...c, [s.key]: Math.min(s.max, (c[s.key]||val)+1)}))} style={{ width:38, height:38, borderRadius:10, background:T.surface, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:22, color:T.mint, boxShadow:T.shadow, display:'grid', placeItems:'center' }}>+</button>
+              </div>
+            </div>
+          );
+        })}
+        <div style={{ marginTop:8 }}>
+          <PrimaryButton onClick={onClose}>Kész</PrimaryButton>
+        </div>
+      </div>
+    </SheetOverlay>
+  );
+}
+
 function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, go }) {
   const [info, setInfo] = useState(null);
   const [sheet, setSheet] = useState(false);
+  const [buszSheet, setBuszSheet] = useState(false);
+  const buszConfig = gameMeta?.buszConfig || {};
+  const setBuszConfig = cfg => setGameMeta(m => ({...m, buszConfig: typeof cfg === 'function' ? cfg(m?.buszConfig||{}) : cfg}));
 
   const allOn = selectedGames.length === GAMES.length;
   const anySelected = selectedGames.length > 0;
@@ -34042,7 +34077,8 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
             const dim = locked || (anySelected && !isSelected);
             return (
               <GameTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked}
-                onClick={() => toggle(g.id)} onInfo={() => setInfo(g.id)} />
+                onClick={() => toggle(g.id)} onInfo={() => setInfo(g.id)}
+                onLongPress={g.id==='busz' ? ()=>setBuszSheet(true) : undefined} />
             );
           })}
         </div>
@@ -34065,6 +34101,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
         <GameSettingsContent meta={gameMeta} setMeta={setGameMeta} onDone={() => setSheet(false)} go={go} />
       </SheetOverlay>}
       {info && <GameInfoModal game={GAMES.find(g=>g.id===info)} onClose={() => setInfo(null)} />}
+      {buszSheet && <BuszConfigSheet config={buszConfig} setConfig={setBuszConfig} onClose={() => setBuszSheet(false)} />}
     </div>
   );
 }
@@ -34086,12 +34123,15 @@ function Chip({ label, active, onClick, tone, icon, disabled }) {
   );
 }
 
-function GameTile({ g, selected, dim, locked, onClick, onInfo }) {
+function GameTile({ g, selected, dim, locked, onClick, onInfo, onLongPress }) {
   const diff = DIFFICULTY_META[g.difficulty];
   const selColor = diff.tone;
   const dimCss = dim ? DIM_STYLES.fade : DIM_STYLES.none;
+  const pressRef = React.useRef(null);
+  const startPress = () => { if (onLongPress) pressRef.current = setTimeout(onLongPress, 500); };
+  const cancelPress = () => clearTimeout(pressRef.current);
   return (
-    <div onClick={onClick} style={{
+    <div onClick={onClick} onTouchStart={startPress} onTouchEnd={cancelPress} onTouchCancel={cancelPress} onMouseDown={startPress} onMouseUp={cancelPress} onMouseLeave={cancelPress} style={{
       position:'relative', cursor: locked ? 'not-allowed' : 'pointer',
       minWidth:0, boxSizing:'border-box',
       background:T.surface, borderRadius:18,
@@ -34110,8 +34150,10 @@ function GameTile({ g, selected, dim, locked, onClick, onInfo }) {
 
       {/* difficulty dot */}
       <div style={{ position:'absolute', top:8, left:8, width:9, height:9, borderRadius:'50%', background:diff.tone, boxShadow:'0 0 0 1.5px rgba(255,255,255,0.95)', zIndex:2 }} />
-      {/* busz settings indicator */}
-      {g.id === 'busz' && <div style={{ position:'absolute', top:20, left:7, fontFamily:T.font, fontWeight:900, fontSize:9, color:diff.tone, lineHeight:1, zIndex:2, opacity:0.85 }}>+</div>}
+      {/* busz configurable gear badge */}
+      {g.id === 'busz' && onLongPress && (
+        <div style={{ position:'absolute', top:6, right:28, width:17, height:17, borderRadius:'50%', background:T.surface, border:`1.5px solid ${g.color}`, display:'grid', placeItems:'center', zIndex:3, boxShadow:'0 1px 4px rgba(0,0,0,0.18)', fontSize:10 }}>⚙️</div>
+      )}
 
       {/* info button */}
       <button onClick={e => { e.stopPropagation(); onInfo(); }} style={{
@@ -34932,7 +34974,7 @@ function PlayingCard({ card, size='md', faceDown=false, glow=false }) {
   );
 }
 
-function BuszGame({ players, roomCode, mode, gameIdx }) {
+function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
   const isOnline = mode === 'Online' && !!roomCode;
   const [buszState, setBuszState] = useState(null);
   const [zsulliAnim, setZsulliAnim] = useState(null);
@@ -34964,14 +35006,19 @@ function BuszGame({ players, roomCode, mode, gameIdx }) {
 
   const initGame = async () => {
     if (isOnline) { try { await firebase.firestore().collection('rooms').doc(roomCode).update({ buszTakenIds: [] }); } catch(e) {} }
-    const deckCount=1, cardsPerPlayer=6;
+    const cfg = gameMeta?.buszConfig || {};
+    const deckCount = cfg.deckCount || 1;
+    const cardsPerPlayer = cfg.cardsPerPlayer || 6;
+    const pyramidRows = cfg.pyramidRows || 5;
+    const busSteps = cfg.busSteps || 6;
     const deck = shuffleDeck(generateDeck(deckCount));
     let di=0;
     const hands={};
     const initialDrinks={};
     for (const p of players) { hands[p.id]=deck.slice(di,di+cardsPerPlayer); di+=cardsPerPlayer; initialDrinks[p.id]=p.drinks||0; }
-    const pyramid = buildPyramid(deck.slice(di,di+15));
-    await persist({ phase:'pyramid', pyramid, hands, nextFlipIdx:0, valueCounts:{}, busRiders:[], busCards:[], busStep:-1, settings:{deckCount,cardsPerPlayer,busSteps:6}, initialDrinks });
+    const pyramidCardCount = pyramidRows * (pyramidRows + 1) / 2;
+    const pyramid = buildPyramid(deck.slice(di, di + pyramidCardCount), pyramidRows);
+    await persist({ phase:'pyramid', pyramid, hands, nextFlipIdx:0, valueCounts:{}, busRiders:[], busCards:[], busStep:-1, settings:{deckCount,cardsPerPlayer,busSteps,pyramidRows}, initialDrinks });
   };
 
   const flipCard = async () => {
@@ -35082,7 +35129,7 @@ function BuszGame({ players, roomCode, mode, gameIdx }) {
     const lastFlipped = nextFlipIdx > 0 ? pyramid[nextFlipIdx-1] : null;
     const nextCard = !allDone ? pyramid[nextFlipIdx] : null;
     const activeRow = nextCard ? nextCard.rowIdx : -1;
-    const ROWS = 5;
+    const ROWS = buszState.settings?.pyramidRows || 5;
 
     return (
       <div style={{display:'flex',flexDirection:'column',gap:12,width:'100%'}}>
@@ -35269,14 +35316,14 @@ function BuszGame({ players, roomCode, mode, gameIdx }) {
   return null;
 }
 
-function GameContent({ gameId, gameIdx, players, onAdvance, roomCode, mode }) {
+function GameContent({ gameId, gameIdx, players, onAdvance, roomCode, mode, gameMeta }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} />;
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} />;
   if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
-  if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} mode={mode} />;
+  if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} mode={mode} gameMeta={gameMeta} />;
   return null;
 }
 
@@ -35423,7 +35470,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
           {scenario.prompt}
         </div>
 
-        <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} roomCode={roomCode} mode={mode} />
+        <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} roomCode={roomCode} mode={mode} gameMeta={gameMeta} />
       </div>
         </div>
       </div>{/* end scrollable */}
