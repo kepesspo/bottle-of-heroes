@@ -34113,6 +34113,8 @@ function GameTile({ g, selected, dim, locked, onClick, onInfo }) {
 
       {/* difficulty dot */}
       <div style={{ position:'absolute', top:8, left:8, width:9, height:9, borderRadius:'50%', background:diff.tone, boxShadow:'0 0 0 1.5px rgba(255,255,255,0.95)', zIndex:2 }} />
+      {/* busz settings indicator */}
+      {g.id === 'busz' && <div style={{ position:'absolute', top:20, left:7, fontFamily:T.font, fontWeight:900, fontSize:9, color:diff.tone, lineHeight:1, zIndex:2, opacity:0.85 }}>+</div>}
 
       {/* info button */}
       <button onClick={e => { e.stopPropagation(); onInfo(); }} style={{
@@ -34715,6 +34717,40 @@ function LóversenyGame({ gameIdx, players, onAdvance }) {
   return null;
 }
 
+// ─── CARD UTILITIES ───────────────────────────────────────────────────────
+const CARD_SUITS = ['♠','♥','♦','♣'];
+const CARD_VALUES = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+const SUIT_RED = new Set(['♥','♦']);
+
+function generateDeck(count=1) {
+  const cards=[];
+  for (let d=0;d<count;d++)
+    for (const suit of CARD_SUITS)
+      for (const value of CARD_VALUES)
+        cards.push({suit,value,id:`${d}-${suit}-${value}`});
+  return cards;
+}
+
+function shuffleDeck(arr) {
+  const a=[...arr];
+  for (let i=a.length-1;i>0;i--) {
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+// rows=5 → bottom row (rowIdx=0, 1 drink) has 5 cards; top (rowIdx=4, 5 drinks) has 1
+function buildPyramid(cards, rows=5) {
+  const pyramid=[];
+  let idx=0;
+  for (let r=0;r<rows;r++) {
+    const n=rows-r;
+    for (let p=0;p<n;p++) pyramid.push({...cards[idx++],faceUp:false,rowIdx:r,posIdx:p});
+  }
+  return pyramid;
+}
+
 const IMPOSZTOR_SZAVAK = [
   'Banán','Focipálya','Mosógép','Repülőgép','Pizzéria',
   'Kókusz','Tengerpart','Könyvtár','Gitár','Víziló',
@@ -34878,13 +34914,241 @@ function ImposztorGame({ gameIdx, players, onAdvance }) {
   return null;
 }
 
-function GameContent({ gameId, gameIdx, players, onAdvance }) {
+function PlayingCard({ card, size='md', faceDown=false, glow=false }) {
+  const sizes = { sm:{w:32,h:46,fs:11,fs2:9}, md:{w:44,h:62,fs:15,fs2:11}, lg:{w:56,h:78,fs:19,fs2:14} };
+  const s = sizes[size]||sizes.md;
+  const red = card && SUIT_RED.has(card.suit);
+  if (faceDown || !card) return (
+    <div style={{ width:s.w, height:s.h, borderRadius:7, background:'linear-gradient(135deg,#1e3a5f,#0d1b35)', border:'1.5px solid rgba(255,255,255,0.1)', display:'grid', placeItems:'center', flexShrink:0, boxShadow: glow ? `0 0 12px ${T.mint}80` : '0 2px 6px rgba(0,0,0,0.35)', transition:'box-shadow .2s' }}>
+      <svg width={s.fs2+4} height={s.fs2+4} viewBox="0 0 16 16" fill="none" opacity="0.3">
+        <rect x="1" y="1" width="14" height="14" rx="2" stroke="#8ab" strokeWidth="1.5"/>
+        <path d="M4 8h8M8 4v8" stroke="#8ab" strokeWidth="1.2"/>
+      </svg>
+    </div>
+  );
+  return (
+    <div style={{ width:s.w, height:s.h, borderRadius:7, background:'#fff', border: glow ? `2px solid ${T.mint}` : '1.5px solid rgba(20,30,50,0.14)', display:'flex', flexDirection:'column', padding:'3px 4px', flexShrink:0, boxShadow: glow ? `0 0 12px ${T.mint}70` : '0 2px 5px rgba(0,0,0,0.12)', position:'relative', overflow:'hidden', transition:'box-shadow .2s' }}>
+      <div style={{ fontFamily:'Georgia,serif', fontWeight:700, fontSize:s.fs, color:red?'#CC2020':'#141424', lineHeight:1 }}>{card.value}</div>
+      <div style={{ fontFamily:'Georgia,serif', fontSize:s.fs2+1, color:red?'#CC2020':'#141424', lineHeight:1.1 }}>{card.suit}</div>
+      <div style={{ position:'absolute', bottom:2, right:3, fontFamily:'Georgia,serif', fontSize:s.fs2+1, color:red?'#CC2020':'#141424', transform:'rotate(180deg)', lineHeight:1, userSelect:'none' }}>{card.suit}</div>
+    </div>
+  );
+}
+
+function BuszGame({ players, roomCode, mode, gameIdx }) {
+  const isOnline = mode === 'online' && !!roomCode;
+  const [buszState, setBuszState] = useState(null);
+  const [zsulliAnim, setZsulliAnim] = useState(null);
+  const [ready, setReady] = useState(false);
+  const stRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOnline) { setReady(true); return; }
+    const db = firebase.firestore();
+    const unsub = db.collection('rooms').doc(roomCode).onSnapshot(snap => {
+      const d = snap.data();
+      const bs = d?.buszState || null;
+      stRef.current = bs;
+      setBuszState(bs);
+      setReady(true);
+    });
+    return unsub;
+  }, [roomCode, isOnline]);
+
+  const persist = async (newState) => {
+    stRef.current = newState;
+    if (isOnline) {
+      await firebase.firestore().collection('rooms').doc(roomCode).update({ buszState: newState });
+    } else {
+      setBuszState(newState);
+    }
+  };
+
+  const initGame = async () => {
+    const deckCount=1, cardsPerPlayer=6;
+    const deck = shuffleDeck(generateDeck(deckCount));
+    let di=0;
+    const hands={};
+    for (const p of players) { hands[p.id]=deck.slice(di,di+cardsPerPlayer); di+=cardsPerPlayer; }
+    const pyramid = buildPyramid(deck.slice(di,di+15));
+    await persist({ phase:'pyramid', pyramid, hands, nextFlipIdx:0, valueCounts:{}, busRiders:[], busCards:[], busStep:-1, settings:{deckCount,cardsPerPlayer,busSteps:6} });
+  };
+
+  const flipCard = async () => {
+    const st = stRef.current;
+    if (!st || st.nextFlipIdx >= st.pyramid.length) return;
+    const idx = st.nextFlipIdx;
+    const card = st.pyramid[idx];
+    const newPyramid = st.pyramid.map((c,i) => i===idx ? {...c,faceUp:true} : c);
+    const newCounts = {...st.valueCounts, [card.value]:(st.valueCounts[card.value]||0)+1};
+    const isZsulli = newCounts[card.value] >= 4;
+    if (isZsulli) { setZsulliAnim(card.value); setTimeout(()=>setZsulliAnim(null),2800); }
+    await persist({...st, pyramid:newPyramid, nextFlipIdx:idx+1, valueCounts:newCounts});
+  };
+
+  const endPyramid = async () => {
+    const st = stRef.current;
+    if (!st) return;
+    const max = Math.max(...players.map(p=>(st.hands[p.id]||[]).length));
+    const riders = players.filter(p=>(st.hands[p.id]||[]).length===max).map(p=>p.id);
+    const busCards = shuffleDeck(generateDeck(st.settings.deckCount))
+      .slice(0, st.settings.busSteps)
+      .map((c,i)=>({...c, faceUp: i===1||i===3}));
+    await persist({...st, phase:'bus', busRiders:riders, busCards, busStep:0, currentRiderIdx:0});
+  };
+
+  if (!ready) return (
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:40}}>
+      <div style={{fontFamily:T.font,color:T.inkSoft}}>Betöltés…</div>
+    </div>
+  );
+
+  // ── Init screen ──────────────────────────────────────────────────────────
+  if (!buszState) return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:18,width:'100%',paddingTop:4}}>
+      <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:22,color:T.ink,textTransform:'uppercase',letterSpacing:T.letterDisplay}}>🚌 Busz</div>
+      {isOnline && roomCode && (
+        <div style={{background:T.surfaceMuted,borderRadius:16,padding:'16px 24px',textAlign:'center',width:'100%',boxSizing:'border-box'}}>
+          <div style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,marginBottom:4,textTransform:'uppercase',letterSpacing:'0.09em'}}>Szobakód</div>
+          <div style={{fontFamily:'monospace',fontWeight:700,fontSize:34,color:T.mint,letterSpacing:'0.18em'}}>{roomCode}</div>
+          <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:4}}>Ezen a kódon csatlakozzanak a játékosok</div>
+        </div>
+      )}
+      <div style={{width:'100%',display:'flex',flexDirection:'column',gap:6}}>
+        {players.map(p=>(
+          <div key={p.id} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',background:T.surfaceMuted,borderRadius:12}}>
+            <div style={{width:34,height:34,borderRadius:'50%',background:p.color,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:700,fontSize:15,color:'#fff',flexShrink:0}}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+            <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.ink}}>{p.name}</div>
+          </div>
+        ))}
+      </div>
+      <PrimaryButton onClick={initGame} disabled={players.length<2}>🚌 Játék indítása</PrimaryButton>
+    </div>
+  );
+
+  // ── Pyramid phase ────────────────────────────────────────────────────────
+  if (buszState.phase === 'pyramid') {
+    const { pyramid, nextFlipIdx, hands } = buszState;
+    const allDone = nextFlipIdx >= pyramid.length;
+    const lastFlipped = nextFlipIdx > 0 ? pyramid[nextFlipIdx-1] : null;
+    const nextCard = !allDone ? pyramid[nextFlipIdx] : null;
+    const activeRow = nextCard ? nextCard.rowIdx : -1;
+    const ROWS = 5;
+
+    return (
+      <div style={{display:'flex',flexDirection:'column',gap:12,width:'100%'}}>
+        {/* ZSÜLLI overlay */}
+        {zsulliAnim && (
+          <div onClick={()=>setZsulliAnim(null)} style={{position:'fixed',inset:0,zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(14,14,24,0.75)',animation:'fadeIn .2s'}}>
+            <div style={{background:T.surface,borderRadius:24,padding:'32px 40px',textAlign:'center',animation:'popIn .3s cubic-bezier(.2,.9,.3,1.4)'}}>
+              <div style={{fontSize:52}}>🍻</div>
+              <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:36,color:T.mint,textTransform:'uppercase',letterSpacing:T.letterDisplay,marginTop:8}}>ZSÜLLI!</div>
+              <div style={{fontFamily:T.font,fontSize:15,color:T.ink,marginTop:10}}>Mind a 4 db <b style={{color:T.mint}}>{zsulliAnim}</b> kijött</div>
+              <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,marginTop:4}}>Mindenki iszik 1-et!</div>
+              <div style={{fontFamily:T.font,fontSize:11,color:T.inkMute,marginTop:14}}>Érintsd meg a bezáráshoz</div>
+            </div>
+          </div>
+        )}
+
+        {/* Pyramid visual — top (5 drinks) to bottom (1 drink) */}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+          {[...Array(ROWS)].map((_,ri)=>{
+            const rowIdx = ROWS-1-ri;
+            const drinks = rowIdx+1;
+            const isActive = rowIdx === activeRow;
+            const rowCards = pyramid.filter(c=>c.rowIdx===rowIdx).sort((a,b)=>a.posIdx-b.posIdx);
+            return (
+              <div key={rowIdx} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
+                <div style={{display:'flex',gap:4,padding:'5px 8px',borderRadius:11,background:isActive?`${T.mint}1A`:'transparent',border:`1.5px solid ${isActive?T.mint+'55':'transparent'}`,transition:'all .3s ease'}}>
+                  {rowCards.map(card=>(
+                    <PlayingCard key={card.id} card={card} size='sm' faceDown={!card.faceUp} />
+                  ))}
+                </div>
+                <div style={{fontFamily:T.font,fontSize:9,fontWeight:isActive?700:400,color:isActive?T.mint:T.inkMute,textTransform:'uppercase',letterSpacing:'0.07em',lineHeight:1}}>{drinks} korty</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Last flipped card */}
+        {lastFlipped && (
+          <div style={{display:'flex',alignItems:'center',gap:14,padding:'12px 16px',background:T.surfaceMuted,borderRadius:14}}>
+            <PlayingCard card={lastFlipped} size='md' glow />
+            <div style={{flex:1}}>
+              <div style={{fontFamily:T.font,fontSize:10,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:3}}>Felfordítva</div>
+              <div style={{fontFamily:'Georgia,serif',fontWeight:700,fontSize:24,color:SUIT_RED.has(lastFlipped.suit)?'#CC2020':T.ink,lineHeight:1}}>{lastFlipped.value} {lastFlipped.suit}</div>
+              <div style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:T.mint,marginTop:4}}>
+                {lastFlipped.rowIdx+1} korty kiosztható
+              </div>
+              <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:2}}>
+                {players.filter(p=>(hands[p.id]||[]).some(c=>c.value===lastFlipped.value)).length} játékosnak van ilyen lapja
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Player hand counts */}
+        <div>
+          <div style={{fontFamily:T.font,fontSize:10,fontWeight:700,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:6}}>Lapok a kézben</div>
+          <div style={{display:'flex',gap:7,flexWrap:'wrap'}}>
+            {players.map(p=>{
+              const n=(hands[p.id]||[]).length;
+              const isMost = n===Math.max(...players.map(x=>(hands[x.id]||[]).length));
+              return (
+                <div key={p.id} style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px',background: isMost&&allDone ? T.coralSoft : T.surfaceMuted,borderRadius:10,border:`1.5px solid ${isMost&&allDone?T.coral+'50':'transparent'}`,transition:'all .3s'}}>
+                  <div style={{width:26,height:26,borderRadius:'50%',background:p.color,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:700,fontSize:12,color:'#fff',flexShrink:0}}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+                  <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:13,color:T.ink}}>{p.name}</div>
+                  <div style={{fontFamily:'monospace',fontWeight:700,fontSize:16,color:isMost&&allDone?T.coral:n>3?T.coral:T.mint}}>{n}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Action */}
+        {allDone ? (
+          <PrimaryButton onClick={endPyramid} tone="coral">🚌 Buszra szállás →</PrimaryButton>
+        ) : (
+          <PrimaryButton onClick={flipCard}>Következő lap →</PrimaryButton>
+        )}
+      </div>
+    );
+  }
+
+  // ── Bus phase (stub — Phase 3) ────────────────────────────────────────────
+  if (buszState.phase === 'bus') {
+    const riders = players.filter(p=>buszState.busRiders.includes(p.id));
+    return (
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16,paddingTop:8,width:'100%'}}>
+        <div style={{fontSize:52}}>🚌</div>
+        <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:22,color:T.ink,textTransform:'uppercase',letterSpacing:T.letterDisplay}}>Buszra szállás</div>
+        <div style={{display:'flex',gap:10,flexWrap:'wrap',justifyContent:'center'}}>
+          {riders.map(p=>(
+            <div key={p.id} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:6,padding:'12px 18px',background:T.coralSoft,borderRadius:14,border:`1.5px solid ${T.coral}40`}}>
+              <div style={{width:46,height:46,borderRadius:'50%',background:p.color,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:700,fontSize:20,color:'#fff'}}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+              <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:14,color:T.ink}}>{p.name}</div>
+              <div style={{fontFamily:T.font,fontSize:12,color:T.coral,fontWeight:700}}>{(buszState.hands[p.id]||[]).length} lap maradt</div>
+            </div>
+          ))}
+        </div>
+        <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,textAlign:'center',lineHeight:1.6,padding:'0 16px'}}>
+          A kisebb/nagyobb buszjáték a következő fázisban érkezik.
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function GameContent({ gameId, gameIdx, players, onAdvance, roomCode, mode }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} />;
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} />;
   if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
+  if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} mode={mode} />;
   return null;
 }
 
@@ -35047,7 +35311,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
           {scenario.prompt}
         </div>
 
-        <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} />
+        <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} roomCode={roomCode} mode={mode} />
       </div>
       </div>
       </div>
@@ -35092,7 +35356,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
           </div>
         </div>
       )}
-      {currentGame.category === 'Csapat' && currentGameId !== 'loverseny' && currentGameId !== 'imposztor' && (
+      {currentGame.category === 'Csapat' && currentGameId !== 'loverseny' && currentGameId !== 'imposztor' && currentGameId !== 'busz' && (
         <div style={{ padding:'0 18px 14px', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
           <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>Ki nyert?</div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center' }}>
