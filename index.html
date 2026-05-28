@@ -33452,6 +33452,98 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   };
 })();
 </script>
+
+<!-- Spotify Web Playback SDK -->
+<script src="https://sdk.scdn.co/spotify-player.js"></script>
+<script>
+(function() {
+  var CLIENT_ID = '466b1ac50ffb4a2a866dddbeab9bef80';
+  var REDIRECT_URI = 'https://kepesspo.github.io/bottle-of-heroes/';
+  var SCOPES = 'streaming user-read-email user-read-private user-modify-playback-state';
+
+  // Handle OAuth callback (token in URL hash)
+  var hash = window.location.hash;
+  if (hash && hash.indexOf('access_token') !== -1) {
+    var params = new URLSearchParams(hash.substring(1));
+    var token = params.get('access_token');
+    var expiresIn = parseInt(params.get('expires_in') || '3600');
+    try { localStorage.setItem('_sp_tok', JSON.stringify({ t: token, e: Date.now() + expiresIn * 1000 })); } catch(e) {}
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
+  window.getSpotifyToken = function() {
+    try {
+      var s = localStorage.getItem('_sp_tok');
+      if (!s) return null;
+      var d = JSON.parse(s);
+      if (Date.now() > d.e) { localStorage.removeItem('_sp_tok'); return null; }
+      return d.t;
+    } catch(e) { return null; }
+  };
+
+  window.spotifyLogin = function() {
+    window.location.href = 'https://accounts.spotify.com/authorize?client_id=' + CLIENT_ID +
+      '&response_type=token&redirect_uri=' + encodeURIComponent(REDIRECT_URI) +
+      '&scope=' + encodeURIComponent(SCOPES) + '&show_dialog=false';
+  };
+
+  window._spotifyPlayer = null;
+  window._spotifyDeviceId = null;
+  window._spotifyPlayerReady = false;
+  window._spotifyIniting = false;
+
+  window.initSpotifyPlayer = function() {
+    var token = window.getSpotifyToken();
+    if (!token || window._spotifyIniting || typeof Spotify === 'undefined') return;
+    window._spotifyIniting = true;
+    var player = new Spotify.Player({
+      name: 'Bottle of Heroes',
+      getOAuthToken: function(cb) { cb(window.getSpotifyToken() || ''); },
+      volume: 0.8
+    });
+    player.addListener('ready', function(data) {
+      window._spotifyDeviceId = data.device_id;
+      window._spotifyPlayerReady = true;
+    });
+    player.addListener('not_ready', function() { window._spotifyPlayerReady = false; });
+    player.addListener('authentication_error', function() {
+      try { localStorage.removeItem('_sp_tok'); } catch(e) {}
+      window._spotifyIniting = false;
+      window._spotifyPlayerReady = false;
+    });
+    player.connect();
+    window._spotifyPlayer = player;
+  };
+
+  window.onSpotifyWebPlaybackSDKReady = function() {
+    window._spotifySDKReady = true;
+    window.initSpotifyPlayer();
+  };
+
+  window.spotifyPlay = function(trackId, startSec) {
+    var token = window.getSpotifyToken();
+    var deviceId = window._spotifyDeviceId;
+    if (!token || !deviceId) return Promise.reject('not ready');
+    return fetch('https://api.spotify.com/v1/me/player/play?device_id=' + deviceId, {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uris: ['spotify:track:' + trackId], position_ms: (startSec || 0) * 1000 })
+    });
+  };
+
+  window.spotifyPause = function() {
+    var token = window.getSpotifyToken();
+    if (!token) return Promise.resolve();
+    return fetch('https://api.spotify.com/v1/me/player/pause', {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer ' + token }
+    }).catch(function(){});
+  };
+
+  // Init player now if token already exists and SDK loads before React
+  if (window.getSpotifyToken()) window.initSpotifyPlayer();
+})();
+</script>
 <script type="text/babel">
 const { useState, useEffect, useRef, useMemo } = React;
 
@@ -33711,7 +33803,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.0 · DNR · 2026.05.28 07:23
+              Verzió 3.0 · DNR · 2026.05.28 07:39
             </div>
           </div>
         </div>
@@ -34151,26 +34243,26 @@ const SCENARIO_DEFAULTS = {
 
 
 const ZENE_SONGS = [
-  { artist:'Queen',                title:'Bohemian Rhapsody',         ytId:'fJ9rUzIMcZQ', start:49 },
-  { artist:'Michael Jackson',      title:'Thriller',                  ytId:'sOnqjkJTMaA', start:95 },
-  { artist:'Ed Sheeran',           title:'Shape of You',              ytId:'JGwWNGJdvx8', start:15 },
-  { artist:'The Weeknd',           title:'Blinding Lights',           ytId:'4NRXx6U8ABQ', start:20 },
-  { artist:'Bruno Mars',           title:'Uptown Funk',               ytId:'OPf0YbXqDm0', start:22 },
-  { artist:'Adele',                title:'Rolling in the Deep',       ytId:'rYEDA3JcQqw', start:15 },
-  { artist:'Tones and I',          title:'Dance Monkey',              ytId:'q0hyYWKXF0Q', start:16 },
-  { artist:'Luis Fonsi',           title:'Despacito',                 ytId:'ktvTqknDobU', start:15 },
-  { artist:'Adele',                title:'Someone Like You',          ytId:'hLQl3WQQoQ0', start:53 },
-  { artist:'Billie Eilish',        title:'Bad Guy',                   ytId:'DyDfgMOUjCI', start:10 },
-  { artist:'Camila Cabello',       title:'Havana',                    ytId:'BQ0mxQXmLsk', start:17 },
-  { artist:'Justin Timberlake',    title:"Can't Stop the Feeling",    ytId:'ru0K8uYEZWw', start:24 },
-  { artist:'Dua Lipa',             title:'Levitating',                ytId:'TUVcZfQe-Kw', start:45 },
-  { artist:'ABBA',                 title:'Dancing Queen',             ytId:'xFrGuyw1V8s', start:28 },
-  { artist:'Eminem',               title:'Lose Yourself',             ytId:'_Yhyp-_hX2s', start:20 },
-  { artist:'Coldplay',             title:'Yellow',                    ytId:'yKNxeF4KMsY', start:45 },
-  { artist:'Arctic Monkeys',       title:'Do I Wanna Know?',          ytId:'bpOSxM0rNPM', start:10 },
-  { artist:'Imagine Dragons',      title:'Believer',                  ytId:'7wtfhZwyrcc', start:10 },
-  { artist:'The Beatles',          title:'Let It Be',                 ytId:'QDYfEBY9NM4', start:62 },
-  { artist:'Sam Smith',            title:'Stay With Me',              ytId:'pB-5XG-DbAA', start:30 },
+  { artist:'Queen',                title:'Bohemian Rhapsody',         spotifyId:'2zImmNYRMK61rOsLyqtihJ', start:49 },
+  { artist:'Michael Jackson',      title:'Thriller',                  spotifyId:'4hqdY15wwLs9MEjROHDBkX', start:95 },
+  { artist:'Ed Sheeran',           title:'Shape of You',              spotifyId:'7qiZfU4dY1lWllzX7mPBI3', start:15 },
+  { artist:'The Weeknd',           title:'Blinding Lights',           spotifyId:'0VjIjW4GlUZAMYd2vXMi3b', start:20 },
+  { artist:'Bruno Mars',           title:'Uptown Funk',               spotifyId:'32OlwWuMpZ6b0aN2RZOeMS', start:22 },
+  { artist:'Adele',                title:'Rolling in the Deep',       spotifyId:'1c8gk2PeTE04A1pIDH9YMk', start:15 },
+  { artist:'Tones and I',          title:'Dance Monkey',              spotifyId:'02R5Ks5qZc44ZHnOHNV27i', start:16 },
+  { artist:'Luis Fonsi',           title:'Despacito',                 spotifyId:'6habFhsOp2NvshLv26DqMb', start:15 },
+  { artist:'Adele',                title:'Someone Like You',          spotifyId:'1zwMYTA5nlNjZxYrvBB2pV', start:53 },
+  { artist:'Billie Eilish',        title:'Bad Guy',                   spotifyId:'2Fxmhks0bxGSBdJ92vM42m', start:10 },
+  { artist:'Camila Cabello',       title:'Havana',                    spotifyId:'4OigJoW7KVYAjBj2Azc6tw', start:17 },
+  { artist:'Justin Timberlake',    title:"Can't Stop the Feeling",    spotifyId:'75ImJaMYx2HgVNolZtGMs2', start:24 },
+  { artist:'Dua Lipa',             title:'Levitating',                spotifyId:'39LLxExYz6ewLAcYrzQQyP', start:45 },
+  { artist:'ABBA',                 title:'Dancing Queen',             spotifyId:'7efXqi3qE5CPlx0N41o1Vm', start:28 },
+  { artist:'Eminem',               title:'Lose Yourself',             spotifyId:'5Z01UMMf7V1o0MzF86s6WJ', start:20 },
+  { artist:'Coldplay',             title:'Yellow',                    spotifyId:'4lIYjf9rjhRYduh8BKGWyZ', start:45 },
+  { artist:'Arctic Monkeys',       title:'Do I Wanna Know?',          spotifyId:'5FVd6KXrgO9B3JPmC8OPst', start:10 },
+  { artist:'Imagine Dragons',      title:'Believer',                  spotifyId:'0pqnGHJpmpxLKifKRmU6WP', start:10 },
+  { artist:'The Beatles',          title:'Let It Be',                 spotifyId:'5V1AHQugSTASVez5ffJtFo', start:62 },
+  { artist:'Sam Smith',            title:'Stay With Me',              spotifyId:'5Nm9ERjJZ5oyfXZTECKmRt', start:30 },
 ];
 
 const KIVAGYOK_CELEBS = [
@@ -34195,28 +34287,63 @@ function ZeneGame({ gameIdx }) {
   const song = ZENE_SONGS[gameIdx % ZENE_SONGS.length];
   const [playing, setPlaying] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const [spReady, setSpReady] = useState(false);
+  const token = typeof getSpotifyToken === 'function' ? getSpotifyToken() : null;
+
+  useEffect(() => {
+    if (!token) return;
+    if (typeof initSpotifyPlayer === 'function') initSpotifyPlayer();
+    const iv = setInterval(() => {
+      if (!window._spotifyDeviceId && typeof initSpotifyPlayer === 'function') initSpotifyPlayer();
+      if (window._spotifyPlayerReady) { setSpReady(true); clearInterval(iv); }
+    }, 500);
+    return () => clearInterval(iv);
+  }, [token]);
+
+  useEffect(() => {
+    return () => { if (typeof spotifyPause === 'function') spotifyPause(); };
+  }, []);
+
+  const handlePlay = () => {
+    setPlaying(true); setRevealed(false);
+    if (typeof spotifyPlay === 'function') spotifyPlay(song.spotifyId, song.start);
+  };
+  const handleStop = () => {
+    setPlaying(false);
+    if (typeof spotifyPause === 'function') spotifyPause();
+  };
+
+  if (!token) return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+      <button onClick={() => typeof spotifyLogin === 'function' && spotifyLogin()} style={{ padding:'12px 24px', background:'#1DB954', border:'none', color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', display:'flex', alignItems:'center', gap:8, boxShadow:T.shadow }}>
+        <span>🎵</span> Csatlakozás Spotify-hoz
+      </button>
+      <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>Prémium fiók szükséges</div>
+    </div>
+  );
+
+  if (!spReady) return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:'10px 0' }}>
+      <div style={{ fontSize:28, animation:'pulse 1.4s infinite' }}>🎵</div>
+      <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em' }}>Spotify betöltése…</div>
+    </div>
+  );
+
   return (
     <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8, alignItems:'center' }}>
-      {playing ? (
-        <div style={{ position:'relative', width:'100%', maxWidth:280, aspectRatio:'16/9', borderRadius:12, overflow:'hidden', boxShadow:T.shadow }}>
-          <iframe
-            src={`https://www.youtube.com/embed/${song.ytId}?start=${song.start}&autoplay=1&controls=0&modestbranding=1`}
-            style={{ position:'absolute', inset:0, width:'100%', height:'100%', border:'none' }}
-            allow="autoplay; encrypted-media"
-          />
-          <div style={{ position:'absolute', inset:0, background:'linear-gradient(135deg,#1a1a2e,#16213e)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10, zIndex:2 }}>
-            <div style={{ fontSize:52, animation:'pulse 1.4s infinite' }}>🎵</div>
-            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:'rgba(255,255,255,0.55)', textTransform:'uppercase', letterSpacing:'0.08em' }}>Hallgasd meg!</div>
-          </div>
+      {playing && (
+        <div style={{ width:'100%', maxWidth:280, padding:'20px 0 16px', background:'linear-gradient(135deg,#1a1a2e,#16213e)', borderRadius:14, display:'flex', flexDirection:'column', alignItems:'center', gap:8, boxShadow:T.shadow }}>
+          <div style={{ fontSize:48, animation:'pulse 1.4s infinite' }}>🎵</div>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:'rgba(255,255,255,0.55)', textTransform:'uppercase', letterSpacing:'0.08em' }}>Hallgasd meg!</div>
         </div>
-      ) : (
-        <button onClick={() => { setPlaying(true); setRevealed(false); }} style={{ padding:'12px 28px', background:`${T.purple}22`, border:`2px solid ${T.purple}`, color:T.purple, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor:'pointer', display:'flex', alignItems:'center', gap:8 }}>
-          <span>▶</span> Lejátszás
-        </button>
       )}
       <div style={{ display:'flex', gap:8 }}>
-        {playing && (
-          <button onClick={() => setPlaying(false)} style={{ padding:'8px 16px', background:T.coralSoft, border:'none', color:T.coral, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:12, cursor:'pointer' }}>⏹ Stop</button>
+        {!playing ? (
+          <button onClick={handlePlay} style={{ padding:'12px 28px', background:`${T.purple}22`, border:`2px solid ${T.purple}`, color:T.purple, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor:'pointer', display:'flex', alignItems:'center', gap:8 }}>
+            <span>▶</span> Lejátszás
+          </button>
+        ) : (
+          <button onClick={handleStop} style={{ padding:'8px 16px', background:T.coralSoft, border:'none', color:T.coral, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:12, cursor:'pointer' }}>⏹ Stop</button>
         )}
         <button onClick={() => setRevealed(r => !r)} style={{ padding:'8px 20px', background: revealed ? T.mint : T.surface, border:'none', color: revealed ? '#fff' : T.ink, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:12, cursor:'pointer', boxShadow:T.shadow }}>
           {revealed ? '▲ Elrejt' : '🎵 Felfed'}
