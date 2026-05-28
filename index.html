@@ -33634,6 +33634,7 @@ const GAMES = [
   { id:'kivagyok',  name:'Ki Vagyok Én',          difficulty:'közepes', category:'Egyéni', emoji:'🕵️', img:IMGS['0be64fa0c_033-reunion.png'],              color:'#F472B6', desc:'Az app mutat egy híresség fotóját és ki kell találni ki van a képen. Ebben a játékban csak egy játékos vesz részt. Ha pontosan meg tudja mondani a híresség életkorát vagy foglalkozását akkor kioszthat egy piát.' },
   { id:'mindenki',  name:'Mindenki Iszik',difficulty:'könnyű',  category:'Egyéni', emoji:'🍻', img:IMGS['7721960ea_024-friendship-1.png'],         color:'#F4C95A', desc:'A játék kiválaszt egy játékost akinek innia kell. Ezt az app sorsolja ki, ha elfogyta az emberek akkor előről megy a kör.' },
   { id:'igazhamis', name:'Igaz Hamis',            difficulty:'könnyű',  category:'Egyéni', emoji:'🤔', img:IMGS['f52ad051b_035-friend.png'],               color:'#06B6D4', desc:'A játékban egy állítás fog megjelenni és el kell dönteni, hogy az igaz, vagy hamis. Ha úgy ítéled meg hogy az állítás igaz, akkor az idő lejárta előtt ezt közölnöd kell a többi játékossal akik ez alapján tudjuk eldönteni, hogy jól válaszoltál-e. Ha nem jó a válaszod akkor sajnos innod kell.' },
+  { id:'imposztor', name:'Imposztor',               difficulty:'közepes', category:'Csapat', emoji:'🕵️', img:IMGS['0be64fa0c_033-reunion.png'], dnr:true,       color:'#6366F1', desc:'Valaki köztetek az Imposztor! Mindenki kap egy titkos szerepet — csak az Imposztor nem tudja a titkos szót. Adjatok tippeket a szóra, a csoport szavazzon, ki a besúgó!' },
 ];
 
 const DIFFICULTY_META = {
@@ -33807,7 +33808,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.0 · DNR · 2026.05.28 10:29
+              Verzió 3.0 · DNR · 2026.05.28 11:13
             </div>
           </div>
         </div>
@@ -34120,8 +34121,8 @@ function GameTile({ g, selected, dim, locked, onClick, onInfo }) {
         </svg>
       </button>
 
-      {/* Busz exclusive badge */}
-      {g.id === 'busz' && (
+      {/* DNR exclusive badge */}
+      {(g.id === 'busz' || g.dnr) && (
         <div style={{
           position:'absolute', bottom:-5, left:'50%',
           transform:'translateX(-50%) rotate(-3deg)',
@@ -34250,6 +34251,7 @@ const SCENARIOS = {
   kopapir:   { prompt:'Kő-Papír-Olló — ki veszített a körben?', cta:[] },
   fingerit:  { prompt:'Finger it — ki tévesztett?', cta:[] },
   loverseny: { prompt:'Lóverseny — kinek nem jött be a tipp?', cta:[] },
+  imposztor: { prompt:'Ki az Imposztor? Mindenki adjon egy tippet a szóra, majd szavazzatok!', cta:[] },
   collect:   { prompt:'Collect & Boom — ki találta a bombát?', cta:[] },
 };
 const SCENARIO_DEFAULTS = {
@@ -34481,7 +34483,7 @@ function SzerencsekerékGame({ gameIdx, players }) {
       const idx = Math.floor(((360 - norm) % 360) / segDeg) % n;
       setWinner(players[idx]);
       setSpinning(false);
-    }, 3200);
+    }, 5200);
   };
 
   const paths = players.map((p, i) => {
@@ -34500,7 +34502,7 @@ function SzerencsekerékGame({ gameIdx, players }) {
       <div style={{ fontSize:20, lineHeight:1, color:T.ink }}>▼</div>
       <div style={{ position:'relative', width:250, height:250 }}>
         <svg width="250" height="250" viewBox="0 0 200 200"
-          style={{ display:'block', transform:`rotate(${rotation}deg)`, transition: spinning ? 'transform 3.2s cubic-bezier(0.17,0.67,0.12,0.99)' : 'none' }}>
+          style={{ display:'block', transform:`rotate(${rotation}deg)`, transition: spinning ? 'transform 5s cubic-bezier(0.12,0.75,0.08,1)' : 'none' }}>
           {paths.map(({ p, path, lx, ly, label }, i) => (
             <g key={p.id || i}>
               <path d={path} fill={p.color || '#ccc'} stroke="white" strokeWidth="2"/>
@@ -34534,6 +34536,7 @@ function LóversenyGame({ gameIdx, players, onAdvance }) {
   const [betStep, setBetStep] = useState(0);
   const [positions, setPositions] = useState([0,0,0,0]);
   const [raceWinner, setRaceWinner] = useState(null);
+  const [gifts, setGifts] = useState({});
   const ivRef = useRef(null);
   const posRef = useRef([0,0,0,0]);
   const FINISH = 8;
@@ -34543,7 +34546,7 @@ function LóversenyGame({ gameIdx, players, onAdvance }) {
   }, []);
   useEffect(() => {
     setPhase('bet'); setBets({}); setBetStep(0);
-    setPositions([0,0,0,0]); setRaceWinner(null);
+    setPositions([0,0,0,0]); setRaceWinner(null); setGifts({});
     posRef.current = [0,0,0,0];
     if (ivRef.current) { clearInterval(ivRef.current); ivRef.current = null; }
   }, [gameIdx]);
@@ -34567,7 +34570,8 @@ function LóversenyGame({ gameIdx, players, onAdvance }) {
     const drinkMap = {};
     players.forEach(p => {
       const b = bets[p.id];
-      if (b && b.horseId !== raceWinner) drinkMap[p.id] = b.amount;
+      if (b && b.horseId !== raceWinner) drinkMap[p.id] = (drinkMap[p.id]||0) + b.amount;
+      if (gifts[p.id]) drinkMap[p.id] = (drinkMap[p.id]||0) + gifts[p.id];
     });
     if (onAdvance) onAdvance(drinkMap);
   };
@@ -34649,8 +34653,11 @@ function LóversenyGame({ gameIdx, players, onAdvance }) {
             </div>
           );
         })}
-        {phase === 'result' && (
-          <div style={{ marginTop:4, display:'flex', flexDirection:'column', gap:4 }}>
+        {phase === 'result' && (() => {
+          const winnerPool = players.filter(p => bets[p.id]?.horseId === raceWinner).reduce((s,p) => s+(bets[p.id]?.amount||0),0);
+          const totalGifted = Object.values(gifts).reduce((s,v)=>s+v,0);
+          return (
+          <div style={{ marginTop:4, display:'flex', flexDirection:'column', gap:6 }}>
             {players.map(p => {
               const b = bets[p.id];
               const horse = HORSES.find(h => h.id === b?.horseId);
@@ -34661,16 +34668,203 @@ function LóversenyGame({ gameIdx, players, onAdvance }) {
                   <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink }}>{p.name}</div>
                   <div style={{ fontSize:13 }}>{horse?.emoji}</div>
                   <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color: won ? T.mint : T.coral }}>
-                    {won ? '🎉 Nyert' : `🍺 ×${b?.amount||0}`}
+                    {won ? `🎉 Kioszt: ${b?.amount||0} 🍺` : `🍺 ×${b?.amount||0}`}
                   </div>
                 </div>
               );
             })}
-            <button onClick={finishGame} style={{ marginTop:4, padding:'10px 0', background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>
+            {winnerPool > 0 && (
+              <div style={{ background:T.surface, borderRadius:12, padding:'10px 12px', boxShadow:T.shadow }}>
+                <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>
+                  🎁 Győztes kioszt: {winnerPool - totalGifted} / {winnerPool} korty
+                </div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                  {players.map(p => (
+                    <button key={p.id} onClick={() => { if(totalGifted < winnerPool) setGifts(g=>({...g,[p.id]:(g[p.id]||0)+1})); }}
+                      disabled={totalGifted >= winnerPool}
+                      style={{
+                        display:'flex', alignItems:'center', gap:6, padding:'6px 10px',
+                        border:'none', background:T.surfaceMuted, borderRadius:10,
+                        cursor: totalGifted >= winnerPool ? 'default' : 'pointer',
+                        opacity: totalGifted >= winnerPool ? 0.5 : 1,
+                      }}>
+                      <div style={{ width:24, height:24, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontSize:10, fontWeight:700, color:'#fff' }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+                      <div style={{ fontFamily:T.font, fontSize:12, fontWeight:600, color:T.ink }}>{p.name}</div>
+                      {(gifts[p.id]||0) > 0 && <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.coral }}>+{gifts[p.id]}🍺</div>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button onClick={finishGame} style={{ padding:'10px 0', background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>
               Következő ▶
             </button>
           </div>
+          );
+        })()}
+      </div>
+    );
+  }
+
+  return null;
+}
+
+const IMPOSZTOR_SZAVAK = [
+  'Banán','Focipálya','Mosógép','Repülőgép','Pizzéria',
+  'Kókusz','Tengerpart','Könyvtár','Gitár','Víziló',
+  'Jégkrém','Karácsonyfa','Mentőautó','Mézeskalács','Labda',
+  'Kaktusz','Nyaralás','Szivárvány','Cipőfűző','Tűzoltó',
+];
+
+function ImposztorGame({ gameIdx, players, onAdvance }) {
+  const [impostorIdx, setImpostorIdx] = useState(0);
+  const [wordIdx, setWordIdx] = useState(0);
+  const [phase, setPhase] = useState('reveal');
+  const [revealStep, setRevealStep] = useState(0);
+  const [showRole, setShowRole] = useState(false);
+  const [votes, setVotes] = useState({});
+  const [voteStep, setVoteStep] = useState(0);
+
+  useEffect(() => {
+    setImpostorIdx(Math.floor(Math.random() * players.length));
+    setWordIdx(gameIdx % IMPOSZTOR_SZAVAK.length);
+    setPhase('reveal'); setRevealStep(0); setShowRole(false); setVotes({}); setVoteStep(0);
+  }, [gameIdx]);
+
+  const word = IMPOSZTOR_SZAVAK[wordIdx];
+
+  if (phase === 'reveal') {
+    const pl = players[revealStep];
+    if (!pl) return null;
+    return (
+      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:12, alignItems:'center' }}>
+        <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>Szerepek — {revealStep+1}/{players.length}</div>
+        {!showRole ? (
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+            <div style={{ width:52, height:52, borderRadius:'50%', background:pl.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:'#fff' }}>{pl.name.charAt(0).toUpperCase()}</div>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{pl.name}</div>
+            <button onClick={() => setShowRole(true)} style={{ padding:'10px 22px', background:`${T.purple}22`, border:`2px solid ${T.purple}`, color:T.purple, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:14, cursor:'pointer' }}>👁 Titkos szerep</button>
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+            <div style={{ padding:'16px 28px', borderRadius:18, background: revealStep===impostorIdx ? '#1a1a2e' : T.surface, border:`3px solid ${revealStep===impostorIdx ? '#EF4444' : T.mint}`, textAlign:'center', animation:'popIn .3s' }}>
+              {revealStep===impostorIdx ? (
+                <>
+                  <div style={{ fontSize:32 }}>🕵️</div>
+                  <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:'#EF4444', letterSpacing:'0.06em' }}>IMPOSZTOR</div>
+                  <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.55)', marginTop:4 }}>Blöffölj — ne derüljön ki!</div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize:28 }}>🔑</div>
+                  <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>A titkos szó</div>
+                  <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:T.ink }}>{word}</div>
+                </>
+              )}
+            </div>
+            <button onClick={() => { setShowRole(false); if(revealStep+1 < players.length) setRevealStep(revealStep+1); else setPhase('describe'); }}
+              style={{ padding:'10px 24px', background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:14, cursor:'pointer' }}>
+              Rendben ✓
+            </button>
+          </div>
         )}
+      </div>
+    );
+  }
+
+  if (phase === 'describe') {
+    return (
+      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:12, alignItems:'center' }}>
+        <div style={{ background:T.surface, borderRadius:14, padding:'12px 16px', width:'100%', boxShadow:T.shadow, textAlign:'center' }}>
+          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6 }}>Mit kell tenni</div>
+          <div style={{ fontFamily:T.font, fontSize:14, color:T.ink, lineHeight:1.5 }}>Mindenki mondjon <strong>egy tippet</strong> a titkos szóra (anélkül hogy kimondaná). Az Imposztor blöfföljön!</div>
+        </div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6, justifyContent:'center' }}>
+          {players.map(p => (
+            <div key={p.id} style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 10px', borderRadius:10, background:T.surfaceMuted }}>
+              <div style={{ width:18, height:18, borderRadius:'50%', background:p.color }} />
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:600, color:T.ink }}>{p.name}</div>
+            </div>
+          ))}
+        </div>
+        <button onClick={() => setPhase('vote')} style={{ padding:'10px 26px', background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:14, cursor:'pointer' }}>
+          Mindenki mondott → Szavazás
+        </button>
+      </div>
+    );
+  }
+
+  if (phase === 'vote') {
+    const voter = players[voteStep];
+    if (!voter) return null;
+    const alreadyVoted = votes[voter.id] !== undefined;
+    return (
+      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
+        <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>Szavazás — {voteStep+1}/{players.length}</div>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ width:34, height:34, borderRadius:'50%', background:voter.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color:'#fff' }}>{voter.name.charAt(0).toUpperCase()}</div>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{voter.name}, ki az Imposztor?</div>
+        </div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center', width:'100%' }}>
+          {players.map((p, pIdx) => {
+            if (pIdx === voteStep) return null;
+            const picked = votes[voter.id] === pIdx;
+            return (
+              <button key={p.id} disabled={alreadyVoted} onClick={() => {
+                const nv = {...votes, [voter.id]: pIdx};
+                setVotes(nv);
+                setTimeout(() => { if(voteStep+1 < players.length) setVoteStep(voteStep+1); else setPhase('result'); }, 400);
+              }} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'8px 14px', border:`2px solid ${picked ? T.coral : 'transparent'}`, background: picked ? `${T.coral}18` : T.surfaceMuted, borderRadius:14, cursor: alreadyVoted ? 'default' : 'pointer' }}>
+                <div style={{ width:40, height:40, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:17, color:'#fff' }}>{p.name.charAt(0).toUpperCase()}</div>
+                <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:11, color:T.ink }}>{p.name}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'result') {
+    const impostor = players[impostorIdx];
+    const voteCounts = {};
+    Object.values(votes).forEach(idx => { voteCounts[idx] = (voteCounts[idx]||0)+1; });
+    const topIdx = Object.entries(voteCounts).sort((a,b)=>b[1]-a[1])[0]?.[0];
+    const found = parseInt(topIdx) === impostorIdx;
+    return (
+      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
+        <div style={{ background:'#1a1a2e', borderRadius:16, padding:'12px 18px', textAlign:'center', boxShadow:T.shadow, animation:'popIn .4s', width:'100%' }}>
+          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Az Imposztor</div>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+            <div style={{ width:44, height:44, borderRadius:'50%', background:impostor.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:'#fff' }}>{impostor.name.charAt(0).toUpperCase()}</div>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:'#EF4444' }}>{impostor.name}</div>
+            <div style={{ fontSize:22 }}>🕵️</div>
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:4 }}>Szó: <strong style={{ color:'rgba(255,255,255,0.85)' }}>{word}</strong></div>
+        </div>
+        <div style={{ padding:'10px 18px', borderRadius:14, background: found ? `${T.mint}22` : `${T.coral}22`, border:`2px solid ${found ? T.mint : T.coral}`, textAlign:'center', animation:'popIn .5s', width:'100%' }}>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:16, color: found ? T.mint : T.coral }}>
+            {found ? '🎉 Megtalálták! Imposztor iszik 3-at!' : '😈 Blöff sikerült! Mindenki más iszik 2-t!'}
+          </div>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:4, width:'100%' }}>
+          {players.map((p, i) => (
+            <div key={p.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 10px', background:T.surface, borderRadius:10 }}>
+              <div style={{ width:26, height:26, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontSize:11, fontWeight:700, color:'#fff', flexShrink:0 }}>{p.name.charAt(0).toUpperCase()}</div>
+              <div style={{ flex:1, fontFamily:T.font, fontSize:13, fontWeight:600, color:T.ink }}>{p.name}</div>
+              {i===impostorIdx && <div style={{ fontSize:13 }}>🕵️</div>}
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{voteCounts[i]||0} szavazat</div>
+            </div>
+          ))}
+        </div>
+        <button onClick={() => {
+          const dm = {};
+          if (found) { dm[impostor.id] = 3; }
+          else { players.forEach(p => { if(p.id !== impostor.id) dm[p.id] = 2; }); }
+          if(onAdvance) onAdvance(dm);
+        }} style={{ width:'100%', padding:'12px 0', background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>
+          Következő ▶
+        </button>
       </div>
     );
   }
@@ -34684,10 +34878,12 @@ function GameContent({ gameId, gameIdx, players, onAdvance }) {
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} />;
   if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
+  if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   return null;
 }
 
-function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) {
+function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, gameMeta }) {
+  const trackScores = gameMeta?.modes?.includes('points') ?? true;
   const [round, setRound] = useState(1);
   const [turn, setTurn] = useState(0);
   const [gameIdx, setGameIdx] = useState(0);
@@ -34757,17 +34953,18 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
   // Egyéni: current player wins or loses
   const advance = success => {
     if (transitioning) return;
-    const newPlayers = players.map((p,i) => i===turn
-      ? {...p, [success?'points':'drinks']: p[success?'points':'drinks']+1} : p);
+    const newPlayers = trackScores
+      ? players.map((p,i) => i===turn ? {...p, [success?'points':'drinks']: p[success?'points':'drinks']+1} : p)
+      : players;
     commitRound(newPlayers, success?'win':'lose', (turn+1)%players.length, gameIdx+1, round+1);
   };
 
   // Csapat: winner gets +1 point, everyone else +1 drink
   const advanceTeam = winnerIdx => {
     if (transitioning) return;
-    const newPlayers = players.map((p,i) =>
-      i===winnerIdx ? {...p,points:p.points+1} : {...p,drinks:p.drinks+1}
-    );
+    const newPlayers = trackScores
+      ? players.map((p,i) => i===winnerIdx ? {...p,points:p.points+1} : {...p,drinks:p.drinks+1})
+      : players;
     commitRound(newPlayers, 'win', (turn+1)%players.length, gameIdx+1, round+1);
   };
 
@@ -34775,24 +34972,28 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
   const advancePaired = currentPlayerWon => {
     if (transitioning || !selectedOpponent) return;
     const opIdx = players.findIndex(p => p.id===selectedOpponent.id);
-    const newPlayers = players.map((p,i) => {
-      if (i===turn) return {...p, ...(currentPlayerWon ? {points:p.points+1} : {drinks:p.drinks+1})};
-      if (i===opIdx) return {...p, ...(currentPlayerWon ? {drinks:p.drinks+1} : {points:p.points+1})};
-      return p;
-    });
+    const newPlayers = trackScores
+      ? players.map((p,i) => {
+          if (i===turn) return {...p, ...(currentPlayerWon ? {points:p.points+1} : {drinks:p.drinks+1})};
+          if (i===opIdx) return {...p, ...(currentPlayerWon ? {drinks:p.drinks+1} : {points:p.points+1})};
+          return p;
+        })
+      : players;
     setSelectedOpponent(null);
     commitRound(newPlayers, currentPlayerWon?'win':'lose', (turn+1)%players.length, gameIdx+1, round+1);
   };
 
   const advanceLoverseny = (drinkMap) => {
     if (transitioning) return;
-    const newPlayers = players.map(p => ({ ...p, drinks: p.drinks + (drinkMap[p.id] || 0) }));
+    const newPlayers = trackScores
+      ? players.map(p => ({ ...p, drinks: p.drinks + (drinkMap[p.id] || 0) }))
+      : players;
     commitRound(newPlayers, null, (turn+1)%players.length, gameIdx+1, round+1);
   };
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg }}>
-      <div style={{ flex:1, display:'flex', flexDirection:'column', maxWidth:680, width:'100%', margin:'0 auto', position:'relative', overflow:'hidden' }}>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', maxWidth:680, width:'100%', margin:'0 auto', position:'relative', minHeight:0 }}>
       {/* top controls */}
       <div style={{ position:'absolute', top:16, right:16, zIndex:5 }}>
         <div style={{
@@ -34820,7 +35021,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
       )}
 
       {/* main area */}
-      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'80px 24px 20px', gap:18 }}>
+      <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'80px 24px 20px', gap:18 }}>
         <div className="content-box" style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:18, width:'100%' }}>
         <div key={gameIdx} style={{
           width:80, height:80, borderRadius:18,
@@ -34840,6 +35042,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
         </div>
 
         <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} />
+      </div>
       </div>
       </div>
       </div>{/* end centered container */}
@@ -34883,7 +35086,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
           </div>
         </div>
       )}
-      {currentGame.category === 'Csapat' && currentGameId !== 'loverseny' && (
+      {currentGame.category === 'Csapat' && currentGameId !== 'loverseny' && currentGameId !== 'imposztor' && (
         <div style={{ padding:'0 18px 14px', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
           <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>Ki nyert?</div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center' }}>
@@ -34905,15 +35108,24 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
           <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, lineHeight:1, fontVariantNumeric:'tabular-nums' }}>{round}</div>
         </div>
         <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-          <div key={currentPlayer.id} style={{
-            width:56, height:56, borderRadius:'50%', background:currentPlayer.color,
-            display:'grid', placeItems:'center',
-            fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:'#fff',
-            boxShadow: scorePulse ? `0 0 0 4px ${currentPlayer.color}44` : 'none',
-            animation:'popIn .35s cubic-bezier(.2,.9,.3,1.4)',
-            transition:'box-shadow .3s',
-          }}>{currentPlayer.name.charAt(0).toUpperCase()||'?'}</div>
-          <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{currentPlayer.name}</div>
+          {currentGame.category === 'Csapat' ? (
+            <>
+              <div style={{ width:56, height:56, borderRadius:'50%', background:T.surfaceMuted, display:'grid', placeItems:'center', fontSize:26 }}>👥</div>
+              <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>Csapat</div>
+            </>
+          ) : (
+            <>
+              <div key={currentPlayer.id} style={{
+                width:56, height:56, borderRadius:'50%', background:currentPlayer.color,
+                display:'grid', placeItems:'center',
+                fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:'#fff',
+                boxShadow: scorePulse ? `0 0 0 4px ${currentPlayer.color}44` : 'none',
+                animation:'popIn .35s cubic-bezier(.2,.9,.3,1.4)',
+                transition:'box-shadow .3s',
+              }}>{currentPlayer.name.charAt(0).toUpperCase()||'?'}</div>
+              <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{currentPlayer.name}</div>
+            </>
+          )}
         </div>
         <button onClick={() => setShowMenu(true)} style={{ width:54, height:54, borderRadius:'50%', border:`2px solid ${T.inkMute}40`, background:'transparent', cursor:'pointer', display:'grid', placeItems:'center', color:T.inkSoft, padding:0 }}>{Icon.menu(T.inkSoft)}</button>
       </div>
@@ -34942,6 +35154,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                 {mSorted.map((p,i) => <LeaderRow key={p.id||i} p={p} rank={i+1} maxScore={mMaxScore} />)}
               </div>
+              <button onClick={() => { setShowMenu(false); go('observer'); }} style={{ width:'100%', minHeight:46, border:`1.5px solid ${T.inkMute}40`, background:'transparent', color:T.inkSoft, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:14, cursor:'pointer' }}>👁 Megfigyelő csatlakozása</button>
               <div style={{ display:'flex', gap:10 }}>
                 <button onClick={() => { setGameIdx(g=>g+1); setShowMenu(false); }} style={{ flex:1, minHeight:56, border:`2px solid ${T.ink}`, background:'transparent', color:T.ink, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer' }}>⏭ Következő</button>
                 <button onClick={() => { setShowMenu(false); go('end'); }} style={{ flex:1, minHeight:56, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>🏁 Kilépés</button>
@@ -35432,7 +35645,7 @@ function BottleApp() {
         {screen==='home'     && <HomeScreen     go={go} mode={mode} setMode={setMode} onStartGame={onStartGame} />}
         {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
         {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
-        {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} mode={mode} />}
+        {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} mode={mode} gameMeta={gameMeta} />}
         {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} />}
         {screen==='observer' && <ObserverScreen go={go} />}
       </div>
