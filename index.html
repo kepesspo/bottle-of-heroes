@@ -33711,7 +33711,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.0 · DNR · 2026.05.28 06:43
+              Verzió 3.0 · DNR · 2026.05.28 06:50
             </div>
           </div>
         </div>
@@ -34115,15 +34115,38 @@ function GameSettingsContent({ meta, setMeta, onDone, go }) {
 
 // ─── PLAY SCREEN ──────────────────────────────────────────────
 const SCENARIOS = {
-  busz:      { prompt:'Talál ki a következő lapot — piros vagy fekete?', cta:['Piros','Fekete'] },
-  memoria:   { prompt:'Fordíts meg két lapot. Talált párt?', cta:['Nem találtam','Pár!'] },
-  erem:      { prompt:'Érem dobás', cta:['Nem sikerült','Sikerült!'] },
-  ticktak:   { prompt:'A csengő szólt — nálad maradt?', cta:['Tovább adtam','Nálam maradt'] },
-  kezcsere:  { prompt:'Kéz csere — sikerült követni?', cta:['Elrontottam','Megcsináltam'] },
-  anagramma: { prompt:'NÖSÉRH → fejtsd meg!', cta:['Feladom','Megvan!'] },
-  ringfire:  { prompt:'Húzz egy lapot. Megúsztad?', cta:['Iszom','Megúsztam'] },
-  rulett:    { prompt:'Válassz egy poharat — vajon ez a kemény?', cta:['Kemény!','Sima'] },
-  kisebb:    { prompt:'A következő szám kisebb vagy nagyobb 7-nél?', cta:['Kisebb','Nagyobb'] },
+  // Egyéni
+  anagramma: { prompt:'4 betű → rakj ki egy értelmes szót 5 mp alatt!', cta:['Nem sikerült','Megvan!'] },
+  ringfire:  { prompt:'Húzz egy lapot — csináld meg a leírást!', cta:['Nem sikerült','Megúsztam!'] },
+  rulett:    { prompt:'Válassz egy poharat — ez a kemény?', cta:['Kemény — iszom','Megúsztam!'] },
+  uveg:      { prompt:'Pörgesd meg az üveget — akire mutat, az iszik.', cta:['Rám mutatott','Másra mutatott'] },
+  zene:      { prompt:'Hallgasd meg a részletet — ki az előadó és mi a cím?', cta:['Nem ismertem fel','Felismertem!'] },
+  otdolog:   { prompt:'Mondj 5 odaillő szót 5 mp alatt a kategóriában!', cta:['Nem sikerült','Megvan!'] },
+  szerencse: { prompt:'Pörgesd meg a kereket — akire mutat, az iszik.', cta:['Rám mutatott','Másra mutatott'] },
+  sohanem:   { prompt:'Én még soha — igaz rád?', cta:['Igaz rám — iszom','Nem igaz rám'] },
+  mindenki:  { prompt:'A kisorsolt játékosnak innia kell.', cta:['Iszom','Tovább'] },
+  igazhamis: { prompt:'Igaz vagy hamis az állítás?', cta:['Hamis — nem iszom','Igaz — iszom'] },
+  kivagyok:  { prompt:'Ki van a képen? Tippelj rá az életkorára vagy foglalkozására!', cta:['Nem ismertem meg','Megismertem!'] },
+  // Páros
+  erem:      { prompt:'Fej vagy írás — döntsétek el, ki iszik!', cta:['Vesztettem','Nyertem!'] },
+  tapper:    { prompt:'Mindketten az ujjatokat a gombra — ki engedi el előbb?', cta:['Én engedtem el','Ő engedte el'] },
+  // Csapat
+  busz:      { prompt:'Találd ki a következő lapot — piros vagy fekete?', cta:[] },
+  memoria:   { prompt:'Fordíts meg két lapot — találtál párt?', cta:[] },
+  ticktak:   { prompt:'A csengő szólt — ki tartotta magánál a tárgyat?', cta:[] },
+  kezcsere:  { prompt:'Kéz csere — ki rontott el?', cta:[] },
+  kisebb:    { prompt:'Kisebb vagy nagyobb a következő szám 7-nél?', cta:[] },
+  kategoria: { prompt:'Ki nem tudott szót mondani a kategóriában?', cta:[] },
+  hajime:    { prompt:'Ki mondott rosszat a hajime körben?', cta:[] },
+  kopapir:   { prompt:'Kő-Papír-Olló — ki veszített a körben?', cta:[] },
+  fingerit:  { prompt:'Finger it — ki tévesztett?', cta:[] },
+  loverseny: { prompt:'Lóverseny — kinek nem jött be a tipp?', cta:[] },
+  collect:   { prompt:'Collect & Boom — ki találta a bombát?', cta:[] },
+};
+const SCENARIO_DEFAULTS = {
+  'Egyéni': { prompt:'Siker vagy kudarc?', cta:['Nem sikerült','Sikerült!'] },
+  'Csapat': { prompt:'Ki nyert a körben?', cta:[] },
+  'Páros':  { prompt:'Válassz ellenfelet!', cta:['Vesztettem','Nyertem!'] },
 };
 
 function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) {
@@ -34137,6 +34160,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
   const [showInfo, setShowInfo] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [hostBurst, setHostBurst] = useState(null);
+  const [selectedOpponent, setSelectedOpponent] = useState(null);
   const transRef = React.useRef(false);
 
   // Polling fallback: pull latest player state from Firestore every 2s
@@ -34156,51 +34180,70 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
   const currentGameId = games[gameIdx % games.length];
   const currentGame = GAMES.find(g=>g.id===currentGameId) || GAMES[0];
   const currentPlayer = players[turn];
-  const scenario = SCENARIOS[currentGameId] || SCENARIOS.erem;
+  const scenario = SCENARIOS[currentGameId] || SCENARIO_DEFAULTS[currentGame.category] || SCENARIO_DEFAULTS['Egyéni'];
   const totalDrinks = players.reduce((s,p) => s+p.drinks, 0);
 
-  const advance = success => {
-    if (transitioning) return;
+  const processPendingDrinks = () => {
+    if (!roomCode || mode!=='Online' || typeof popPendingDrinks!=='function') return;
+    popPendingDrinks(roomCode).then(items => {
+      if (!items || items.length === 0) return;
+      setPlayers(prev => {
+        let updated = [...prev];
+        items.forEach(item => {
+          if (item.group) updated = updated.map(p => ({...p, drinks:p.drinks+(item.amount||1)}));
+          else if (item.playerId) updated = updated.map(p => p.id===item.playerId ? {...p,drinks:p.drinks+(item.amount||1)} : p);
+        });
+        if (typeof syncRoom==='function') syncRoom(roomCode, { players:updated });
+        return updated;
+      });
+      setHostBurst(items);
+    });
+  };
+
+  const commitRound = (newPlayers, fb, newTurn, newGameIdx, newRound) => {
     transRef.current = true;
     setTransitioning(true);
-    setFeedback(success ? 'win' : 'lose');
+    setFeedback(fb);
+    setPlayers(newPlayers);
+    if (fb==='win') { setScorePulse(true); setTimeout(()=>setScorePulse(false),600); }
+    else if (fb==='lose') { setDrinkPulse(true); setTimeout(()=>setDrinkPulse(false),600); }
+    if (roomCode && mode==='Online' && typeof syncRoom==='function')
+      syncRoom(roomCode, { players:newPlayers, turn:newTurn, gameIdx:newGameIdx, round:newRound });
+    setTimeout(() => {
+      setFeedback(null); setTurn(newTurn); setGameIdx(newGameIdx);
+      setRound(newRound); setTransitioning(false); transRef.current = false;
+      processPendingDrinks();
+    }, 700);
+  };
+
+  // Egyéni: current player wins or loses
+  const advance = success => {
+    if (transitioning) return;
     const newPlayers = players.map((p,i) => i===turn
       ? {...p, [success?'points':'drinks']: p[success?'points':'drinks']+1} : p);
-    const newTurn = (turn+1) % players.length;
-    const newGameIdx = gameIdx+1;
-    const newRound = round+1;
-    setPlayers(newPlayers);
-    if (success) { setScorePulse(true); setTimeout(() => setScorePulse(false), 600); }
-    else { setDrinkPulse(true); setTimeout(() => setDrinkPulse(false), 600); }
-    if (roomCode && mode==='Online' && typeof syncRoom==='function') {
-      syncRoom(roomCode, { players:newPlayers, turn:newTurn, gameIdx:newGameIdx, round:newRound });
-    }
-    setTimeout(() => {
-      setFeedback(null);
-      setTurn(newTurn);
-      setGameIdx(newGameIdx);
-      setRound(newRound);
-      setTransitioning(false);
-      transRef.current = false;
-      if (roomCode && mode==='Online' && typeof popPendingDrinks==='function') {
-        popPendingDrinks(roomCode).then(items => {
-          if (!items || items.length === 0) return;
-          setPlayers(prev => {
-            let updated = [...prev];
-            items.forEach(item => {
-              if (item.group) {
-                updated = updated.map(p => ({...p, drinks: p.drinks + (item.amount||1)}));
-              } else if (item.playerId) {
-                updated = updated.map(p => p.id===item.playerId ? {...p, drinks: p.drinks + (item.amount||1)} : p);
-              }
-            });
-            if (typeof syncRoom === 'function') syncRoom(roomCode, { players: updated });
-            return updated;
-          });
-          setHostBurst(items);
-        });
-      }
-    }, 700);
+    commitRound(newPlayers, success?'win':'lose', (turn+1)%players.length, gameIdx+1, round+1);
+  };
+
+  // Csapat: winner gets +1 point, everyone else +1 drink
+  const advanceTeam = winnerIdx => {
+    if (transitioning) return;
+    const newPlayers = players.map((p,i) =>
+      i===winnerIdx ? {...p,points:p.points+1} : {...p,drinks:p.drinks+1}
+    );
+    commitRound(newPlayers, 'win', (turn+1)%players.length, gameIdx+1, round+1);
+  };
+
+  // Páros: challenger vs picked opponent
+  const advancePaired = currentPlayerWon => {
+    if (transitioning || !selectedOpponent) return;
+    const opIdx = players.findIndex(p => p.id===selectedOpponent.id);
+    const newPlayers = players.map((p,i) => {
+      if (i===turn) return {...p, ...(currentPlayerWon ? {points:p.points+1} : {drinks:p.drinks+1})};
+      if (i===opIdx) return {...p, ...(currentPlayerWon ? {drinks:p.drinks+1} : {points:p.points+1})};
+      return p;
+    });
+    setSelectedOpponent(null);
+    commitRound(newPlayers, currentPlayerWon?'win':'lose', (turn+1)%players.length, gameIdx+1, round+1);
   };
 
   return (
@@ -34264,11 +34307,58 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
       </div>
       </div>{/* end centered container */}
 
-      {/* action buttons */}
-      <div className='play-actions'>
-        <button onClick={() => advance(false)} disabled={transitioning} style={{ flex:1, minHeight:60, border:'none', background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>{scenario.cta[0]}</button>
-        <button onClick={() => advance(true)} disabled={transitioning} style={{ flex:1, minHeight:60, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>{scenario.cta[1]}</button>
-      </div>
+      {/* action buttons – varies by game type */}
+      {currentGame.category === 'Egyéni' && (
+        <div className='play-actions'>
+          <button onClick={() => advance(false)} disabled={transitioning} style={{ flex:1, minHeight:60, border:'none', background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>{scenario.cta[0]}</button>
+          <button onClick={() => advance(true)} disabled={transitioning} style={{ flex:1, minHeight:60, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>{scenario.cta[1]}</button>
+        </div>
+      )}
+      {currentGame.category === 'Páros' && !selectedOpponent && (
+        <div style={{ padding:'0 18px 14px', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
+          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>Válassz ellenfelet</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center' }}>
+            {players.filter((_,i) => i!==turn).map(p => (
+              <button key={p.id} onClick={() => !transitioning && setSelectedOpponent(p)} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'8px 12px', border:'none', background:T.surface, borderRadius:14, boxShadow:T.shadow, cursor:'pointer' }}>
+                <div style={{ width:44, height:44, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:17, color:'#fff' }}>{p.name.charAt(0).toUpperCase()}</div>
+                <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:11, color:T.ink, maxWidth:60, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {currentGame.category === 'Páros' && selectedOpponent && (
+        <div style={{ padding:'0 18px 0' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:18, padding:'0 0 10px' }}>
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+              <div style={{ width:46, height:46, borderRadius:'50%', background:currentPlayer.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:'#fff' }}>{currentPlayer.name.charAt(0).toUpperCase()}</div>
+              <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:11, color:T.ink, maxWidth:64, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'center' }}>{currentPlayer.name}</div>
+            </div>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.inkSoft }}>VS</div>
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+              <div style={{ width:46, height:46, borderRadius:'50%', background:selectedOpponent.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:'#fff' }}>{selectedOpponent.name.charAt(0).toUpperCase()}</div>
+              <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:11, color:T.ink, maxWidth:64, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'center' }}>{selectedOpponent.name}</div>
+            </div>
+          </div>
+          <div className='play-actions'>
+            <button onClick={() => advancePaired(false)} disabled={transitioning} style={{ flex:1, minHeight:60, border:'none', background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>Vesztettem 😔</button>
+            <button onClick={() => advancePaired(true)} disabled={transitioning} style={{ flex:1, minHeight:60, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>Nyertem! 🎉</button>
+          </div>
+        </div>
+      )}
+      {currentGame.category === 'Csapat' && (
+        <div style={{ padding:'0 18px 14px', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
+          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>Ki nyert?</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center' }}>
+            {players.map((p, i) => (
+              <button key={p.id} onClick={() => !transitioning && advanceTeam(i)} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'8px 12px', border:'none', background:T.surface, borderRadius:14, boxShadow:T.shadow, cursor: transitioning ? 'default' : 'pointer' }}>
+                <div style={{ width:44, height:44, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:17, color:'#fff' }}>{p.name.charAt(0).toUpperCase()}</div>
+                <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:11, color:T.ink, maxWidth:60, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* footer */}
       <div style={{ background:T.surface, boxShadow:'0 -4px 18px rgba(20,30,50,0.05)', padding:'14px 18px 22px' }}>
