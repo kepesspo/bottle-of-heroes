@@ -53,6 +53,8 @@
     @keyframes burstPop  { from{transform:scale(.5);opacity:0} to{transform:scale(1);opacity:1} }
     @keyframes burstFade { to{opacity:0;transform:scale(.92) translateY(-8px)} }
     @keyframes wobble    { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-12deg) scale(1.1)} 75%{transform:rotate(10deg) scale(1.1)} }
+    @keyframes slideDown  { from{transform:translateY(-80px);opacity:0} to{transform:translateY(0);opacity:1} }
+    @keyframes alertPulse { 0%,100%{box-shadow:0 0 0 0 rgba(244,160,74,0)} 50%{box-shadow:0 0 0 6px rgba(244,160,74,0.35)} }
     @keyframes emojiRise { 0%{transform:translateY(20px) rotate(0);opacity:0} 15%{opacity:1} 100%{transform:translateY(-560px) rotate(20deg);opacity:0} }
 
     /* ── Responsive layout ── */
@@ -33709,7 +33711,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.0 · DNR · 2026.05.28 06:09
+              Verzió 3.0 · DNR · 2026.05.28 06:21
             </div>
           </div>
         </div>
@@ -34195,9 +34197,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
             if (typeof syncRoom === 'function') syncRoom(roomCode, { players: updated });
             return updated;
           });
-          const total = items.reduce((s,i) => s + (i.amount||1), 0);
-          setHostBurst({ icon:'🍺', title:`+${total} korty!`, sub:'A megfigyelőtől érkezett', tone: '#F4A04A' });
-          setTimeout(() => setHostBurst(null), 1400);
+          setHostBurst(items);
         });
       }
     }, 700);
@@ -34293,7 +34293,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode }) 
 
       </div>
       {showInfo && <GameInfoModal game={currentGame} onClose={() => setShowInfo(false)} />}
-      {hostBurst && <ActionBurst burst={hostBurst} />}
+      {hostBurst && <HostDrinkAlert items={hostBurst} players={players} onDismiss={() => setHostBurst(null)} />}
       {showMenu && (() => {
         const mSorted = [...players].sort((a,b)=>(b.points-a.points)||(a.drinks-b.drinks));
         const mWinner = mSorted[0];
@@ -34517,8 +34517,8 @@ function ObserverWatching({ code, observerName, onLeave }) {
   const [pulseId, setPulseId] = useState(null);
   const [sheet, setSheet] = useState(null);
   const [burst, setBurst] = useState(null);
-  const [emojiFly, setEmojiFly] = useState(null);
-  const [drinkUsed, setDrinkUsed] = useState(false);
+  const [groupUsed, setGroupUsed] = useState(false);
+  const [kortyUsed, setKortyUsed] = useState(false);
 
   useEffect(() => {
     const unsub = subscribeRoom(code, data => {
@@ -34552,21 +34552,16 @@ function ObserverWatching({ code, observerName, onLeave }) {
 
   const fireBurst = b => { setBurst(b); setTimeout(() => setBurst(null), 1400); };
   const giveDrinks = (player, amount) => {
-    if (drinkUsed) return;
+    if (kortyUsed) return;
     if (typeof addPendingDrink==='function') addPendingDrink(code, { playerId:player.id, amount, group:false, observerName });
-    setDrinkUsed(true);
+    setKortyUsed(true);
     fireBurst({ icon:'🍺', title:`Idd meg, ${player.name}!`, sub:`+${amount} korty elküldve`, tone:T.coral });
   };
   const groupDrink = () => {
-    if (drinkUsed) return;
+    if (groupUsed) return;
     if (typeof addPendingDrink==='function') addPendingDrink(code, { group:true, amount:1, observerName });
-    setDrinkUsed(true);
+    setGroupUsed(true);
     fireBurst({ icon:'🍻', title:'Csoportos ivás!', sub:'Ivás elküldve', tone:T.yellow });
-  };
-  const sendEmoji = e => {
-    setEmojiFly({ char:e, id:Date.now() });
-    setTimeout(() => setEmojiFly(null), 2200);
-    fireBurst({ icon:e, title:`${e} elküldve`, sub:'A szoba látja', tone:T.purple });
   };
 
   return (
@@ -34631,43 +34626,26 @@ function ObserverWatching({ code, observerName, onLeave }) {
       </div>
 
       {/* Megfigyelő panel */}
-      <div style={{ background:T.surface, borderTopLeftRadius:24, borderTopRightRadius:24, boxShadow:'0 -4px 18px rgba(20,30,50,0.06)', padding:'10px 14px max(18px,calc(env(safe-area-inset-bottom)+10px))', flexShrink:0 }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6, padding:'0 4px 8px' }}>
+      <div style={{ background:T.surface, borderTopLeftRadius:24, borderTopRightRadius:24, boxShadow:'0 -4px 18px rgba(20,30,50,0.06)', padding:'10px 16px max(22px,calc(env(safe-area-inset-bottom)+14px))', flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 2px 10px' }}>
           <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'2px 8px', borderRadius:999, background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:9, letterSpacing:'0.1em', textTransform:'uppercase' }}>
             <span style={{ width:5, height:5, borderRadius:'50%', background:T.mint }}/>
             {observerName || 'Megfigyelő'}
           </span>
-          {drinkUsed
-            ? <span style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.mint, letterSpacing:'0.06em', textTransform:'uppercase' }}>✓ Ivás elküldve</span>
-            : <span style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkSoft, letterSpacing:'0.06em', textTransform:'uppercase' }}>küldj ivást</span>
-          }
+          <span style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color: (kortyUsed && groupUsed) ? T.mint : T.inkSoft, letterSpacing:'0.06em', textTransform:'uppercase' }}>
+            {(kortyUsed && groupUsed) ? '✓ Ivás elküldve' : 'küldj ivást'}
+          </span>
         </div>
-        <div style={{ display:'flex', gap:6 }}>
-          {[
-            { emoji:'🍺', label:'Korty', onClick:() => { if (!drinkUsed) setSheet('drink'); }, off: drinkUsed },
-            { emoji:'🍻', label:'Csoport', onClick:() => { if (!drinkUsed) groupDrink(); }, off: drinkUsed },
-            { emoji:'💬', label:'Emoji', onClick:() => setSheet('emoji'), off: false },
-          ].map(a => (
-            <button key={a.label} onClick={a.onClick} style={{ flex:1, minWidth:0, padding:'8px 4px', background: a.off ? T.surfaceMuted : T.surface, border:'none', borderRadius:14, boxShadow: a.off ? 'none' : T.shadow, cursor: a.off ? 'default' : 'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:4, opacity: a.off ? 0.38 : 1, transition:'opacity .25s' }}
-              onMouseDown={e => !a.off && (e.currentTarget.style.transform='scale(0.94)')}
-              onMouseUp={e => e.currentTarget.style.transform=''}
-              onMouseLeave={e => e.currentTarget.style.transform=''}
-            >
-              <div style={{ fontSize:24, lineHeight:1 }}>{a.emoji}</div>
-              <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:10, color:T.ink, textAlign:'center', lineHeight:1.15 }}>{a.label}</div>
-            </button>
-          ))}
+        <div style={{ display:'flex', gap:10 }}>
+          <button onClick={() => { if (!groupUsed) groupDrink(); }} style={{ flex:1, minHeight:56, border:`2px solid ${groupUsed ? T.inkMute+'60' : T.yellow}`, background:'transparent', color: groupUsed ? T.inkMute : T.yellow, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor: groupUsed ? 'default' : 'pointer', opacity: groupUsed ? 0.4 : 1, transition:'all .25s' }}>🍻 Csoport</button>
+          <button onClick={() => { if (!kortyUsed) setSheet('drink'); }} style={{ flex:1, minHeight:56, border:'none', background: kortyUsed ? T.surfaceMuted : T.coral, color: kortyUsed ? T.inkMute : '#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor: kortyUsed ? 'default' : 'pointer', opacity: kortyUsed ? 0.4 : 1, transition:'all .25s', boxShadow: kortyUsed ? 'none' : T.shadow }}>🍺 Korty</button>
         </div>
       </div>
 
       {sheet==='drink' && <SheetOverlay onClose={() => setSheet(null)}>
         <DrinkSheet players={players} onPick={(p,n) => { giveDrinks(p,n); setSheet(null); }} />
       </SheetOverlay>}
-      {sheet==='emoji' && <SheetOverlay onClose={() => setSheet(null)}>
-        <EmojiSheet onPick={e => { sendEmoji(e); setSheet(null); }} />
-      </SheetOverlay>}
       {burst && <ActionBurst burst={burst} />}
-      {emojiFly && <EmojiFly char={emojiFly.char} key={emojiFly.id} />}
     </div>
   );
 }
@@ -34714,6 +34692,36 @@ function EmojiSheet({ onPick }) {
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10 }}>
         {emojis.map(e => <button key={e} onClick={() => onPick(e)} style={{ aspectRatio:'1/1', border:'none', cursor:'pointer', background:T.surfaceMuted, borderRadius:16, display:'grid', placeItems:'center', fontSize:34 }}>{e}</button>)}
+      </div>
+    </div>
+  );
+}
+
+function HostDrinkAlert({ items, players, onDismiss }) {
+  const lines = (items || []).map(item => {
+    if (item.group) return { icon:'🍻', from: item.observerName || 'Megfigyelő', to: 'mindenki', amount: item.amount || 1 };
+    const p = players.find(pl => pl.id === item.playerId);
+    return { icon:'🍺', from: item.observerName || 'Megfigyelő', to: p ? p.name : '?', amount: item.amount || 1 };
+  });
+  return (
+    <div style={{ position:'fixed', top:0, left:0, right:0, zIndex:100, padding:'12px 14px 0', pointerEvents:'none' }}>
+      <div style={{ background:T.surface, borderRadius:18, padding:'14px 16px 12px', borderTop:`4px solid #F4A04A`, animation:'slideDown .4s cubic-bezier(.2,.9,.3,1), alertPulse 1.2s .4s 3', pointerEvents:'auto', display:'flex', alignItems:'flex-start', gap:12 }}>
+        <div style={{ fontSize:36, lineHeight:1, animation:'wobble .6s', flexShrink:0 }}>🍺</div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:14, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginBottom:4 }}>Megfigyelői ivás!</div>
+          {lines.map((l,i) => (
+            <div key={i} style={{ display:'flex', alignItems:'center', gap:6, marginTop:2 }}>
+              <span style={{ fontSize:14 }}>{l.icon}</span>
+              <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.mintDeep }}>{l.from}</span>
+              <span style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>→</span>
+              <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.ink }}>{l.to}</span>
+              <span style={{ fontFamily:T.font, fontSize:11, fontWeight:600, color:T.coral, marginLeft:2 }}>+{l.amount}</span>
+            </div>
+          ))}
+        </div>
+        <button onClick={onDismiss} style={{ width:30, height:30, borderRadius:'50%', border:'none', background:T.surfaceMuted, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0, marginTop:-2 }}>
+          {Icon.close(T.inkSoft)}
+        </button>
       </div>
     </div>
   );
