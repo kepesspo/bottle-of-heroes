@@ -33943,7 +33943,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 4.1 · DNR · 2026.05.29 19:28
+              Verzió 4.2 · DNR · 2026.05.29 19:31
             </div>
           </div>
         </div>
@@ -36694,32 +36694,53 @@ function BuszPlayerView({ room, roomCode }) {
         );
       })()}
 
+      {/* ── Drink distribution center modal ── */}
+      {giftTarget && (
+        <div onClick={giftTarget.pool<=0 ? ()=>setGiftTarget(null) : undefined} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.55)', zIndex:60, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 20px', animation:'fadeIn .2s' }}>
+          <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:380, background:T.surface, borderRadius:24, boxShadow:'0 8px 40px rgba(0,0,0,0.25)', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.4)', overflow:'hidden' }}>
+            {/* Header */}
+            <div style={{ background:`linear-gradient(135deg, ${T.mint}22, ${T.mint}08)`, padding:'20px 20px 16px', borderBottom:`1px solid ${T.mint}25` }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div>
+                  <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:T.mint, lineHeight:1 }}>
+                    {giftTarget.pool > 0 ? `${giftTarget.pool} korty` : '✓ Kész!'}
+                  </div>
+                  <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:4 }}>
+                    {giftTarget.pool > 0 ? 'Kioszthatod — koppints a névre' : 'Minden korty ki van osztva'}
+                  </div>
+                </div>
+                <div style={{ fontSize:36, lineHeight:1 }}>🍺</div>
+              </div>
+            </div>
+            {/* Player list */}
+            <div style={{ padding:'10px 14px', maxHeight:260, overflowY:'auto', WebkitOverflowScrolling:'touch', display:'flex', flexDirection:'column', gap:6 }}>
+              {players.filter(p=>p.id!==playerId).map(p=>(
+                <button key={p.id} onClick={()=>giftTarget.pool>0&&giveOneDrink(p.id)}
+                  style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 14px', background:giftTarget.assigned[p.id]>0?`${T.mint}15`:T.surfaceMuted, border:`1.5px solid ${giftTarget.assigned[p.id]>0?T.mint+'60':'transparent'}`, borderRadius:14, cursor:giftTarget.pool>0?'pointer':'default', textAlign:'left', width:'100%', transition:'all .15s' }}>
+                  <div style={{ width:36, height:36, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:15, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+                  <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{p.name}</div>
+                  {giftTarget.assigned[p.id]>0 && (
+                    <div style={{ display:'flex', alignItems:'center', gap:3, background:T.mint, borderRadius:20, padding:'3px 10px' }}>
+                      <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:14, color:'#fff' }}>{giftTarget.assigned[p.id]}</span>
+                      <span style={{ fontSize:13 }}>🍺</span>
+                    </div>
+                  )}
+                  {giftTarget.pool>0 && <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:T.mint, flexShrink:0 }}>+1</div>}
+                </button>
+              ))}
+            </div>
+            {/* Footer button */}
+            <div style={{ padding:'10px 14px 18px' }}>
+              <button onClick={()=>setGiftTarget(null)} style={{ width:'100%', padding:'14px', background:giftTarget.pool>0?T.surfaceMuted:T.mint, color:giftTarget.pool>0?T.inkSoft:'#fff', border:'none', borderRadius:14, fontFamily:T.font, fontWeight:700, fontSize:15, cursor:'pointer', boxShadow:giftTarget.pool>0?'none':T.shadow, transition:'all .2s' }}>
+                {giftTarget.pool > 0 ? `Kész (még ${giftTarget.pool} korty maradt)` : '✓ Bezárás'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Fixed bottom panel ── */}
       <div style={{ position:'fixed', bottom:0, left:0, right:0, zIndex:40, display:'flex', flexDirection:'column', gap:10, padding:'12px 16px 28px', background:T.bg }}>
-
-        {/* Drink distribution — above cards, inline */}
-        {giftTarget && (
-          <div style={{ background:`${T.mint}18`, borderRadius:16, padding:'10px 14px 12px', border:`1.5px solid ${T.mint}40` }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.mint, textTransform:'uppercase', letterSpacing:'0.06em' }}>
-                {giftTarget.pool > 0 ? `🍺 Kioszthatod a ${giftTarget.pool} kortyot` : '✓ Minden kiosztva!'}
-              </div>
-              <button onClick={()=>setGiftTarget(null)} style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.inkSoft, background:'transparent', border:'none', cursor:'pointer', padding:'2px 6px' }}>Kész</button>
-            </div>
-            {giftTarget.pool > 0 && (
-              <div style={{ display:'flex', flexDirection:'column', gap:5, maxHeight:168, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
-                {players.filter(p=>p.id!==playerId).map(p=>(
-                  <button key={p.id} onClick={()=>giveOneDrink(p.id)} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', background:T.surface, border:'none', borderRadius:10, cursor:'pointer', textAlign:'left', width:'100%', flexShrink:0 }}>
-                    <div style={{ width:30, height:30, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:13, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-                    <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{p.name}</div>
-                    {giftTarget.assigned[p.id]>0 && <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:14, color:T.mint }}>{giftTarget.assigned[p.id]}🍺</div>}
-                    <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:T.mint }}>+1</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* White card: header + horizontal cards */}
         <div style={{ background:T.surface, borderRadius:20, boxShadow:T.shadow, overflow:'hidden' }}>
