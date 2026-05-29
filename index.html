@@ -33871,7 +33871,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.1 · DNR · 2026.05.29 17:49
+              Verzió 3.1 · DNR · 2026.05.29 18:01
             </div>
           </div>
         </div>
@@ -36524,9 +36524,10 @@ function BuszPlayerView({ room, roomCode }) {
   const effectiveSel = selectedCardIds.filter(id=>playableCards.some(c=>c.id===id));
   const drinksPerCard = lastFlipped ? lastFlipped.rowIdx+1 : 0;
   const totalDrinks = drinksPerCard * effectiveSel.length;
+  const canPlay = effectiveSel.length > 0;
 
   return (
-    <div style={{ flex:1, display:'flex', flexDirection:'column', gap:12, padding:'12px 16px', overflowY:'auto' }}>
+    <div style={{ display:'flex', flexDirection:'column', width:'100%', gap:12, paddingBottom:240 }}>
       {/* Player header + Active card */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, padding:'12px 10px', background:T.surface, borderRadius:14, boxShadow:T.shadow, textAlign:'center' }}>
@@ -36550,28 +36551,6 @@ function BuszPlayerView({ room, roomCode }) {
           </div>
         )}
       </div>
-
-      {/* Drink distribution */}
-      {giftTarget && (
-        <div style={{ background:`${T.mint}14`, borderRadius:14, padding:'14px 16px', border:`1.5px solid ${T.mint}45` }}>
-          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color:T.mint, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginBottom:10 }}>
-            {giftTarget.pool > 0 ? `Kioszthatod a ${giftTarget.pool} kortyot 🍺` : '✓ Minden kiosztva!'}
-          </div>
-          {giftTarget.pool > 0 && (
-            <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
-              {players.filter(p=>p.id!==playerId).map(p=>(
-                <button key={p.id} onClick={()=>giveOneDrink(p.id)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:T.surface, border:'none', borderRadius:12, cursor:'pointer', boxShadow:T.shadow, textAlign:'left', width:'100%' }}>
-                  <div style={{ width:32, height:32, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:14, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-                  <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{p.name}</div>
-                  {giftTarget.assigned[p.id]>0 && <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:16, color:T.coral }}>{giftTarget.assigned[p.id]}</div>}
-                  <div style={{ fontFamily:T.font, fontSize:12, color:T.mint }}>+1 →</div>
-                </button>
-              ))}
-            </div>
-          )}
-          <button onClick={()=>setGiftTarget(null)} style={{ marginTop:10, width:'100%', padding:'11px', background:T.mint, color:'#fff', border:'none', borderRadius:12, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, cursor:'pointer', boxShadow:T.shadow }}>Kész</button>
-        </div>
-      )}
 
       {/* Ezen a lapnál kapott */}
       {(buszState.flipInitialDrinks || buszState.initialDrinks) && (() => {
@@ -36604,58 +36583,78 @@ function BuszPlayerView({ room, roomCode }) {
         );
       })()}
 
-      {/* Hand: white card with header + horizontal cards */}
-      <div style={{ background:T.surface, borderRadius:20, boxShadow:T.shadow, overflow:'hidden' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 18px 10px' }}>
-          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, textTransform:'uppercase', letterSpacing:'0.08em' }}>
-            A KEZED · {myHand.length} LAP
-          </div>
-          {playableCards.length > 0 && lastFlipped && (
-            <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7L6 11L12 3" stroke={T.mint} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.mint }}>{lastFlipped.value}{lastFlipped.suit} lerakható</span>
+      {/* ── Fixed bottom panel ── */}
+      <div style={{ position:'fixed', bottom:0, left:0, right:0, zIndex:40, display:'flex', flexDirection:'column', gap:10, padding:'12px 16px 28px', background:T.bg }}>
+
+        {/* Drink distribution — appears above the card section */}
+        {giftTarget && (
+          <div style={{ background:`${T.mint}22`, borderRadius:16, padding:'14px 16px', border:`1.5px solid ${T.mint}55` }}>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:14, color:T.mint, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginBottom:10 }}>
+              {giftTarget.pool > 0 ? `Kioszthatod a ${giftTarget.pool} kortyot 🍺` : '✓ Minden kiosztva!'}
             </div>
-          )}
-        </div>
-        <div style={{ overflowX:'auto', overflowY:'visible', padding:'4px 16px 16px', display:'flex', gap:10, alignItems:'flex-start', WebkitOverflowScrolling:'touch' }}>
-          {myHand.length === 0 ? (
-            <div style={{ padding:'16px', textAlign:'center', width:'100%' }}>
-              <div style={{ fontFamily:T.font, fontSize:14, color:T.mint, fontWeight:700 }}>🎉 Nincs több lapod!</div>
-            </div>
-          ) : myHand.map(card => {
-            const isPlayable = playableCards.some(c=>c.id===card.id);
-            const isSel = effectiveSel.includes(card.id);
-            return (
-              <div key={card.id}
-                onClick={()=>isPlayable && setSelectedCardIds(ids=>isSel?ids.filter(x=>x!==card.id):[...ids,card.id])}
-                style={{ position:'relative', flexShrink:0, cursor:isPlayable?'pointer':'default', transform:isSel?'translateY(-8px)':'none', transition:'transform .18s ease', userSelect:'none', paddingTop:isPlayable?18:0 }}>
-                {isPlayable && (
-                  <div style={{ position:'absolute', top:4, left:6, zIndex:10, background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:9, textTransform:'uppercase', letterSpacing:'0.06em', padding:'3px 8px', borderRadius:6 }}>
-                    Lerakható
-                  </div>
-                )}
-                <div style={{ border:`2.5px solid ${isPlayable?(isSel?T.coral:T.mint):'transparent'}`, borderRadius:13, transition:'border-color .15s' }}>
-                  <PlayingCard card={card} size='xl' glow={isSel} />
-                </div>
+            {giftTarget.pool > 0 && (
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {players.filter(p=>p.id!==playerId).map(p=>(
+                  <button key={p.id} onClick={()=>giveOneDrink(p.id)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:T.surface, border:'none', borderRadius:12, cursor:'pointer', boxShadow:T.shadow, textAlign:'left', width:'100%' }}>
+                    <div style={{ width:32, height:32, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:14, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+                    <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{p.name}</div>
+                    {giftTarget.assigned[p.id]>0 && <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:16, color:T.coral }}>{giftTarget.assigned[p.id]}</div>}
+                    <div style={{ fontFamily:T.font, fontSize:12, color:T.mint }}>+1 →</div>
+                  </button>
+                ))}
               </div>
-            );
-          })}
+            )}
+            <button onClick={()=>setGiftTarget(null)} style={{ marginTop:10, width:'100%', padding:'12px', background:T.mint, color:'#fff', border:'none', borderRadius:12, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, cursor:'pointer', boxShadow:T.shadow }}>Kész</button>
+          </div>
+        )}
+
+        {/* White card: header + cards */}
+        <div style={{ background:T.surface, borderRadius:20, boxShadow:T.shadow, overflow:'hidden' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 18px 10px' }}>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, textTransform:'uppercase', letterSpacing:'0.08em' }}>
+              A KEZED · {myHand.length} LAP
+            </div>
+            {playableCards.length > 0 && lastFlipped && (
+              <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7L6 11L12 3" stroke={T.mint} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.mint }}>{lastFlipped.value}{lastFlipped.suit} lerakható</span>
+              </div>
+            )}
+          </div>
+          <div style={{ overflowX:'auto', overflowY:'visible', padding:'4px 16px 14px', display:'flex', gap:10, alignItems:'flex-start', WebkitOverflowScrolling:'touch' }}>
+            {myHand.length === 0 ? (
+              <div style={{ padding:'12px', textAlign:'center', width:'100%' }}>
+                <div style={{ fontFamily:T.font, fontSize:14, color:T.mint, fontWeight:700 }}>🎉 Nincs több lapod!</div>
+              </div>
+            ) : myHand.map(card => {
+              const isPlayable = playableCards.some(c=>c.id===card.id);
+              const isSel = effectiveSel.includes(card.id);
+              return (
+                <div key={card.id}
+                  onClick={()=>isPlayable && setSelectedCardIds(ids=>isSel?ids.filter(x=>x!==card.id):[...ids,card.id])}
+                  style={{ position:'relative', flexShrink:0, cursor:isPlayable?'pointer':'default', transform:isSel?'translateY(-6px)':'none', transition:'transform .18s ease', userSelect:'none', paddingTop:isPlayable?18:0 }}>
+                  {isPlayable && (
+                    <div style={{ position:'absolute', top:4, left:6, zIndex:10, background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:9, textTransform:'uppercase', letterSpacing:'0.06em', padding:'3px 8px', borderRadius:6 }}>
+                      Lerakható
+                    </div>
+                  )}
+                  <div style={{ border:`2.5px solid ${isPlayable?(isSel?T.coral:T.mint):'transparent'}`, borderRadius:13, transition:'border-color .15s' }}>
+                    <PlayingCard card={card} size='xl' glow={isSel} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      {/* Action button */}
-      {effectiveSel.length > 0 ? (
-        <button onClick={()=>playCards(effectiveSel)} style={{ width:'100%', padding:'16px', background:T.mint, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:700, fontSize:16, cursor:'pointer', boxShadow:`0 4px 18px ${T.mint}55`, display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+        {/* Button — always visible, greyed when nothing selected */}
+        <button
+          onClick={()=>canPlay && playCards(effectiveSel)}
+          style={{ width:'100%', padding:'16px', background:canPlay?T.mint:T.inkMute, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:700, fontSize:16, cursor:canPlay?'pointer':'default', boxShadow:canPlay?`0 4px 18px ${T.mint}55`:'none', display:'flex', alignItems:'center', justifyContent:'center', gap:10, transition:'background .2s, box-shadow .2s', opacity:canPlay?1:0.5 }}>
           <span style={{ fontSize:20, lineHeight:1 }}>+</span>
-          <span>Lerakom · {totalDrinks} korty kiosztása</span>
+          <span>Lerakom · {lastFlipped ? (lastFlipped.rowIdx+1)*Math.max(effectiveSel.length,1) : 0} korty kiosztása</span>
         </button>
-      ) : !lastFlipped ? (
-        <div style={{ textAlign:'center', fontFamily:T.font, fontSize:13, color:T.inkSoft }}>Várakozás a következő lapra…</div>
-      ) : playableCards.length === 0 ? (
-        <div style={{ textAlign:'center', fontFamily:T.font, fontSize:13, color:T.inkSoft }}>Nincs lerakható lapod ennél a fordulónál</div>
-      ) : null}
-
-      <div style={{ height:16 }}/>
+      </div>
     </div>
   );
 }
