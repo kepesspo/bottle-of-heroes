@@ -19,6 +19,13 @@
   <!-- Theme color (amber) -->
   <meta name="theme-color" content="#F4C57E"/>
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+  <script>
+    window._deferredInstallPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      window._deferredInstallPrompt = e;
+    });
+  </script>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
 
@@ -33853,9 +33860,74 @@ function GameImg({ g, size='full' }) {
 }
 
 // ─── HOME SCREEN ──────────────────────────────────────────────
+
+function InstallModal({ onClose }) {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const hasNativePrompt = !!window._deferredInstallPrompt;
+
+  const triggerInstall = async () => {
+    const prompt = window._deferredInstallPrompt;
+    if (!prompt) return;
+    prompt.prompt();
+    const { outcome } = await prompt.userChoice;
+    window._deferredInstallPrompt = null;
+    if (outcome === 'accepted') onClose();
+  };
+
+  const iosSteps = [
+    { icon:'🌐', html:'Nyisd meg ezt az oldalt <b>Safari</b> böngészőben' },
+    { icon:'⬆️', html:'Koppints a <b>Megosztás</b> ikonra (alul, középen)' },
+    { icon:'➕', html:'Görgess le és válaszd: <b>„Főképernyőre"</b>' },
+    { icon:'✅', html:'Koppints a <b>„Hozzáadás"</b> gombra' },
+  ];
+  const androidSteps = [
+    { icon:'⋮', html:'Koppints a böngésző <b>menüjére</b> (jobb felső sarok)' },
+    { icon:'➕', html:'Válaszd: <b>„Hozzáadás a főképernyőhöz"</b> vagy <b>„Alkalmazás telepítése"</b>' },
+    { icon:'✅', html:'Koppints a <b>„Hozzáadás"</b> / <b>„Telepítés"</b> gombra' },
+  ];
+
+  return (
+    <SheetOverlay onClose={onClose}>
+      <div style={{ padding:'4px 20px 32px', display:'flex', flexDirection:'column', gap:18 }}>
+        <div style={{ textAlign:'center' }}>
+          <div style={{ fontSize:44 }}>📲</div>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginTop:6 }}>Főképernyőre</div>
+          <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:4 }}>Telepítsd appként — ingyen, App Store nélkül</div>
+        </div>
+
+        {hasNativePrompt && (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <div style={{ padding:'14px 16px', background:T.surfaceMuted, borderRadius:14, fontFamily:T.font, fontSize:14, color:T.inkSoft, lineHeight:1.6, textAlign:'center' }}>
+              A böngésződ közvetlenül tudja telepíteni — nincs szükség App Store-ra.
+            </div>
+            <PrimaryButton onClick={triggerInstall}>📲 Telepítés most</PrimaryButton>
+          </div>
+        )}
+
+        {!hasNativePrompt && (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {(isIOS ? iosSteps : androidSteps).map((s, i) => (
+              <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:14, padding:'12px 14px', background:T.surfaceMuted, borderRadius:14 }}>
+                <div style={{ fontSize:22, flexShrink:0, lineHeight:1.4 }}>{s.icon}</div>
+                <div style={{ fontFamily:T.font, fontSize:14, color:T.ink, lineHeight:1.55 }} dangerouslySetInnerHTML={{ __html: s.html }} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button onClick={onClose} style={{ width:'100%', padding:'14px', background:T.surfaceMuted, color:T.inkSoft, border:'none', borderRadius:14, fontFamily:T.font, fontWeight:700, fontSize:15, cursor:'pointer' }}>Bezárás</button>
+      </div>
+    </SheetOverlay>
+  );
+}
+
 function HomeScreen({ go, mode, setMode, onStartGame }) {
+  const [showInstall, setShowInstall] = React.useState(false);
+  const isStandalone = typeof window !== 'undefined' && (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches);
+
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg }}>
+      {showInstall && <InstallModal onClose={() => setShowInstall(false)} />}
       <div className="home-inner">
         <div className="home-brand">
           <Logo size={200} />
@@ -33871,7 +33943,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.8 · DNR · 2026.05.29 19:16
+              Verzió 3.9 · DNR · 2026.05.29 19:22
             </div>
           </div>
         </div>
@@ -33892,6 +33964,12 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
           </div>
           <PrimaryButton onClick={onStartGame || (() => go('players'))} tone="mint">Játék</PrimaryButton>
           <PrimaryButton onClick={() => go('observer')} tone="coral">Csatlakozás</PrimaryButton>
+          {!isStandalone && (
+            <button onClick={() => setShowInstall(true)} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'12px 16px', background:'transparent', border:`1.5px solid ${T.inkMute}40`, borderRadius:14, cursor:'pointer', color:T.inkSoft, fontFamily:T.font, fontWeight:700, fontSize:13 }}>
+              <span style={{ fontSize:16 }}>📲</span>
+              <span>Főképernyőre mentés</span>
+            </button>
+          )}
         </div>
       </div>
     </div>
