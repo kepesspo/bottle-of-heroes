@@ -33871,7 +33871,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.4 · DNR · 2026.05.29 19:00
+              Verzió 3.5 · DNR · 2026.05.29 19:07
             </div>
           </div>
         </div>
@@ -36612,30 +36612,50 @@ function BuszPlayerView({ room, roomCode }) {
         );
       })()}
 
-      {/* ── Fixed bottom panel ── */}
-      <div style={{ position:'fixed', bottom:0, left:0, right:0, zIndex:40, display:'flex', flexDirection:'column', gap:10, padding:'12px 16px 28px', background:T.bg }}>
-
-        {/* Drink distribution — appears above cards */}
-        {giftTarget && (
-          <div style={{ background:`${T.mint}22`, borderRadius:16, padding:'14px 16px', border:`1.5px solid ${T.mint}55` }}>
-            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:14, color:T.mint, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginBottom:10 }}>
-              {giftTarget.pool > 0 ? `Kioszthatod a ${giftTarget.pool} kortyot 🍺` : '✓ Minden kiosztva!'}
+      {/* ── Drink distribution popup ── */}
+      {giftTarget && (
+        <SheetOverlay onClose={giftTarget.pool <= 0 ? ()=>setGiftTarget(null) : undefined}>
+          <div style={{ padding:'8px 20px 28px', display:'flex', flexDirection:'column', gap:14 }}>
+            {/* Header */}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div>
+                <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.mint }}>
+                  {giftTarget.pool > 0 ? `${giftTarget.pool} korty` : '✓ Kész!'}
+                </div>
+                <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:2 }}>
+                  {giftTarget.pool > 0 ? 'Kioszthatod — koppints a játékosra' : 'Minden korty ki van osztva'}
+                </div>
+              </div>
+              <div style={{ width:56, height:56, borderRadius:'50%', background:`${T.mint}20`, display:'grid', placeItems:'center', fontSize:28, flexShrink:0 }}>🍺</div>
             </div>
+            {/* Player list */}
             {giftTarget.pool > 0 && (
-              <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:172, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                 {players.filter(p=>p.id!==playerId).map(p=>(
-                  <button key={p.id} onClick={()=>giveOneDrink(p.id)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:T.surface, border:'none', borderRadius:12, cursor:'pointer', boxShadow:T.shadow, textAlign:'left', width:'100%' }}>
-                    <div style={{ width:32, height:32, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:14, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-                    <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{p.name}</div>
-                    {giftTarget.assigned[p.id]>0 && <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:16, color:T.coral }}>{giftTarget.assigned[p.id]}</div>}
-                    <div style={{ fontFamily:T.font, fontSize:12, color:T.mint }}>+1 →</div>
+                  <button key={p.id} onClick={()=>giveOneDrink(p.id)} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px', background:giftTarget.assigned[p.id]>0?`${T.mint}15`:T.surfaceMuted, border:`1.5px solid ${giftTarget.assigned[p.id]>0?T.mint+'55':'transparent'}`, borderRadius:16, cursor:'pointer', textAlign:'left', width:'100%', transition:'all .15s' }}>
+                    <div style={{ width:40, height:40, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:17, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+                    <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{p.name}</div>
+                    {giftTarget.assigned[p.id]>0 && (
+                      <div style={{ display:'flex', alignItems:'center', gap:4, background:T.mint, borderRadius:20, padding:'4px 12px' }}>
+                        <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:16, color:'#fff' }}>{giftTarget.assigned[p.id]}</span>
+                        <span style={{ fontSize:14 }}>🍺</span>
+                      </div>
+                    )}
+                    <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:T.mint, flexShrink:0 }}>+1</div>
                   </button>
                 ))}
               </div>
             )}
-            <button onClick={()=>setGiftTarget(null)} style={{ marginTop:10, width:'100%', padding:'12px', background:T.mint, color:'#fff', border:'none', borderRadius:12, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, cursor:'pointer', boxShadow:T.shadow }}>Kész</button>
+            {/* Done button */}
+            <button onClick={()=>setGiftTarget(null)} style={{ width:'100%', padding:'16px', background:giftTarget.pool>0?T.inkMute:T.mint, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:700, fontSize:16, cursor:'pointer', boxShadow:giftTarget.pool>0?'none':T.shadow, opacity:giftTarget.pool>0?0.5:1 }}>
+              {giftTarget.pool > 0 ? `Kész (még ${giftTarget.pool} maradt)` : '✓ Kész — bezárás'}
+            </button>
           </div>
-        )}
+        </SheetOverlay>
+      )}
+
+      {/* ── Fixed bottom panel ── */}
+      <div style={{ position:'fixed', bottom:0, left:0, right:0, zIndex:40, display:'flex', flexDirection:'column', gap:10, padding:'12px 16px 28px', background:T.bg }}>
 
         {/* White card: header + horizontal cards */}
         <div style={{ background:T.surface, borderRadius:20, boxShadow:T.shadow, overflow:'hidden' }}>
