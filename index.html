@@ -33943,7 +33943,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 4.3 · DNR · 2026.05.29 19:36
+              Verzió 4.4 · DNR · 2026.05.29 19:38
             </div>
           </div>
         </div>
@@ -36629,6 +36629,20 @@ function BuszPlayerView({ room, roomCode }) {
     } catch(e) { console.error('giveOneDrink', e); }
   };
 
+  const takeOneDrink = async (targetId) => {
+    if (!giftTarget || (giftTarget.assigned[targetId]||0) <= 0) return;
+    setGiftTarget(g => ({...g, pool:g.pool+1, assigned:{...g.assigned, [targetId]:g.assigned[targetId]-1}}));
+    try {
+      const db = firebase.firestore();
+      const ref = db.collection('rooms').doc(roomCode);
+      await db.runTransaction(async t => {
+        const snap = await t.get(ref);
+        const ps = snap.data()?.players || [];
+        t.update(ref, { players: ps.map(p => p.id===targetId ? {...p, drinks:Math.max(0,(p.drinks||0)-1)} : p) });
+      });
+    } catch(e) { console.error('takeOneDrink', e); }
+  };
+
   // ── Pyramid phase — hand view ─────────────────────────────────────────
   const effectiveSel = selectedCardIds.filter(id=>playableCards.some(c=>c.id===id));
   const canPlay = effectiveSel.length > 0;
@@ -36715,18 +36729,22 @@ function BuszPlayerView({ room, roomCode }) {
             {/* Player list */}
             <div style={{ padding:'10px 14px', maxHeight:260, overflowY:'auto', WebkitOverflowScrolling:'touch', display:'flex', flexDirection:'column', gap:6 }}>
               {players.filter(p=>p.id!==playerId).map(p=>(
-                <button key={p.id} onClick={()=>giftTarget.pool>0&&giveOneDrink(p.id)}
-                  style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 14px', background:giftTarget.assigned[p.id]>0?`${T.mint}15`:T.surfaceMuted, border:`1.5px solid ${giftTarget.assigned[p.id]>0?T.mint+'60':'transparent'}`, borderRadius:14, cursor:giftTarget.pool>0?'pointer':'default', textAlign:'left', width:'100%', transition:'all .15s' }}>
-                  <div style={{ width:36, height:36, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:15, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-                  <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{p.name}</div>
+                <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:giftTarget.assigned[p.id]>0?`${T.mint}15`:T.surfaceMuted, border:`1.5px solid ${giftTarget.assigned[p.id]>0?T.mint+'60':'transparent'}`, borderRadius:14, transition:'all .15s' }}>
+                  <div onClick={()=>giftTarget.pool>0&&giveOneDrink(p.id)} style={{ display:'flex', alignItems:'center', gap:12, flex:1, cursor:giftTarget.pool>0?'pointer':'default', minWidth:0 }}>
+                    <div style={{ width:36, height:36, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:15, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+                    <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
+                    {giftTarget.pool>0 && <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:T.mint, flexShrink:0 }}>+1</div>}
+                  </div>
                   {giftTarget.assigned[p.id]>0 && (
-                    <div style={{ display:'flex', alignItems:'center', gap:3, background:T.mint, borderRadius:20, padding:'3px 10px' }}>
-                      <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:14, color:'#fff' }}>{giftTarget.assigned[p.id]}</span>
-                      <span style={{ fontSize:13 }}>🍺</span>
+                    <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+                      <button onClick={()=>takeOneDrink(p.id)} style={{ width:28, height:28, borderRadius:'50%', background:T.coralSoft, border:`1.5px solid ${T.coral}60`, cursor:'pointer', display:'grid', placeItems:'center', fontFamily:'monospace', fontWeight:700, fontSize:16, color:T.coral, flexShrink:0 }}>−</button>
+                      <div style={{ display:'flex', alignItems:'center', gap:3, background:T.mint, borderRadius:20, padding:'3px 10px', flexShrink:0 }}>
+                        <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:14, color:'#fff' }}>{giftTarget.assigned[p.id]}</span>
+                        <span style={{ fontSize:13 }}>🍺</span>
+                      </div>
                     </div>
                   )}
-                  {giftTarget.pool>0 && <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:T.mint, flexShrink:0 }}>+1</div>}
-                </button>
+                </div>
               ))}
             </div>
             {/* Footer button */}
