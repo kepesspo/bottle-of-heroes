@@ -33943,7 +33943,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 4.7 · DNR · 2026.05.29 20:22
+              Verzió 4.8 · DNR · 2026.05.29 20:35
             </div>
           </div>
         </div>
@@ -35279,7 +35279,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
         const newPositions = {...busRiderPositions, [riderId]: busStepsCount};
         const newDone = {...busRiderDone, [riderId]: true};
         const newDrawnCards = {...(busRiderDrawnCards||{}), [riderId]: [drawnCard]};
-        setGuessResult({correct:true, done:true, bonus:true});
+        setGuessResult({correct:true, done:true, bonus:true, card:drawnCard, step:myStep});
         setTimeout(() => setGuessResult(null), 2000);
         if (busRiders.every(rid => newDone[rid])) {
           await persist({...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawnCards, busRiderPositions:newPositions, busRiderDone:newDone, busRiderBonusUsed:newBonusUsed, phase:'done'});
@@ -35292,7 +35292,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
         const newRiderDrinks = {...(st.busRiderDrinks||{}), [riderId]: ((st.busRiderDrinks||{})[riderId]||0)+drinks};
         const newPositions = {...busRiderPositions, [riderId]: 0};
         const newDrawnCards = {...(busRiderDrawnCards||{}), [riderId]: []};
-        setGuessResult({correct:false, drinks, bonus:true});
+        setGuessResult({correct:false, drinks, bonus:true, card:drawnCard, step:myStep});
         setTimeout(() => setGuessResult(null), 2200);
         if (roomCode && mode === 'Online') { try { const snap=await firebase.firestore().collection('rooms').doc(roomCode).get(); const rPlayers=snap.data()?.players||[]; const updated=rPlayers.map(p=>p.id===riderId?{...p,drinks:(p.drinks||0)+drinks}:p); await firebase.firestore().collection('rooms').doc(roomCode).update({players:updated}); } catch(e){} }
         const nextId = getNextRider(riderId, busRiderDone);
@@ -35305,7 +35305,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
       const newRiderDrinks = {...(st.busRiderDrinks||{}), [riderId]: ((st.busRiderDrinks||{})[riderId]||0) + drinks};
       const newPositions = {...busRiderPositions, [riderId]: 0};
       const newDrawnCards = {...(busRiderDrawnCards||{}), [riderId]: []};
-      setGuessResult({correct:false, drinks});
+      setGuessResult({correct:false, drinks, card:drawnCard, step:myStep});
       setTimeout(() => setGuessResult(null), 2200);
       if (roomCode && mode === 'Online') {
         try {
@@ -35323,7 +35323,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
       const isDone = newStep >= busStepsCount;
       const newPositions = {...busRiderPositions, [riderId]: newStep};
       const newDone = {...busRiderDone, [riderId]: isDone};
-      setGuessResult({correct:true, done:isDone});
+      setGuessResult({correct:true, done:isDone, card:drawnCard, step:myStep});
       setTimeout(() => setGuessResult(null), 1800);
       if (isDone && busRiders.every(rid => newDone[rid])) {
         await persist({...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawnCards, busRiderPositions:newPositions, busRiderDone:newDone, phase:'done'});
@@ -35528,9 +35528,11 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
           <div style={{fontFamily:T.font,fontSize:9,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em',textAlign:'center',marginBottom:2}}>Húzott lapok</div>
           <div style={{display:'flex',justifyContent:'center',gap:4}}>
             {(busRouteCards||[]).map((_, i) => {
-              const dc = riderDrawn[i];
+              const dc = riderDrawn[i] || (guessResult?.card && guessResult.step === i ? guessResult.card : null);
+              const isResult = guessResult?.step === i && !riderDrawn[i];
+              const glow = isResult && !guessResult?.correct;
               return dc
-                ? <PlayingCard key={i} card={dc} size='lg' />
+                ? <PlayingCard key={i} card={dc} size='lg' glow={glow} />
                 : <div key={i} style={{width:56,height:78,borderRadius:7,border:`1.5px dashed ${i<myStep?T.coral+'60':T.inkMute+'30'}`,background:i<myStep?`${T.coral}08`:'transparent',flexShrink:0}} />;
             })}
           </div>
@@ -36469,7 +36471,7 @@ function BuszPlayerView({ room, roomCode }) {
         const getNextRider = (curId, doneMap) => { const idx=busRiders.indexOf(curId); for(let i=1;i<=busRiders.length;i++){const nid=busRiders[(idx+i)%busRiders.length];if(!doneMap[nid])return nid;} return null; };
         if (isBonus) {
           const newBonusUsed = {...(busRiderBonusUsed||{}), [playerId]: true};
-          setBusGuessResult({correct, done:correct, bonus:true});
+          setBusGuessResult({correct, done:correct, bonus:true, card:drawnCard, step:myStep});
           setTimeout(() => setBusGuessResult(null), 2000);
           if (correct) {
             const newPositions = {...busRiderPositions, [playerId]: busStepsCount};
@@ -36495,7 +36497,7 @@ function BuszPlayerView({ room, roomCode }) {
         }
         if (!correct) {
           const drinks = myStep + 1;
-          setBusGuessResult({correct:false, drinks});
+          setBusGuessResult({correct:false, drinks, card:drawnCard, step:myStep});
           setTimeout(() => setBusGuessResult(null), 2200);
           const newRiderDrinks = {...(st.busRiderDrinks||{}), [playerId]: ((st.busRiderDrinks||{})[playerId]||0) + drinks};
           const newPositions = {...busRiderPositions, [playerId]: 0};
@@ -36508,7 +36510,7 @@ function BuszPlayerView({ room, roomCode }) {
           const newDrawnCards = {...(busRiderDrawnCards||{}), [playerId]: [...((busRiderDrawnCards||{})[playerId]||[]), drawnCard]};
           const newStep = myStep + 1;
           const isDone = newStep >= busStepsCount;
-          setBusGuessResult({correct:true, done:isDone});
+          setBusGuessResult({correct:true, done:isDone, card:drawnCard, step:myStep});
           setTimeout(() => setBusGuessResult(null), 1800);
           const newPositions = {...busRiderPositions, [playerId]: newStep};
           const newDone = {...busRiderDone, [playerId]: isDone};
@@ -36621,10 +36623,12 @@ function BuszPlayerView({ room, roomCode }) {
           <div style={{ fontFamily:T.font, fontSize:9, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', textAlign:'center', marginBottom:2 }}>Húzott lapok</div>
           <div style={{ display:'flex', justifyContent:'center', gap:4 }}>
             {(busRouteCards||[]).map((_, i) => {
-              const dc = activeDrawn[i];
+              const dc = activeDrawn[i] || (busGuessResult?.card && busGuessResult.step === i ? busGuessResult.card : null);
+              const isResult = busGuessResult?.step === i && !activeDrawn[i];
+              const glow = isResult && !busGuessResult?.correct;
               return dc
-                ? <PlayingCard key={i} card={dc} size='lg' />
-                : <div key={i} style={{ width:32, height:46, borderRadius:7, border:`1.5px dashed ${i<activeStep?T.coral+'60':T.inkMute+'30'}`, background:i<activeStep?`${T.coral}08`:'transparent', flexShrink:0 }} />;
+                ? <PlayingCard key={i} card={dc} size='lg' glow={glow} />
+                : <div key={i} style={{ width:56, height:78, borderRadius:7, border:`1.5px dashed ${i<activeStep?T.coral+'60':T.inkMute+'30'}`, background:i<activeStep?`${T.coral}08`:'transparent', flexShrink:0 }} />;
             })}
           </div>
         </div>
@@ -36634,7 +36638,7 @@ function BuszPlayerView({ room, roomCode }) {
             <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:16, color:busGuessResult.correct?T.mint:T.coral }}>
               {busGuessResult.precise
                 ? (busGuessResult.correct ? `🎯🎉 Big Dick! ${busGuessResult.card?.value}${busGuessResult.card?.suit} — Leszálltál!` : `🎯✗ Nem ${selectedPreciseValue||'?'} volt — 1 korty, vissza az ${preciseTippStep}. állomásra`)
-                : busGuessResult.correct ? (busGuessResult.done ? '🎉 Teljesítve! Leszálltál!' : '✓ Helyes! Előre!') : `✗ Rossz tipp! ${busGuessResult.drinks} korty!`}
+                : busGuessResult.correct ? (busGuessResult.done ? `🎉 Teljesítve! Leszálltál! (${busGuessResult.card?.value}${busGuessResult.card?.suit})` : `✓ Helyes! (${busGuessResult.card?.value}${busGuessResult.card?.suit}) Előre!`) : `✗ ${busGuessResult.card?.value}${busGuessResult.card?.suit} — Rossz tipp! ${busGuessResult.drinks} korty!`}
             </div>
           </div>
         )}
