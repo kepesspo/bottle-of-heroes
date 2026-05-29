@@ -33943,7 +33943,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 4.5 · DNR · 2026.05.29 19:52
+              Verzió 4.6 · DNR · 2026.05.29 20:15
             </div>
           </div>
         </div>
@@ -35515,14 +35515,14 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
           <div style={{display:'flex',justifyContent:'center',gap:4}}>
             {(busRouteCards||[]).map((card, i) => (
               <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
-                <PlayingCard card={card} size='md' glow={i===myStep} />
+                <PlayingCard card={card} size='lg' glow={i===myStep} />
                 {i===myStep && <div style={{width:6,height:6,borderRadius:'50%',background:T.mint}} />}
               </div>
             ))}
           </div>
           <div style={{display:'flex',justifyContent:'center',gap:4,margin:'2px 0'}}>
             {(busRouteCards||[]).map((_, i) => (
-              <div key={i} style={{width:44,textAlign:'center',fontSize:12,color:i===myStep?T.mint:T.inkMute+'30',lineHeight:1,fontWeight:i===myStep?700:400}}>↓</div>
+              <div key={i} style={{width:56,textAlign:'center',fontSize:12,color:i===myStep?T.mint:T.inkMute+'30',lineHeight:1,fontWeight:i===myStep?700:400}}>↓</div>
             ))}
           </div>
           <div style={{fontFamily:T.font,fontSize:9,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em',textAlign:'center',marginBottom:2}}>Húzott lapok</div>
@@ -35530,8 +35530,8 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
             {(busRouteCards||[]).map((_, i) => {
               const dc = riderDrawn[i];
               return dc
-                ? <PlayingCard key={i} card={dc} size='sm' />
-                : <div key={i} style={{width:44,height:62,borderRadius:7,border:`1.5px dashed ${i<myStep?T.coral+'60':T.inkMute+'30'}`,background:i<myStep?`${T.coral}08`:'transparent',flexShrink:0}} />;
+                ? <PlayingCard key={i} card={dc} size='lg' />
+                : <div key={i} style={{width:56,height:78,borderRadius:7,border:`1.5px dashed ${i<myStep?T.coral+'60':T.inkMute+'30'}`,background:i<myStep?`${T.coral}08`:'transparent',flexShrink:0}} />;
             })}
           </div>
         </div>
@@ -35557,22 +35557,16 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
             </div>
           </div>
         )}
-        {/* Bonus guess button (only when rider at step 0 and bonus not used) */}
-        {buszState.settings?.bonusGuess && myStep===0 && !(buszState.busRiderBonusUsed?.[currentTurnRiderId]) && !guessResult && (
-          <div style={{padding:'10px 12px',background:`${T.yellow}15`,border:`1.5px solid ${T.yellow}55`,borderRadius:14,display:'flex',flexDirection:'column',gap:8}}>
-            <div style={{fontFamily:T.font,fontSize:12,fontWeight:700,color:T.yellow,textAlign:'center'}}>💡 Zseniális tipp — Ha eltalálod, azonnal leugrik!</div>
-            <div style={{display:'flex',gap:8}}>
-              <button onClick={()=>makeGuess('K',true)} style={{flex:1,minHeight:44,border:`2px solid ${T.coral}`,background:'transparent',color:T.coral,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,borderRadius:12,cursor:'pointer'}}>▼ Kisebb</button>
-              <button onClick={()=>makeGuess('N',true)} style={{flex:1,minHeight:44,border:`2px solid ${T.mint}`,background:'transparent',color:T.mint,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,borderRadius:12,cursor:'pointer'}}>▲ Nagyobb</button>
-            </div>
-          </div>
-        )}
-        {/* K/N buttons — hidden when bonus section is visible */}
-        {!guessResult && !(buszState.settings?.bonusGuess && myStep===0 && !(buszState.busRiderBonusUsed?.[currentTurnRiderId])) && (
+        {/* K/N buttons */}
+        {!guessResult && (
           <div style={{display:'flex',gap:10}}>
             <button onClick={()=>makeGuess('K')} style={{flex:1,minHeight:52,border:`2px solid ${T.coral}`,background:'transparent',color:T.coral,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:16,borderRadius:14,cursor:'pointer'}}>▼ Kisebb</button>
             <button onClick={()=>makeGuess('N')} style={{flex:1,minHeight:52,border:`2px solid ${T.mint}`,background:'transparent',color:T.mint,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:16,borderRadius:14,cursor:'pointer'}}>▲ Nagyobb</button>
           </div>
+        )}
+        {/* Pontos tipp — jelez ha valaki él a lehetőséggel */}
+        {buszState.busRiderBonusUsed?.[currentTurnRiderId] && (
+          <div style={{textAlign:'center',fontFamily:T.font,fontSize:12,color:T.yellow}}>🎯 Big Dick aktiválva</div>
         )}
       </div>
     );
@@ -36367,6 +36361,11 @@ function BuszPlayerView({ room, roomCode }) {
   const [giftTarget, setGiftTarget] = useState(null); // { pool, assigned:{} }
   const [busGuessResult, setBusGuessResult] = useState(null);
   const [selectedCardIds, setSelectedCardIds] = useState([]);
+  const [preciseTippActive, setPreciseTippActive] = useState(false);
+  const [selectedPreciseValue, setSelectedPreciseValue] = useState(null);
+  const [preciseTippStep, setPreciseTippStep] = useState(0);
+  const busIntroShownRef = React.useRef(false);
+  const prevBusRidersKeyRef = React.useRef(null);
 
   const player = players.find(p => p.id === playerId);
   const myHand = buszState ? (buszState.hands?.[playerId] || []) : [];
@@ -36523,6 +36522,49 @@ function BuszPlayerView({ room, roomCode }) {
       } catch(e) { console.error(e); }
     };
 
+    const makePreciseGuess = async (guess) => {
+      try {
+        const snap = await firebase.firestore().collection('rooms').doc(roomCode).get();
+        const st = snap.data()?.buszState;
+        if (!st || st.phase !== 'bus' || st.currentTurnRiderId !== playerId) return;
+        const { busRouteCards, busDrawDeck, busRiders, busRiderPositions, busRiderDone, busRiderBonusUsed, busRiderDrawnCards, currentTurnRiderId, settings } = st;
+        const busStepsCount = settings?.busSteps || 6;
+        const deck = (busDrawDeck && busDrawDeck.length > 0) ? busDrawDeck : shuffleDeck(generateDeck(settings?.deckCount || 1));
+        const drawnCard = deck[0];
+        const newDrawDeck = deck.length > 1 ? deck.slice(1) : shuffleDeck(generateDeck(settings?.deckCount || 1));
+        const newBonusUsed = {...(busRiderBonusUsed||{}), [playerId]: true};
+        const isExactMatch = drawnCard.value === selectedPreciseValue;
+        const getNextRider = (curId, doneMap) => { const idx=busRiders.indexOf(curId); for(let i=1;i<=busRiders.length;i++){const nid=busRiders[(idx+i)%busRiders.length];if(!doneMap[nid])return nid;} return null; };
+        if (isExactMatch) {
+          const newPositions = {...busRiderPositions, [playerId]: busStepsCount};
+          const newDone = {...busRiderDone, [playerId]: true};
+          const newDrawnCards = {...(busRiderDrawnCards||{}), [playerId]: [drawnCard]};
+          setBusGuessResult({correct:true, done:true, precise:true, card:drawnCard});
+          setTimeout(() => setBusGuessResult(null), 2500);
+          if (busRiders.every(rid=>newDone[rid])) {
+            await firebase.firestore().collection('rooms').doc(roomCode).update({buszState:{...st,busDrawDeck:newDrawDeck,busRiderDrawnCards:newDrawnCards,busRiderPositions:newPositions,busRiderDone:newDone,busRiderBonusUsed:newBonusUsed,phase:'done'}});
+          } else {
+            const nextId = getNextRider(playerId, newDone);
+            await firebase.firestore().collection('rooms').doc(roomCode).update({buszState:{...st,busDrawDeck:newDrawDeck,busRiderDrawnCards:newDrawnCards,busRiderPositions:newPositions,busRiderDone:newDone,busRiderBonusUsed:newBonusUsed,currentTurnRiderId:nextId||playerId}});
+          }
+        } else {
+          const drinks = 1;
+          const newRiderDrinks = {...(st.busRiderDrinks||{}), [playerId]: ((st.busRiderDrinks||{})[playerId]||0)+drinks};
+          const resetStep = preciseTippStep;
+          const newPositions = {...busRiderPositions, [playerId]: resetStep};
+          const newDrawnCards = {...(busRiderDrawnCards||{}), [playerId]: (busRiderDrawnCards||{})[playerId]?.slice(0, resetStep) || []};
+          setBusGuessResult({correct:false, precise:true, card:drawnCard, drinks});
+          setTimeout(() => setBusGuessResult(null), 2500);
+          const nextId = getNextRider(playerId, busRiderDone);
+          const rPlayers = snap.data()?.players || [];
+          const updated = rPlayers.map(p => p.id===playerId ? {...p, drinks:(p.drinks||0)+drinks} : p);
+          await firebase.firestore().collection('rooms').doc(roomCode).update({players:updated, buszState:{...st,busDrawDeck:newDrawDeck,busRiderDrawnCards:newDrawnCards,busRiderPositions:newPositions,busRiderBonusUsed:newBonusUsed,busRiderDrinks:newRiderDrinks,currentTurnRiderId:nextId||playerId}});
+        }
+        setPreciseTippActive(false);
+        setSelectedPreciseValue(null);
+      } catch(e) { console.error('makePreciseGuess', e); }
+    };
+
     const { busRouteCards, busRiders, busRiderPositions, busRiderDone, busRiderDrawnCards, currentTurnRiderId } = buszState;
     const busStepsCount = buszState.settings?.busSteps || 6;
     const isMyTurn = currentTurnRiderId === playerId;
@@ -36530,7 +36572,9 @@ function BuszPlayerView({ room, roomCode }) {
     const activeStep = busRiderPositions?.[currentTurnRiderId] || 0;
     const activeDrawn = busRiderDrawnCards?.[currentTurnRiderId] || [];
 
-    if (!busGuessResult && myStep === 0 && !window['_busStarted_'+playerId]) {
+    const _busRidersKey = (busRiders||[]).join(',')+'_'+playerId;
+    if (_busRidersKey !== prevBusRidersKeyRef.current) { prevBusRidersKeyRef.current = _busRidersKey; busIntroShownRef.current = false; }
+    if (!busGuessResult && myStep === 0 && !busIntroShownRef.current) {
       const busMsgs = [
         { emoji:'🚌', title:'Felszálltál a buszra!', sub:'Ez nem lesz könnyű. Teljesítsd mind a '+busStepsCount+' állomást, különben iszol. Sok szerencsét!' },
         { emoji:'😬', title:'Hát te megszívtad...', sub:'A legtöbb lapot te tartottad — most meg kell küzdened '+busStepsCount+' állomáson át. Hajrá!' },
@@ -36544,7 +36588,7 @@ function BuszPlayerView({ room, roomCode }) {
           <div style={{ fontSize:72 }}>{bm.emoji}</div>
           <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:24, color:T.coral, textTransform:'uppercase', letterSpacing:T.letterDisplay, textAlign:'center', lineHeight:1.15 }}>{bm.title}</div>
           <div style={{ fontFamily:T.font, fontSize:15, color:T.inkSoft, textAlign:'center', lineHeight:1.65, maxWidth:280 }}>{bm.sub}</div>
-          <PrimaryButton tone="coral" onClick={()=>{ window['_busStarted_'+playerId]=true; setBusGuessResult(null); }}>Kezdjük! 🚌</PrimaryButton>
+          <PrimaryButton tone="coral" onClick={()=>{ busIntroShownRef.current=true; setBusGuessResult(null); }}>Kezdjük! 🚌</PrimaryButton>
         </div>
       );
     }
@@ -36564,7 +36608,7 @@ function BuszPlayerView({ room, roomCode }) {
           <div style={{ display:'flex', justifyContent:'center', gap:4 }}>
             {(busRouteCards||[]).map((card, i) => (
               <div key={i} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-                <PlayingCard card={card} size='md' glow={i===activeStep&&isMyTurn} />
+                <PlayingCard card={card} size='lg' glow={i===activeStep&&isMyTurn} />
                 {i===activeStep && isMyTurn && <div style={{ width:6, height:6, borderRadius:'50%', background:T.mint }} />}
               </div>
             ))}
@@ -36579,34 +36623,63 @@ function BuszPlayerView({ room, roomCode }) {
             {(busRouteCards||[]).map((_, i) => {
               const dc = activeDrawn[i];
               return dc
-                ? <PlayingCard key={i} card={dc} size='sm' />
+                ? <PlayingCard key={i} card={dc} size='lg' />
                 : <div key={i} style={{ width:32, height:46, borderRadius:7, border:`1.5px dashed ${i<activeStep?T.coral+'60':T.inkMute+'30'}`, background:i<activeStep?`${T.coral}08`:'transparent', flexShrink:0 }} />;
             })}
           </div>
         </div>
-        {/* guess result feedback */}
+        {/* Guess result feedback */}
         {busGuessResult && (
-          <div style={{ textAlign:'center', padding:'10px 16px', borderRadius:14, background:busGuessResult.correct?`${T.mint}22`:`${T.coral}22`, border:`2px solid ${busGuessResult.correct?T.mint:T.coral}`, animation:'popIn .3s' }}>
-            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color:busGuessResult.correct?T.mint:T.coral }}>
-              {busGuessResult.bonus ? (busGuessResult.correct ? '💡🎉 Zseniális! Leugrottál!' : `💡✗ Nem sikerült! ${busGuessResult.drinks||1} korty!`) : busGuessResult.correct ? (busGuessResult.done ? '🎉 Teljesítve!' : '✓ Helyes!') : `✗ Rossz! ${busGuessResult.drinks} kortynyi!`}
+          <div style={{ textAlign:'center', padding:'12px 16px', borderRadius:14, background:busGuessResult.correct?`${T.mint}22`:`${T.coral}22`, border:`2px solid ${busGuessResult.correct?T.mint:T.coral}`, animation:'popIn .3s' }}>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:16, color:busGuessResult.correct?T.mint:T.coral }}>
+              {busGuessResult.precise
+                ? (busGuessResult.correct ? `🎯🎉 Big Dick! ${busGuessResult.card?.value}${busGuessResult.card?.suit} — Leszálltál!` : `🎯✗ Nem ${selectedPreciseValue||'?'} volt — 1 korty, vissza az ${preciseTippStep}. állomásra`)
+                : busGuessResult.correct ? (busGuessResult.done ? '🎉 Teljesítve! Leszálltál!' : '✓ Helyes! Előre!') : `✗ Rossz tipp! ${busGuessResult.drinks} korty!`}
             </div>
           </div>
         )}
-        {/* Bonus guess (only when my turn, step 0, bonus not used) */}
-        {isMyTurn && myStep===0 && !(buszState.busRiderBonusUsed?.[playerId]) && buszState.settings?.bonusGuess && !busGuessResult && (
-          <div style={{ padding:'10px 12px', background:`${T.yellow}15`, border:`1.5px solid ${T.yellow}55`, borderRadius:14, display:'flex', flexDirection:'column', gap:8 }}>
-            <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.yellow, textAlign:'center' }}>💡 Zseniális tipp — Ha eltalálod, azonnal leugrsz!</div>
-            <div style={{ display:'flex', gap:8 }}>
-              <button onClick={()=>makeGuessPlayer('K',true)} style={{ flex:1, minHeight:44, border:`2px solid ${T.coral}`, background:'transparent', color:T.coral, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:12, cursor:'pointer' }}>▼ Kisebb</button>
-              <button onClick={()=>makeGuessPlayer('N',true)} style={{ flex:1, minHeight:44, border:`2px solid ${T.mint}`, background:'transparent', color:T.mint, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:12, cursor:'pointer' }}>▲ Nagyobb</button>
+        {/* Precise tipp value picker */}
+        {isMyTurn && preciseTippActive && !busGuessResult && (
+          <div style={{ background:`${T.yellow}18`, border:`1.5px solid ${T.yellow}60`, borderRadius:16, padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
+            <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.yellow, textAlign:'center', textTransform:'uppercase', letterSpacing:'0.06em' }}>
+              🎯 Válaszd ki a pontos értéket!
             </div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:6, justifyContent:'center' }}>
+              {['2','3','4','5','6','7','8','9','10','J','Q','K','A'].map(v => (
+                <button key={v} onClick={()=>setSelectedPreciseValue(v)}
+                  style={{ minWidth:36, height:36, borderRadius:10, border:`2px solid ${selectedPreciseValue===v?T.yellow:T.inkMute+'40'}`, background:selectedPreciseValue===v?T.yellow:'transparent', color:selectedPreciseValue===v?'#fff':T.ink, fontFamily:'Georgia,serif', fontWeight:700, fontSize:15, cursor:'pointer', transition:'all .15s' }}>
+                  {v}
+                </button>
+              ))}
+            </div>
+            {selectedPreciseValue && (
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={()=>makePreciseGuess('K')} style={{ flex:1, minHeight:50, border:`2px solid ${T.coral}`, background:'transparent', color:T.coral, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:12, cursor:'pointer' }}>▼ Kisebb</button>
+                <button onClick={()=>makePreciseGuess('N')} style={{ flex:1, minHeight:50, border:`2px solid ${T.mint}`, background:'transparent', color:T.mint, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:12, cursor:'pointer' }}>▲ Nagyobb</button>
+              </div>
+            )}
+            <button onClick={()=>{setPreciseTippActive(false);setSelectedPreciseValue(null);}} style={{ background:'transparent', border:'none', color:T.inkSoft, fontFamily:T.font, fontSize:12, cursor:'pointer', padding:'2px 0' }}>Mégsem</button>
           </div>
         )}
         {/* K/N buttons */}
-        {isMyTurn && !busGuessResult && (
-          <div style={{ display:'flex', gap:10 }}>
-            <button onClick={()=>makeGuessPlayer('K')} style={{ flex:1, minHeight:56, border:`2px solid ${T.coral}`, background:'transparent', color:T.coral, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor:'pointer' }}>▼ Kisebb</button>
-            <button onClick={()=>makeGuessPlayer('N')} style={{ flex:1, minHeight:56, border:`2px solid ${T.mint}`, background:'transparent', color:T.mint, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor:'pointer' }}>▲ Nagyobb</button>
+        {isMyTurn && !busGuessResult && !preciseTippActive && (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={()=>makeGuessPlayer('K')} style={{ flex:1, minHeight:56, border:`2px solid ${T.coral}`, background:'transparent', color:T.coral, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor:'pointer' }}>▼ Kisebb</button>
+              <button onClick={()=>makeGuessPlayer('N')} style={{ flex:1, minHeight:56, border:`2px solid ${T.mint}`, background:'transparent', color:T.mint, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor:'pointer' }}>▲ Nagyobb</button>
+            </div>
+            <div style={{ display:'flex', justifyContent:'center' }}>
+              {!(buszState.busRiderBonusUsed?.[playerId]) ? (
+                <button onClick={()=>{setPreciseTippActive(true);setSelectedPreciseValue(null);setPreciseTippStep(myStep);}}
+                  style={{ padding:'8px 22px', background:`${T.yellow}18`, border:`1.5px solid ${T.yellow}70`, borderRadius:20, cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:13, color:T.yellow, display:'flex', alignItems:'center', gap:6 }}>
+                  🎯 Big Dick
+                </button>
+              ) : (
+                <button disabled style={{ padding:'8px 22px', background:'transparent', border:`1.5px solid ${T.inkMute}30`, borderRadius:20, cursor:'default', fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkMute, display:'flex', alignItems:'center', gap:6, opacity:0.4 }}>
+                  🎯 Big Dick (elhasználva)
+                </button>
+              )}
+            </div>
           </div>
         )}
         {/* riders progress */}
