@@ -33871,7 +33871,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 3.1 · DNR · 2026.05.29 18:26
+              Verzió 3.2 · DNR · 2026.05.29 18:40
             </div>
           </div>
         </div>
@@ -33901,6 +33901,31 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
 // ─── PLAYERS SCREEN ───────────────────────────────────────────
 function PlayersScreen({ players, setPlayers, go }) {
   const [editing, setEditing] = useState(null);
+  const [secretTaps, setSecretTaps] = useState(0);
+  const secretTimerRef = React.useRef(null);
+
+  const PRESET_PLAYERS = [
+    { name:'Sere' }, { name:'Kecsi' }, { name:'Luca' }, { name:'Tóth' },
+    { name:'Márk' }, { name:'Dani' }, { name:'KKK' }, { name:'Vivi' }, { name:'Balázs' }
+  ];
+
+  const handleSecretTap = () => {
+    const next = secretTaps + 1;
+    setSecretTaps(next);
+    if (secretTimerRef.current) clearTimeout(secretTimerRef.current);
+    if (next >= 5) {
+      setSecretTaps(0);
+      const used = new Set();
+      const newPlayers = PRESET_PLAYERS.map((p, i) => {
+        const color = PLAYER_COLORS.find(c => !used.has(c)) || PLAYER_COLORS[i % PLAYER_COLORS.length];
+        used.add(color);
+        return { id:'p'+Date.now()+i, name:p.name, color, drinks:0, points:0 };
+      });
+      setPlayers(newPlayers);
+    } else {
+      secretTimerRef.current = setTimeout(() => setSecretTaps(0), 1500);
+    }
+  };
 
   const addPlayer = () => {
     const used = new Set(players.map(p => p.color));
@@ -33944,10 +33969,12 @@ function PlayersScreen({ players, setPlayers, go }) {
       </div>
 
       {players.length < 2 && (
-        <div style={{ padding:'0 16px 8px' }}>
-          <div style={{ border:`2px dashed ${T.mint}`, borderRadius:14, background:T.surfaceMuted, padding:'12px 16px', display:'flex', alignItems:'center', gap:10 }}>
+        <div style={{ padding:'0 16px 8px' }} onClick={handleSecretTap}>
+          <div style={{ border:`2px dashed ${T.mint}`, borderRadius:14, background:T.surfaceMuted, padding:'12px 16px', display:'flex', alignItems:'center', gap:10, userSelect:'none' }}>
             <div style={{ width:36, height:36, borderRadius:999, border:`2px solid ${T.mint}`, display:'grid', placeItems:'center', flexShrink:0 }}>{Icon.plus(T.mint)}</div>
-            <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.mint }}>Legalább 2 játékos kell. Adj hozzá még valakit!</div>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.mint }}>
+              {secretTaps > 0 ? `${secretTaps}/5…` : 'Legalább 2 játékos kell. Adj hozzá még valakit!'}
+            </div>
           </div>
         </div>
       )}
@@ -35329,7 +35356,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
                     const cnt = card.faceUp ? (buszState.valueCounts?.[card.value]||0) : 0;
                     return (
                       <div key={card.id} style={{position:'relative'}}>
-                        <PlayingCard card={card} size='sm' faceDown={!card.faceUp} glow={isActive && card.faceUp} />
+                        <PlayingCard card={card} size='md' faceDown={!card.faceUp} glow={isActive && card.faceUp} />
                         {cnt>0&&<div style={{position:'absolute',top:-4,right:-4,minWidth:14,height:14,borderRadius:7,background:T.coral,color:'#fff',fontFamily:T.font,fontWeight:700,fontSize:9,display:'grid',placeItems:'center',padding:'0 2px'}}>{cnt}</div>}
                       </div>
                     );
@@ -36272,7 +36299,7 @@ function BuszPlayerView({ room, roomCode }) {
         <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginTop:8 }}>Te ki vagy?</div>
         <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:6 }}>Válaszd ki a neved a listából</div>
       </div>
-      <div style={{ display:'flex', flexDirection:'column', gap:8, overflowY:'auto', WebkitOverflowScrolling:'touch', paddingBottom:8 }}>
+      <div style={{ display:'flex', flexDirection:'column', gap:8, overflowY:'auto', WebkitOverflowScrolling:'touch', paddingBottom:8, maxHeight:'calc(100dvh - 260px)' }}>
         {players.map(p => {
           const taken = (room.buszTakenIds||[]).includes(p.id);
           return (
