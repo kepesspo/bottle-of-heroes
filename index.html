@@ -33943,7 +33943,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.7 · DNR · 2026.05.30 13:30
+              Verzió 5.8 · DNR · 2026.05.30 14:00
             </div>
           </div>
         </div>
@@ -35552,7 +35552,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
             return (
               <div key={rid} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',borderRadius:999,background:T.surface,border:`1.5px solid ${hasPending?T.yellow:rid===currentTurnRiderId?T.mint:done?T.mint+'60':'transparent'}`}}>
                 <div style={{width:20,height:20,borderRadius:'50%',background:rp?.color,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:700,fontSize:9,color:'#fff'}}>{(rp?.name||'?').charAt(0).toUpperCase()}</div>
-                <div style={{fontFamily:T.font,fontSize:12,fontWeight:600,color:done?T.mint:rid===currentTurnRiderId?T.mint:T.inkSoft}}>{done?'✓':`${step}/${busStepsCount}`}</div>
+                <div style={{fontFamily:T.font,fontSize:12,fontWeight:600,color:done?T.mint:hasPending?T.yellow:T.inkSoft}}>{done?'✓':`${step}/${busStepsCount}`}</div>
               </div>
             );
           })}
@@ -36512,7 +36512,8 @@ function BuszPlayerView({ room, roomCode }) {
       try {
         const snap = await firebase.firestore().collection('rooms').doc(roomCode).get();
         const st = snap.data()?.buszState;
-        if (!st || st.phase !== 'bus' || st.currentTurnRiderId !== playerId) return;
+        if (!st || st.phase !== 'bus') return;
+        if (!(st.busRiders||[]).includes(playerId) || (st.busRiderDone||{})[playerId]) return;
         const { busRouteCards, busDrawDeck, busRiders, busRiderPositions, busRiderDone, busRiderBonusUsed, busRiderDrawnCards, currentTurnRiderId, settings } = st;
         const busStepsCount = settings?.busSteps || 6;
         const deck = (busDrawDeck && busDrawDeck.length > 0) ? busDrawDeck : shuffleDeck(generateDeck(settings?.deckCount || 1));
@@ -36555,8 +36556,10 @@ function BuszPlayerView({ room, roomCode }) {
     const busStepsCount = buszState.settings?.busSteps || 6;
     const isMyTurn = currentTurnRiderId === playerId;
     const myStep = busRiderPositions?.[playerId] || 0;
-    const activeStep = busRiderPositions?.[currentTurnRiderId] || 0;
-    const activeDrawn = busRiderDrawnCards?.[currentTurnRiderId] || [];
+    const myDone = !!(busRiderDone?.[playerId]);
+    const myPendingGuess = !!(buszState.busRiderPendingGuesses||{})[playerId];
+    const activeDrawn = busRiderDrawnCards?.[playerId] || [];
+    const canGuess = onBus && !myDone && !myPendingGuess && !busGuessResult;
 
     const _busRidersKey = (busRiders||[]).join(',')+'_'+(playerId||'');
     if (_busRidersKey !== lastBusRidersKey && playerId) { setLastBusRidersKey(_busRidersKey); setBusIntroShown(false); setShowBigDickModal(false); setPreciseTippActive(false); setSelectedPreciseValue(null); }
@@ -36579,7 +36582,7 @@ function BuszPlayerView({ room, roomCode }) {
       );
     }
 
-    const activeStep2 = isMyTurn ? myStep : activeStep;
+    const activeStep2 = myStep;
     const currentRouteCard = (busRouteCards||[])[activeStep2];
     return (
       <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
@@ -36587,13 +36590,13 @@ function BuszPlayerView({ room, roomCode }) {
         <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'14px 18px 0', display:'flex', flexDirection:'column', gap:14 }}>
           {/* Header row: turn label + player chip */}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
-            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:isMyTurn?T.mint:T.inkSoft, letterSpacing:T.letterDisplay, textTransform:'uppercase', lineHeight:1.1 }}>
-              {isMyTurn ? '🚌 A te sorod!' : `${players.find(p=>p.id===currentTurnRiderId)?.name||'?'} megy…`}
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:canGuess?T.mint:myPendingGuess?T.yellow:T.inkSoft, letterSpacing:T.letterDisplay, textTransform:'uppercase', lineHeight:1.1 }}>
+              {canGuess ? '🚌 Tippelj!' : myPendingGuess ? '⏳ Tipped leadva' : myDone ? '✓ Teljesítve!' : '🚌 A te sorod!'}
             </div>
             <div style={{ display:'flex', alignItems:'center', gap:6, background:T.surface, borderRadius:999, padding:'5px 12px 5px 5px', boxShadow:T.shadow, flexShrink:0 }}>
               <div style={{ width:32, height:32, borderRadius:'50%', background:player?.color||T.mint, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:14, color:'#fff', flexShrink:0 }}>{(player?.name||'?').charAt(0).toUpperCase()}</div>
               <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink }}>Te</div>
-              <div style={{ fontFamily:T.font, fontSize:13, color:isMyTurn?T.mint:T.inkSoft, fontWeight:700 }}>{myStep}/{busStepsCount}</div>
+              <div style={{ fontFamily:T.font, fontSize:13, color:canGuess||myPendingGuess?T.mint:T.inkSoft, fontWeight:700 }}>{myStep}/{busStepsCount}</div>
             </div>
           </div>
 
@@ -36611,8 +36614,8 @@ function BuszPlayerView({ room, roomCode }) {
                 const revealed = (buszState.busRevealedPositions||[1,3]).includes(i);
                 return (
                   <div key={i} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0 }}>
-                    <div style={{ height:20, display:'grid', placeItems:'center', fontSize:15 }}>{isCurr && isMyTurn ? '🚌' : ''}</div>
-                    <PlayingCard card={card} size='lg' faceDown={!revealed} glow={isCurr && isMyTurn && revealed} />
+                    <div style={{ height:20, display:'grid', placeItems:'center', fontSize:15 }}>{isCurr ? '🚌' : ''}</div>
+                    <PlayingCard card={card} size='lg' faceDown={!revealed} glow={isCurr && revealed} />
                   </div>
                 );
               })}
@@ -36626,8 +36629,8 @@ function BuszPlayerView({ room, roomCode }) {
                 const glow = isResult && !busGuessResult?.correct;
                 return dc
                   ? <div key={i} style={{ flexShrink:0 }}><PlayingCard card={dc} size='lg' glow={glow} /></div>
-                  : <div key={i} style={{ width:56, height:78, borderRadius:8, flexShrink:0, border:`1.5px dashed ${isCurr && isMyTurn ? T.mint : i < activeStep2 ? T.coral+'50' : T.inkMute+'25'}`, background: isCurr && isMyTurn ? `${T.mint}10` : i < activeStep2 ? `${T.coral}08` : 'transparent', display:'grid', placeItems:'center' }}>
-                      {isCurr && isMyTurn && <div style={{ color:T.mint, fontSize:18, fontWeight:700 }}>↓</div>}
+                  : <div key={i} style={{ width:56, height:78, borderRadius:8, flexShrink:0, border:`1.5px dashed ${isCurr ? T.mint : i < activeStep2 ? T.coral+'50' : T.inkMute+'25'}`, background: isCurr ? `${T.mint}10` : i < activeStep2 ? `${T.coral}08` : 'transparent', display:'grid', placeItems:'center' }}>
+                      {isCurr && canGuess && <div style={{ color:T.mint, fontSize:18, fontWeight:700 }}>↓</div>}
                     </div>;
               })}
             </div>
@@ -36640,7 +36643,7 @@ function BuszPlayerView({ room, roomCode }) {
           </div>
 
           {/* Question text */}
-          {isMyTurn && !busGuessResult && currentRouteCard && (
+          {canGuess && currentRouteCard && (
             <div style={{ textAlign:'center', fontFamily:T.font, fontSize:14, color:T.ink, fontWeight:500, lineHeight:1.5 }}>
               {preciseTippActive
                 ? <span>🎯 <b>Big Pick</b> — <span style={{ fontFamily:'Georgia,serif', fontWeight:700 }}>{selectedPreciseValue}</span> — Kisebb vagy nagyobb?</span>
@@ -36666,7 +36669,7 @@ function BuszPlayerView({ room, roomCode }) {
           )}
 
           {/* K/N buttons or waiting state */}
-          {isMyTurn && !busGuessResult && !((buszState.busRiderPendingGuesses||{})[playerId]) && (
+          {canGuess && (
             <div style={{ display:'flex', gap:10 }}>
               <button onClick={()=>preciseTippActive?makePreciseGuess('K'):makeGuessPlayer('K')}
                 style={{ flex:1, height:56, border:'none', background:T.coral, color:'#fff', borderRadius:16, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, cursor:'pointer', boxShadow:`0 4px 16px ${T.coral}45` }}>
@@ -36678,7 +36681,7 @@ function BuszPlayerView({ room, roomCode }) {
               </button>
             </div>
           )}
-          {isMyTurn && !busGuessResult && (buszState.busRiderPendingGuesses||{})[playerId] && (
+          {!busGuessResult && myPendingGuess && (
             <div style={{ textAlign:'center', padding:'14px 16px', borderRadius:16, background:`${T.yellow}15`, border:`1.5px solid ${T.yellow}50` }}>
               <div style={{ fontFamily:T.font, fontWeight:700, fontSize:15, color:T.yellow }}>⏳ Tipped elküldve!</div>
               <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:4 }}>
@@ -36705,10 +36708,11 @@ function BuszPlayerView({ room, roomCode }) {
                 const step = busRiderPositions?.[rid] || 0;
                 const done = busRiderDone?.[rid];
                 const isMe = rid === playerId;
+                const rHasPending = !!(buszState.busRiderPendingGuesses||{})[rid];
                 return (
-                  <div key={rid} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 12px', borderRadius:999, background:T.surface, border:`1.5px solid ${rid===currentTurnRiderId?T.mint:done?T.mint+'60':'transparent'}` }}>
+                  <div key={rid} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 12px', borderRadius:999, background:T.surface, border:`1.5px solid ${rHasPending?T.yellow:done?T.mint+'60':'transparent'}` }}>
                     <div style={{ width:20, height:20, borderRadius:'50%', background:rp?.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:9, color:'#fff' }}>{(rp?.name||'?').charAt(0).toUpperCase()}</div>
-                    <div style={{ fontFamily:T.font, fontSize:12, fontWeight:isMe?700:600, color:done?T.mint:rid===currentTurnRiderId?T.mint:T.inkSoft }}>{isMe?'Te | ':''}{done?'✓':`${step}/${busStepsCount}`}</div>
+                    <div style={{ fontFamily:T.font, fontSize:12, fontWeight:isMe?700:600, color:done?T.mint:hasPending?T.yellow:T.inkSoft }}>{isMe?'Te | ':''}{done?'✓':`${step}/${busStepsCount}`}</div>
                   </div>
                 );
               })}
@@ -36717,7 +36721,7 @@ function BuszPlayerView({ room, roomCode }) {
         </div>
 
         {/* Big Pick sticky bottom */}
-        {isMyTurn && !busGuessResult && !preciseTippActive && !(buszState.busRiderPendingGuesses||{})[playerId] && (
+        {canGuess && !preciseTippActive && (
           <div style={{ paddingTop:10, paddingLeft:16, paddingRight:16, paddingBottom:'max(22px, calc(env(safe-area-inset-bottom) + 10px))', marginTop:'auto' }}>
             {!(buszState.busRiderBonusUsed?.[playerId]) ? (
               <button onClick={()=>{ setShowBigDickModal(true); setSelectedPreciseValue(null); }}
