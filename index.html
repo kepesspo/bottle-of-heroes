@@ -33957,7 +33957,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.10 · DNR · 2026.05.30 15:30
+              Verzió 5.11 · DNR · 2026.05.30 16:00
             </div>
           </div>
         </div>
@@ -36390,6 +36390,21 @@ function BuszPlayerView({ room, roomCode }) {
   const noBusIdxRef = React.useRef(null);
   const [busIntroShown, setBusIntroShown] = useState(false);
   const [lastBusRidersKey, setLastBusRidersKey] = useState(null);
+  const busResultTimerRef = React.useRef(null);
+
+  // When waiting for others and Firestore clears our pending → show result then clear
+  useEffect(() => {
+    if (!busGuessResult?.waiting || !buszState || !playerId) return;
+    if ((buszState.busRiderPendingGuesses||{})[playerId]) return; // still pending
+    const step = busGuessResult.step ?? 0;
+    const newPos = buszState.busRiderPositions?.[playerId] || 0;
+    const done = !!(buszState.busRiderDone?.[playerId]);
+    const drawnCards = buszState.busRiderDrawnCards?.[playerId] || [];
+    const correct = done || newPos > step;
+    setBusGuessResult({ correct, done, card: correct ? drawnCards[drawnCards.length-1] : null, step, drinks: correct ? 0 : step+1 });
+    if (busResultTimerRef.current) clearTimeout(busResultTimerRef.current);
+    busResultTimerRef.current = setTimeout(() => setBusGuessResult(null), correct ? 1800 : 2200);
+  }, [buszState]);
 
   const player = players.find(p => p.id === playerId);
   const myHand = buszState ? (buszState.hands?.[playerId] || []) : [];
