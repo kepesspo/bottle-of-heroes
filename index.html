@@ -33943,7 +33943,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 4.8 · DNR · 2026.05.29 20:35
+              Verzió 4.9 · DNR · 2026.05.29 20:50
             </div>
           </div>
         </div>
@@ -36366,6 +36366,7 @@ function BuszPlayerView({ room, roomCode }) {
   const [preciseTippActive, setPreciseTippActive] = useState(false);
   const [selectedPreciseValue, setSelectedPreciseValue] = useState(null);
   const [preciseTippStep, setPreciseTippStep] = useState(0);
+  const [showBigDickModal, setShowBigDickModal] = useState(false);
   const [busIntroShown, setBusIntroShown] = useState(false);
   const [lastBusRidersKey, setLastBusRidersKey] = useState(null);
 
@@ -36575,7 +36576,7 @@ function BuszPlayerView({ room, roomCode }) {
     const activeDrawn = busRiderDrawnCards?.[currentTurnRiderId] || [];
 
     const _busRidersKey = (busRiders||[]).join(',')+'_'+(playerId||'');
-    if (_busRidersKey !== lastBusRidersKey && playerId) { setLastBusRidersKey(_busRidersKey); setBusIntroShown(false); }
+    if (_busRidersKey !== lastBusRidersKey && playerId) { setLastBusRidersKey(_busRidersKey); setBusIntroShown(false); setShowBigDickModal(false); setPreciseTippActive(false); setSelectedPreciseValue(null); }
     if (!busGuessResult && myStep === 0 && !busIntroShown) {
       const busMsgs = [
         { emoji:'🚌', title:'Felszálltál a buszra!', sub:'Ez nem lesz könnyű. Teljesítsd mind a '+busStepsCount+' állomást, különben iszol. Sok szerencsét!' },
@@ -36642,27 +36643,54 @@ function BuszPlayerView({ room, roomCode }) {
             </div>
           </div>
         )}
-        {/* Precise tipp value picker */}
-        {isMyTurn && preciseTippActive && !busGuessResult && (
-          <div style={{ background:`${T.yellow}18`, border:`1.5px solid ${T.yellow}60`, borderRadius:16, padding:'12px 14px', display:'flex', flexDirection:'column', gap:10 }}>
-            <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.yellow, textAlign:'center', textTransform:'uppercase', letterSpacing:'0.06em' }}>
-              🎯 Válaszd ki a pontos értéket!
-            </div>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:6, justifyContent:'center' }}>
-              {['2','3','4','5','6','7','8','9','10','J','Q','K','A'].map(v => (
-                <button key={v} onClick={()=>setSelectedPreciseValue(v)}
-                  style={{ minWidth:36, height:36, borderRadius:10, border:`2px solid ${selectedPreciseValue===v?T.yellow:T.inkMute+'40'}`, background:selectedPreciseValue===v?T.yellow:'transparent', color:selectedPreciseValue===v?'#fff':T.ink, fontFamily:'Georgia,serif', fontWeight:700, fontSize:15, cursor:'pointer', transition:'all .15s' }}>
-                  {v}
-                </button>
-              ))}
-            </div>
-            {selectedPreciseValue && (
-              <div style={{ display:'flex', gap:8 }}>
-                <button onClick={()=>makePreciseGuess('K')} style={{ flex:1, minHeight:50, border:`2px solid ${T.coral}`, background:'transparent', color:T.coral, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:12, cursor:'pointer' }}>▼ Kisebb</button>
-                <button onClick={()=>makePreciseGuess('N')} style={{ flex:1, minHeight:50, border:`2px solid ${T.mint}`, background:'transparent', color:T.mint, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:12, cursor:'pointer' }}>▲ Nagyobb</button>
+        {/* Big Dick modal */}
+        {showBigDickModal && (
+          <div onClick={()=>setShowBigDickModal(false)} style={{ position:'fixed', inset:0, background:'rgba(10,10,18,0.72)', zIndex:80, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 20px' }}>
+            <div onClick={e=>e.stopPropagation()} style={{ background:T.surface, borderRadius:24, width:'100%', maxWidth:400, padding:'22px 18px 20px', display:'flex', flexDirection:'column', gap:16, boxShadow:'0 24px 64px rgba(0,0,0,0.5)', animation:'popIn .22s' }}>
+              {/* Header */}
+              <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                <div style={{ width:46, height:46, borderRadius:13, background:`linear-gradient(135deg, ${T.yellow}, #c87800)`, display:'grid', placeItems:'center', fontSize:22, flexShrink:0, boxShadow:`0 4px 14px ${T.yellow}50` }}>🎯</div>
+                <div>
+                  <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.yellow, letterSpacing:T.letterDisplay, textTransform:'uppercase' }}>Big Dick</div>
+                  <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:1 }}>Válaszd ki melyik lap jön!</div>
+                </div>
               </div>
-            )}
-            <button onClick={()=>{setPreciseTippActive(false);setSelectedPreciseValue(null);}} style={{ background:'transparent', border:'none', color:T.inkSoft, fontFamily:T.font, fontSize:12, cursor:'pointer', padding:'2px 0' }}>Mégsem</button>
+              {/* Card value grid */}
+              <div style={{ display:'flex', flexWrap:'wrap', gap:7, justifyContent:'center' }}>
+                {['2','3','4','5','6','7','8','9','10','J','Q','K','A'].map(v => {
+                  const isRed = ['J','Q','K','A'].includes(v);
+                  const sel = selectedPreciseValue === v;
+                  return (
+                    <div key={v} onClick={()=>setSelectedPreciseValue(v)} style={{ cursor:'pointer', transition:'all .15s', transform: sel ? 'scale(1.12)' : 'scale(1)' }}>
+                      <div style={{ width:44, height:62, borderRadius:8, background: sel ? `linear-gradient(160deg, #fff 0%, #fff8e8 100%)` : '#fff', border:`2.5px solid ${sel ? T.yellow : T.inkMute+'30'}`, boxShadow: sel ? `0 0 16px ${T.yellow}70, 0 4px 10px rgba(0,0,0,0.15)` : '0 2px 6px rgba(0,0,0,0.12)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'space-between', padding:'4px 3px', position:'relative' }}>
+                        <div style={{ fontFamily:'Georgia,serif', fontWeight:700, fontSize:13, color: isRed ? '#c0392b' : '#1a1a2e', lineHeight:1, alignSelf:'flex-start', paddingLeft:2 }}>{v}</div>
+                        <div style={{ fontFamily:'Georgia,serif', fontWeight:700, fontSize:20, color: isRed ? '#c0392b' : '#1a1a2e', lineHeight:1 }}>{v}</div>
+                        <div style={{ fontFamily:'Georgia,serif', fontWeight:700, fontSize:13, color: isRed ? '#c0392b' : '#1a1a2e', lineHeight:1, alignSelf:'flex-end', paddingRight:2, transform:'rotate(180deg)' }}>{v}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Confirm */}
+              <button disabled={!selectedPreciseValue} onClick={()=>{ setShowBigDickModal(false); setPreciseTippActive(true); setPreciseTippStep(myStep); }}
+                style={{ width:'100%', padding:'14px', borderRadius:14, border:'none', cursor: selectedPreciseValue ? 'pointer' : 'default', background: selectedPreciseValue ? `linear-gradient(135deg, ${T.yellow}, #c87800)` : T.inkMute+'20', color: selectedPreciseValue ? '#1a1100' : T.inkSoft, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, transition:'all .2s', boxShadow: selectedPreciseValue ? `0 4px 16px ${T.yellow}40` : 'none' }}>
+                {selectedPreciseValue ? `Ezt választom: ${selectedPreciseValue} 🎯` : 'Válassz egy értéket'}
+              </button>
+              <button onClick={()=>setShowBigDickModal(false)} style={{ background:'transparent', border:'none', color:T.inkSoft, fontFamily:T.font, fontSize:13, cursor:'pointer', padding:'2px 0', textAlign:'center' }}>Mégsem</button>
+            </div>
+          </div>
+        )}
+        {/* Big Dick K/N after value selected */}
+        {isMyTurn && preciseTippActive && !busGuessResult && (
+          <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'12px 14px', background:`${T.yellow}12`, border:`1.5px solid ${T.yellow}50`, borderRadius:16 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, justifyContent:'center' }}>
+              <div style={{ width:28, height:28, borderRadius:8, background:`linear-gradient(135deg, ${T.yellow}, #c87800)`, display:'grid', placeItems:'center', fontSize:14, flexShrink:0 }}>🎯</div>
+              <div style={{ fontFamily:T.font, fontSize:13, color:T.yellow, fontWeight:700 }}>Big Dick — <span style={{ fontFamily:'Georgia,serif', fontSize:16 }}>{selectedPreciseValue}</span> — Kisebb vagy nagyobb?</div>
+            </div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={()=>makePreciseGuess('K')} style={{ flex:1, minHeight:52, border:`2px solid ${T.coral}`, background:'transparent', color:T.coral, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor:'pointer' }}>▼ Kisebb</button>
+              <button onClick={()=>makePreciseGuess('N')} style={{ flex:1, minHeight:52, border:`2px solid ${T.mint}`, background:'transparent', color:T.mint, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor:'pointer' }}>▲ Nagyobb</button>
+            </div>
           </div>
         )}
         {/* K/N buttons */}
@@ -36672,18 +36700,25 @@ function BuszPlayerView({ room, roomCode }) {
               <button onClick={()=>makeGuessPlayer('K')} style={{ flex:1, minHeight:56, border:`2px solid ${T.coral}`, background:'transparent', color:T.coral, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor:'pointer' }}>▼ Kisebb</button>
               <button onClick={()=>makeGuessPlayer('N')} style={{ flex:1, minHeight:56, border:`2px solid ${T.mint}`, background:'transparent', color:T.mint, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor:'pointer' }}>▲ Nagyobb</button>
             </div>
-            <div style={{ display:'flex', justifyContent:'center' }}>
-              {!(buszState.busRiderBonusUsed?.[playerId]) ? (
-                <button onClick={()=>{setPreciseTippActive(true);setSelectedPreciseValue(null);setPreciseTippStep(myStep);}}
-                  style={{ padding:'8px 22px', background:`${T.yellow}18`, border:`1.5px solid ${T.yellow}70`, borderRadius:20, cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:13, color:T.yellow, display:'flex', alignItems:'center', gap:6 }}>
-                  🎯 Big Dick
-                </button>
-              ) : (
-                <button disabled style={{ padding:'8px 22px', background:'transparent', border:`1.5px solid ${T.inkMute}30`, borderRadius:20, cursor:'default', fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkMute, display:'flex', alignItems:'center', gap:6, opacity:0.4 }}>
-                  🎯 Big Dick (elhasználva)
-                </button>
-              )}
-            </div>
+            {!(buszState.busRiderBonusUsed?.[playerId]) ? (
+              <button onClick={()=>{ setShowBigDickModal(true); setSelectedPreciseValue(null); }}
+                style={{ width:'100%', padding:'13px 20px', background:`linear-gradient(135deg, #1e1500, #2e2000)`, border:`2px solid ${T.yellow}`, borderRadius:16, cursor:'pointer', display:'flex', alignItems:'center', gap:12, boxShadow:`0 4px 20px ${T.yellow}25` }}>
+                <div style={{ width:40, height:40, borderRadius:11, background:`linear-gradient(135deg, ${T.yellow}, #c87800)`, display:'grid', placeItems:'center', fontSize:20, flexShrink:0, boxShadow:`0 2px 10px ${T.yellow}50` }}>🎯</div>
+                <div style={{ flex:1, textAlign:'left' }}>
+                  <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.yellow, letterSpacing:'0.04em' }}>Big Dick</div>
+                  <div style={{ fontFamily:T.font, fontSize:11, color:`${T.yellow}70`, marginTop:1 }}>Tippelj egyenesen — ha jön, leszállsz</div>
+                </div>
+                <div style={{ fontSize:16, color:`${T.yellow}80` }}>›</div>
+              </button>
+            ) : (
+              <div style={{ width:'100%', padding:'13px 20px', background:'transparent', border:`1.5px solid ${T.inkMute}25`, borderRadius:16, display:'flex', alignItems:'center', gap:12, opacity:0.35 }}>
+                <div style={{ width:40, height:40, borderRadius:11, background:T.inkMute+'20', display:'grid', placeItems:'center', fontSize:20, flexShrink:0 }}>🎯</div>
+                <div style={{ flex:1, textAlign:'left' }}>
+                  <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.inkSoft }}>Big Dick</div>
+                  <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, marginTop:1 }}>Elhasználva</div>
+                </div>
+              </div>
+            )}
           </div>
         )}
         {/* riders progress */}
