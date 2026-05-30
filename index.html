@@ -33430,18 +33430,18 @@ window.triggerHaptic = function() {
     appId:"1:568962707863:web:d10e5fadea2e44402554d2"
   });
   var db = firebase.firestore();
-  // iOS PWA: WebSockets suspend in background → use long polling for reliable real-time
   var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   var isStandalone = window.navigator.standalone === true;
-  if (isIOS || isStandalone) {
-    db.settings({ experimentalForceLongPolling: true, merge: true });
-  }
-  // Reconnect Firestore when app comes back to foreground (iOS PWA background kill)
-  var _activeSnapshots = [];
-  var _origOnSnapshot = null;
+  // iOS PWA: WebSockets are killed in background → long polling is more reliable
+  db.settings({ experimentalAutoDetectLongPolling: true });
+  // Offline persistence: first load returns cached data instantly, then syncs
+  db.enablePersistence({ synchronizeTabs: true }).catch(function(e) {
+    // failed-precondition = multiple tabs; unimplemented = browser doesn't support it
+  });
+  // When iOS PWA comes back to foreground, force reconnect immediately
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'visible') {
-      try { db.disableNetwork().then(function(){ return db.enableNetwork(); }).catch(function(){}); } catch(e) {}
+      db.enableNetwork().catch(function(){});
     }
   });
   window.generateRoomCode = function() {
@@ -33957,7 +33957,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.9 · DNR · 2026.05.30 15:00
+              Verzió 5.10 · DNR · 2026.05.30 15:30
             </div>
           </div>
         </div>
