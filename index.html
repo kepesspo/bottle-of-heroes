@@ -33430,6 +33430,20 @@ window.triggerHaptic = function() {
     appId:"1:568962707863:web:d10e5fadea2e44402554d2"
   });
   var db = firebase.firestore();
+  // iOS PWA: WebSockets suspend in background → use long polling for reliable real-time
+  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  var isStandalone = window.navigator.standalone === true;
+  if (isIOS || isStandalone) {
+    db.settings({ experimentalForceLongPolling: true, merge: true });
+  }
+  // Reconnect Firestore when app comes back to foreground (iOS PWA background kill)
+  var _activeSnapshots = [];
+  var _origOnSnapshot = null;
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') {
+      try { db.disableNetwork().then(function(){ return db.enableNetwork(); }).catch(function(){}); } catch(e) {}
+    }
+  });
   window.generateRoomCode = function() {
     var c=''; for(var i=0;i<6;i++) c+=Math.floor(Math.random()*10); return c;
   };
@@ -33943,7 +33957,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.8 · DNR · 2026.05.30 14:00
+              Verzió 5.9 · DNR · 2026.05.30 15:00
             </div>
           </div>
         </div>
@@ -36712,7 +36726,7 @@ function BuszPlayerView({ room, roomCode }) {
                 return (
                   <div key={rid} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 12px', borderRadius:999, background:T.surface, border:`1.5px solid ${rHasPending?T.yellow:done?T.mint+'60':'transparent'}` }}>
                     <div style={{ width:20, height:20, borderRadius:'50%', background:rp?.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:9, color:'#fff' }}>{(rp?.name||'?').charAt(0).toUpperCase()}</div>
-                    <div style={{ fontFamily:T.font, fontSize:12, fontWeight:isMe?700:600, color:done?T.mint:hasPending?T.yellow:T.inkSoft }}>{isMe?'Te | ':''}{done?'✓':`${step}/${busStepsCount}`}</div>
+                    <div style={{ fontFamily:T.font, fontSize:12, fontWeight:isMe?700:600, color:done?T.mint:rHasPending?T.yellow:T.inkSoft }}>{isMe?'Te | ':''}{done?'✓':`${step}/${busStepsCount}`}</div>
                   </div>
                 );
               })}
