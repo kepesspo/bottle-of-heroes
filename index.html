@@ -33957,7 +33957,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.11 · DNR · 2026.05.30 16:00
+              Verzió 5.12 · DNR · 2026.05.30 17:00
             </div>
           </div>
         </div>
@@ -34779,177 +34779,234 @@ function SzerencsekerékGame({ gameIdx, players }) {
 }
 
 function LóversenyGame({ gameIdx, players, onAdvance }) {
+  const FINISH = 12;
   const [phase, setPhase] = useState('bet');
   const [bets, setBets] = useState({});
   const [betStep, setBetStep] = useState(0);
   const [positions, setPositions] = useState([0,0,0,0]);
   const [raceWinner, setRaceWinner] = useState(null);
+  const [finalRanks, setFinalRanks] = useState([]);
   const [gifts, setGifts] = useState({});
   const ivRef = useRef(null);
   const posRef = useRef([0,0,0,0]);
-  const FINISH = 8;
 
+  useEffect(() => { return () => { if (ivRef.current) clearInterval(ivRef.current); }; }, []);
   useEffect(() => {
-    return () => { if (ivRef.current) clearInterval(ivRef.current); };
-  }, []);
-  useEffect(() => {
-    setPhase('bet'); setBets({}); setBetStep(0);
-    setPositions([0,0,0,0]); setRaceWinner(null); setGifts({});
+    setPhase('bet'); setBets({}); setBetStep(0); setPositions([0,0,0,0]);
+    setRaceWinner(null); setFinalRanks([]); setGifts({});
     posRef.current = [0,0,0,0];
     if (ivRef.current) { clearInterval(ivRef.current); ivRef.current = null; }
   }, [gameIdx]);
 
-  const startRace = () => {
+  const startRace = (finalBets) => {
     setPhase('race');
     posRef.current = [0,0,0,0];
+    setPositions([0,0,0,0]);
     ivRef.current = setInterval(() => {
       const idx = Math.floor(Math.random() * 4);
       posRef.current[idx]++;
       setPositions([...posRef.current]);
       if (posRef.current[idx] >= FINISH) {
         clearInterval(ivRef.current); ivRef.current = null;
-        setRaceWinner(HORSES[idx].id);
+        const winnerId = HORSES[idx].id;
+        const others = HORSES.filter(h => h.id !== winnerId)
+          .sort((a,b) => posRef.current[b.id-1] - posRef.current[a.id-1])
+          .map(h => h.id);
+        setFinalRanks([winnerId, ...others]);
+        setRaceWinner(winnerId);
         setPhase('result');
       }
-    }, 750);
+    }, 480);
   };
 
   const finishGame = () => {
     const drinkMap = {};
     players.forEach(p => {
       const b = bets[p.id];
-      if (b && b.horseId !== raceWinner) drinkMap[p.id] = (drinkMap[p.id]||0) + b.amount;
-      if (gifts[p.id]) drinkMap[p.id] = (drinkMap[p.id]||0) + gifts[p.id];
+      if (b && b.horseId !== raceWinner) drinkMap[p.id] = (drinkMap[p.id]||0) + (b.amount||0);
     });
+    Object.entries(gifts).forEach(([pid, amt]) => { drinkMap[pid] = (drinkMap[pid]||0) + amt; });
     if (onAdvance) onAdvance(drinkMap);
   };
 
-  // ── Betting phase ──
+  const getRanks = (pos) => {
+    const sorted = [...HORSES].sort((a,b) => (pos[b.id-1]||0) - (pos[a.id-1]||0));
+    const rm = {}; sorted.forEach((h,i) => rm[h.id] = i+1); return rm;
+  };
+
+  const winnerPool = players.filter(p => bets[p.id]?.horseId === raceWinner).reduce((s,p) => s+(bets[p.id]?.amount||0), 0);
+  const totalGifted = Object.values(gifts).reduce((s,v) => s+v, 0);
+  const remaining = winnerPool - totalGifted;
+
+  // ── Betting phase ──────────────────────────────────────────────────────────
   if (phase === 'bet') {
     const cp = players[betStep];
     if (!cp) return null;
     const myBet = bets[cp.id] || {};
+    const amount = myBet.amount || 1;
     const isLast = betStep === players.length - 1;
+    const selectedHorse = HORSES.find(h => h.id === myBet.horseId);
     return (
-      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <div style={{ width:34, height:34, borderRadius:'50%', background:cp.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color:'#fff' }}>{(cp.name||'?').charAt(0).toUpperCase()}</div>
-          <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{cp.name} tétje</div>
-          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{betStep+1}/{players.length}</div>
+      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:16 }}>
+        {/* Player indicator chip */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, background:T.surface, borderRadius:14, padding:'10px 14px', boxShadow:T.shadow }}>
+          <div style={{ width:36, height:36, borderRadius:'50%', background:cp.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:15, color:'#fff', flexShrink:0 }}>{(cp.name||'?').charAt(0).toUpperCase()}</div>
+          <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{cp.name} tétje</div>
+          <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+            {players.map((_,i) => <div key={i} style={{ width:8, height:8, borderRadius:'50%', background: i<betStep ? T.mint : i===betStep ? cp.color : T.inkMute+'40' }} />)}
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginLeft:4 }}>{betStep+1}/{players.length}</div>
+          </div>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6, width:'100%' }}>
-          {HORSES.map(h => {
-            const sel = myBet.horseId === h.id;
-            return (
-              <button key={h.id} onClick={() => setBets({...bets,[cp.id]:{...myBet,horseId:h.id}})} style={{
-                padding:'8px 4px', borderRadius:12, border:`2px solid ${sel ? h.color : 'transparent'}`,
-                background: sel ? `${h.color}22` : T.surfaceMuted, cursor:'pointer',
-                display:'flex', flexDirection:'column', alignItems:'center', gap:3,
-              }}>
-                <div style={{ fontSize:20 }}>{h.emoji}</div>
-                <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color: sel ? h.color : T.inkSoft }}>{h.name}</div>
-              </button>
-            );
-          })}
+        {/* Horse selection */}
+        <div>
+          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>Melyik lóra fogadsz?</div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8 }}>
+            {HORSES.map(h => {
+              const sel = myBet.horseId === h.id;
+              return (
+                <button key={h.id} onClick={() => setBets(prev => ({...prev,[cp.id]:{...(prev[cp.id]||{amount:1}),horseId:h.id}}))} style={{
+                  padding:'14px 4px 10px', borderRadius:16, border:`2.5px solid ${sel ? h.color : 'transparent'}`,
+                  background: sel ? h.color+'18' : T.surfaceMuted, cursor:'pointer',
+                  display:'flex', flexDirection:'column', alignItems:'center', gap:8, transition:'all .15s',
+                }}>
+                  <div style={{ width:40, height:40, borderRadius:'50%', background:h.color, boxShadow:`0 3px 10px ${h.color}55` }} />
+                  <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: sel ? h.color : T.inkSoft }}>{h.name}</div>
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div style={{ display:'flex', gap:6 }}>
-          {[1,2,3,4,5].map(n => {
-            const sel = myBet.amount === n;
-            return (
-              <button key={n} onClick={() => setBets({...bets,[cp.id]:{...myBet,amount:n}})} style={{
-                width:44, height:44, borderRadius:12, border:`2px solid ${sel ? T.coral : 'transparent'}`,
-                background: sel ? T.coralSoft : T.surfaceMuted, cursor:'pointer',
-                fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color: sel ? T.coral : T.inkSoft,
-                display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:0,
-              }}>
-                <div>{n}</div>
-                <div style={{ fontSize:10 }}>🍺</div>
-              </button>
-            );
-          })}
+        {/* Amount stepper */}
+        <div>
+          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>Hány korty a tét?</div>
+          <div style={{ display:'flex', alignItems:'center', background:T.surface, borderRadius:16, padding:'6px', boxShadow:T.shadow }}>
+            <button onClick={() => setBets(prev => ({...prev,[cp.id]:{...(prev[cp.id]||{}),amount:Math.max(1,(prev[cp.id]?.amount||1)-1)}}))} style={{ width:52, height:52, border:'none', background:T.surfaceMuted, borderRadius:12, cursor:'pointer', fontFamily:T.font, fontSize:24, color:T.inkSoft }}>−</button>
+            <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+              <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:T.ink }}>{amount}</div>
+              <div style={{ fontSize:22 }}>🍺</div>
+            </div>
+            <button onClick={() => setBets(prev => ({...prev,[cp.id]:{...(prev[cp.id]||{}),amount:Math.min(6,(prev[cp.id]?.amount||1)+1)}}))} style={{ width:52, height:52, border:'none', background:T.mintSoft, borderRadius:12, cursor:'pointer', fontFamily:T.font, fontSize:24, color:T.mint }}>+</button>
+          </div>
         </div>
-        <button disabled={!myBet.horseId || !myBet.amount} onClick={() => isLast ? startRace() : setBetStep(betStep+1)}
-          style={{ padding:'10px 24px', background: (!myBet.horseId||!myBet.amount) ? T.surfaceMuted : T.mint, border:'none', color: (!myBet.horseId||!myBet.amount) ? T.inkSoft : '#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:14, cursor: (!myBet.horseId||!myBet.amount) ? 'default' : 'pointer' }}>
-          {isLast ? '🏁 Rajt!' : 'Következő →'}
-        </button>
+        {/* Summary sentence */}
+        {myBet.horseId && (
+          <div style={{ textAlign:'center', fontFamily:T.font, fontSize:13, color:T.inkSoft }}>
+            <b style={{ color:T.ink }}>{cp.name}</b> a <b style={{ color:selectedHorse?.color }}>{selectedHorse?.name}</b> lóra tesz <b style={{ color:T.ink }}>{amount} kortyot</b>
+          </div>
+        )}
+        <PrimaryButton disabled={!myBet.horseId} onClick={() => {
+          const finalBets = {...bets, [cp.id]: {horseId:myBet.horseId, amount}};
+          setBets(finalBets);
+          if (isLast) startRace(finalBets);
+          else setBetStep(s => s+1);
+        }}>{isLast ? '🏁 Rajt!' : 'Következő →'}</PrimaryButton>
       </div>
     );
   }
 
-  // ── Race phase ──
-  if (phase === 'race' || (phase === 'result' && raceWinner)) {
-    const winnerHorse = HORSES.find(h => h.id === raceWinner);
+  // ── Race phase ─────────────────────────────────────────────────────────────
+  if (phase === 'race') {
+    const ranks = getRanks(positions);
+    const leadIdx = positions.reduce((bi,v,i) => v > positions[bi] ? i : bi, 0);
+    const leader = HORSES[leadIdx];
     return (
-      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8 }}>
-        {phase === 'result' && winnerHorse && (
-          <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, animation:'popIn .4s' }}>
-            🏆 {winnerHorse.emoji} {winnerHorse.name} nyert!
+      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:14 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>Rajt — verseny indul!</div>
+          <div style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 10px 4px 6px', borderRadius:999, background:leader.color+'20', border:`1.5px solid ${leader.color}` }}>
+            <div style={{ width:14, height:14, borderRadius:'50%', background:leader.color }} />
+            <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:leader.color }}>Élen: {leader.name}</div>
           </div>
-        )}
-        {HORSES.map((h, idx) => {
-          const pct = Math.min(positions[idx] / FINISH, 1);
-          const won = raceWinner === h.id;
-          return (
-            <div key={h.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <div style={{ width:22, textAlign:'center', fontSize:16 }}>{h.emoji}</div>
-              <div style={{ flex:1, height:24, background:T.surfaceMuted, borderRadius:12, overflow:'hidden', position:'relative' }}>
-                <div style={{ width:`${pct*100}%`, height:'100%', background:h.color, borderRadius:12, transition:'width .35s', display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:4 }}>
-                  {pct > 0.1 && <div style={{ fontSize:14 }}>🏇</div>}
-                </div>
-              </div>
-              {won && <div style={{ fontSize:16 }}>🏆</div>}
-            </div>
-          );
-        })}
-        {phase === 'result' && (() => {
-          const winnerPool = players.filter(p => bets[p.id]?.horseId === raceWinner).reduce((s,p) => s+(bets[p.id]?.amount||0),0);
-          const totalGifted = Object.values(gifts).reduce((s,v)=>s+v,0);
-          return (
-          <div style={{ marginTop:4, display:'flex', flexDirection:'column', gap:6 }}>
-            {players.map(p => {
-              const b = bets[p.id];
-              const horse = HORSES.find(h => h.id === b?.horseId);
-              const won = b?.horseId === raceWinner;
-              return (
-                <div key={p.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px', background:T.surface, borderRadius:10, boxShadow:T.shadow }}>
-                  <div style={{ width:28, height:28, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:12, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-                  <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink }}>{p.name}</div>
-                  <div style={{ fontSize:13 }}>{horse?.emoji}</div>
-                  <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color: won ? T.mint : T.coral }}>
-                    {won ? `🎉 Kioszt: ${b?.amount||0} 🍺` : `🍺 ×${b?.amount||0}`}
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {HORSES.map((h, idx) => {
+            const pct = Math.min(positions[idx] / FINISH, 1);
+            const rank = ranks[h.id];
+            return (
+              <div key={h.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div style={{ width:26, height:26, borderRadius:'50%', background:h.color, flexShrink:0, boxShadow:`0 2px 6px ${h.color}55` }} />
+                <div style={{ flex:1, height:34, background:T.surfaceMuted, borderRadius:17, overflow:'hidden', position:'relative' }}>
+                  <div style={{ position:'absolute', right:0, top:0, bottom:0, width:18, zIndex:2, background:'repeating-linear-gradient(135deg,rgba(0,0,0,0.13) 0px,rgba(0,0,0,0.13) 3px,transparent 3px,transparent 7px)', borderLeft:`2px solid ${T.inkMute}40` }} />
+                  <div style={{ width:`${Math.max(pct*100,0)}%`, height:'100%', background:`linear-gradient(90deg,${h.color}cc,${h.color})`, borderRadius:17, transition:'width .25s ease', display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:8, minWidth: pct>0?36:0, position:'relative', zIndex:1 }}>
+                    {pct > 0 && <span style={{ fontSize:18 }}>🏇</span>}
                   </div>
                 </div>
-              );
-            })}
-            {winnerPool > 0 && (
-              <div style={{ background:T.surface, borderRadius:12, padding:'10px 12px', boxShadow:T.shadow }}>
-                <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>
-                  🎁 Győztes kioszt: {winnerPool - totalGifted} / {winnerPool} korty
-                </div>
-                <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-                  {players.map(p => (
-                    <button key={p.id} onClick={() => { if(totalGifted < winnerPool) setGifts(g=>({...g,[p.id]:(g[p.id]||0)+1})); }}
-                      disabled={totalGifted >= winnerPool}
-                      style={{
-                        display:'flex', alignItems:'center', gap:6, padding:'6px 10px',
-                        border:'none', background:T.surfaceMuted, borderRadius:10,
-                        cursor: totalGifted >= winnerPool ? 'default' : 'pointer',
-                        opacity: totalGifted >= winnerPool ? 0.5 : 1,
-                      }}>
-                      <div style={{ width:24, height:24, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontSize:10, fontWeight:700, color:'#fff' }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-                      <div style={{ fontFamily:T.font, fontSize:12, fontWeight:600, color:T.ink }}>{p.name}</div>
-                      {(gifts[p.id]||0) > 0 && <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.coral }}>+{gifts[p.id]}🍺</div>}
-                    </button>
-                  ))}
+                <div style={{ width:22, textAlign:'center', fontFamily:T.font, fontSize:13, fontWeight:700, color:T.inkSoft, flexShrink:0 }}>{rank}.</div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ textAlign:'center', fontFamily:T.font, fontSize:13, color:T.inkSoft }}>A célba érő szín nyer — a többire fogadók isznak 🍺</div>
+      </div>
+    );
+  }
+
+  // ── Result phase ────────────────────────────────────────────────────────────
+  if (phase === 'result') {
+    const winH = HORSES.find(h => h.id === raceWinner);
+    const ranks = finalRanks.length ? finalRanks : HORSES.map(h=>h.id);
+    return (
+      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:12 }}>
+        {/* Winner banner */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, padding:'12px 16px', borderRadius:16, background:winH?.color+'20', border:`2px solid ${winH?.color}`, animation:'popIn .4s' }}>
+          <span style={{ fontSize:22 }}>🏆</span>
+          <div style={{ width:22, height:22, borderRadius:'50%', background:winH?.color, boxShadow:`0 2px 8px ${winH?.color}60` }} />
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:winH?.color }}>{winH?.name} nyert!</div>
+        </div>
+        {/* Podium 1-4 */}
+        <div style={{ display:'flex', gap:10, justifyContent:'center', alignItems:'center' }}>
+          {ranks.map((horseId, i) => {
+            const h = HORSES.find(x => x.id === horseId);
+            return (
+              <div key={horseId} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5 }}>
+                <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:i===0?T.yellow:T.inkSoft }}>{i+1}.</div>
+                <div style={{ width:i===0?32:26, height:i===0?32:26, borderRadius:'50%', background:h.color, boxShadow:`0 2px 8px ${h.color}55`, border: i===0?`2px solid ${T.yellow}`:'none', transition:'all .3s' }} />
+              </div>
+            );
+          })}
+        </div>
+        {/* Player rows */}
+        <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
+          {players.map(p => {
+            const b = bets[p.id];
+            const horse = HORSES.find(h => h.id === b?.horseId);
+            const won = b?.horseId === raceWinner;
+            return (
+              <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:T.surface, borderRadius:14, boxShadow:T.shadow }}>
+                <div style={{ width:32, height:32, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:13, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+                <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{p.name}</div>
+                {horse && <div style={{ width:16, height:16, borderRadius:'50%', background:horse.color, flexShrink:0 }} />}
+                <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color: won ? T.mint : T.coral }}>
+                  {won ? `🎉 Oszthat ${winnerPool}` : `🍺 ×${b?.amount||0}`}
                 </div>
               </div>
-            )}
-            <button onClick={finishGame} style={{ padding:'10px 0', background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>
-              Következő ▶
-            </button>
+            );
+          })}
+        </div>
+        {/* Gift distribution */}
+        {winnerPool > 0 && (
+          <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft }}>🎁 Győztes kioszt</div>
+              <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:remaining>0?T.mint:T.inkMute }}>{remaining} / {winnerPool} korty</div>
+            </div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+              {players.map(p => {
+                const given = gifts[p.id]||0;
+                return (
+                  <button key={p.id} onClick={() => { if(remaining>0) setGifts(g=>({...g,[p.id]:(g[p.id]||0)+1})); }} disabled={remaining<=0}
+                    style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px', border:'none', background: given>0 ? T.mint+'22' : T.surfaceMuted, borderRadius:10, cursor:remaining>0?'pointer':'default', opacity:remaining<=0&&!given?0.5:1, transition:'all .15s' }}>
+                    <div style={{ width:24, height:24, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontSize:10, fontWeight:700, color:'#fff' }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+                    <div style={{ fontFamily:T.font, fontSize:12, fontWeight:600, color:T.ink }}>{p.name}</div>
+                    {given>0 && <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.mint }}>+{given}</div>}
+                    <div style={{ fontFamily:T.font, fontSize:16, color:remaining>0?T.mint:T.inkMute+'60' }}>+</div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          );
-        })()}
+        )}
+        <PrimaryButton onClick={finishGame}>Következő ▶</PrimaryButton>
       </div>
     );
   }
