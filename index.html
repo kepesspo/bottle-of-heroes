@@ -33959,7 +33959,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.14 · DNR · 2026.05.30 19:00
+              Verzió 5.15 · DNR · 2026.05.30 20:00
             </div>
           </div>
         </div>
@@ -34552,18 +34552,16 @@ const KIVAGYOK_CELEBS = [
   { name:'Nelson Mandela',    info:'1918–2013 · Politikus',     img:'https://upload.wikimedia.org/wikipedia/commons/0/02/Nelson_Mandela_1994.jpg' },
 ];
 
-function ZeneGame({ gameIdx, onAdvance }) {
+function ZeneGame({ gameIdx }) {
   const song = ZENE_SONGS[gameIdx % ZENE_SONGS.length];
   const [playing, setPlaying] = useState(false);
   const [revealed, setRevealed] = useState(false);
-  const [result, setResult] = useState(null);
   const ctrlRef = useRef(null);
   const containerRef = useRef(null);
 
   useEffect(() => {
     setPlaying(false);
     setRevealed(false);
-    setResult(null);
     const setupCtrl = (IFrameAPI) => {
       try { if (ctrlRef.current) ctrlRef.current.pause(); } catch(e) {}
       ctrlRef.current = null;
@@ -34586,21 +34584,18 @@ function ZeneGame({ gameIdx, onAdvance }) {
 
   const handlePlay = () => { try { ctrlRef.current.play(); setPlaying(true); } catch(e) {} };
   const handleStop = () => { try { ctrlRef.current.pause(); setPlaying(false); } catch(e) {} };
-  const handleResult = (r) => {
-    setResult(r);
-    handleStop();
-    if (onAdvance) setTimeout(() => onAdvance(), 1800);
-  };
 
   const WAVE_H = [12,20,30,40,48,42,52,44,34,46,38,28,18,12];
 
   return (
     <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
-      <div ref={containerRef} style={{ position:'absolute', left:-9999, top:-9999, width:1, height:1, overflow:'hidden' }} />
+      {/* Spotify embed hidden with collapsed wrapper */}
+      <div style={{ height:0, overflow:'hidden', width:'100%' }}>
+        <div ref={containerRef} style={{ width:'100%', height:80 }} />
+      </div>
 
       {/* Vinyl + static tonearm */}
       <div style={{ position:'relative', width:270, height:270, flexShrink:0 }}>
-        {/* Spinning disc */}
         <div style={{ position:'absolute', left:10, top:10, width:250, height:250, transformOrigin:'center', animation: playing ? 'vinylSpin 2.6s linear infinite' : 'none' }}>
           <svg width="250" height="250" viewBox="0 0 250 250">
             <circle cx="125" cy="125" r="123" fill="#181818"/>
@@ -34612,7 +34607,6 @@ function ZeneGame({ gameIdx, onAdvance }) {
             <circle cx="125" cy="125" r="7" fill="#080808"/>
           </svg>
         </div>
-        {/* Tonearm — does NOT spin */}
         <svg width="270" height="270" viewBox="0 0 270 270" style={{ position:'absolute', left:0, top:0, pointerEvents:'none' }}>
           <line x1="248" y1="22" x2="158" y2="150" stroke="#E0D8C8" strokeWidth="7" strokeLinecap="round"/>
           <circle cx="248" cy="22" r="12" fill="#1B2340" stroke="#E0D8C8" strokeWidth="2.5"/>
@@ -34624,14 +34618,11 @@ function ZeneGame({ gameIdx, onAdvance }) {
       <div style={{ display:'flex', alignItems:'center', gap:3, height:54, marginTop:-6 }}>
         {WAVE_H.map((h, i) => (
           <div key={i} style={{
-            width:5, borderRadius:3,
-            background:'#1B2340',
-            height:h,
+            width:5, borderRadius:3, background:'#1B2340', height:h,
             transformOrigin:'center',
             animation: playing ? `waveBar ${0.48 + i*0.065}s ease-in-out infinite` : 'none',
             animationDelay:`${i*0.055}s`,
-            opacity: playing ? 1 : 0.4,
-            transition:'opacity .3s',
+            opacity: playing ? 1 : 0.4, transition:'opacity .3s',
           }}/>
         ))}
       </div>
@@ -34651,67 +34642,36 @@ function ZeneGame({ gameIdx, onAdvance }) {
         </button>
       </div>
 
-      {/* Revealed artist/title */}
       {revealed && (
         <div style={{ background:'rgba(255,255,255,0.65)', borderRadius:12, padding:'8px 18px', textAlign:'center' }}>
           <div style={{ fontFamily:T.font, fontWeight:700, fontSize:16, color:'#1B2340', textTransform:'uppercase', letterSpacing:'0.06em' }}>{song.artist}</div>
           <div style={{ fontFamily:T.font, fontSize:13, color:'#555', marginTop:2 }}>„{song.title}"</div>
         </div>
       )}
-
-      {/* Result buttons — always visible */}
-      {!result && (
-        <div style={{ width:'100%', display:'flex', gap:10, marginTop:2 }}>
-          <button onClick={() => handleResult('no')} style={{ flex:1, padding:'18px 8px', background:'#E8A090', border:'none', borderRadius:20, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, cursor:'pointer', lineHeight:1.35 }}>
-            Nem ismertem<br/>fel
-          </button>
-          <button onClick={() => handleResult('yes')} style={{ flex:1, padding:'18px 8px', background:'#50A882', border:'none', borderRadius:20, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, cursor:'pointer' }}>
-            Felismertem!
-          </button>
-        </div>
-      )}
-
-      {result && (
-        <div style={{ marginTop:8, textAlign:'center', animation:'burstPop .3s' }}>
-          <div style={{ fontSize:46 }}>{result === 'yes' ? '🎉' : '😅'}</div>
-          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:16, color: result==='yes' ? '#50A882' : '#E8A090', marginTop:6 }}>
-            {result === 'yes' ? 'Felismerted!' : 'Nem ismerted fel'}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-function KivagyokGame({ gameIdx, onAdvance }) {
+function KivagyokGame({ gameIdx }) {
   const celeb = KIVAGYOK_CELEBS[gameIdx % KIVAGYOK_CELEBS.length];
   const [revealed, setRevealed] = useState(false);
-  const [result, setResult] = useState(null);
 
   const infoParts = (celeb.info || '').split(' · ');
   const lifespan   = infoParts[0] || '';
   const occupation = infoParts[1] || '';
 
-  const handleResult = (r) => {
-    setResult(r);
-    if (onAdvance) setTimeout(() => onAdvance(), 1800);
-  };
-
   const stripeStyle = (w) => ({
-    height:14, borderRadius:3,
-    width: w || '100%',
+    height:14, borderRadius:3, width: w || '100%',
     background:'repeating-linear-gradient(-45deg,#1e1e2e,#1e1e2e 4px,#2e2e3e 4px,#2e2e3e 8px)',
   });
 
   return (
     <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
-      {/* Dossier card */}
       <div style={{ width:'100%', background:'#EDE5CF', borderRadius:20, border:'2.5px solid #1B2340', overflow:'visible', position:'relative' }}>
 
-        {/* Top section: photo (left) + fields (right) */}
         <div style={{ display:'flex', gap:12, padding:'14px 14px 12px', position:'relative' }}>
           {/* AKTA stamp */}
-          <div style={{ position:'absolute', top:10, right:12, border:'2.5px solid #CC2222', borderRadius:5, padding:'2px 9px', color:'#CC2222', fontFamily:'monospace', fontWeight:900, fontSize:11, letterSpacing:'0.12em', transform:'rotate(8deg)', background:'transparent', zIndex:3, pointerEvents:'none' }}>
+          <div style={{ position:'absolute', top:10, right:12, border:'2.5px solid #CC2222', borderRadius:5, padding:'2px 9px', color:'#CC2222', fontFamily:'monospace', fontWeight:900, fontSize:11, letterSpacing:'0.12em', transform:'rotate(8deg)', zIndex:3, pointerEvents:'none' }}>
             AKTA #{String((gameIdx % KIVAGYOK_CELEBS.length) + 1).padStart(2,'0')}
           </div>
 
@@ -34730,36 +34690,25 @@ function KivagyokGame({ gameIdx, onAdvance }) {
           <div style={{ flex:1, display:'flex', flexDirection:'column', gap:8, paddingRight:40 }}>
             <div>
               <div style={{ fontFamily:'monospace', fontSize:9, fontWeight:700, color:'#888', letterSpacing:'0.16em', marginBottom:4 }}>NÉV</div>
-              {revealed
-                ? <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'#1B2340', lineHeight:1.3 }}>{celeb.name}</div>
-                : <div style={stripeStyle('90%')}/>
-              }
+              {revealed ? <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'#1B2340', lineHeight:1.3 }}>{celeb.name}</div> : <div style={stripeStyle('90%')}/>}
             </div>
             {lifespan && (
               <div>
                 <div style={{ fontFamily:'monospace', fontSize:9, fontWeight:700, color:'#888', letterSpacing:'0.16em', marginBottom:4 }}>ÉLETKOR</div>
-                {revealed
-                  ? <div style={{ fontFamily:T.font, fontSize:12, color:'#1B2340' }}>{lifespan}</div>
-                  : <div style={stripeStyle('68%')}/>
-                }
+                {revealed ? <div style={{ fontFamily:T.font, fontSize:12, color:'#1B2340' }}>{lifespan}</div> : <div style={stripeStyle('68%')}/>}
               </div>
             )}
             {occupation && (
               <div>
                 <div style={{ fontFamily:'monospace', fontSize:9, fontWeight:700, color:'#888', letterSpacing:'0.16em', marginBottom:4 }}>FOGLALKOZÁS</div>
-                {revealed
-                  ? <div style={{ fontFamily:T.font, fontSize:12, color:'#1B2340' }}>{occupation}</div>
-                  : <div style={stripeStyle('80%')}/>
-                }
+                {revealed ? <div style={{ fontFamily:T.font, fontSize:12, color:'#1B2340' }}>{occupation}</div> : <div style={stripeStyle('80%')}/>}
               </div>
             )}
           </div>
         </div>
 
-        {/* Dashed separator */}
         <div style={{ borderTop:'1.5px dashed rgba(27,35,64,0.3)', margin:'0 14px' }}/>
 
-        {/* Hint box + Akta felfedése button */}
         <div style={{ padding:'12px 14px 14px', display:'flex', flexDirection:'column', gap:10 }}>
           <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
             <div style={{ width:36, height:36, minWidth:36, background:'#1B2340', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -34774,27 +34723,6 @@ function KivagyokGame({ gameIdx, onAdvance }) {
           </button>
         </div>
       </div>
-
-      {/* Result buttons — always visible, outside card */}
-      {!result && (
-        <div style={{ width:'100%', display:'flex', gap:10, marginTop:2 }}>
-          <button onClick={() => handleResult('no')} style={{ flex:1, padding:'18px 8px', background:'#E8A090', border:'none', borderRadius:20, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, cursor:'pointer', lineHeight:1.35 }}>
-            Nem ismertem<br/>meg
-          </button>
-          <button onClick={() => handleResult('yes')} style={{ flex:1, padding:'18px 8px', background:'#50A882', border:'none', borderRadius:20, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, cursor:'pointer' }}>
-            Megismertem!
-          </button>
-        </div>
-      )}
-
-      {result && (
-        <div style={{ marginTop:8, textAlign:'center', animation:'burstPop .3s' }}>
-          <div style={{ fontSize:46 }}>{result === 'yes' ? '🎉' : '😅'}</div>
-          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:16, color: result==='yes' ? '#50A882' : '#E8A090', marginTop:6 }}>
-            {result === 'yes' ? 'Megismerted!' : 'Nem ismerted meg'}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -35210,14 +35138,14 @@ function ImposztorGame({ gameIdx, players, onAdvance }) {
   const [wordIdx, setWordIdx] = useState(0);
   const [phase, setPhase] = useState('reveal');
   const [revealStep, setRevealStep] = useState(0);
-  const [showRole, setShowRole] = useState(false);
+  const [holding, setHolding] = useState(false);
   const [votes, setVotes] = useState({});
   const [voteStep, setVoteStep] = useState(0);
 
   useEffect(() => {
     setImpostorIdx(Math.floor(Math.random() * players.length));
     setWordIdx(gameIdx % IMPOSZTOR_SZAVAK.length);
-    setPhase('reveal'); setRevealStep(0); setShowRole(false); setVotes({}); setVoteStep(0);
+    setPhase('reveal'); setRevealStep(0); setHolding(false); setVotes({}); setVoteStep(0);
   }, [gameIdx]);
 
   const word = IMPOSZTOR_SZAVAK[wordIdx];
@@ -35225,38 +35153,75 @@ function ImposztorGame({ gameIdx, players, onAdvance }) {
   if (phase === 'reveal') {
     const pl = players[revealStep];
     if (!pl) return null;
+    const isImpostor = revealStep === impostorIdx;
     return (
-      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:12, alignItems:'center' }}>
-        <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>Szerepek — {revealStep+1}/{players.length}</div>
-        {!showRole ? (
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
-            <div style={{ width:52, height:52, borderRadius:'50%', background:pl.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:'#fff' }}>{pl.name.charAt(0).toUpperCase()}</div>
-            <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{pl.name}</div>
-            <button onClick={() => setShowRole(true)} style={{ padding:'10px 22px', background:`${T.purple}22`, border:`2px solid ${T.purple}`, color:T.purple, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:14, cursor:'pointer' }}>👁 Titkos szerep</button>
+      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
+
+        {/* Progress chips */}
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'center' }}>
+          {players.map((p, i) => {
+            const done = i < revealStep;
+            const active = i === revealStep;
+            return (
+              <div key={p.id} style={{ position:'relative', width:44, height:44, borderRadius:'50%', background: active ? p.color : done ? p.color : T.surfaceMuted, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color: active||done ? '#fff' : T.inkMute, opacity: active ? 1 : done ? 0.75 : 0.45, border: active ? `3px solid ${p.color}` : '2px solid transparent', boxShadow: active ? `0 0 0 3px rgba(255,255,255,0.5)` : 'none', transition:'all .2s' }}>
+                {p.name.charAt(0).toUpperCase()}
+                {done && <div style={{ position:'absolute', bottom:-2, right:-2, width:16, height:16, borderRadius:'50%', background:'#50A882', border:'1.5px solid #fff', display:'grid', placeItems:'center', fontSize:9, color:'#fff', fontWeight:700 }}>✓</div>}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>
+          Szerepek — {revealStep+1}/{players.length}
+        </div>
+
+        {/* Dark reveal card */}
+        <div style={{ width:'100%', background:'#1B2340', borderRadius:20, padding:'20px 18px 16px', display:'flex', flexDirection:'column', alignItems:'center', gap:14 }}>
+          {/* Player avatar */}
+          <div style={{ width:54, height:54, borderRadius:'50%', background:pl.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:'#fff', boxShadow:`0 0 0 3px rgba(255,255,255,0.15)` }}>
+            {pl.name.charAt(0).toUpperCase()}
           </div>
-        ) : (
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
-            <div style={{ padding:'16px 28px', borderRadius:18, background: revealStep===impostorIdx ? '#1a1a2e' : T.surface, border:`3px solid ${revealStep===impostorIdx ? '#EF4444' : T.mint}`, textAlign:'center', animation:'popIn .3s' }}>
-              {revealStep===impostorIdx ? (
-                <>
-                  <div style={{ fontSize:32 }}>🕵️</div>
-                  <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:'#EF4444', letterSpacing:'0.06em' }}>IMPOSZTOR</div>
-                  <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.55)', marginTop:4 }}>Blöffölj — ne derüljön ki!</div>
-                </>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:18, color:'#fff' }}>{pl.name}, te jössz</div>
+
+          {/* Eye / reveal area */}
+          <div style={{ width:94, height:94, borderRadius:18, border:'2px dashed rgba(255,255,255,0.28)', background:'rgba(255,255,255,0.05)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6, padding:8 }}>
+            {holding ? (
+              isImpostor ? (
+                <div style={{ textAlign:'center', animation:'burstPop .25s' }}>
+                  <div style={{ fontSize:26 }}>🕵️</div>
+                  <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:'#EF4444', letterSpacing:'0.05em' }}>IMPOSZTOR</div>
+                </div>
               ) : (
-                <>
-                  <div style={{ fontSize:28 }}>🔑</div>
-                  <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>A titkos szó</div>
-                  <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:T.ink }}>{word}</div>
-                </>
-              )}
-            </div>
-            <button onClick={() => { setShowRole(false); if(revealStep+1 < players.length) setRevealStep(revealStep+1); else setPhase('describe'); }}
-              style={{ padding:'10px 24px', background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, borderRadius:14, cursor:'pointer' }}>
-              Rendben ✓
-            </button>
+                <div style={{ textAlign:'center', animation:'burstPop .25s' }}>
+                  <div style={{ fontFamily:T.font, fontSize:10, color:'rgba(255,255,255,0.45)', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:2 }}>Titkos szó</div>
+                  <div style={{ fontFamily:T.font, fontWeight:700, fontSize:17, color:'#fff' }}>{word}</div>
+                </div>
+              )
+            ) : (
+              <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
+                <ellipse cx="17" cy="17" rx="14" ry="9" stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+                <circle cx="17" cy="17" r="5" stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+              </svg>
+            )}
           </div>
-        )}
+
+          <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.38)', textAlign:'center' }}>Tartsd lenyomva a felfedéshez</div>
+
+          {/* Hold button */}
+          <button
+            onPointerDown={e=>{e.preventDefault();setHolding(true);}}
+            onPointerUp={()=>setHolding(false)}
+            onPointerLeave={()=>setHolding(false)}
+            onPointerCancel={()=>setHolding(false)}
+            style={{ width:'100%', padding:'14px 0', background: holding ? '#8C7AE6' : '#6C5CE7', border:'none', borderRadius:14, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, cursor:'pointer', userSelect:'none', WebkitUserSelect:'none', display:'flex', alignItems:'center', justifyContent:'center', gap:8, transition:'background .1s' }}>
+            <span style={{ fontSize:14 }}>⬇</span><span>Nyomd &amp; tartsd</span>
+          </button>
+        </div>
+
+        {/* Pass to next */}
+        <button onClick={() => { setHolding(false); if(revealStep+1 < players.length) setRevealStep(revealStep+1); else setPhase('describe'); }}
+          style={{ width:'100%', padding:'14px 0', background:'#1B2340', border:'none', borderRadius:14, color:'rgba(255,255,255,0.9)', fontFamily:T.font, fontWeight:700, fontSize:15, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+          <span>Láttam — adom tovább</span><span style={{ fontSize:14 }}>→</span>
+        </button>
       </div>
     );
   }
@@ -35806,43 +35771,92 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
 
 
 function RulettGame({ gameIdx }) {
-  const [layout, setLayout] = React.useState(null);
-  const [picked, setPicked] = React.useState(null);
-  React.useEffect(() => {
-    const wp = Math.floor(Math.random()*3);
-    setLayout([0,1,2].map(i=>i===wp?'win':'lose'));
+  const [layout, setLayout] = useState(null);
+  const [picked, setPicked] = useState(null);
+  const [stress] = useState(() => Math.floor(Math.random() * 45) + 28);
+
+  useEffect(() => {
+    const cards = ['fire','fire','pia'];
+    for (let i = 2; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [cards[i],cards[j]]=[cards[j],cards[i]]; }
+    setLayout(cards);
     setPicked(null);
   }, [gameIdx]);
+
   if (!layout) return null;
-  const result = picked!==null ? layout[picked] : null;
+  const result = picked !== null ? layout[picked] : null;
+  const ANGLES = [-22, 0, 22];
+
   return (
-    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:18}}>
-      <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,textAlign:'center'}}>2 alatt tűz, 1 alatt pia — melyik az?</div>
-      <div style={{display:'flex',gap:14}}>
-        {[0,1,2].map(i=>{
-          const isMe = picked===i;
-          const res = layout[i];
+    <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+
+      {/* Outcome chips */}
+      <div style={{ display:'flex', gap:10 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(255,255,255,0.7)', borderRadius:24, padding:'6px 14px', boxShadow:'0 1px 6px rgba(0,0,0,0.08)' }}>
+          <span style={{ fontSize:16 }}>🔥</span>
+          <span style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:'#D05040' }}>2× tűz</span>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(255,255,255,0.7)', borderRadius:24, padding:'6px 14px', boxShadow:'0 1px 6px rgba(0,0,0,0.08)' }}>
+          <span style={{ fontSize:16 }}>🥃</span>
+          <span style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:'#50A882' }}>1× pia</span>
+        </div>
+      </div>
+
+      {/* VÁLASZTVA label */}
+      {picked !== null && (
+        <div style={{ background:'#1B2340', color:'#fff', padding:'3px 16px', borderRadius:20, fontFamily:T.font, fontWeight:700, fontSize:11, letterSpacing:'0.12em' }}>
+          VÁLASZTVA
+        </div>
+      )}
+
+      {/* Card fan */}
+      <div style={{ position:'relative', width:'100%', height:210 }}>
+        {[0,1,2].map(i => {
+          const isSelected = picked === i;
+          const res = isSelected ? layout[i] : null;
           return (
-            <div key={i} onClick={()=>picked===null&&setPicked(i)} style={{
-              width:70,height:98,borderRadius:12,cursor:picked===null?'pointer':'default',
-              background:isMe?(res==='win'?`${T.mint}22`:`${T.coral}22`):T.surface,
-              border:`2px solid ${isMe?(res==='win'?T.mint:T.coral):T.inkMute+'60'}`,
-              display:'flex',alignItems:'center',justifyContent:'center',fontSize:isMe?38:28,
-              boxShadow:T.shadow,transition:'all .25s',animation:isMe?'popIn .3s':'none',
-              transform:isMe?'scale(1.08)':'scale(1)',
-            }}>
-              {picked===null?'🃏':isMe?(res==='win'?'🍺':'🔥'):'?'}
+            <div key={i}
+              onClick={() => picked === null && setPicked(i)}
+              style={{
+                position:'absolute', left:'50%', bottom:0,
+                marginLeft:-60, width:120, height:168,
+                transformOrigin:'bottom center',
+                transform:`rotate(${ANGLES[i]}deg)${isSelected ? ' scale(1.06) translateY(-6px)' : ''}`,
+                zIndex: isSelected ? 5 : i===1 ? 2 : 1,
+                cursor: picked===null ? 'pointer' : 'default',
+                transition:'transform .25s',
+                borderRadius:16,
+                background:'repeating-linear-gradient(45deg,transparent,transparent 12px,rgba(255,255,255,0.05) 12px,rgba(255,255,255,0.05) 24px),linear-gradient(160deg,#4060d8,#2a40b0)',
+                border: isSelected ? '3px solid #1B2340' : '3px solid rgba(255,255,255,0.82)',
+                boxShadow: isSelected ? '0 10px 28px rgba(0,0,0,0.3)' : '0 4px 14px rgba(0,0,0,0.18)',
+                display:'flex', alignItems:'center', justifyContent:'center',
+              }}>
+              {res ? (
+                <div style={{ fontSize:42, animation:'burstPop .3s' }}>{res === 'pia' ? '🍺' : '🔥'}</div>
+              ) : (
+                <span style={{ fontFamily:'Georgia,serif', fontWeight:900, fontSize:48, color:'rgba(255,255,255,0.5)' }}>?</span>
+              )}
             </div>
           );
         })}
       </div>
+
+      {/* Result text */}
       {result && (
-        <div style={{padding:'12px 24px',borderRadius:16,background:result==='win'?`${T.coral}22`:`${T.mint}22`,border:`2px solid ${result==='win'?T.coral:T.mint}`,animation:'popIn .35s',textAlign:'center'}}>
-          <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:22,color:result==='win'?T.coral:T.mint}}>
-            {result==='win'?'🍺 Pia! Iszol!':'🔥 Tűz! Megúsztad!'}
-          </div>
+        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:16, color: result==='pia' ? '#50A882' : '#D05040', animation:'popIn .3s', textAlign:'center' }}>
+          {result === 'pia' ? '🍺 Pia! Megúsztad!' : '🔥 Tűz! Iszol!'}
         </div>
       )}
+
+      {/* Stress meter */}
+      <div style={{ width:'100%', marginTop:4 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
+          <span style={{ fontFamily:T.font, fontSize:12, color:'#50A882', fontWeight:600 }}>Nyugi</span>
+          <span style={{ fontFamily:T.font, fontSize:12, color:'#D05040', fontWeight:600 }}>Para 😬</span>
+        </div>
+        <div style={{ position:'relative', height:10, borderRadius:6, background:'linear-gradient(to right,#50A882,#F0C040 50%,#D05040)' }}>
+          <div style={{ position:'absolute', top:'50%', left:`${stress}%`, transform:'translate(-50%,-50%)', width:18, height:18, borderRadius:'50%', background:'#fff', border:'2.5px solid #1B2340', boxShadow:'0 1px 5px rgba(0,0,0,0.25)' }}/>
+        </div>
+      </div>
     </div>
   );
 }
@@ -36215,8 +36229,8 @@ function TapperGame({ gameIdx }) {
 }
 
 function GameContent({ gameId, gameIdx, players, onAdvance, roomCode, mode, gameMeta }) {
-  if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
-  if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
+  if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} />;
+  if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} />;
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} />;
   if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
