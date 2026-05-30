@@ -33943,7 +33943,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.3 · DNR · 2026.05.29 21:32
+              Verzió 5.4 · DNR · 2026.05.29 22:00
             </div>
           </div>
         </div>
@@ -35250,89 +35250,89 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
     const busRiderBonusUsed = {};
     const busRiderDrawnCards = {};
     riders.forEach(rid => { busRiderPositions[rid] = 0; busRiderDone[rid] = false; busRiderBonusUsed[rid] = false; busRiderDrawnCards[rid] = []; });
-    await persist({...st, phase:'bus', busRiders:riders, busRouteCards, busDrawDeck, busRiderPositions, busRiderDone, busRiderBonusUsed, busRiderDrawnCards, currentTurnRiderId:riders[0], busRiderDrinks:{}, settings:{...st.settings, bonusGuess:!!(gameMeta?.buszConfig?.bonusGuess!==false)}});
+    const busRevealedPositions = [1, 3].filter(i => i < st.settings.busSteps);
+    await persist({...st, phase:'bus', busRiders:riders, busRouteCards, busDrawDeck, busRiderPositions, busRiderDone, busRiderBonusUsed, busRiderDrawnCards, busRiderPendingGuesses:{}, busRevealedPositions, currentTurnRiderId:riders[0], busRiderDrinks:{}, settings:{...st.settings, bonusGuess:!!(gameMeta?.buszConfig?.bonusGuess!==false)}});
+  };
+
+  const evalBusGuess = (guess, routeCard, drawnCard) => {
+    const rr = CARD_VALUES.indexOf(routeCard.value);
+    const dr = CARD_VALUES.indexOf(drawnCard.value);
+    if (routeCard.value === drawnCard.value) return false;
+    if (routeCard.value === 'A') return true;
+    return (guess === 'K' && dr < rr) || (guess === 'N' && dr > rr);
+  };
+
+  const resolvePosition = (st, posIdx, pendingGuesses, drawnCard, newDrawDeck) => {
+    const { busRouteCards, busRiders, busRiderPositions, busRiderDone, busRiderBonusUsed, busRiderDrawnCards, settings } = st;
+    const busStepsCount = settings?.busSteps || 6;
+    const routeCard = busRouteCards[posIdx];
+    const newPositions = {...busRiderPositions};
+    const newDone = {...busRiderDone};
+    const newBonus = {...(busRiderBonusUsed||{})};
+    const newDrawn = {...(busRiderDrawnCards||{})};
+    let newDrinks = {...(st.busRiderDrinks||{})};
+    const results = {};
+    const ridersAtPos = busRiders.filter(rid => !busRiderDone[rid] && (busRiderPositions[rid]||0) === posIdx);
+    ridersAtPos.forEach(rid => {
+      const g = pendingGuesses[rid];
+      const isBonus = g && g.startsWith && g.startsWith('BONUS_');
+      const actualGuess = isBonus ? g.slice(6) : g;
+      const correct = evalBusGuess(actualGuess, routeCard, drawnCard);
+      if (isBonus) newBonus[rid] = true;
+      if (correct) {
+        if (isBonus) { newPositions[rid] = busStepsCount; newDone[rid] = true; newDrawn[rid] = [drawnCard]; }
+        else { const ns = posIdx+1; const done = ns>=busStepsCount; newPositions[rid]=ns; newDone[rid]=done; newDrawn[rid]=[...((busRiderDrawnCards||{})[rid]||[]), drawnCard]; }
+      } else {
+        const drinks = isBonus ? 1 : posIdx+1;
+        newDrinks[rid] = (newDrinks[rid]||0)+drinks;
+        newPositions[rid] = 0; newDrawn[rid] = [];
+      }
+      results[rid] = { correct, drinks: correct ? 0 : (isBonus?1:posIdx+1), done: newDone[rid] };
+    });
+    const allDone = busRiders.every(rid => newDone[rid]);
+    const newRevealedRaw = st.busRevealedPositions || [1,3].filter(i=>i<busStepsCount);
+    const newRevealed = newRevealedRaw.includes(posIdx) ? newRevealedRaw : [...newRevealedRaw, posIdx];
+    const newPending = {...pendingGuesses};
+    ridersAtPos.forEach(rid => delete newPending[rid]);
+    const nextCurrent = busRiders.find(rid => !newDone[rid]) || busRiders[0];
+    return { newPositions, newDone, newBonus, newDrawn, newDrinks, newRevealed, newPending, results, allDone, nextCurrent, drawnCard };
   };
 
   const makeGuess = async (guess, isBonus=false) => {
     const st = stRef.current;
     if (!st || st.phase !== 'bus') return;
-    const { busRouteCards, busDrawDeck, busRiders, busRiderPositions, busRiderDone, busRiderBonusUsed, busRiderDrawnCards, currentTurnRiderId, settings } = st;
+    const { busRiders, busRiderPositions, busRiderDone, currentTurnRiderId, settings, busRiderPendingGuesses:pendingIn, busRevealedPositions:revIn, busDrawDeck } = st;
     const busStepsCount = settings?.busSteps || 6;
     const riderId = currentTurnRiderId;
     if (!riderId || busRiderDone[riderId]) return;
     const myStep = busRiderPositions[riderId] || 0;
     if (myStep >= busStepsCount) return;
-    const deck = (busDrawDeck && busDrawDeck.length > 0) ? busDrawDeck : shuffleDeck(generateDeck(settings?.deckCount || 1));
-    const drawnCard = deck[0];
-    const newDrawDeck = deck.length > 1 ? deck.slice(1) : shuffleDeck(generateDeck(settings?.deckCount || 1));
-    const routeCard = busRouteCards[myStep];
-    const rr = CARD_VALUES.indexOf(routeCard.value);
-    const dr = CARD_VALUES.indexOf(drawnCard.value);
-    const sameValue = routeCard.value === drawnCard.value;
-    let correct;
-    if (sameValue) { correct = false; }
-    else if (routeCard.value === 'A') { correct = true; }
-    else { correct = (guess === 'K' && dr < rr) || (guess === 'N' && dr > rr); }
-    const getNextRider = (curId, doneMap) => { const idx=busRiders.indexOf(curId); for(let i=1;i<=busRiders.length;i++){const nid=busRiders[(idx+i)%busRiders.length];if(!doneMap[nid])return nid;} return null; };
-    if (isBonus) {
-      const newBonusUsed = {...(busRiderBonusUsed||{}), [riderId]: true};
-      if (correct) {
-        const newPositions = {...busRiderPositions, [riderId]: busStepsCount};
-        const newDone = {...busRiderDone, [riderId]: true};
-        const newDrawnCards = {...(busRiderDrawnCards||{}), [riderId]: [drawnCard]};
-        setGuessResult({correct:true, done:true, bonus:true, card:drawnCard, step:myStep});
-        setTimeout(() => setGuessResult(null), 2000);
-        if (busRiders.every(rid => newDone[rid])) {
-          await persist({...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawnCards, busRiderPositions:newPositions, busRiderDone:newDone, busRiderBonusUsed:newBonusUsed, phase:'done'});
-        } else {
-          const nextId = getNextRider(riderId, newDone);
-          await persist({...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawnCards, busRiderPositions:newPositions, busRiderDone:newDone, busRiderBonusUsed:newBonusUsed, currentTurnRiderId:nextId||riderId});
-        }
-      } else {
-        const drinks = 1;
-        const newRiderDrinks = {...(st.busRiderDrinks||{}), [riderId]: ((st.busRiderDrinks||{})[riderId]||0)+drinks};
-        const newPositions = {...busRiderPositions, [riderId]: 0};
-        const newDrawnCards = {...(busRiderDrawnCards||{}), [riderId]: []};
-        setGuessResult({correct:false, drinks, bonus:true, card:drawnCard, step:myStep});
-        setTimeout(() => setGuessResult(null), 2200);
-        if (roomCode && mode === 'Online') { try { const snap=await firebase.firestore().collection('rooms').doc(roomCode).get(); const rPlayers=snap.data()?.players||[]; const updated=rPlayers.map(p=>p.id===riderId?{...p,drinks:(p.drinks||0)+drinks}:p); await firebase.firestore().collection('rooms').doc(roomCode).update({players:updated}); } catch(e){} }
-        const nextId = getNextRider(riderId, busRiderDone);
-        await persist({...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawnCards, busRiderPositions:newPositions, busRiderBonusUsed:newBonusUsed, busRiderDrinks:newRiderDrinks, currentTurnRiderId:nextId||riderId});
-      }
+    const gKey = isBonus ? ('BONUS_'+guess) : guess;
+    const pending = {...(pendingIn||{}), [riderId]: gKey};
+    const ridersAtPos = busRiders.filter(rid => !busRiderDone[rid] && (busRiderPositions[rid]||0) === myStep);
+    const allSubmitted = ridersAtPos.every(rid => pending[rid] !== undefined);
+    if (!allSubmitted) {
+      // Find next un-submitted rider at same position
+      const nextAtPos = ridersAtPos.find(rid => !pending[rid]);
+      await persist({...st, busRiderPendingGuesses:pending, currentTurnRiderId:nextAtPos||riderId});
       return;
     }
-    if (!correct) {
-      const drinks = myStep + 1;
-      const newRiderDrinks = {...(st.busRiderDrinks||{}), [riderId]: ((st.busRiderDrinks||{})[riderId]||0) + drinks};
-      const newPositions = {...busRiderPositions, [riderId]: 0};
-      const newDrawnCards = {...(busRiderDrawnCards||{}), [riderId]: []};
-      setGuessResult({correct:false, drinks, card:drawnCard, step:myStep});
-      setTimeout(() => setGuessResult(null), 2200);
-      if (roomCode && mode === 'Online') {
-        try {
-          const snap = await firebase.firestore().collection('rooms').doc(roomCode).get();
-          const rPlayers = snap.data()?.players || [];
-          const updated = rPlayers.map(p => p.id===riderId ? {...p, drinks:(p.drinks||0)+drinks} : p);
-          await firebase.firestore().collection('rooms').doc(roomCode).update({ players: updated });
-        } catch(e){}
-      }
-      const nextId = getNextRider(riderId, busRiderDone);
-      await persist({...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawnCards, busRiderPositions:newPositions, busRiderDrinks:newRiderDrinks, currentTurnRiderId:nextId||riderId});
-    } else {
-      const newDrawnCards = {...(busRiderDrawnCards||{}), [riderId]: [...((busRiderDrawnCards||{})[riderId]||[]), drawnCard]};
-      const newStep = myStep + 1;
-      const isDone = newStep >= busStepsCount;
-      const newPositions = {...busRiderPositions, [riderId]: newStep};
-      const newDone = {...busRiderDone, [riderId]: isDone};
-      setGuessResult({correct:true, done:isDone, card:drawnCard, step:myStep});
-      setTimeout(() => setGuessResult(null), 1800);
-      if (isDone && busRiders.every(rid => newDone[rid])) {
-        await persist({...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawnCards, busRiderPositions:newPositions, busRiderDone:newDone, phase:'done'});
-      } else {
-        const nextId = getNextRider(riderId, newDone);
-        await persist({...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawnCards, busRiderPositions:newPositions, busRiderDone:newDone, currentTurnRiderId:nextId||riderId});
-      }
+    const deck = (busDrawDeck && busDrawDeck.length>0) ? busDrawDeck : shuffleDeck(generateDeck(settings?.deckCount||1));
+    const drawnCard = deck[0];
+    const newDrawDeck = deck.length>1 ? deck.slice(1) : shuffleDeck(generateDeck(settings?.deckCount||1));
+    const r = resolvePosition(st, myStep, pending, drawnCard, newDrawDeck);
+    const myRes = r.results[riderId];
+    setGuessResult({correct:myRes.correct, done:myRes.done, bonus:isBonus, card:drawnCard, step:myStep, drinks:myRes.drinks});
+    setTimeout(() => setGuessResult(null), myRes.correct ? 1800 : 2200);
+    if (roomCode && mode==='Online') {
+      try {
+        const snap = await firebase.firestore().collection('rooms').doc(roomCode).get();
+        const rPlayers = snap.data()?.players||[];
+        const updated = rPlayers.map(p => { const d=r.results[p.id]?.drinks||0; return d>0?{...p,drinks:(p.drinks||0)+d}:p; });
+        await firebase.firestore().collection('rooms').doc(roomCode).update({players:updated});
+      } catch(e){}
     }
+    await persist({...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:r.newDrawn, busRiderPositions:r.newPositions, busRiderDone:r.newDone, busRiderBonusUsed:r.newBonus, busRiderDrinks:r.newDrinks, busRiderPendingGuesses:r.newPending, busRevealedPositions:r.newRevealed, currentTurnRiderId:r.nextCurrent, ...(r.allDone?{phase:'done'}:{})});
   };
 
   if (!ready) return (
@@ -35514,12 +35514,15 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
         <div style={{display:'flex',flexDirection:'column',gap:3}}>
           <div style={{fontFamily:T.font,fontSize:9,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em',textAlign:'center',marginBottom:2}}>Buszállomások</div>
           <div style={{display:'flex',justifyContent:'center',gap:4}}>
-            {(busRouteCards||[]).map((card, i) => (
-              <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
-                <PlayingCard card={card} size='lg' glow={i===myStep} />
-                {i===myStep && <div style={{width:6,height:6,borderRadius:'50%',background:T.mint}} />}
-              </div>
-            ))}
+            {(busRouteCards||[]).map((card, i) => {
+              const revealed = (buszState.busRevealedPositions||[1,3]).includes(i);
+              return (
+                <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
+                  <PlayingCard card={card} size='lg' faceDown={!revealed} glow={i===myStep&&revealed} />
+                  {i===myStep && <div style={{width:6,height:6,borderRadius:'50%',background:T.mint}} />}
+                </div>
+              );
+            })}
           </div>
           <div style={{display:'flex',justifyContent:'center',gap:4,margin:'2px 0'}}>
             {(busRouteCards||[]).map((_, i) => (
@@ -35544,8 +35547,9 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
             const rp = players.find(p=>p.id===rid);
             const step = busRiderPositions?.[rid] || 0;
             const done = busRiderDone?.[rid];
+            const hasPending = !!(buszState.busRiderPendingGuesses||{})[rid];
             return (
-              <div key={rid} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',borderRadius:999,background:T.surface,border:`1.5px solid ${rid===currentTurnRiderId?T.mint:done?T.mint+'60':'transparent'}`}}>
+              <div key={rid} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',borderRadius:999,background:T.surface,border:`1.5px solid ${hasPending?T.yellow:rid===currentTurnRiderId?T.mint:done?T.mint+'60':'transparent'}`}}>
                 <div style={{width:20,height:20,borderRadius:'50%',background:rp?.color,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:700,fontSize:9,color:'#fff'}}>{(rp?.name||'?').charAt(0).toUpperCase()}</div>
                 <div style={{fontFamily:T.font,fontSize:12,fontWeight:600,color:done?T.mint:rid===currentTurnRiderId?T.mint:T.inkSoft}}>{done?'✓':`${step}/${busStepsCount}`}</div>
               </div>
@@ -36457,75 +36461,49 @@ function BuszPlayerView({ room, roomCode }) {
         const snap = await firebase.firestore().collection('rooms').doc(roomCode).get();
         const st = snap.data()?.buszState;
         if (!st || st.phase !== 'bus') return;
-        const { busRouteCards, busDrawDeck, busRiders, busRiderPositions, busRiderDone, busRiderBonusUsed, busRiderDrawnCards, currentTurnRiderId, settings } = st;
-        if (currentTurnRiderId !== playerId) return;
+        const { busRiders, busRiderPositions, busRiderDone, settings, busRiderPendingGuesses:pendingIn, busRevealedPositions:revIn, busDrawDeck } = st;
         const busStepsCount = settings?.busSteps || 6;
         const myStep = busRiderPositions?.[playerId] || 0;
-        if (myStep >= busStepsCount) return;
-        const deck = (busDrawDeck && busDrawDeck.length > 0) ? busDrawDeck : shuffleDeck(generateDeck(settings?.deckCount || 1));
-        const drawnCard = deck[0];
-        const newDrawDeck = deck.length > 1 ? deck.slice(1) : shuffleDeck(generateDeck(settings?.deckCount || 1));
-        const routeCard = busRouteCards[myStep];
-        const rr = CARD_VALUES.indexOf(routeCard.value);
-        const dr = CARD_VALUES.indexOf(drawnCard.value);
-        const sameValue = routeCard.value === drawnCard.value;
-        let correct;
-        if (sameValue) { correct = false; }
-        else if (routeCard.value === 'A') { correct = true; }
-        else { correct = (guess === 'K' && dr < rr) || (guess === 'N' && dr > rr); }
-        const getNextRider = (curId, doneMap) => { const idx=busRiders.indexOf(curId); for(let i=1;i<=busRiders.length;i++){const nid=busRiders[(idx+i)%busRiders.length];if(!doneMap[nid])return nid;} return null; };
-        if (isBonus) {
-          const newBonusUsed = {...(busRiderBonusUsed||{}), [playerId]: true};
-          setBusGuessResult({correct, done:correct, bonus:true, card:drawnCard, step:myStep});
-          setTimeout(() => setBusGuessResult(null), 2000);
-          if (correct) {
-            const newPositions = {...busRiderPositions, [playerId]: busStepsCount};
-            const newDone = {...busRiderDone, [playerId]: true};
-            const newDrawnCards = {...(busRiderDrawnCards||{}), [playerId]: [drawnCard]};
-            if (busRiders.every(rid=>newDone[rid])) {
-              await firebase.firestore().collection('rooms').doc(roomCode).update({buszState:{...st,busDrawDeck:newDrawDeck,busRiderDrawnCards:newDrawnCards,busRiderPositions:newPositions,busRiderDone:newDone,busRiderBonusUsed:newBonusUsed,phase:'done'}});
-            } else {
-              const nextId = getNextRider(playerId, newDone);
-              await firebase.firestore().collection('rooms').doc(roomCode).update({buszState:{...st,busDrawDeck:newDrawDeck,busRiderDrawnCards:newDrawnCards,busRiderPositions:newPositions,busRiderDone:newDone,busRiderBonusUsed:newBonusUsed,currentTurnRiderId:nextId||playerId}});
-            }
-          } else {
-            const drinks = 1;
-            const newRiderDrinks = {...(st.busRiderDrinks||{}), [playerId]: ((st.busRiderDrinks||{})[playerId]||0)+drinks};
-            const newPositions = {...busRiderPositions, [playerId]: 0};
-            const newDrawnCards = {...(busRiderDrawnCards||{}), [playerId]: []};
-            const nextId = getNextRider(playerId, busRiderDone);
-            const rPlayers = snap.data()?.players || [];
-            const updated = rPlayers.map(p => p.id===playerId ? {...p, drinks:(p.drinks||0)+drinks} : p);
-            await firebase.firestore().collection('rooms').doc(roomCode).update({players:updated,buszState:{...st,busDrawDeck:newDrawDeck,busRiderDrawnCards:newDrawnCards,busRiderPositions:newPositions,busRiderBonusUsed:newBonusUsed,busRiderDrinks:newRiderDrinks,currentTurnRiderId:nextId||playerId}});
-          }
+        if (myStep >= busStepsCount || busRiderDone[playerId]) return;
+        const gKey = isBonus ? ('BONUS_'+guess) : guess;
+        const pending = {...(pendingIn||{}), [playerId]: gKey};
+        const ridersAtPos = busRiders.filter(rid => !busRiderDone[rid] && (busRiderPositions[rid]||0) === myStep);
+        const allSubmitted = ridersAtPos.every(rid => pending[rid] !== undefined);
+        if (!allSubmitted) {
+          setBusGuessResult({waiting:true, step:myStep});
+          await firebase.firestore().collection('rooms').doc(roomCode).update({buszState:{...st, busRiderPendingGuesses:pending}});
           return;
         }
-        if (!correct) {
-          const drinks = myStep + 1;
-          setBusGuessResult({correct:false, drinks, card:drawnCard, step:myStep});
-          setTimeout(() => setBusGuessResult(null), 2200);
-          const newRiderDrinks = {...(st.busRiderDrinks||{}), [playerId]: ((st.busRiderDrinks||{})[playerId]||0) + drinks};
-          const newPositions = {...busRiderPositions, [playerId]: 0};
-          const newDrawnCards = {...(busRiderDrawnCards||{}), [playerId]: []};
-          const nextId = getNextRider(playerId, busRiderDone);
-          const rPlayers = snap.data()?.players || [];
-          const updated = rPlayers.map(p => p.id===playerId ? {...p, drinks:(p.drinks||0)+drinks} : p);
-          await firebase.firestore().collection('rooms').doc(roomCode).update({ players: updated, buszState: {...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawnCards, busRiderPositions: newPositions, busRiderDrinks: newRiderDrinks, currentTurnRiderId: nextId || playerId} });
-        } else {
-          const newDrawnCards = {...(busRiderDrawnCards||{}), [playerId]: [...((busRiderDrawnCards||{})[playerId]||[]), drawnCard]};
-          const newStep = myStep + 1;
-          const isDone = newStep >= busStepsCount;
-          setBusGuessResult({correct:true, done:isDone, card:drawnCard, step:myStep});
-          setTimeout(() => setBusGuessResult(null), 1800);
-          const newPositions = {...busRiderPositions, [playerId]: newStep};
-          const newDone = {...busRiderDone, [playerId]: isDone};
-          if (isDone && busRiders.every(rid => newDone[rid])) {
-            await firebase.firestore().collection('rooms').doc(roomCode).update({ buszState: {...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawnCards, busRiderPositions: newPositions, busRiderDone: newDone, phase:'done'} });
-          } else {
-            const nextId = getNextRider(playerId, newDone);
-            await firebase.firestore().collection('rooms').doc(roomCode).update({ buszState: {...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawnCards, busRiderPositions: newPositions, busRiderDone: newDone, currentTurnRiderId: nextId || playerId} });
-          }
-        }
+        // All at position submitted → resolve
+        const deck = (busDrawDeck && busDrawDeck.length>0) ? busDrawDeck : shuffleDeck(generateDeck(settings?.deckCount||1));
+        const drawnCard = deck[0];
+        const newDrawDeck = deck.length>1 ? deck.slice(1) : shuffleDeck(generateDeck(settings?.deckCount||1));
+        // evalBusGuess defined inline
+        const evalG = (g, rc, dc) => { const rr=CARD_VALUES.indexOf(rc.value),dr=CARD_VALUES.indexOf(dc.value); if(rc.value===dc.value)return false; if(rc.value==='A')return true; return (g==='K'&&dr<rr)||(g==='N'&&dr>rr); };
+        const busRouteCards=st.busRouteCards, busRiderBonusUsed=st.busRiderBonusUsed||{}, busRiderDrawnCards=st.busRiderDrawnCards||{}, busRiderDrinks=st.busRiderDrinks||{};
+        const routeCard = busRouteCards[myStep];
+        const newPositions={...busRiderPositions}, newDone={...busRiderDone}, newBonus={...busRiderBonusUsed}, newDrawn={...busRiderDrawnCards}, newDrinks={...busRiderDrinks};
+        const results={};
+        ridersAtPos.forEach(rid => {
+          const g=pending[rid], isB=g&&g.startsWith('BONUS_'), ag=isB?g.slice(6):g;
+          const correct=evalG(ag,routeCard,drawnCard);
+          if(isB)newBonus[rid]=true;
+          if(correct){if(isB){newPositions[rid]=busStepsCount;newDone[rid]=true;newDrawn[rid]=[drawnCard];}else{const ns=myStep+1,done=ns>=busStepsCount;newPositions[rid]=ns;newDone[rid]=done;newDrawn[rid]=[...((busRiderDrawnCards)[rid]||[]),drawnCard];}}
+          else{const d=isB?1:myStep+1;newDrinks[rid]=(newDrinks[rid]||0)+d;newPositions[rid]=0;newDrawn[rid]=[];}
+          results[rid]={correct,drinks:correct?0:(isB?1:myStep+1),done:newDone[rid]};
+        });
+        const revealedRaw = revIn || [1,3].filter(i=>i<busStepsCount);
+        const newRevealed = revealedRaw.includes(myStep) ? revealedRaw : [...revealedRaw, myStep];
+        const newPending={...pending}; ridersAtPos.forEach(rid=>delete newPending[rid]);
+        const allDone = busRiders.every(rid=>newDone[rid]);
+        const nextCurrent = busRiders.find(rid=>!newDone[rid]) || busRiders[0];
+        const myRes = results[playerId];
+        setBusGuessResult({correct:myRes.correct, done:myRes.done, bonus:isBonus, card:drawnCard, step:myStep, drinks:myRes.drinks});
+        setTimeout(() => setBusGuessResult(null), myRes.correct ? 1800 : 2200);
+        const rPlayers = snap.data()?.players || [];
+        const updatedPlayers = rPlayers.map(p => { const d=results[p.id]?.drinks||0; return d>0?{...p,drinks:(p.drinks||0)+d}:p; });
+        const newSt = {...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawn, busRiderPositions:newPositions, busRiderDone:newDone, busRiderBonusUsed:newBonus, busRiderDrinks:newDrinks, busRiderPendingGuesses:newPending, busRevealedPositions:newRevealed, currentTurnRiderId:nextCurrent, ...(allDone?{phase:'done'}:{})};
+        await firebase.firestore().collection('rooms').doc(roomCode).update({players:updatedPlayers, buszState:newSt});
       } catch(e) { console.error(e); }
     };
 
@@ -36629,10 +36607,11 @@ function BuszPlayerView({ room, roomCode }) {
             <div style={{ display:'flex', gap:4, overflowX:'auto' }}>
               {(busRouteCards||[]).map((card, i) => {
                 const isCurr = i === activeStep2;
+                const revealed = (buszState.busRevealedPositions||[1,3]).includes(i);
                 return (
                   <div key={i} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0 }}>
                     <div style={{ height:20, display:'grid', placeItems:'center', fontSize:15 }}>{isCurr && isMyTurn ? '🚌' : ''}</div>
-                    <PlayingCard card={card} size='lg' glow={isCurr && isMyTurn} />
+                    <PlayingCard card={card} size='lg' faceDown={!revealed} glow={isCurr && isMyTurn && revealed} />
                   </div>
                 );
               })}
@@ -36664,12 +36643,18 @@ function BuszPlayerView({ room, roomCode }) {
             <div style={{ textAlign:'center', fontFamily:T.font, fontSize:14, color:T.ink, fontWeight:500, lineHeight:1.5 }}>
               {preciseTippActive
                 ? <span>🎯 <b>Big Dick</b> — <span style={{ fontFamily:'Georgia,serif', fontWeight:700 }}>{selectedPreciseValue}</span> — Kisebb vagy nagyobb?</span>
-                : (currentRouteCard.value === 'A' ? `🃏 Ász! Mindkét irány helyes — nem lehet mellé tippelni!` : `A húzott lap kisebb vagy nagyobb lesz, mint a ${currentRouteCard.value} ${currentRouteCard.suit}?`)}
+                : (() => {
+                    const revealed = (buszState.busRevealedPositions||[1,3]).includes(myStep);
+                    if (!revealed) return '🙈 Vakon tippelsz! Kisebb vagy nagyobb lesz a húzott lap?';
+                    if (currentRouteCard.value === 'A') return '🃏 Ász! Mindkét irány helyes — nem lehet mellé tippelni!';
+                    return `A húzott lap kisebb vagy nagyobb lesz, mint a ${currentRouteCard.value} ${currentRouteCard.suit}?`;
+                  })()
+              }
             </div>
           )}
 
           {/* Guess result feedback */}
-          {busGuessResult && (
+          {busGuessResult && !busGuessResult.waiting && (
             <div style={{ textAlign:'center', padding:'12px 16px', borderRadius:14, background:busGuessResult.correct?`${T.mint}22`:`${T.coral}22`, border:`2px solid ${busGuessResult.correct?T.mint:T.coral}`, animation:'popIn .3s' }}>
               <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:16, color:busGuessResult.correct?T.mint:T.coral }}>
                 {busGuessResult.precise
@@ -36679,8 +36664,8 @@ function BuszPlayerView({ room, roomCode }) {
             </div>
           )}
 
-          {/* K/N buttons */}
-          {isMyTurn && !busGuessResult && (
+          {/* K/N buttons or waiting state */}
+          {isMyTurn && !busGuessResult && !((buszState.busRiderPendingGuesses||{})[playerId]) && (
             <div style={{ display:'flex', gap:10 }}>
               <button onClick={()=>preciseTippActive?makePreciseGuess('K'):makeGuessPlayer('K')}
                 style={{ flex:1, height:56, border:'none', background:T.coral, color:'#fff', borderRadius:16, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, cursor:'pointer', boxShadow:`0 4px 16px ${T.coral}45` }}>
@@ -36690,6 +36675,24 @@ function BuszPlayerView({ room, roomCode }) {
                 style={{ flex:1, height:56, border:'none', background:T.mint, color:'#fff', borderRadius:16, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, cursor:'pointer', boxShadow:`0 4px 16px ${T.mint}45` }}>
                 ▲ Nagyobb
               </button>
+            </div>
+          )}
+          {isMyTurn && !busGuessResult && (buszState.busRiderPendingGuesses||{})[playerId] && (
+            <div style={{ textAlign:'center', padding:'14px 16px', borderRadius:16, background:`${T.yellow}15`, border:`1.5px solid ${T.yellow}50` }}>
+              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:15, color:T.yellow }}>⏳ Tipped elküldve!</div>
+              <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:4 }}>
+                Várakozás a többi buszozóra...
+              </div>
+              <div style={{ display:'flex', gap:6, justifyContent:'center', marginTop:8, flexWrap:'wrap' }}>
+                {(busRiders||[]).filter(rid=>!busRiderDone?.[rid]&&(busRiderPositions?.[rid]||0)===myStep).map(rid => {
+                  const rp = players.find(p=>p.id===rid);
+                  const submitted = !!(buszState.busRiderPendingGuesses||{})[rid];
+                  return <div key={rid} style={{ display:'flex', alignItems:'center', gap:4, padding:'3px 8px', borderRadius:999, background:submitted?`${T.mint}25`:`${T.inkMute}15`, border:`1px solid ${submitted?T.mint:T.inkMute+'30'}` }}>
+                    <div style={{ width:16, height:16, borderRadius:'50%', background:rp?.color, flexShrink:0 }} />
+                    <div style={{ fontFamily:T.font, fontSize:11, color:submitted?T.mint:T.inkSoft }}>{rp?.name||'?'} {submitted?'✓':'...'}</div>
+                  </div>;
+                })}
+              </div>
             </div>
           )}
 
@@ -36713,7 +36716,7 @@ function BuszPlayerView({ room, roomCode }) {
         </div>
 
         {/* Big Dick sticky bottom */}
-        {isMyTurn && !busGuessResult && !preciseTippActive && (
+        {isMyTurn && !busGuessResult && !preciseTippActive && !(buszState.busRiderPendingGuesses||{})[playerId] && (
           <div style={{ padding:'10px 0 0', marginTop:'auto' }}>
             {!(buszState.busRiderBonusUsed?.[playerId]) ? (
               <button onClick={()=>{ setShowBigDickModal(true); setSelectedPreciseValue(null); }}
