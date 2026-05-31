@@ -33959,7 +33959,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.23 · DNR · 2026.05.31 04:00
+              Verzió 5.24 · DNR · 2026.05.31 05:00
             </div>
           </div>
         </div>
@@ -36192,58 +36192,145 @@ function KisebbGame({ gameIdx, players, onAdvance }) {
 }
 
 function UvegGame({ gameIdx, players }) {
-  const [rotation, setRotation] = React.useState(0);
+  const [angle, setAngle] = React.useState(0);
   const [spinning, setSpinning] = React.useState(false);
   const [winner, setWinner] = React.useState(null);
-  React.useEffect(()=>{setRotation(0);setSpinning(false);setWinner(null);},[gameIdx]);
-  const n = players.length||1;
-  const spin = ()=>{
-    if(spinning||winner) return;
-    const w = players[Math.floor(Math.random()*n)];
-    const spins = 5+Math.floor(Math.random()*5);
-    const finalAngle = (players.indexOf(w)/n)*360 + Math.random()*20 - 10;
-    const total = rotation + spins*360 + finalAngle;
+
+  React.useEffect(() => { setAngle(0); setSpinning(false); setWinner(null); }, [gameIdx]);
+
+  const n = Math.max(players.length, 1);
+
+  const spin = () => {
+    if (spinning || winner) return;
+    const winnerIdx = Math.floor(Math.random() * n);
+    const targetDeg = winnerIdx * (360 / n);
+    const curNorm = ((angle % 360) + 360) % 360;
+    const delta = ((targetDeg - curNorm) + 360) % 360 || 360;
+    const totalAngle = angle + (4 + Math.floor(Math.random() * 3)) * 360 + delta;
     setSpinning(true);
-    setRotation(total);
-    setTimeout(()=>{setSpinning(false);setWinner(w);},3200);
+    setAngle(totalAngle);
+    setTimeout(() => { setSpinning(false); setWinner(players[winnerIdx]); }, 3600);
   };
-  const segDeg = 360/n;
+
+  const CX = 180, CY = 180;
+  const DIAL_R = 104;
+  const PLAYER_R = 127;
+  const NAME_R = 150;
+  const NUM_TICKS = 60;
+
+  const ticks = Array.from({ length: NUM_TICKS }, (_, i) => {
+    const a = (i * 360 / NUM_TICKS - 90) * Math.PI / 180;
+    const isMaj = i % 5 === 0;
+    const ri = isMaj ? 94 : 98;
+    return {
+      x1: (CX + ri * Math.cos(a)).toFixed(1),
+      y1: (CY + ri * Math.sin(a)).toFixed(1),
+      x2: (CX + 103 * Math.cos(a)).toFixed(1),
+      y2: (CY + 103 * Math.sin(a)).toFixed(1),
+      isMaj,
+    };
+  });
+
+  const playerData = players.map((p, i) => {
+    const a = (i * (360 / n) - 90) * Math.PI / 180;
+    return {
+      p,
+      ax: (CX + PLAYER_R * Math.cos(a)).toFixed(1),
+      ay: (CY + PLAYER_R * Math.sin(a)).toFixed(1),
+      nx: (CX + NAME_R * Math.cos(a)).toFixed(1),
+      ny: (CY + NAME_R * Math.sin(a)).toFixed(1),
+    };
+  });
+
   return (
-    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
-      <div style={{position:'relative',width:220,height:220}}>
-        <svg width="220" height="220" viewBox="0 0 200 200">
-          {players.map((p,i)=>{
-            const a1=(i*segDeg-90)*Math.PI/180, a2=((i+1)*segDeg-90)*Math.PI/180;
-            const x1=100+88*Math.cos(a1),y1=100+88*Math.sin(a1);
-            const x2=100+88*Math.cos(a2),y2=100+88*Math.sin(a2);
-            const large=segDeg>180?1:0;
-            const mx=100+58*Math.cos(((i+0.5)*segDeg-90)*Math.PI/180);
-            const my=100+58*Math.sin(((i+0.5)*segDeg-90)*Math.PI/180);
-            return <g key={p.id||i}>
-              <path d={`M 100 100 L ${x1.toFixed(1)} ${y1.toFixed(1)} A 88 88 0 ${large} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z`} fill={p.color||'#ccc'} stroke="#1a2a4a" strokeWidth="1.5"/>
-              <text x={mx.toFixed(1)} y={my.toFixed(1)} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="10" fontWeight="bold" style={{userSelect:'none'}}>{(p.name||'?').slice(0,6)}</text>
-            </g>;
-          })}
-          <circle cx="100" cy="100" r="12" fill="#1a2a4a" stroke="white" strokeWidth="2"/>
-          <g style={{transform:`rotate(${rotation}deg)`,transformOrigin:'100px 100px',transition:spinning?'transform 3.2s cubic-bezier(0.17,0.67,0.08,1)':'none'}}>
-            <line x1="100" y1="100" x2="100" y2="18" stroke="white" strokeWidth="4" strokeLinecap="round"/>
-            <polygon points="100,10 95,22 105,22" fill="white"/>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+      <svg width="280" height="280" viewBox="0 0 360 360" style={{ overflow:'visible' }}>
+
+        {/* Dial face */}
+        <circle cx={CX} cy={CY} r={DIAL_R} fill="#F5F0E4" stroke="#1B2340" strokeWidth="3.5" />
+
+        {/* Tick marks */}
+        {ticks.map((t, i) => (
+          <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
+            stroke="#C4B898" strokeWidth={t.isMaj ? 2 : 1} />
+        ))}
+
+        {/* Inner dashed ring */}
+        <circle cx={CX} cy={CY} r={74} fill="none" stroke="#D0C8B0" strokeWidth="1" strokeDasharray="5 4" />
+
+        {/* Bottle group — centered at CX,CY so rotation works cleanly */}
+        <g transform={`translate(${CX} ${CY})`}>
+          <g style={{
+            transform: `rotate(${angle}deg)`,
+            transformOrigin: '0px 0px',
+            transition: spinning ? 'transform 3.6s cubic-bezier(0.13,0.60,0.06,1)' : 'none',
+          }}>
+            {/* Dashed pointer line */}
+            <line x1="0" y1="0" x2="0" y2="-93" stroke="#E55555" strokeWidth="1.5" strokeDasharray="5 3" opacity="0.65" />
+            {/* Arrow tip */}
+            <polygon points="0,-97 -5,-85 5,-85" fill="#E55555" />
+            {/* Bottle cap */}
+            <rect x="-7" y="-82" width="14" height="7" rx="2.5" fill="#1B2340" />
+            {/* Neck */}
+            <rect x="-5" y="-76" width="10" height="18" rx="4" fill="#2D6A4F" />
+            {/* Shoulder taper */}
+            <path d="M -5,-58 Q -14,-54 -14,-46 L 14,-46 Q 14,-54 5,-58 Z" fill="#2D6A4F" />
+            {/* Body */}
+            <rect x="-14" y="-46" width="28" height="48" rx="8" fill="#2D6A4F" />
+            {/* Label highlight */}
+            <rect x="-10" y="-40" width="20" height="24" rx="4" fill="rgba(255,255,255,0.2)" />
+            {/* Bottom rim */}
+            <rect x="-14" y="2" width="28" height="5" rx="3" fill="#1B4332" />
           </g>
-        </svg>
-      </div>
-      {!winner?(
-        <button onClick={spin} disabled={spinning} style={{padding:'12px 28px',background:`${T.mint}22`,border:`2px solid ${T.mint}`,color:T.mint,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:16,borderRadius:14,cursor:spinning?'default':'pointer',opacity:spinning?0.6:1}}>
-          {spinning?'🌀 Pörög…':'🍾 Pörgetés!'}
-        </button>
-      ):(
-        <div style={{background:T.surface,borderRadius:16,padding:'12px 20px',textAlign:'center',boxShadow:T.shadow,animation:'popIn .35s'}}>
-          <div style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:4}}>Iszik</div>
-          <div style={{display:'flex',alignItems:'center',gap:8,justifyContent:'center'}}>
-            <div style={{width:36,height:36,borderRadius:'50%',background:winner.color,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:16,color:'#fff'}}>{(winner.name||'?').charAt(0)}</div>
-            <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:22,color:T.ink}}>{winner.name}</div>
-          </div>
+        </g>
+
+        {/* Center hub */}
+        <circle cx={CX} cy={CY} r={11} fill="#1B2340" />
+        <circle cx={CX} cy={CY} r={5} fill="#fff" />
+
+        {/* Player avatars + names */}
+        {playerData.map(({ p, ax, ay, nx, ny }) => {
+          const isW = winner && winner.id === p.id;
+          return (
+            <g key={p.id}>
+              {isW && <circle cx={ax} cy={ay} r="24" fill={p.color} opacity="0.2" />}
+              <circle cx={ax} cy={ay} r="20" fill={p.color} stroke="#fff" strokeWidth={isW ? 3 : 2} />
+              <text x={ax} y={ay} textAnchor="middle" dominantBaseline="middle"
+                fill="#fff" fontSize="13" fontWeight="bold" style={{ userSelect:'none' }}>
+                {p.name.charAt(0).toUpperCase()}
+              </text>
+              <text x={nx} y={ny} textAnchor="middle" dominantBaseline="middle"
+                fill={isW ? p.color : '#1B2340'} fontSize="11" fontWeight={isW ? '800' : '600'}
+                style={{ userSelect:'none' }}>
+                {p.name}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Result card */}
+      {winner && (
+        <div style={{ width:'100%', padding:'10px 18px', borderRadius:14, background:'rgba(255,255,255,0.9)', boxShadow:T.shadow, textAlign:'center', animation:'popIn .3s' }}>
+          <span style={{ fontFamily:T.font, fontSize:14, color:T.ink }}>
+            🧭 A palack{' '}
+            <span style={{ fontWeight:800, color:winner.color }}>{winner.name}</span>
+            {' '}felé áll — iszik!
+          </span>
         </div>
       )}
+
+      {/* Spin button */}
+      <button onClick={spin} disabled={spinning} style={{
+        width:'100%', padding:'14px', borderRadius:16,
+        background: spinning ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.7)',
+        border:`2px solid ${T.mint}`, color:T.mint,
+        fontFamily:T.font, fontWeight:700, fontSize:16,
+        cursor: spinning ? 'default' : 'pointer',
+        opacity: spinning ? 0.65 : 1,
+      }}>
+        {spinning ? '🌀 Pörög…' : '🍾 Pörgetés!'}
+      </button>
     </div>
   );
 }
