@@ -33959,7 +33959,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.22 · DNR · 2026.05.31 03:00
+              Verzió 5.23 · DNR · 2026.05.31 04:00
             </div>
           </div>
         </div>
@@ -34881,70 +34881,123 @@ function IgazHamisGame({ gameIdx }) {
   );
 }
 
-function SzerencsekerékGame({ gameIdx, players }) {
-  const [rotation, setRotation] = useState(0);
-  const [spinning, setSpinning] = useState(false);
-  const [winner, setWinner] = useState(null);
-  useEffect(() => { setRotation(0); setSpinning(false); setWinner(null); }, [gameIdx]);
+function SzerencsekerékGame({ gameIdx, players, onAdvance }) {
+  const [phase, setPhase] = React.useState('ready'); // ready | spinning | result
+  const [currentIdx, setCurrentIdx] = React.useState(0);
+  const [winner, setWinner] = React.useState(null);
 
-  const n = players.length || 1;
-  const segDeg = 360 / n;
+  React.useEffect(() => {
+    setPhase('ready');
+    setCurrentIdx(gameIdx % Math.max(players.length,1));
+    setWinner(null);
+  }, [gameIdx]);
 
   const spin = () => {
-    if (spinning || winner) return;
-    const extra = 5 + Math.floor(Math.random() * 5);
-    const finalAngle = Math.random() * 360;
-    const total = rotation + extra * 360 + finalAngle;
-    setSpinning(true);
-    setWinner(null);
-    setRotation(total);
-    setTimeout(() => {
-      const norm = ((total % 360) + 360) % 360;
-      const idx = Math.floor(((360 - norm) % 360) / segDeg) % n;
-      setWinner(players[idx]);
-      setSpinning(false);
-    }, 5200);
+    if (phase !== 'ready' || players.length === 0) return;
+    setPhase('spinning');
+    const n = players.length;
+    const winnerIdx = Math.floor(Math.random() * n);
+    const stepsToWinner = ((winnerIdx - currentIdx + n) % n) || n;
+    const totalSteps = n * 4 + stepsToWinner;
+    let step = 0;
+    let cur = currentIdx;
+
+    const next = () => {
+      step++;
+      cur = (cur + 1) % n;
+      setCurrentIdx(cur);
+      if (step < totalSteps) {
+        const progress = step / totalSteps;
+        const delay = 55 + Math.pow(progress, 2.2) * 560;
+        setTimeout(next, delay);
+      } else {
+        setWinner(players[winnerIdx]);
+        setPhase('result');
+      }
+    };
+    setTimeout(next, 55);
   };
 
-  const paths = players.map((p, i) => {
-    const a1 = (i * segDeg - 90) * Math.PI / 180;
-    const a2 = ((i + 1) * segDeg - 90) * Math.PI / 180;
-    const x1 = 100 + 90 * Math.cos(a1), y1 = 100 + 90 * Math.sin(a1);
-    const x2 = 100 + 90 * Math.cos(a2), y2 = 100 + 90 * Math.sin(a2);
-    const large = segDeg > 180 ? 1 : 0;
-    const mid = ((i + 0.5) * segDeg - 90) * Math.PI / 180;
-    const lx = 100 + 58 * Math.cos(mid), ly = 100 + 58 * Math.sin(mid);
-    return { p:p, path:`M 100 100 L ${x1.toFixed(2)} ${y1.toFixed(2)} A 90 90 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`, lx, ly, label:(p.name||'?').slice(0,6) };
-  });
+  const proceed = () => {
+    const dm = {};
+    if (winner) dm[winner.id] = 1;
+    onAdvance && onAdvance(dm);
+  };
+
+  const n = Math.max(players.length, 1);
+  const VISIBLE = 5;
+  const half = Math.floor(VISIBLE / 2);
+
+  const visibleItems = [];
+  for (let offset = -half; offset <= half; offset++) {
+    const idx = ((currentIdx + offset) % n + n) % n;
+    visibleItems.push({ player: players[idx], offset });
+  }
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
-      <div style={{ fontSize:20, lineHeight:1, color:T.ink }}>▼</div>
-      <div style={{ position:'relative', width:250, height:250 }}>
-        <svg width="250" height="250" viewBox="0 0 200 200"
-          style={{ display:'block', transform:`rotate(${rotation}deg)`, transition: spinning ? 'transform 5s cubic-bezier(0.12,0.75,0.08,1)' : 'none' }}>
-          {paths.map(({ p, path, lx, ly, label }, i) => (
-            <g key={p.id || i}>
-              <path d={path} fill={p.color || '#ccc'} stroke="white" strokeWidth="2"/>
-              <text x={lx.toFixed(1)} y={ly.toFixed(1)} textAnchor="middle" dominantBaseline="middle"
-                fill="white" fontSize="11" fontWeight="bold" style={{ userSelect:'none', pointerEvents:'none' }}>{label}</text>
-            </g>
-          ))}
-          <circle cx="100" cy="100" r="10" fill="white" stroke="#ccc" strokeWidth="1.5"/>
-        </svg>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12, width:'100%' }}>
+
+      {/* Drum window */}
+      <div style={{ background:'#fff', borderRadius:20, padding:'10px 14px', boxShadow:'0 4px 18px rgba(0,0,0,0.10)', width:'100%', position:'relative', overflow:'hidden' }}>
+
+        {visibleItems.map(({ player, offset }) => {
+          const isCenter = offset === 0;
+          const dist = Math.abs(offset);
+          const alpha = dist === 0 ? 1 : dist === 1 ? 0.55 : 0.3;
+          return (
+            <div key={`${offset}-${player.id}`} style={{
+              display:'flex', alignItems:'center', gap:12,
+              padding: isCenter ? '10px 14px' : '6px 14px',
+              borderRadius:13,
+              background: isCenter ? `${T.mint}18` : 'transparent',
+              border: `2px solid ${isCenter ? T.mint : 'transparent'}`,
+              marginBottom: 2,
+              opacity: alpha,
+              transition: 'opacity .1s',
+            }}>
+              {/* Left arrow indicators */}
+              {offset === -1 && (
+                <div style={{ position:'absolute', left:8, fontFamily:T.font, fontSize:11, color:T.inkSoft }}>◀</div>
+              )}
+              {offset === 1 && (
+                <div style={{ position:'absolute', left:8, fontFamily:T.font, fontSize:11, color:T.inkSoft }}>▶</div>
+              )}
+              <div style={{ width:isCenter?44:32, height:isCenter?44:32, borderRadius:'50%', background:player.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:isCenter?18:13, color:'#fff', flexShrink:0, transition:'all .1s' }}>
+                {player.name.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ fontFamily:T.font, fontWeight:isCenter?800:500, fontSize:isCenter?21:14, color:isCenter?T.ink:T.inkSoft, transition:'all .1s' }}>
+                {player.name}
+              </div>
+            </div>
+          );
+        })}
       </div>
-      {!winner ? (
-        <button onClick={spin} disabled={spinning} style={{ padding:'10px 28px', background:`${T.purple}22`, border:`2px solid ${T.purple}`, color:T.purple, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor: spinning ? 'default' : 'pointer', opacity: spinning ? 0.6 : 1 }}>
-          {spinning ? '🌀 Pörög…' : '🎡 Pörgetés!'}
+
+      {/* Result banner */}
+      {phase === 'result' && winner && (
+        <div style={{ width:'100%', padding:'10px 18px', borderRadius:14, background:'rgba(255,255,255,0.9)', boxShadow:T.shadow, textAlign:'center', animation:'popIn .3s' }}>
+          <span style={{ fontFamily:T.font, fontSize:14, color:T.ink }}>
+            🎰 A sors <span style={{ fontWeight:800, color:winner.color }}>{winner.name}</span>-t húzta — iszik!
+          </span>
+        </div>
+      )}
+
+      {/* Buttons */}
+      {phase !== 'result' ? (
+        <button onClick={spin} disabled={phase==='spinning'} style={{
+          width:'100%', padding:'14px', borderRadius:16,
+          background: phase==='spinning' ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.7)',
+          border:`2px solid ${T.mint}`, color:T.mint,
+          fontFamily:T.font, fontWeight:700, fontSize:16,
+          cursor: phase==='spinning' ? 'default' : 'pointer',
+          opacity: phase==='spinning' ? 0.65 : 1,
+        }}>
+          🎰 Sorsolás!
         </button>
       ) : (
-        <div style={{ background:T.surface, borderRadius:16, padding:'10px 20px', textAlign:'center', boxShadow:T.shadow, animation:'popIn .35s' }}>
-          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Iszik</div>
-          <div style={{ display:'flex', alignItems:'center', gap:8, justifyContent:'center' }}>
-            <div style={{ width:34, height:34, borderRadius:'50%', background:winner.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color:'#fff' }}>{(winner.name||'?').charAt(0).toUpperCase()}</div>
-            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.ink }}>{winner.name}</div>
-          </div>
-        </div>
+        <button onClick={proceed} style={{ width:'100%', padding:'14px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow }}>
+          Tovább →
+        </button>
       )}
     </div>
   );
@@ -37027,11 +37080,94 @@ function CollectBoomGame({ gameIdx, players, onAdvance }) {
   );
 }
 
+function KategoriaGame({ gameIdx, players, onAdvance }) {
+  const CATS = [
+    'Fővárosok','Gyümölcsök','Sportágak','Filmek','Állatok',
+    'Autómárkák','Zenekarok','Ételek','Országok','TV-sorozatok',
+    'Focicsapatok','Koktélok','Énekes előadók','Játékok','Foglalkozások',
+    'Hangszerek','Tánctípusok','Borok','Folyók','Magyar városok',
+    'Filmhősök','Ruhamárkák','Könyvek','Olimpiai sportok','Helyek Budapesten',
+    'Zöldségek','Sütemények','Filmrendezők','Állatfajok','Csapatjátékok',
+  ];
+  const BG_COLORS = ['#F4D06A','#A8CFF7','#F4A4A0'];
+
+  const cat = CATS[gameIdx % CATS.length];
+  const [loserPid, setLoserPid] = React.useState(null);
+
+  React.useEffect(() => { setLoserPid(null); }, [gameIdx]);
+
+  const loser = loserPid ? players.find(p=>p.id===loserPid) : null;
+
+  const proceed = () => {
+    const dm = {};
+    if (loserPid) dm[loserPid] = 1;
+    onAdvance && onAdvance(dm);
+  };
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, width:'100%' }}>
+
+      {/* Stacked card deck */}
+      <div style={{ position:'relative', width:'100%', height:160 }}>
+        {BG_COLORS.map((bg, i) => (
+          <div key={i} style={{
+            position:'absolute', inset:0,
+            background:bg, borderRadius:20,
+            transform:`rotate(${[-4,3,0][i]}deg) translateY(${[4,2,0][i]}px)`,
+            boxShadow:'0 4px 18px rgba(0,0,0,0.12)',
+          }} />
+        ))}
+        <div style={{ position:'relative', background:'#fff', borderRadius:20, padding:'20px 24px', boxShadow:'0 4px 18px rgba(0,0,0,0.12)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', boxSizing:'border-box' }}>
+          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:10 }}>KATEGÓRIA</div>
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:26, color:T.ink, textAlign:'center', lineHeight:1.2 }}>{cat}</div>
+        </div>
+      </div>
+
+      {/* Player selection */}
+      <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.12em' }}>
+        Ki nem tudott szót mondani?
+      </div>
+      <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'center' }}>
+        {players.map(p => {
+          const selected = loserPid === p.id;
+          return (
+            <div key={p.id} onClick={() => setLoserPid(selected ? null : p.id)} style={{
+              display:'flex', flexDirection:'column', alignItems:'center', gap:6,
+              padding:'10px 14px', borderRadius:14,
+              background: selected ? '#FFF0EE' : '#fff',
+              border:`2px solid ${selected ? '#F87171' : 'transparent'}`,
+              boxShadow:'0 2px 8px rgba(0,0,0,0.08)', cursor:'pointer', minWidth:70,
+            }}>
+              <div style={{ width:44, height:44, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:17, color:'#fff' }}>
+                {p.name.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ fontFamily:T.font, fontWeight:600, fontSize:12, color: selected ? '#E55' : T.ink }}>
+                {p.name}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Action button */}
+      {loser ? (
+        <button onClick={proceed} style={{ width:'100%', padding:'15px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow, animation:'popIn .2s' }}>
+          {loser.name} iszik — új kategória →
+        </button>
+      ) : (
+        <button onClick={() => onAdvance && onAdvance({})} style={{ width:'100%', padding:'15px', background:'rgba(255,255,255,0.6)', color:T.inkSoft, fontFamily:T.font, fontWeight:600, fontSize:15, borderRadius:16, border:`2px solid rgba(0,0,0,0.1)`, cursor:'pointer' }}>
+          Senki nem rontott — tovább →
+        </button>
+      )}
+    </div>
+  );
+}
+
 function GameContent({ gameId, gameIdx, players, onAdvance, roomCode, mode, gameMeta, challenger, opponent }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} />;
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} />;
-  if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} />;
+  if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} mode={mode} gameMeta={gameMeta} />;
@@ -37045,6 +37181,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, roomCode, mode, game
   if (gameId === 'ringfire') return <RingFireGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
   if (gameId === 'kopapir') return <KoPapirGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'collect') return <CollectBoomGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
+  if (gameId === 'kategoria') return <KategoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   return null;
 }
 
@@ -37235,7 +37372,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
           </div>
         </div>
       )}
-      {currentGame.category === 'Csapat' && currentGameId !== 'loverseny' && currentGameId !== 'imposztor' && currentGameId !== 'busz' && currentGameId !== 'kisebb' && currentGameId !== 'ticktak' && (
+      {currentGame.category === 'Csapat' && currentGameId !== 'loverseny' && currentGameId !== 'imposztor' && currentGameId !== 'busz' && currentGameId !== 'kisebb' && currentGameId !== 'ticktak' && currentGameId !== 'szerencse' && currentGameId !== 'kategoria' && currentGameId !== 'collect' && currentGameId !== 'kopapir' && (
         <div style={{ padding:'0 18px 14px', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
           <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>Ki nyert?</div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center' }}>
