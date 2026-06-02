@@ -33992,7 +33992,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.90 · DNR · 2026.06.02 18:30
+              Verzió 5.91 · DNR · 2026.06.02 18:30
             </div>
           </div>
         </div>
@@ -34294,6 +34294,8 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   const [sheet, setSheet] = useState(false);
   const [buszSheet, setBuszSheet] = useState(false);
   const [beerpongSheet, setBeerpongSheet] = useState(false);
+  const [filterSheet, setFilterSheet] = useState(false);
+  const [activeFilters, setActiveFilters] = useState([]); // [] = show all
   const buszConfig = gameMeta?.buszConfig || {};
   const setBuszConfig = cfg => setGameMeta(m => ({...m, buszConfig: typeof cfg === 'function' ? cfg(m?.buszConfig||{}) : cfg}));
   const beerpongConfig = gameMeta?.beerpongConfig || {};
@@ -34321,6 +34323,25 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
     const n = 4 + Math.floor(Math.random()*4);
     setSelectedGames([...pool].sort(()=>Math.random()-.5).slice(0,n).map(g=>g.id));
   };
+  const toggleFilter = f => setActiveFilters(fs => fs.includes(f) ? fs.filter(x=>x!==f) : [...fs, f]);
+
+  const gameMatchesFilter = g => {
+    if (!activeFilters.length) return true;
+    return activeFilters.some(f => {
+      if (f === 'DNR') return g.id === 'busz' || g.dnr;
+      return g.category === f;
+    });
+  };
+
+  const FILTER_OPTIONS = [
+    { key:'Csapat',  label:'Csapat',  icon:'👥' },
+    { key:'Egyéni', label:'Egyéni', icon:'🧍' },
+    { key:'Páros',  label:'Páros',  icon:'👫' },
+    { key:'DNR',    label:'DNR',    icon:'★' },
+  ];
+
+  const visibleGames = GAMES.filter(gameMatchesFilter);
+  const hasFilter = activeFilters.length > 0;
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
@@ -34338,14 +34359,28 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
         <Chip label="Összes" active={allOn} onClick={selectAll} />
         <Chip label="Törlés" onClick={clearAll} />
         <Chip label="Véletlen" onClick={shuffle} tone="purple" icon={Icon.dice('#fff')} />
-        <Chip label="+ Saját" disabled tone="muted" />
+        <Chip label="Szűrő" onClick={() => setFilterSheet(true)} tone={hasFilter ? 'filter' : undefined} icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M7 12h10M11 18h2" stroke={hasFilter ? '#fff' : T.ink} strokeWidth="2.2" strokeLinecap="round"/></svg>} active={hasFilter} />
       </div>
+      {hasFilter && (
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:8 }}>
+          {activeFilters.map(f => {
+            const opt = FILTER_OPTIONS.find(o=>o.key===f);
+            return (
+              <div key={f} onClick={() => toggleFilter(f)} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:999, background:T.mint, cursor:'pointer' }}>
+                <span style={{ fontSize:12 }}>{opt?.icon}</span>
+                <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:'#fff' }}>{opt?.label}</span>
+                <span style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.7)', marginLeft:2 }}>✕</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
       </div>
 
       <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
         <div className="screen-wide screen-pad" style={{ paddingTop:14, paddingBottom:140 }}>
         <div className="grid-games">
-          {GAMES.map(g => {
+          {visibleGames.map(g => {
             const isSelected = selectedGames.includes(g.id);
             const locked = isLocked(g.id);
             const dim = locked || (anySelected && !isSelected);
@@ -34377,17 +34412,44 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
       {info && <GameInfoModal game={GAMES.find(g=>g.id===info)} onClose={() => setInfo(null)} />}
       {buszSheet && <BuszConfigSheet config={buszConfig} setConfig={setBuszConfig} onClose={() => setBuszSheet(false)} />}
       {beerpongSheet && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setBeerpongSheet(false)} />}
+      {filterSheet && (
+        <SheetOverlay onClose={() => setFilterSheet(false)}>
+          <div style={{ padding:'4px 18px 18px', display:'flex', flexDirection:'column', gap:10 }}>
+            <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginBottom:4 }}>Szűrés</div>
+            {FILTER_OPTIONS.map(opt => {
+              const on = activeFilters.includes(opt.key);
+              return (
+                <button key={opt.key} onClick={() => toggleFilter(opt.key)} style={{
+                  display:'flex', alignItems:'center', gap:12, padding:'14px 16px',
+                  background: on ? `${T.mint}18` : T.bg, border: `2px solid ${on ? T.mint : 'transparent'}`,
+                  borderRadius:16, cursor:'pointer', width:'100%', textAlign:'left',
+                }}>
+                  <span style={{ fontSize:22, lineHeight:1 }}>{opt.icon}</span>
+                  <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink, flex:1 }}>{opt.label}</span>
+                  <div style={{ width:24, height:24, borderRadius:'50%', border:`2px solid ${on ? T.mint : T.inkMute}`, background: on ? T.mint : 'transparent', display:'grid', placeItems:'center', transition:'all .15s', flexShrink:0 }}>
+                    {on && <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </div>
+                </button>
+              );
+            })}
+            <div style={{ marginTop:4 }}>
+              <PrimaryButton onClick={() => setFilterSheet(false)}>Kész</PrimaryButton>
+            </div>
+          </div>
+        </SheetOverlay>
+      )}
     </div>
   );
 }
 
 function Chip({ label, active, onClick, tone, icon, disabled }) {
-  const bg = disabled ? T.surfaceMuted : tone==='purple' ? T.purple : active ? T.surface : T.surfaceMuted;
-  const fg = disabled ? T.inkMute : tone==='purple' ? '#fff' : T.ink;
+  const isFilter = tone === 'filter';
+  const bg = disabled ? T.surfaceMuted : tone==='purple' ? T.purple : isFilter && active ? T.mint : active ? T.surface : T.surfaceMuted;
+  const fg = disabled ? T.inkMute : (tone==='purple' || (isFilter && active)) ? '#fff' : T.ink;
   return (
     <button onClick={disabled ? undefined : onClick} style={{
       minHeight:44, padding:'0 6px', background:bg, color:fg, border:'none',
-      borderRadius:14, boxShadow: tone==='purple' ? '0 4px 14px rgba(124,58,237,0.3)' : 'none',
+      borderRadius:14, boxShadow: tone==='purple' ? '0 4px 14px rgba(124,58,237,0.3)' : isFilter && active ? `0 4px 14px ${T.mint}55` : 'none',
       fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13,
       display:'flex', alignItems:'center', justifyContent:'center', gap:6,
       cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.7 : 1,
