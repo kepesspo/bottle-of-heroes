@@ -33990,7 +33990,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.87 · DNR · 2026.06.02 18:30
+              Verzió 5.88 · DNR · 2026.06.02 18:30
             </div>
           </div>
         </div>
@@ -35021,16 +35021,22 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult }) {
   const DRINKS_PER_LOSS = 5;
   const MAX_CUPS = 10;
 
+  const buildRound = (participants) => {
+    const matches = [];
+    for (let i = 0; i < participants.length; i += 2) {
+      const p1 = participants[i] || null;
+      const p2 = participants[i + 1] || null;
+      if (!p1 && !p2) continue; // skip empty bye-vs-bye slots
+      matches.push({ p1, p2, winner: !p2 ? p1 : !p1 ? p2 : null, loser: null, score: null });
+    }
+    return matches;
+  };
+
   const buildFirstRound = (plrs) => {
     const shuffled = [...plrs].sort(() => Math.random() - 0.5);
     const size = Math.pow(2, Math.ceil(Math.log2(Math.max(shuffled.length, 2))));
     while (shuffled.length < size) shuffled.push(null);
-    const matches = [];
-    for (let i = 0; i < shuffled.length; i += 2) {
-      const p1 = shuffled[i], p2 = shuffled[i + 1];
-      matches.push({ p1, p2, winner: p2 === null ? p1 : null, loser: null, score: null });
-    }
-    return matches;
+    return buildRound(shuffled);
   };
 
   const [rounds, setRounds] = React.useState([]);
@@ -35099,11 +35105,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult }) {
         return newRounds;
       }
 
-      const nextRound = [];
-      for (let i = 0; i < winners.length; i += 2) {
-        const p1 = winners[i], p2 = winners[i + 1] || null;
-        nextRound.push({ p1, p2, winner: p2 === null ? p1 : null, loser: null, score: null });
-      }
+      const nextRound = buildRound(winners);
       const nextRoundIdx = curRound + 1;
       setCurRound(nextRoundIdx);
       setCurMatch(nextRound.findIndex(m => m.winner === null));
