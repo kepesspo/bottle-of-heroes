@@ -33751,7 +33751,7 @@ const GAMES = [
   { id:'collect',   name:'Collect and Boom',      difficulty:'közepes', category:'Csapat', emoji:'💣', symbol:IMGS['collect_symbol.png'], img:IMGS['collect_icon.png'], banner:IMGS['collect_banner.png'], color:'#0EA5E9', desc:'Az app kisorsol egy játékost aki el fogja kezdeni a kört. A játéktábláról ki kell választania egy cellát. Utána a tőle jobbra ülő fog választani egyet, addig választanak a játékosok ameddig egy bombát találnak — ekkor a játék véget ért és az addig összegyűjtött egységet kell meginnia a vesztesnek.' },
   { id:'kivagyok',  name:'Ki Vagyok Én',          difficulty:'közepes', category:'Egyéni', emoji:'🕵️', symbol:IMGS['kivagyok_symbol.png'], img:IMGS['kivagyok_icon.png'], banner:IMGS['kivagyok_banner.png'], color:'#F472B6', desc:'Az app mutat egy híresség fotóját és ki kell találni ki van a képen. Ebben a játékban csak egy játékos vesz részt. Ha pontosan meg tudja mondani a híresség életkorát vagy foglalkozását akkor kioszthat egy piát.' },
   { id:'mindenki',  name:'Mindenki Iszik',difficulty:'könnyű',  category:'Csapat', emoji:'🍻', symbol:IMGS['mindenki_symbol.png'], img:IMGS['mindenki_icon.png'], banner:IMGS['mindenki_banner.png'], color:'#F4C95A', desc:'A játék kiválaszt egy játékost akinek innia kell. Ezt az app sorsolja ki, ha elfogyta az emberek akkor előről megy a kör.' },
-  { id:'beerpong', name:'Beer Pong Torna',         difficulty:'könnyű',  category:'Csapat', emoji:'🏓', symbol:null, img:IMGS['beerpong_icon.png'], banner:IMGS['beerpong_banner.png'], color:'#3B82F6', desc:'Egyéni kieséses beer pong torna. Az app generálja a sorsolást, te döntöd el ki nyert — a vesztes 5 kortyt iszik. Az utolsó ember állva marad a bajnok!' },
+  { id:'beerpong', name:'Beer Pong Torna',         difficulty:'könnyű',  category:'Csapat', emoji:'🏓', symbol:null, img:IMGS['beerpong_icon.png'], banner:IMGS['beerpong_banner.png'], color:'#3B82F6', dnr:true, desc:'Egyéni kieséses beer pong torna. Az app generálja a sorsolást, te döntöd el ki nyert — a vesztes 5 kortyt iszik. Az utolsó ember állva marad a bajnok!' },
   { id:'igazhamis', name:'Igaz Hamis',            difficulty:'könnyű',  category:'Egyéni', emoji:'🤔', symbol:IMGS['igazhamis_symbol.png'], img:IMGS['igazhamis_icon.png'], banner:IMGS['igazhamis_banner.png'], color:'#06B6D4', desc:'A játékban egy állítás fog megjelenni és el kell dönteni, hogy az igaz, vagy hamis. Ha úgy ítéled meg hogy az állítás igaz, akkor az idő lejárta előtt ezt közölnöd kell a többi játékossal akik ez alapján tudjuk eldönteni, hogy jól válaszoltál-e. Ha nem jó a válaszod akkor sajnos innod kell.' },
 ];
 
@@ -33992,7 +33992,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.89 · DNR · 2026.06.02 18:30
+              Verzió 5.90 · DNR · 2026.06.02 18:30
             </div>
           </div>
         </div>
@@ -34212,6 +34212,33 @@ const DIM_STYLES = {
   none: { opacity:1 },
 };
 
+function BeerPongConfigSheet({ config, setConfig, onClose }) {
+  const maxCups = config.maxCups ?? 10;
+  const drinksPerLoss = config.drinksPerLoss ?? 5;
+  return (
+    <SheetOverlay onClose={onClose}>
+      <div style={{ padding:'4px 18px 18px', display:'flex', flexDirection:'column', gap:2 }}>
+        <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginBottom:4 }}>Beer Pong beállítások</div>
+        {[
+          { key:'maxCups', label:'Kupák száma', val:maxCups, min:4, max:16, step:2 },
+          { key:'drinksPerLoss', label:'Vesztes korty', val:drinksPerLoss, min:1, max:10, step:1 },
+        ].map(s => (
+          <div key={s.key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'7px 0', borderBottom:`1px solid rgba(20,30,50,0.06)` }}>
+            <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{s.label}</span>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <button onClick={() => setConfig(c => ({...c, [s.key]: Math.max(s.min, (c[s.key]??s.val)-s.step)}))} style={{ width:30, height:30, borderRadius:8, background:T.surface, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:18, color:T.coral, boxShadow:T.shadow, display:'grid', placeItems:'center' }}>−</button>
+              <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:18, color:T.ink, minWidth:22, textAlign:'center' }}>{s.val}</span>
+              <button onClick={() => setConfig(c => ({...c, [s.key]: Math.min(s.max, (c[s.key]??s.val)+s.step)}))} style={{ width:30, height:30, borderRadius:8, background:T.surface, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:18, color:T.mint, boxShadow:T.shadow, display:'grid', placeItems:'center' }}>+</button>
+            </div>
+          </div>
+        ))}
+        <div style={{ marginTop:4 }}>
+          <PrimaryButton onClick={onClose}>Kész</PrimaryButton>
+        </div>
+      </div>
+    </SheetOverlay>
+  );
+}
 function BuszConfigSheet({ config, setConfig, onClose }) {
   const CFG = [
     { key:'deckCount',      label:'Paklik száma',        min:1, max:3 },
@@ -34266,23 +34293,31 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   const [info, setInfo] = useState(null);
   const [sheet, setSheet] = useState(false);
   const [buszSheet, setBuszSheet] = useState(false);
+  const [beerpongSheet, setBeerpongSheet] = useState(false);
   const buszConfig = gameMeta?.buszConfig || {};
   const setBuszConfig = cfg => setGameMeta(m => ({...m, buszConfig: typeof cfg === 'function' ? cfg(m?.buszConfig||{}) : cfg}));
+  const beerpongConfig = gameMeta?.beerpongConfig || {};
+  const setBeerpongConfig = cfg => setGameMeta(m => ({...m, beerpongConfig: typeof cfg === 'function' ? cfg(m?.beerpongConfig||{}) : cfg}));
 
   const allOn = selectedGames.length === GAMES.length;
   const anySelected = selectedGames.length > 0;
   const buszSelected = selectedGames.includes('busz');
-  const otherSelected = selectedGames.some(id => id !== 'busz');
-  const isLocked = id => id==='busz' ? otherSelected : buszSelected;
+  const beerpongSelected = selectedGames.includes('beerpong');
+  const otherSelected = selectedGames.some(id => id !== 'busz' && id !== 'beerpong');
+  const isLocked = id => {
+    if (id === 'busz') return otherSelected || beerpongSelected;
+    if (id === 'beerpong') return otherSelected || buszSelected;
+    return buszSelected || beerpongSelected;
+  };
 
   const toggle = id => {
     if (isLocked(id)) return;
     setSelectedGames(selectedGames.includes(id) ? selectedGames.filter(x=>x!==id) : [...selectedGames, id]);
   };
-  const selectAll = () => setSelectedGames(GAMES.filter(g=>g.id!=='busz').map(g=>g.id));
+  const selectAll = () => setSelectedGames(GAMES.filter(g=>g.id!=='busz'&&g.id!=='beerpong').map(g=>g.id));
   const clearAll = () => setSelectedGames([]);
   const shuffle = () => {
-    const pool = GAMES.filter(g=>g.id!=='busz');
+    const pool = GAMES.filter(g=>g.id!=='busz'&&g.id!=='beerpong');
     const n = 4 + Math.floor(Math.random()*4);
     setSelectedGames([...pool].sort(()=>Math.random()-.5).slice(0,n).map(g=>g.id));
   };
@@ -34317,7 +34352,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
             return (
               <GameTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked}
                 onClick={() => toggle(g.id)} onInfo={() => setInfo(g.id)}
-                onLongPress={g.id==='busz' ? ()=>setBuszSheet(true) : undefined} />
+                onLongPress={g.id==='busz' ? ()=>setBuszSheet(true) : g.id==='beerpong' ? ()=>setBeerpongSheet(true) : undefined} />
             );
           })}
         </div>
@@ -34341,6 +34376,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
       </SheetOverlay>}
       {info && <GameInfoModal game={GAMES.find(g=>g.id===info)} onClose={() => setInfo(null)} />}
       {buszSheet && <BuszConfigSheet config={buszConfig} setConfig={setBuszConfig} onClose={() => setBuszSheet(false)} />}
+      {beerpongSheet && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setBeerpongSheet(false)} />}
     </div>
   );
 }
@@ -34388,8 +34424,8 @@ function GameTile({ g, selected, dim, locked, onClick, onInfo, onLongPress }) {
       <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, color:T.ink, textAlign:'center', lineHeight:1.15, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'100%' }}>{g.name}</div>
       <div style={{ width:22, height:3, borderRadius:2, background:diff.tone }} />
 
-      {/* busz configurable gear badge */}
-      {g.id === 'busz' && onLongPress && (
+      {/* busz/beerpong configurable gear badge */}
+      {(g.id === 'busz' || g.id === 'beerpong') && onLongPress && (
         <div style={{ position:'absolute', top:5, left:6, width:16, height:16, borderRadius:'50%', background:T.surface, border:`1.5px solid ${g.color}`, display:'grid', placeItems:'center', zIndex:3, boxShadow:'0 1px 4px rgba(0,0,0,0.18)', fontSize:9 }}>⚙️</div>
       )}
 
@@ -35019,9 +35055,10 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult }) {
   );
 }
 
-function BeerPongGame({ gameIdx, players, onAdvance, onResult }) {
-  const DRINKS_PER_LOSS = 5;
-  const MAX_CUPS = 10;
+function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
+  const bpCfg = gameMeta?.beerpongConfig || {};
+  const DRINKS_PER_LOSS = bpCfg.drinksPerLoss ?? 5;
+  const MAX_CUPS = bpCfg.maxCups ?? 10;
 
   const buildRound = (participants) => {
     const matches = [];
@@ -38943,7 +38980,7 @@ function KezCsereGame({ gameIdx, players, onAdvance }) {
 
 function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, mode, gameMeta, challenger, opponent }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} />;
-  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
   if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
@@ -38979,6 +39016,9 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
   const [feedback, setFeedback] = useState(null);
   const [transitioning, setTransitioning] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [showBpConfig, setShowBpConfig] = useState(false);
+  const beerpongConfig = gameMeta?.beerpongConfig || {};
+  const setBeerpongConfig = cfg => setGameMeta && setGameMeta(m => ({...m, beerpongConfig: typeof cfg === 'function' ? cfg(m?.beerpongConfig||{}) : cfg}));
   const [showMenu, setShowMenu] = useState(false);
   const [pendingCommit, setPendingCommit] = useState(null);
   const [hostBurst, setHostBurst] = useState(null);
@@ -39102,7 +39142,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
       {/* ── Top bar ── */}
       <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:8, padding:'10px 16px 6px', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
         <div style={{ width:54, height:54, display:'grid', placeItems:'center', flexShrink:0 }}>
-          <button onClick={() => setShowInfo(true)} style={{ width:44, height:44, borderRadius:'50%', background:T.surface, border:'none', boxShadow:'0 2px 10px rgba(0,0,0,0.10)', cursor:'pointer', display:'grid', placeItems:'center', padding:0 }}>{Icon.info(T.inkSoft)}</button>
+          <button onClick={() => currentGameId==='beerpong' ? setShowBpConfig(true) : setShowInfo(true)} style={{ width:44, height:44, borderRadius:'50%', background:T.surface, border:'none', boxShadow:'0 2px 10px rgba(0,0,0,0.10)', cursor:'pointer', display:'grid', placeItems:'center', padding:0 }}>{currentGameId==='beerpong' ? <span style={{fontSize:18}}>⚙️</span> : Icon.info(T.inkSoft)}</button>
         </div>
         <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:8, overflow:'hidden' }}>
           {currentGame.banner ? (
@@ -39305,6 +39345,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
 
       </div>
       {showInfo && <GameInfoModal game={currentGame} onClose={() => setShowInfo(false)} />}
+      {showBpConfig && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setShowBpConfig(false)} />}
       {hostBurst && <HostDrinkAlert items={hostBurst} players={players} onDismiss={() => setHostBurst(null)} />}
       {showMenu && (() => {
         const mSorted = [...players].sort((a,b)=>(b.points-a.points)||(a.drinks-b.drinks));
