@@ -33988,7 +33988,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.69 · DNR · 2026.06.02 18:30
+              Verzió 5.71 · DNR · 2026.06.02 18:30
             </div>
           </div>
         </div>
@@ -35455,7 +35455,7 @@ const HORSES = [
   { id:4, color:'#5BA0DB', emoji:'🔵', name:'Kék' },
 ];
 
-function IgazHamisGame({ gameIdx, challenger, onAdvance }) {
+function IgazHamisGame({ gameIdx, challenger, onAdvance, onResult }) {
   const item = IGAZ_HAMIS[gameIdx % IGAZ_HAMIS.length];
   const [decided, setDecided] = useState(null); // null | 'igaz' | 'hamis'
   const [dragX, setDragX] = useState(0);
@@ -35479,7 +35479,10 @@ function IgazHamisGame({ gameIdx, challenger, onAdvance }) {
     advancedRef.current = true;
     const dm = {};
     if (!correct && challenger) dm[challenger.id] = 1;
-    onAdvance && onAdvance(dm);
+    const pm = {};
+    if (correct && challenger) pm[challenger.id] = 1;
+    onAdvance && onAdvance(dm, pm);
+    onResult && onResult({ correct, playerName: (!correct && challenger) ? challenger.name : null });
   }, [decided]);
 
   const onPointerDown = (e) => {
@@ -35598,20 +35601,6 @@ function IgazHamisGame({ gameIdx, challenger, onAdvance }) {
         </div>
       </div>
 
-      {/* Result banner */}
-      {decided && (
-        <div style={{ width:'100%', borderRadius:16, padding:'14px 18px', display:'flex', alignItems:'center', gap:12, animation:'popIn .3s cubic-bezier(.2,.9,.3,1.2)', background: correct ? 'rgba(80,168,130,0.12)' : 'rgba(232,160,144,0.18)', border:`2px solid ${correct ? '#50A882' : '#E8A090'}` }}>
-          <div style={{ fontSize:28 }}>{correct ? '🎉' : '🍺'}</div>
-          <div>
-            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color: correct ? '#50A882' : '#C05050' }}>
-              {correct ? 'Helyes! Nem kell innod.' : 'Rossz tipp — inni kell!'}
-            </div>
-            {challenger && !correct && (
-              <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>{challenger.name} iszik egyet</div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -38309,10 +38298,10 @@ function KezCsereGame({ gameIdx, players, onAdvance }) {
   );
 }
 
-function GameContent({ gameId, gameIdx, players, onAdvance, roomCode, mode, gameMeta, challenger, opponent }) {
+function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, mode, gameMeta, challenger, opponent }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} />;
-  if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} />;
+  if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
@@ -38350,8 +38339,9 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
   const [hostBurst, setHostBurst] = useState(null);
   const [selectedOpponent, setSelectedOpponent] = useState(null);
   const [csapatLosers, setCsapatLosers] = useState(new Set());
+  const [gameResult, setGameResult] = useState(null); // { correct, playerName }
   const transRef = React.useRef(false);
-  useEffect(() => { setCsapatLosers(new Set()); setPendingCommit(null); }, [gameIdx]);
+  useEffect(() => { setCsapatLosers(new Set()); setPendingCommit(null); setGameResult(null); }, [gameIdx]);
 
   useEffect(() => {
     if (currentGame.category !== 'Páros') { setSelectedOpponent(null); return; }
@@ -38453,10 +38443,10 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
     setPendingCommit({ newPlayers, fb:currentPlayerWon?'win':'lose', newTurn:(turn+1)%players.length, newGameIdx:gameIdx+1, newRound:round+1 });
   };
 
-  const advanceLoverseny = (drinkMap) => {
+  const advanceLoverseny = (drinkMap, pointsMap) => {
     if (transitioning) return;
     const newPlayers = trackScores
-      ? players.map(p => ({ ...p, drinks: p.drinks + (drinkMap[p.id] || 0) }))
+      ? players.map(p => ({ ...p, drinks: p.drinks + (drinkMap[p.id] || 0), points: p.points + ((pointsMap && pointsMap[p.id]) || 0) }))
       : players;
     setPendingCommit({ newPlayers, fb:null, newTurn:(turn+1)%players.length, newGameIdx:gameIdx+1, newRound:round+1 });
   };
@@ -38513,7 +38503,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
           </div>
         )}
 
-        <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} roomCode={roomCode} mode={mode} gameMeta={gameMeta} challenger={currentPlayer} opponent={selectedOpponent} />
+        <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} onResult={setGameResult} roomCode={roomCode} mode={mode} gameMeta={gameMeta} challenger={currentPlayer} opponent={selectedOpponent} />
       </div>
         </div>
       </div>{/* end scrollable */}
@@ -38565,6 +38555,26 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
               Senki nem rontott ✔
             </button>
           )}
+        </div>
+      )}
+
+      {/* ResultBanner */}
+      {gameResult && (
+        <div style={{ flexShrink:0, padding:'0 18px 8px', maxWidth:680, margin:'0 auto', width:'100%', boxSizing:'border-box' }}>
+          <div style={{ borderRadius:16, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, animation:'popIn .3s cubic-bezier(.2,.9,.3,1.2)', background: gameResult.correct ? 'rgba(80,168,130,0.12)' : 'rgba(232,160,144,0.18)', border:`2px solid ${gameResult.correct ? '#50A882' : '#E8A090'}` }}>
+            <div style={{ fontSize:26 }}>{gameResult.correct ? '🎉' : '🍺'}</div>
+            <div>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color: gameResult.correct ? '#50A882' : '#C05050' }}>
+                {gameResult.correct ? 'Helyes! +1 pont 🌟' : 'Rossz tipp — inni kell!'}
+              </div>
+              {gameResult.playerName && !gameResult.correct && (
+                <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:1 }}>{gameResult.playerName} iszik egyet</div>
+              )}
+              {gameResult.playerName && gameResult.correct && (
+                <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:1 }}>{gameResult.playerName} kap 1 pontot</div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
