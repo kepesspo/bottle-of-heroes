@@ -33988,7 +33988,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.72 · DNR · 2026.06.02 18:30
+              Verzió 5.73 · DNR · 2026.06.02 18:30
             </div>
           </div>
         </div>
@@ -37895,10 +37895,9 @@ function KoPapirGame({ gameIdx, players, onAdvance }) {
   );
 }
 
-function CollectBoomGame({ gameIdx, players, onAdvance }) {
+function CollectBoomGame({ gameIdx, players, onAdvance, onResult }) {
   const COLS = 4, TOTAL = 16, MAX_POT = 10;
 
-  // 3×1 + 2×2 + 1×3 = 10 kortyok, 2 bombs, 8 safe
   const grid = React.useMemo(() => {
     const cells = [
       {type:'bomb'}, {type:'bomb'},
@@ -37921,11 +37920,13 @@ function CollectBoomGame({ gameIdx, players, onAdvance }) {
   const [pot, setPot] = React.useState(0);
   const [bombPid, setBombPid] = React.useState(null);
   const [bombDrinks, setBombDrinks] = React.useState(0);
+  const advancedRef = React.useRef(false);
 
   React.useEffect(() => {
     setRevealed(new Array(TOTAL).fill(false));
     setTurn(gameIdx % Math.max(players.length,1));
     setPot(0); setBombPid(null); setBombDrinks(0);
+    advancedRef.current = false;
   }, [gameIdx]);
 
   const currentPlayer = players[turn % Math.max(players.length,1)];
@@ -37945,21 +37946,36 @@ function CollectBoomGame({ gameIdx, players, onAdvance }) {
     }
   };
 
-  const proceed = () => {
-    const dm = {};
-    if (bombPid && bombDrinks > 0) dm[bombPid] = bombDrinks;
-    else if (bombPid) dm[bombPid] = 1;
-    onAdvance && onAdvance(dm);
-  };
-
   const loser = bombPid ? players.find(p=>p.id===bombPid) : null;
-  const allSafe = !bombPid && revealed.every(Boolean);
+  const allRevealed = revealed.every(Boolean);
+  const allSafe = !bombPid && allRevealed;
+
+  // Auto-advance on bomb hit
+  React.useEffect(() => {
+    if (!bombPid || advancedRef.current) return;
+    advancedRef.current = true;
+    const drinks = bombDrinks > 0 ? bombDrinks : 1;
+    const dm = { [bombPid]: drinks };
+    const pm = {};
+    players.forEach(p => { if (p.id !== bombPid) pm[p.id] = 1; });
+    onAdvance && onAdvance(dm, pm);
+    const loserPlayer = players.find(p=>p.id===bombPid);
+    onResult && onResult({ correct: false, playerName: loserPlayer?.name, drinks });
+  }, [bombPid]);
+
+  // Auto-advance when all safe
+  React.useEffect(() => {
+    if (!allSafe || advancedRef.current) return;
+    advancedRef.current = true;
+    onAdvance && onAdvance({});
+    onResult && onResult({ correct: true, playerName: null });
+  }, [allSafe]);
 
   return (
     <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:12,width:'100%'}}>
 
       {/* Drink counter + player indicator */}
-      {!bombPid && (
+      {!bombPid && !allSafe && (
         <div style={{ display:'flex', gap:10, width:'100%' }}>
           <div style={{ display:'flex', alignItems:'center', gap:10, background:'rgba(255,255,255,0.92)', borderRadius:14, padding:'10px 14px', boxShadow:T.shadow, flex:1 }}>
             <div style={{ width:36, height:36, borderRadius:'50%', background:currentPlayer?.color||T.ink, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:15, color:'#fff', flexShrink:0 }}>
@@ -38009,25 +38025,16 @@ function CollectBoomGame({ gameIdx, players, onAdvance }) {
         })}
       </div>
 
-      {/* All safe */}
-      {allSafe && (
-        <div style={{width:'100%',padding:'12px 16px',borderRadius:14,background:'rgba(255,255,255,0.9)',boxShadow:T.shadow,textAlign:'center',animation:'popIn .3s'}}>
-          <div style={{fontFamily:T.font,fontSize:14,fontWeight:700,color:T.mint,marginBottom:8}}>🎉 Senki nem találta a bombát!</div>
-          <button onClick={proceed} style={{width:'100%',padding:'14px',background:T.mint,color:'#fff',fontFamily:T.font,fontWeight:700,fontSize:16,borderRadius:14,border:'none',cursor:'pointer',boxShadow:T.shadow}}>Új kör →</button>
-        </div>
-      )}
-
-      {/* Bomb result */}
+      {/* Bomb result info (no button) */}
       {bombPid && loser && (
-        <div style={{width:'100%',padding:'12px 16px',borderRadius:14,background:'#FFF0EE',boxShadow:T.shadow,display:'flex',flexDirection:'column',gap:10,animation:'popIn .3s',border:'2px solid #F87171'}}>
-          <div style={{fontFamily:T.font,fontSize:15,color:T.ink,textAlign:'center',lineHeight:1.6}}>
-            <span style={{fontSize:28}}>💣</span><br/>
+        <div style={{width:'100%',padding:'12px 16px',borderRadius:14,background:'#FFF0EE',boxShadow:T.shadow,textAlign:'center',animation:'popIn .3s',border:'2px solid #F87171'}}>
+          <span style={{fontSize:28}}>💣</span>
+          <div style={{fontFamily:T.font,fontSize:15,color:T.ink,lineHeight:1.6,marginTop:4}}>
             <span style={{fontWeight:800,color:'#E55555'}}>{loser.name}</span> csapta fel a bombát!<br/>
-            {bombDrinks > 0 ? <span style={{fontWeight:800,color:'#E55555',fontSize:18}}>{bombDrinks} kortyt iszik!</span> : <span>Iszik egyet!</span>}
+            {bombDrinks > 0
+              ? <span style={{fontWeight:800,color:'#E55555',fontSize:18}}>{bombDrinks} kortyt iszik!</span>
+              : <span>Iszik egyet!</span>}
           </div>
-          <button onClick={proceed} style={{width:'100%',padding:'14px',background:T.mint,color:'#fff',fontFamily:T.font,fontWeight:700,fontSize:16,borderRadius:14,border:'none',cursor:'pointer',boxShadow:T.shadow}}>
-            Új kör →
-          </button>
         </div>
       )}
     </div>
@@ -38317,7 +38324,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, 
   if (gameId === 'anagramma') return <AnagrammaGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
   if (gameId === 'ringfire') return <RingFireGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
   if (gameId === 'kopapir') return <KoPapirGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
-  if (gameId === 'collect') return <CollectBoomGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
+  if (gameId === 'collect') return <CollectBoomGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kategoria') return <KategoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'memoria') return <MemoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'kezcsere') return <KezCsereGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
