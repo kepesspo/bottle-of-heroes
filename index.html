@@ -33749,6 +33749,7 @@ const GAMES = [
   { id:'collect',   name:'Collect and Boom',      difficulty:'közepes', category:'Csapat', emoji:'💣', symbol:IMGS['collect_symbol.png'], img:IMGS['collect_icon.png'], banner:IMGS['collect_banner.png'], color:'#0EA5E9', desc:'Az app kisorsol egy játékost aki el fogja kezdeni a kört. A játéktábláról ki kell választania egy cellát. Utána a tőle jobbra ülő fog választani egyet, addig választanak a játékosok ameddig egy bombát találnak — ekkor a játék véget ért és az addig összegyűjtött egységet kell meginnia a vesztesnek.' },
   { id:'kivagyok',  name:'Ki Vagyok Én',          difficulty:'közepes', category:'Egyéni', emoji:'🕵️', symbol:IMGS['kivagyok_symbol.png'], img:IMGS['kivagyok_icon.png'], banner:IMGS['kivagyok_banner.png'], color:'#F472B6', desc:'Az app mutat egy híresség fotóját és ki kell találni ki van a képen. Ebben a játékban csak egy játékos vesz részt. Ha pontosan meg tudja mondani a híresség életkorát vagy foglalkozását akkor kioszthat egy piát.' },
   { id:'mindenki',  name:'Mindenki Iszik',difficulty:'könnyű',  category:'Csapat', emoji:'🍻', symbol:IMGS['mindenki_symbol.png'], img:IMGS['mindenki_icon.png'], banner:IMGS['mindenki_banner.png'], color:'#F4C95A', desc:'A játék kiválaszt egy játékost akinek innia kell. Ezt az app sorsolja ki, ha elfogyta az emberek akkor előről megy a kör.' },
+  { id:'beerpong', name:'Beer Pong Torna',         difficulty:'könnyű',  category:'Csapat', emoji:'🏓', symbol:null, img:null, banner:null, color:'#3B82F6', desc:'Egyéni kieséses beer pong torna. Az app generálja a sorsolást, te döntöd el ki nyert — a vesztes 5 kortyt iszik. Az utolsó ember állva marad a bajnok!' },
   { id:'igazhamis', name:'Igaz Hamis',            difficulty:'könnyű',  category:'Egyéni', emoji:'🤔', symbol:IMGS['igazhamis_symbol.png'], img:IMGS['igazhamis_icon.png'], banner:IMGS['igazhamis_banner.png'], color:'#06B6D4', desc:'A játékban egy állítás fog megjelenni és el kell dönteni, hogy az igaz, vagy hamis. Ha úgy ítéled meg hogy az állítás igaz, akkor az idő lejárta előtt ezt közölnöd kell a többi játékossal akik ez alapján tudjuk eldönteni, hogy jól válaszoltál-e. Ha nem jó a válaszod akkor sajnos innod kell.' },
 ];
 
@@ -33989,7 +33990,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.85 · DNR · 2026.06.02 18:30
+              Verzió 5.86 · DNR · 2026.06.02 18:30
             </div>
           </div>
         </div>
@@ -34515,6 +34516,7 @@ const SCENARIOS = {
   szerencse: { prompt:'Pörgesd meg a kereket — akire mutat, az iszik.', cta:['Rám mutatott','Másra mutatott'] },
   sohanem:   { prompt:'Én még soha — igaz rád?', cta:['Igaz rám — iszom','Nem igaz rám'] },
   mindenki:  { prompt:'', cta:[] },
+  beerpong:  { prompt:'', cta:[] },
   igazhamis: { prompt:'Igaz vagy hamis az állítás?', cta:[] },
   kivagyok:  { prompt:'Ki van a képen? Tippelj rá az életkorára vagy foglalkozására!', cta:[] },
   // Páros
@@ -35011,6 +35013,195 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult }) {
         </div>
       )}
 
+    </div>
+  );
+}
+
+function BeerPongGame({ gameIdx, players, onAdvance, onResult }) {
+  const DRINKS_PER_LOSS = 5;
+
+  const buildFirstRound = (plrs) => {
+    const shuffled = [...plrs].sort(() => Math.random() - 0.5);
+    const size = Math.pow(2, Math.ceil(Math.log2(Math.max(shuffled.length, 2))));
+    while (shuffled.length < size) shuffled.push(null);
+    const matches = [];
+    for (let i = 0; i < shuffled.length; i += 2) {
+      const p1 = shuffled[i], p2 = shuffled[i + 1];
+      matches.push({ p1, p2, winner: p2 === null ? p1 : null, loser: null });
+    }
+    return matches;
+  };
+
+  const [rounds, setRounds] = React.useState([]);
+  const [curRound, setCurRound] = React.useState(0);
+  const [curMatch, setCurMatch] = React.useState(0);
+  const [drinkMap, setDrinkMap] = React.useState({});
+  const [champion, setChampion] = React.useState(null);
+  const doneRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!players || players.length < 2) return;
+    doneRef.current = false;
+    const first = buildFirstRound(players);
+    setRounds([first]);
+    setCurRound(0);
+    setCurMatch(first.findIndex(m => m.winner === null));
+    setDrinkMap({});
+    setChampion(null);
+  }, [gameIdx]);
+
+  const roundName = (roundIdx, totalRounds) => {
+    const remaining = totalRounds - roundIdx;
+    if (remaining === 1) return '🏆 Döntő';
+    if (remaining === 2) return 'Elődöntő';
+    if (remaining === 3) return 'Negyeddöntő';
+    return `1/${Math.pow(2, remaining - 1)} döntő`;
+  };
+
+  const handleWin = (winner, loser) => {
+    setRounds(prevRounds => {
+      const newRounds = prevRounds.map(r => r.map(m => ({ ...m })));
+      newRounds[curRound][curMatch].winner = winner;
+      newRounds[curRound][curMatch].loser = loser;
+
+      const newDrink = { ...drinkMap };
+      if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + DRINKS_PER_LOSS;
+      setDrinkMap(newDrink);
+
+      // Next match in current round without winner
+      const nextInRound = newRounds[curRound].findIndex((m, i) => i > curMatch && m.winner === null);
+      if (nextInRound !== -1) {
+        setCurMatch(nextInRound);
+        return newRounds;
+      }
+
+      // Round complete — collect winners
+      const winners = newRounds[curRound].map(m => m.winner).filter(Boolean);
+      if (winners.length === 1) {
+        // Tournament done
+        if (!doneRef.current) {
+          doneRef.current = true;
+          setChampion(winners[0]);
+          setTimeout(() => {
+            onAdvance && onAdvance(newDrink);
+            onResult && onResult({ correct: true, playerName: winners[0].name, subtitle: `${winners[0].name} nyerte a tornát! 🏆` });
+          }, 0);
+        }
+        return newRounds;
+      }
+
+      // Build next round
+      const nextRound = [];
+      for (let i = 0; i < winners.length; i += 2) {
+        const p1 = winners[i], p2 = winners[i + 1] || null;
+        nextRound.push({ p1, p2, winner: p2 === null ? p1 : null, loser: null });
+      }
+      const nextRoundIdx = curRound + 1;
+      const nextMatch = nextRound.findIndex(m => m.winner === null);
+      setCurRound(nextRoundIdx);
+      setCurMatch(nextMatch);
+      return [...newRounds, nextRound];
+    });
+  };
+
+  if (!players || players.length < 2) return (
+    <div style={{ fontFamily:T.font, color:T.inkSoft, textAlign:'center', padding:24 }}>Legalább 2 játékos kell a tornához.</div>
+  );
+  if (!rounds.length) return null;
+
+  const totalRounds = Math.ceil(Math.log2(Math.max(players.length, 2)));
+  const match = rounds[curRound] && rounds[curRound][curMatch];
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:14, width:'100%' }}>
+
+      {/* Champion screen */}
+      {champion && (
+        <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'28px 20px', textAlign:'center', boxShadow:T.shadow, display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+          <div style={{ fontSize:48 }}>🏆</div>
+          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Bajnok</div>
+          <div style={{ width:80, height:80, borderRadius:'50%', background:champion.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:34, color:'#fff', boxShadow:`0 6px 24px ${champion.color}66` }}>
+            {champion.name.charAt(0).toUpperCase()}
+          </div>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:28, color:T.ink }}>{champion.name}</div>
+          <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>Nyomj Kövi-t az eredmények rögzítéséhez</div>
+        </div>
+      )}
+
+      {/* Current match */}
+      {!champion && match && (
+        <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'20px 16px', boxShadow:T.shadow }}>
+          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', textAlign:'center', marginBottom:14 }}>
+            {roundName(curRound, totalRounds)} · Meccs {curMatch + 1}
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:10, justifyContent:'center' }}>
+            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+              <div style={{ width:72, height:72, borderRadius:'50%', background:match.p1.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:30, color:'#fff', boxShadow:`0 4px 16px ${match.p1.color}55` }}>
+                {match.p1.name.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:15, color:T.ink, textAlign:'center' }}>{match.p1.name}</div>
+            </div>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.inkSoft, flexShrink:0 }}>VS</div>
+            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+              <div style={{ width:72, height:72, borderRadius:'50%', background:match.p2.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:30, color:'#fff', boxShadow:`0 4px 16px ${match.p2.color}55` }}>
+                {match.p2.name.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:15, color:T.ink, textAlign:'center' }}>{match.p2.name}</div>
+            </div>
+          </div>
+          <div style={{ display:'flex', gap:10, marginTop:16 }}>
+            <button onClick={() => handleWin(match.p1, match.p2)} style={{ flex:1, minHeight:56, border:'none', background:match.p1.color, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, borderRadius:14, cursor:'pointer', boxShadow:`0 3px 12px ${match.p1.color}55` }}>
+              🏆 {match.p1.name} nyert
+            </button>
+            <button onClick={() => handleWin(match.p2, match.p1)} style={{ flex:1, minHeight:56, border:'none', background:match.p2.color, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, borderRadius:14, cursor:'pointer', boxShadow:`0 3px 12px ${match.p2.color}55` }}>
+              🏆 {match.p2.name} nyert
+            </button>
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, textAlign:'center', marginTop:8 }}>A vesztes {DRINKS_PER_LOSS} kortyt iszik</div>
+        </div>
+      )}
+
+      {/* Bracket overview */}
+      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 16px', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:10 }}>Bracket</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          {rounds.map((round, rIdx) => (
+            <div key={rIdx}>
+              <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:rIdx === curRound ? T.ink : T.inkSoft, marginBottom:5, textTransform:'uppercase', letterSpacing:'0.06em' }}>
+                {roundName(rIdx, totalRounds)}
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                {round.map((m, mIdx) => {
+                  const isActive = rIdx === curRound && mIdx === curMatch && !champion;
+                  const isDone = m.winner !== null;
+                  return (
+                    <div key={mIdx} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 10px', borderRadius:10, background: isActive ? `${T.blue}18` : 'transparent', border: isActive ? `1.5px solid ${T.blue}44` : '1.5px solid transparent' }}>
+                      <div style={{ flex:1, display:'flex', alignItems:'center', gap:6 }}>
+                        <div style={{ width:22, height:22, borderRadius:'50%', background: m.p1 ? (isDone && m.winner?.id === m.p1?.id ? m.p1.color : `${m.p1.color}55`) : '#ddd', display:'grid', placeItems:'center', fontSize:10, fontFamily:T.font, fontWeight:700, color:'#fff', flexShrink:0 }}>
+                          {m.p1 ? m.p1.name.charAt(0).toUpperCase() : '?'}
+                        </div>
+                        <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone && m.winner?.id === m.p1?.id ? 700 : 400, color: isDone && m.loser?.id === m.p1?.id ? T.inkSoft : T.ink, textDecoration: isDone && m.loser?.id === m.p1?.id ? 'line-through' : 'none' }}>
+                          {m.p1 ? m.p1.name : 'BYE'}
+                        </div>
+                      </div>
+                      <div style={{ fontFamily:T.font, fontSize:10, color:T.inkSoft, flexShrink:0 }}>vs</div>
+                      <div style={{ flex:1, display:'flex', alignItems:'center', gap:6, justifyContent:'flex-end' }}>
+                        <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone && m.winner?.id === m.p2?.id ? 700 : 400, color: isDone && m.loser?.id === m.p2?.id ? T.inkSoft : T.ink, textDecoration: isDone && m.loser?.id === m.p2?.id ? 'line-through' : 'none', textAlign:'right' }}>
+                          {m.p2 ? m.p2.name : 'BYE'}
+                        </div>
+                        <div style={{ width:22, height:22, borderRadius:'50%', background: m.p2 ? (isDone && m.winner?.id === m.p2?.id ? m.p2.color : `${m.p2.color}55`) : '#ddd', display:'grid', placeItems:'center', fontSize:10, fontFamily:T.font, fontWeight:700, color:'#fff', flexShrink:0 }}>
+                          {m.p2 ? m.p2.name.charAt(0).toUpperCase() : '?'}
+                        </div>
+                      </div>
+                      {isDone && <div style={{ fontSize:14, flexShrink:0 }}>✅</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -38709,6 +38900,7 @@ function KezCsereGame({ gameIdx, players, onAdvance }) {
 
 function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, mode, gameMeta, challenger, opponent }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} />;
+  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
@@ -38932,7 +39124,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
           <button onClick={() => advancePaired(true)} disabled={transitioning} style={{ flex:1, minHeight:60, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>Nyertem! 🎉</button>
         </div>
       )}
-      {currentGame.category === 'Csapat' && currentGameId !== 'loverseny' && currentGameId !== 'imposztor' && currentGameId !== 'busz' && currentGameId !== 'kisebb' && currentGameId !== 'ticktak' && currentGameId !== 'szerencse' && currentGameId !== 'kategoria' && currentGameId !== 'collect' && currentGameId !== 'kopapir' && currentGameId !== 'memoria' && currentGameId !== 'kezcsere' && currentGameId !== 'mindenki' && (
+      {currentGame.category === 'Csapat' && currentGameId !== 'loverseny' && currentGameId !== 'imposztor' && currentGameId !== 'busz' && currentGameId !== 'kisebb' && currentGameId !== 'ticktak' && currentGameId !== 'szerencse' && currentGameId !== 'kategoria' && currentGameId !== 'collect' && currentGameId !== 'kopapir' && currentGameId !== 'memoria' && currentGameId !== 'kezcsere' && currentGameId !== 'mindenki' && currentGameId !== 'beerpong' && (
         <div style={{ padding:'0 18px 14px', display:'flex', flexDirection:'column', gap:10 }}>
           <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', textAlign:'center' }}>Ki rontott?</div>
           <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:4, WebkitOverflowScrolling:'touch' }}>
