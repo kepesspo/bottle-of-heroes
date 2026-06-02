@@ -33989,7 +33989,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.78 · DNR · 2026.06.02 18:30
+              Verzió 5.79 · DNR · 2026.06.02 18:30
             </div>
           </div>
         </div>
@@ -34863,7 +34863,12 @@ const OTDOLOG_CATEGORIES = [
   'Ruhafélék','Virágok','Madárfajták','Hegyek','Folyók',
   'Filmszínészek','Énekesek','Sportolók','Márkák','Konyhai eszközök',
   'Technológiai cégek','Magyar sütemények','Tengergyümölcsök','Hüvelyesek','Fűszerek',
+  'Mesehősök','Szuperhősök','Hangszerek','Nyelvek','Rovarfajták',
+  'Bolygók','Halak','Fafajták','Magyar ételek','Koktélok',
+  'Sportcsapatok','Olimpiai sportok','Oscar-díjas filmek','Zenei műfajok','Társasjátékok',
+  'Kártyajátékok','Videójátékok','Sörök','Gombafajták','Vallások',
 ];
+(()=>{ for(let i=OTDOLOG_CATEGORIES.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [OTDOLOG_CATEGORIES[i],OTDOLOG_CATEGORIES[j]]=[OTDOLOG_CATEGORIES[j],OTDOLOG_CATEGORIES[i]]; } })();
 
 const SOHANEM_CARDS = [
   {t:'csókolóztam vadidegennel',l:'vad'},
@@ -34908,47 +34913,60 @@ const SOHANEM_CARDS = [
   {t:'megevtem más ételét a hűtőből beleegyezés nélkül',l:'alap'},
 ];
 
-function OtdologGame({ gameIdx, challenger, onAdvance }) {
+function OtdologGame({ gameIdx, challenger, onAdvance, onResult }) {
   const cat = OTDOLOG_CATEGORIES[gameIdx % OTDOLOG_CATEGORIES.length];
+  const [phase, setPhase] = React.useState('ready'); // 'ready' | 'running' | 'done'
   const [timeLeft, setTimeLeft] = React.useState(5);
   const [checked, setChecked] = React.useState([false,false,false,false,false]);
-  const [running, setRunning] = React.useState(false);
-  const [expired, setExpired] = React.useState(false);
+  const advancedRef = React.useRef(false);
 
   React.useEffect(() => {
-    setTimeLeft(5); setChecked([false,false,false,false,false]); setRunning(false); setExpired(false);
+    setPhase('ready'); setTimeLeft(5); setChecked([false,false,false,false,false]); advancedRef.current = false;
   }, [gameIdx]);
 
   React.useEffect(() => {
-    if (!running || expired) return;
+    if (phase !== 'running') return;
     const iv = setInterval(() => {
       setTimeLeft(prev => {
         const next = +(prev - 0.05).toFixed(2);
-        if (next <= 0) { setExpired(true); setRunning(false); return 0; }
+        if (next <= 0) { setPhase('done'); return 0; }
         return next;
       });
     }, 50);
     return () => clearInterval(iv);
-  }, [running, expired]);
+  }, [phase]);
 
   const checkedCount = checked.filter(Boolean).length;
   const pct = timeLeft / 5;
   const r = 72, circ = +(2 * Math.PI * r).toFixed(1);
   const timerColor = pct > 0.5 ? T.mint : pct > 0.2 ? T.yellow : T.coral;
-  const doWin = () => onAdvance && onAdvance({});
-  const doLose = () => onAdvance && onAdvance(challenger ? {[challenger.id]:1} : {});
+
+  const handleResult = (correct) => {
+    if (advancedRef.current) return;
+    advancedRef.current = true;
+    const dm = {};
+    const pm = {};
+    if (!correct && challenger) dm[challenger.id] = 1;
+    if (correct && challenger) pm[challenger.id] = 1;
+    onAdvance && onAdvance(dm, pm);
+    onResult && onResult({ correct, playerName: challenger ? challenger.name : null, drinks: correct ? 0 : 1 });
+  };
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, width:'100%' }}>
       <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'20px 24px', textAlign:'center', boxShadow:T.shadow }}>
         <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>KATEGÓRIA</div>
-        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:T.ink, lineHeight:1.1 }}>{cat}</div>
+        {phase === 'ready' ? (
+          <div style={{ height:34, borderRadius:8, background:'repeating-linear-gradient(-45deg,#e0e4f0,#e0e4f0 4px,#d0d4e4 4px,#d0d4e4 8px)' }}/>
+        ) : (
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:T.ink, lineHeight:1.1, animation:'popIn .3s cubic-bezier(.2,.9,.3,1.2)' }}>{cat}</div>
+        )}
       </div>
 
-      {(!running && !expired) ? (
-        <button onClick={() => setRunning(true)} style={{ width:148, height:148, borderRadius:'50%', background:T.mint, border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, boxShadow:T.shadow }}>
+      {phase === 'ready' ? (
+        <button onClick={() => setPhase('running')} style={{ width:148, height:148, borderRadius:'50%', background:T.mint, border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, boxShadow:T.shadow }}>
           <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:36, color:'#fff', lineHeight:1 }}>▶</div>
-          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.85)' }}>Indítás</div>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.85)' }}>Felfed & Indít</div>
         </button>
       ) : (
         <div style={{ position:'relative', width:160, height:160 }}>
@@ -34959,13 +34977,13 @@ function OtdologGame({ gameIdx, challenger, onAdvance }) {
               style={{ transition:'stroke .3s' }} />
           </svg>
           <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
-            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:52, color:T.ink, lineHeight:1 }}>{expired ? '0' : Math.ceil(timeLeft)}</div>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:52, color:T.ink, lineHeight:1 }}>{phase==='done' ? '0' : Math.ceil(timeLeft)}</div>
             <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, letterSpacing:'0.07em' }}>MP</div>
           </div>
         </div>
       )}
 
-      {(running || expired) && (
+      {phase !== 'ready' && (
         <div style={{ display:'flex', gap:8 }}>
           {checked.map((c, i) => (
             <div key={i} onClick={() => { const n=[...checked]; n[i]=!n[i]; setChecked(n); }}
@@ -34977,16 +34995,16 @@ function OtdologGame({ gameIdx, challenger, onAdvance }) {
         </div>
       )}
 
-      {(running || expired) && (
+      {phase !== 'ready' && (
         <div style={{ fontFamily:T.font, fontSize:14, fontWeight:600, color:T.inkSoft }}>
-          {checkedCount===5 ? '\U0001f389 Mind megvan!' : checkedCount>0 ? `${checkedCount} / 5 megvan — hajrá!` : expired ? 'Idő lejárt!' : 'Jelöld be amit kimondottál!'}
+          {checkedCount===5 ? '🎉 Mind megvan!' : checkedCount>0 ? `${checkedCount} / 5 megvan — hajrá!` : phase==='done' ? 'Idő lejárt!' : 'Jelöld be amit kimondottál!'}
         </div>
       )}
 
-      {(running || expired) && (
-        <div style={{ display:'flex', gap:10, width:'100%' }}>
-          <button onClick={doLose} style={{ flex:1, padding:'14px', background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow }}>Nem sikerült</button>
-          <button onClick={doWin} style={{ flex:1, padding:'14px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow }}>Megvan! \U0001f389</button>
+      {phase !== 'ready' && (
+        <div className="play-actions" style={{ width:'100%' }}>
+          <button onClick={() => handleResult(false)} style={{ flex:1, minHeight:60, border:'none', background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>Nem sikerült 😔</button>
+          <button onClick={() => handleResult(true)} style={{ flex:1, minHeight:60, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>Megvan! 🎉</button>
         </div>
       )}
     </div>
@@ -38642,7 +38660,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, 
   if (gameId === 'kategoria') return <KategoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'memoria') return <MemoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'kezcsere') return <KezCsereGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
-  if (gameId === 'otdolog') return <OtdologGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} />;
+  if (gameId === 'otdolog') return <OtdologGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'sohanem') return <SohanemGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} />;
   return null;
 }
