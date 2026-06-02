@@ -33988,7 +33988,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.67 · DNR · 2026.06.02 18:30
+              Verzió 5.68 · DNR · 2026.06.02 18:30
             </div>
           </div>
         </div>
@@ -35455,14 +35455,15 @@ const HORSES = [
   { id:4, color:'#5BA0DB', emoji:'🔵', name:'Kék' },
 ];
 
-function IgazHamisGame({ gameIdx }) {
+function IgazHamisGame({ gameIdx, challenger, onAdvance }) {
   const item = IGAZ_HAMIS[gameIdx % IGAZ_HAMIS.length];
   const [decided, setDecided] = useState(null); // null | 'igaz' | 'hamis'
   const [dragX, setDragX] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startXRef = useRef(null);
+  const advancedRef = useRef(false);
 
-  useEffect(() => { setDecided(null); setDragX(0); setDragging(false); }, [gameIdx]);
+  useEffect(() => { setDecided(null); setDragX(0); setDragging(false); advancedRef.current = false; }, [gameIdx]);
 
   const decide = (choice) => {
     if (decided) return;
@@ -35470,6 +35471,16 @@ function IgazHamisGame({ gameIdx }) {
     setDragX(0);
     setDragging(false);
   };
+
+  const correct = decided !== null ? (decided === (item.igaz ? 'igaz' : 'hamis')) : null;
+
+  useEffect(() => {
+    if (decided === null || advancedRef.current) return;
+    advancedRef.current = true;
+    const dm = {};
+    if (!correct && challenger) dm[challenger.id] = 1;
+    onAdvance && onAdvance(dm);
+  }, [decided]);
 
   const onPointerDown = (e) => {
     if (decided) return;
@@ -35499,9 +35510,7 @@ function IgazHamisGame({ gameIdx }) {
     boxShadow:'0 8px 32px rgba(0,0,0,0.14)',
     transform: dragging
       ? `translateX(${dragX}px) rotate(${dragX / 18}deg)`
-      : decided
-        ? 'translateX(0) rotate(0deg)'
-        : 'translateX(0) rotate(0deg)',
+      : 'translateX(0) rotate(0deg)',
     transition: dragging ? 'none' : 'transform .4s cubic-bezier(.2,.9,.3,1.2)',
     cursor: decided ? 'default' : 'grab',
     userSelect:'none', WebkitUserSelect:'none',
@@ -35538,13 +35547,6 @@ function IgazHamisGame({ gameIdx }) {
             onPointerCancel={() => { setDragging(false); setDragX(0); }}
             style={cardStyle}>
 
-            {/* Answer chip — top right, appears after decision */}
-            {decided && (
-              <div style={{ position:'absolute', top:14, right:14, background: item.igaz ? '#50A882' : '#E8A090', borderRadius:20, padding:'5px 13px', display:'flex', alignItems:'center', gap:4, animation:'burstPop .3s' }}>
-                <span style={{ color:'#fff', fontWeight:800, fontSize:12 }}>{item.igaz ? '✓ IGAZ' : '✗ HAMIS'}</span>
-              </div>
-            )}
-
             {/* Drag preview chip */}
             {dragging && swipeRatio > 0.35 && (
               <div style={{ position:'absolute', top:14, ...(dragDir==='igaz' ? {right:14} : {left:14}), background: dragDir==='igaz' ? `rgba(80,168,130,${0.6+swipeRatio*0.4})` : `rgba(232,160,144,${0.6+swipeRatio*0.4})`, borderRadius:20, padding:'5px 13px', pointerEvents:'none' }}>
@@ -35553,16 +35555,30 @@ function IgazHamisGame({ gameIdx }) {
             )}
 
             {/* Category chip */}
-            {item.cat && (
-              <div style={{ position:'absolute', top:54, background:'#F5ECD8', borderRadius:20, padding:'5px 13px' }}>
+            {item.cat && !decided && (
+              <div style={{ position:'absolute', top:16, background:'#F5ECD8', borderRadius:20, padding:'5px 13px' }}>
                 <span style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:'#7a6550', letterSpacing:'0.06em' }}>{item.cat}</span>
               </div>
             )}
 
+            {/* After decision: correct answer chip */}
+            {decided && (
+              <div style={{ position:'absolute', top:16, background: item.igaz ? '#50A882' : '#E8A090', borderRadius:20, padding:'5px 13px', animation:'burstPop .3s' }}>
+                <span style={{ color:'#fff', fontWeight:800, fontSize:12 }}>{item.igaz ? '✓ IGAZ' : '✗ HAMIS'}</span>
+              </div>
+            )}
+
             {/* Statement */}
-            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:19, color:'#1B2340', textAlign:'center', lineHeight:1.45, marginTop: item.cat ? 32 : 0 }}>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:19, color:'#1B2340', textAlign:'center', lineHeight:1.45, marginTop:32 }}>
               {item.text}
             </div>
+
+            {/* After decision: explanation */}
+            {decided && item.exp && (
+              <div style={{ position:'absolute', bottom:14, left:16, right:16, fontFamily:T.font, fontSize:12, color:'#555', textAlign:'center', lineHeight:1.4, fontStyle:'italic' }}>
+                {item.exp}
+              </div>
+            )}
 
             {/* Swipe hint */}
             {!decided && (
@@ -35581,6 +35597,21 @@ function IgazHamisGame({ gameIdx }) {
           <span style={{ fontFamily:T.font, fontWeight:700, fontSize:9, color:'#50A882', letterSpacing:'0.1em' }}>IGAZ</span>
         </div>
       </div>
+
+      {/* Result banner */}
+      {decided && (
+        <div style={{ width:'100%', borderRadius:16, padding:'14px 18px', display:'flex', alignItems:'center', gap:12, animation:'popIn .3s cubic-bezier(.2,.9,.3,1.2)', background: correct ? 'rgba(80,168,130,0.12)' : 'rgba(232,160,144,0.18)', border:`2px solid ${correct ? '#50A882' : '#E8A090'}` }}>
+          <div style={{ fontSize:28 }}>{correct ? '🎉' : '🍺'}</div>
+          <div>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color: correct ? '#50A882' : '#C05050' }}>
+              {correct ? 'Helyes! Nem kell innod.' : 'Rossz tipp — inni kell!'}
+            </div>
+            {challenger && !correct && (
+              <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>{challenger.name} iszik egyet</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -38281,7 +38312,7 @@ function KezCsereGame({ gameIdx, players, onAdvance }) {
 function GameContent({ gameId, gameIdx, players, onAdvance, roomCode, mode, gameMeta, challenger, opponent }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} />;
-  if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} />;
+  if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
