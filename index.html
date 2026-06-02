@@ -33989,7 +33989,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.83 · DNR · 2026.06.02 18:30
+              Verzió 5.84 · DNR · 2026.06.02 18:30
             </div>
           </div>
         </div>
@@ -35024,10 +35024,14 @@ function MindenkiGame({ gameIdx, players, onAdvance, onResult }) {
   React.useEffect(() => {
     doneRef.current = false;
     if (!current) return;
-    const dm = { [current.id]: 1 };
-    onAdvance && onAdvance(dm);
-    onResult && onResult({ correct: false, playerName: current.name, drinks: 1, subtitle: `${current.name} iszik egyet` });
-    doneRef.current = true;
+    // setTimeout(0) ensures this fires after PlayScreen's useEffect resets pendingCommit
+    const t = setTimeout(() => {
+      const dm = { [current.id]: 1 };
+      onAdvance && onAdvance(dm);
+      onResult && onResult({ correct: false, playerName: current.name, drinks: 1, subtitle: `${current.name} iszik egyet` });
+      doneRef.current = true;
+    }, 0);
+    return () => clearTimeout(t);
   }, [gameIdx]);
 
   if (!current) return null;
@@ -35237,7 +35241,8 @@ function ZeneGame({ gameIdx }) {
 }
 
 function KivagyokGame({ gameIdx, challenger, onAdvance, onResult }) {
-  const celeb = KIVAGYOK_CELEBS[gameIdx % KIVAGYOK_CELEBS.length];
+  const [offset, setOffset] = React.useState(0);
+  const celeb = KIVAGYOK_CELEBS[(gameIdx + offset) % KIVAGYOK_CELEBS.length];
   const [revealed, setRevealed] = useState(false);
   const [decided, setDecided] = useState(null);
   const [imgState, setImgState] = useState('loading'); // 'loading' | 'ok' | 'err'
@@ -35248,6 +35253,7 @@ function KivagyokGame({ gameIdx, challenger, onAdvance, onResult }) {
     setRevealed(false);
     setDecided(null);
     setImgState('loading');
+    setOffset(0);
   }, [gameIdx]);
 
   const infoParts = (celeb.info || '').split(' · ');
@@ -35290,18 +35296,13 @@ function KivagyokGame({ gameIdx, challenger, onAdvance, onResult }) {
                 <div style={{ width:28, height:28, border:'3px solid #9aabb8', borderTopColor:'#1B2340', borderRadius:'50%', animation:'spin 0.8s linear infinite' }}/>
               </div>
             )}
-            {imgState === 'err' && (
-              <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:'#b0bec8', fontFamily:T.font, fontWeight:900, fontSize:28, color:'#fff' }}>
-                {initials}
-              </div>
-            )}
             <img
               key={celeb.img}
               src={celeb.img}
               alt="celeb"
               style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', display: imgState === 'ok' ? 'block' : 'none' }}
               onLoad={() => setImgState('ok')}
-              onError={() => setImgState('err')}
+              onError={() => { setOffset(o => o + 1); setImgState('loading'); }}
             />
           </div>
 
