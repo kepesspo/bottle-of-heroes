@@ -51,6 +51,7 @@
 
     /* ── Animations ── */
     @keyframes fadeIn    { from{opacity:0} to{opacity:1} }
+    @keyframes spin      { to { transform: rotate(360deg); } }
     @keyframes popIn     { from{transform:scale(.7);opacity:0} to{transform:scale(1);opacity:1} }
     @keyframes slideUp   { from{transform:translateY(60px);opacity:.6} to{transform:translateY(0);opacity:1} }
     @keyframes slideIn   { from{transform:translateX(40px);opacity:0} to{transform:translateX(0);opacity:1} }
@@ -33988,7 +33989,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.77 · DNR · 2026.06.02 18:30
+              Verzió 5.78 · DNR · 2026.06.02 18:30
             </div>
           </div>
         </div>
@@ -35153,10 +35154,16 @@ function ZeneGame({ gameIdx }) {
 function KivagyokGame({ gameIdx, challenger, onAdvance, onResult }) {
   const celeb = KIVAGYOK_CELEBS[gameIdx % KIVAGYOK_CELEBS.length];
   const [revealed, setRevealed] = useState(false);
-  const [decided, setDecided] = useState(null); // 'correct' | 'wrong'
+  const [decided, setDecided] = useState(null);
+  const [imgState, setImgState] = useState('loading'); // 'loading' | 'ok' | 'err'
   const advancedRef = React.useRef(false);
 
-  React.useEffect(() => { advancedRef.current = false; setRevealed(false); setDecided(null); }, [gameIdx]);
+  React.useEffect(() => {
+    advancedRef.current = false;
+    setRevealed(false);
+    setDecided(null);
+    setImgState('loading');
+  }, [gameIdx]);
 
   const infoParts = (celeb.info || '').split(' · ');
   const lifespan   = infoParts[0] || '';
@@ -35179,6 +35186,8 @@ function KivagyokGame({ gameIdx, challenger, onAdvance, onResult }) {
     onResult && onResult({ correct, playerName: challenger ? challenger.name : null, drinks: correct ? 0 : 1 });
   };
 
+  const initials = celeb.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+
   return (
     <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
       <div style={{ width:'100%', background:'#EDE5CF', borderRadius:20, border:'2.5px solid #1B2340', overflow:'visible', position:'relative' }}>
@@ -35189,9 +35198,26 @@ function KivagyokGame({ gameIdx, challenger, onAdvance, onResult }) {
             AKTA #{String((gameIdx % KIVAGYOK_CELEBS.length) + 1).padStart(2,'0')}
           </div>
 
-          {/* Photo */}
-          <div style={{ width:100, height:118, background:'#C4CDD8', borderRadius:10, overflow:'hidden', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', border:'1.5px solid #9aabb8' }}>
-            <img src={celeb.img} alt="celeb" style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top' }} onError={e=>{e.target.style.display='none';}}/>
+          {/* Photo with spinner/fallback */}
+          <div style={{ width:100, height:118, background:'#C4CDD8', borderRadius:10, overflow:'hidden', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', border:'1.5px solid #9aabb8', position:'relative' }}>
+            {imgState === 'loading' && (
+              <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:'#C4CDD8' }}>
+                <div style={{ width:28, height:28, border:'3px solid #9aabb8', borderTopColor:'#1B2340', borderRadius:'50%', animation:'spin 0.8s linear infinite' }}/>
+              </div>
+            )}
+            {imgState === 'err' && (
+              <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:'#b0bec8', fontFamily:T.font, fontWeight:900, fontSize:28, color:'#fff' }}>
+                {initials}
+              </div>
+            )}
+            <img
+              key={celeb.img}
+              src={celeb.img}
+              alt="celeb"
+              style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', display: imgState === 'ok' ? 'block' : 'none' }}
+              onLoad={() => setImgState('ok')}
+              onError={() => setImgState('err')}
+            />
           </div>
 
           {/* Fields */}
@@ -35218,37 +35244,29 @@ function KivagyokGame({ gameIdx, challenger, onAdvance, onResult }) {
         <div style={{ borderTop:'1.5px dashed rgba(27,35,64,0.3)', margin:'0 14px' }}/>
 
         <div style={{ padding:'12px 14px 14px', display:'flex', flexDirection:'column', gap:10 }}>
-          {!revealed ? (
-            <>
-              <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
-                <div style={{ width:36, height:36, minWidth:36, background:'#1B2340', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <span style={{ fontSize:18, color:'#F0C040', fontWeight:900 }}>?</span>
-                </div>
-                <div style={{ fontFamily:T.font, fontSize:13, color:'#2a2a3a', lineHeight:1.5 }}>
-                  Tippeld meg a <strong>hírességet</strong> — aztán fedd fel az aktát.
-                </div>
-              </div>
-              <button onClick={() => setRevealed(true)} style={{ width:'100%', padding:'14px 0', background:'#1B2340', border:'none', borderRadius:14, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-                <span>🔍</span><span>Akta felfedése</span>
-              </button>
-            </>
-          ) : !decided ? (
-            <>
-              <div style={{ fontFamily:T.font, fontSize:13, color:'#2a2a3a', lineHeight:1.5, textAlign:'center' }}>
-                Sikerült kitalálni?
-              </div>
-              <div style={{ display:'flex', gap:10 }}>
-                <button onClick={() => handleResult(false)} style={{ flex:1, padding:'13px 0', background:'rgba(232,160,144,0.18)', border:'2px solid #E8A090', borderRadius:14, color:'#C05050', fontFamily:T.font, fontWeight:700, fontSize:15, cursor:'pointer' }}>
-                  🍺 Nem ismertem
-                </button>
-                <button onClick={() => handleResult(true)} style={{ flex:1, padding:'13px 0', background:'rgba(80,168,130,0.12)', border:'2px solid #50A882', borderRadius:14, color:'#50A882', fontFamily:T.font, fontWeight:700, fontSize:15, cursor:'pointer' }}>
-                  🎉 Megismertem!
-                </button>
-              </div>
-            </>
-          ) : null}
+          <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
+            <div style={{ width:36, height:36, minWidth:36, background:'#1B2340', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <span style={{ fontSize:18, color:'#F0C040', fontWeight:900 }}>?</span>
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:13, color:'#2a2a3a', lineHeight:1.5 }}>
+              Tippeld meg a <strong>hírességet</strong> — aztán fedd fel az aktát.
+            </div>
+          </div>
+          {!revealed && (
+            <button onClick={() => setRevealed(true)} style={{ width:'100%', padding:'14px 0', background:'#1B2340', border:'none', borderRadius:14, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+              <span>🔍</span><span>Akta felfedése</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Result buttons — styled like play-actions, only shown after reveal */}
+      {revealed && !decided && (
+        <div className="play-actions" style={{ width:'100%' }}>
+          <button onClick={() => handleResult(false)} style={{ flex:1, minHeight:60, border:'none', background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>Nem ismertem 🍺</button>
+          <button onClick={() => handleResult(true)} style={{ flex:1, minHeight:60, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>Megismertem! 🎉</button>
+        </div>
+      )}
     </div>
   );
 }
