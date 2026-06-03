@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.06';
+const APP_VERSION = 'v6.07';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -34271,7 +34271,7 @@ function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
             {BP_TOURNAMENT_TYPES.map(t => {
               const on = tournament === t.key;
-              const disabled = playerCount >= 4 ? false : t.key.startsWith('grp_');
+              const disabled = (playerCount < 99 && playerCount < 4) && t.key.startsWith('grp_');
               return (
                 <button key={t.key} onClick={() => !disabled && setConfig(c => ({...c, tournamentType:t.key}))} disabled={disabled}
                   style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, padding:'8px 6px', borderRadius:12, border: on ? '2px solid ' + T.mint : '2px solid rgba(20,30,50,0.08)', background: on ? T.mint + '14' : disabled ? 'rgba(20,30,50,0.04)' : T.bg, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1, minHeight:48 }}>
@@ -34476,7 +34476,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
       </SheetOverlay>}
       {info && <GameInfoModal game={GAMES.find(g=>g.id===info)} onClose={() => setInfo(null)} />}
       {buszSheet && <BuszConfigSheet config={buszConfig} setConfig={setBuszConfig} onClose={() => setBuszSheet(false)} />}
-      {beerpongSheet && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setBeerpongSheet(false)} playerCount={0} />}
+      {beerpongSheet && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setBeerpongSheet(false)} playerCount={99} />}
       {filterSheet && (
         <SheetOverlay onClose={() => setFilterSheet(false)}>
           <div style={{ padding:'4px 18px 18px', display:'flex', flexDirection:'column', gap:10 }}>
@@ -35201,9 +35201,13 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   const TOURNAMENT = bpCfg.tournamentType || 'se';
   const GROUP_ADVANCE = bpCfg.groupAdvance ?? 1;
   const MATCH_MINUTES = bpCfg.matchMinutes ?? 5;
+  const MODE = bpCfg.mode || 'egyeni';
   const doneRef = React.useRef(false);
+  const teamPlayersRef = React.useRef(null);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+  const effectivePlayers = (MODE === 'csapat' && teamsReady && teamPlayersRef.current) ? teamPlayersRef.current : players;
+
   const buildSERound = (parts) => {
     const ms = [];
     for (let i = 0; i < parts.length; i += 2) {
@@ -35273,6 +35277,12 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   const [expandedRounds, setExpandedRounds] = React.useState({});
   const lpTimer = React.useRef(null);
   const [standingsExp, setStandingsExp] = React.useState(true);
+  const [teamsReady, setTeamsReady] = React.useState(false);
+  const [teamAssign, setTeamAssign] = React.useState(() => {
+    const a = {};
+    players.forEach((p, i) => { a[p.id] = i % 2; });
+    return a;
+  });
   const [matchListExp, setMatchListExp] = React.useState(true);
   const [viewGroup, setViewGroup] = React.useState(0);
   const [expandedGroups, setExpandedGroups_g] = React.useState({});
@@ -35318,22 +35328,20 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   // finals reuse SE or RR state (seRounds/rrMatches)
 
   // ── Init ──────────────────────────────────────────────────────────────────
-  React.useEffect(() => {
+  const initTournament = (tp) => {
     doneRef.current = false;
     setCups1(MAX_CUPS); setCups2(MAX_CUPS);
     setDrinkMap({}); setChampion(null); setExpandedRounds({}); setViewGroup(0); setExpandedGroups_g({});
-
     if (TOURNAMENT === 'se') {
-      const br = buildSEBracket(players);
+      const br = buildSEBracket(tp);
       setSeRounds(br); setSeCurRound(0);
       const firstPending = br[0].findIndex(m => m.winner === null);
       setSeCurMatch(firstPending >= 0 ? firstPending : 0);
     } else if (TOURNAMENT === 'rr') {
-      const ms = buildRRMatches([...players].sort(() => Math.random() - 0.5));
+      const ms = buildRRMatches([...tp].sort(() => Math.random() - 0.5));
       setRrMatches(ms); setRrIdx(0); setRrDone(false);
     } else {
-      // Two-stage: split into 2 groups
-      const sh = [...players].sort(() => Math.random() - 0.5);
+      const sh = [...tp].sort(() => Math.random() - 0.5);
       const half = Math.ceil(sh.length / 2);
       const gPlayers = [sh.slice(0, half), sh.slice(half)];
       const groupType = TOURNAMENT.startsWith('grp_rr') ? 'rr' : 'se';
@@ -35348,7 +35356,17 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
       setTsGroups(groups); setTsCurGroup(0); setTsPhase('groups');
       setSeRounds([]); setRrMatches([]); setRrDone(false);
     }
+  };
+
+  React.useEffect(() => {
+    if (MODE === 'csapat') { setTeamsReady(false); teamPlayersRef.current = null; return; }
+    initTournament(players);
   }, [gameIdx]);
+
+  React.useEffect(() => {
+    if (!teamsReady || !teamPlayersRef.current) return;
+    initTournament(teamPlayersRef.current);
+  }, [teamsReady]);
 
   // ── SE confirm ────────────────────────────────────────────────────────────
   const handleSEConfirm = (rounds, curRound, curMatch, setCB) => {
@@ -35369,7 +35387,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
       nr[curRound][curMatch].loser  = loser;
       nr[curRound][curMatch].score  = score;
 
-      const nextInRound = nr[curRound].findIndex((m, i) => i > curMatch && m.winner === null);
+      const nextInRound = nr[curRound].findIndex(m => m.winner === null);
       if (nextInRound !== -1) { setSeCurMatch(nextInRound); return nr; }
 
       const winners = nr[curRound].map(m => m.winner).filter(Boolean);
@@ -35855,7 +35873,57 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
 
   // ── Main render ───────────────────────────────────────────────────────────
   const isTwoStage = TOURNAMENT.startsWith('grp_');
-  const rrParts = TOURNAMENT === 'rr' ? players : (rrMatches.flatMap(m => [m.p1, m.p2]).filter((p, i, a) => p && a.findIndex(x => x && x.id === p.id) === i));
+  const rrParts = TOURNAMENT === 'rr' ? effectivePlayers : (rrMatches.flatMap(m => [m.p1, m.p2]).filter((p, i, a) => p && a.findIndex(x => x && x.id === p.id) === i));
+
+  if (MODE === 'csapat' && !teamsReady) {
+    const teamColors = [T.mint, T.coral, T.blue, '#FACC15'];
+    const teamLabels = ['A csapat', 'B csapat', 'C csapat', 'D csapat'];
+    const numTeams = Math.max(2, Math.min(4, Math.ceil(players.length / 2)));
+    const teamCounts = Array.from({length: numTeams}, (_, ti) => players.filter(p => (teamAssign[p.id] ?? (players.indexOf(p) % 2)) === ti).length);
+    return (
+      <div style={{ display:'flex', flexDirection:'column', gap:12, padding:'16px 12px' }}>
+        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textAlign:'center', textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Csapatok összeállítása</div>
+        <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, textAlign:'center', marginTop:-4 }}>Érintsd meg a játékost a csapat váltásához</div>
+        <div style={{ display:'flex', gap:8, justifyContent:'center', flexWrap:'wrap' }}>
+          {Array.from({length: numTeams}, (_, ti) => (
+            <div key={ti} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 10px', borderRadius:20, background: teamColors[ti] + '22', border:'1.5px solid ' + teamColors[ti] }}>
+              <div style={{ width:8, height:8, borderRadius:4, background: teamColors[ti] }} />
+              <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color: teamColors[ti] }}>{teamLabels[ti]} ({teamCounts[ti]})</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+          {players.map(p => {
+            const ti = teamAssign[p.id] ?? (players.indexOf(p) % 2);
+            const nextTi = (ti + 1) % numTeams;
+            return (
+              <div key={p.id} onClick={() => setTeamAssign(prev => ({...prev, [p.id]: nextTi}))}
+                style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:14, background:T.surface, boxShadow:T.shadow, cursor:'pointer', border:'2px solid ' + teamColors[ti] + '88', transition:'all .15s' }}>
+                <div style={{ width:10, height:10, borderRadius:5, background: teamColors[ti], flexShrink:0 }} />
+                <div style={{ flex:1, fontFamily:T.font, fontWeight:700, fontSize:15, color:T.ink }}>{p.name}</div>
+                <div style={{ fontFamily:T.font, fontSize:12, color: teamColors[ti], fontWeight:700 }}>{teamLabels[ti]}</div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ marginTop:8 }}>
+          <PrimaryButton onClick={() => {
+            const numT = numTeams;
+            const tl = teamLabels;
+            const builtTeams = Array.from({length: numT}, (_, ti) => ({
+              id: 'team_' + ti,
+              name: tl[ti],
+              emoji: ['🟢','🔴','🔵','🟡'][ti],
+              avatar: null,
+              members: players.filter(p => (teamAssign[p.id] ?? (players.indexOf(p) % 2)) === ti),
+            })).filter(t => t.members.length > 0);
+            teamPlayersRef.current = builtTeams;
+            setTeamsReady(true);
+          }}>Torna indítása ▶</PrimaryButton>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, width:'100%' }}>
