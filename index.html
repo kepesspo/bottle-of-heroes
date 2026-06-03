@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.63';
+const APP_VERSION = 'v6.64';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -36219,6 +36219,10 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       );
     }
     if (!currentMatch) return null;
+    if (!currentMatch.p1 || !currentMatch.p2) {
+      // BYE match — auto-advance, skip rendering
+      return null;
+    }
 
     // Phase label
     let phaseLabel = '';
@@ -40668,11 +40672,13 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
 
   const advanceLoverseny = (drinkMap, pointsMap) => {
     if (transitioning) return;
+    const dm = drinkMap || {};
+    const pm = pointsMap || {};
     const newPlayers = trackScores
-      ? players.map(p => ({ ...p, drinks: p.drinks + (drinkMap[p.id] || 0), points: p.points + ((pointsMap && pointsMap[p.id]) || 0) }))
+      ? players.map(p => ({ ...p, drinks: p.drinks + (dm[p.id] || 0), points: p.points + (pm[p.id] || 0) }))
       : players;
-    const hasPoints = pointsMap && Object.values(pointsMap).some(v => v > 0);
-    const hasDrinks = drinkMap && Object.values(drinkMap).some(v => v > 0);
+    const hasPoints = Object.values(pm).some(v => v > 0);
+    const hasDrinks = Object.values(dm).some(v => v > 0);
     const fb = hasPoints ? 'win' : hasDrinks ? 'lose' : null;
     setPendingCommit({ newPlayers, fb, newTurn:(turn+1)%players.length, newGameIdx:gameIdx+1, newRound:round+1 });
   };
