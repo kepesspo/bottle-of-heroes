@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.15';
+const APP_VERSION = 'v6.16';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -37074,7 +37074,7 @@ function IgazHamisGame({ gameIdx, challenger, onAdvance, onResult }) {
   );
 }
 
-function SzerencsekerékGame({ gameIdx, players, onAdvance }) {
+function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
   const [phase, setPhase] = React.useState('ready'); // ready | spinning | result
   const [currentIdx, setCurrentIdx] = React.useState(0);
   const [winner, setWinner] = React.useState(null);
@@ -37084,6 +37084,14 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance }) {
     setCurrentIdx(gameIdx % Math.max(players.length,1));
     setWinner(null);
   }, [gameIdx]);
+
+  // Reset to ready after result so user can spin again
+  React.useEffect(() => {
+    if (phase === 'result') {
+      const t = setTimeout(() => setPhase('ready'), 2200);
+      return () => clearTimeout(t);
+    }
+  }, [phase]);
 
   const spin = () => {
     if (phase !== 'ready' || players.length === 0) return;
@@ -37106,14 +37114,24 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance }) {
       } else {
         setWinner(players[winnerIdx]);
         setPhase('result');
+        // Auto-show drink result via onResult after short delay
+        setTimeout(() => {
+          const w = players[winnerIdx];
+          if (w) {
+            onResult && onResult({ correct: false, playerName: w.name, drinks: 1, subtitle: w.name + ' iszik egyet!' });
+            const dm = { [w.id]: 1 };
+            onAdvance && onAdvance(dm);
+          }
+        }, 600);
       }
     };
     setTimeout(next, 55);
   };
 
   const proceed = () => {
-    const dm = {};
-    if (winner) dm[winner.id] = 1;
+    if (!winner) return;
+    onResult && onResult({ correct: false, playerName: winner.name, drinks: 1, subtitle: winner.name + ' iszik egyet!' });
+    const dm = { [winner.id]: 1 };
     onAdvance && onAdvance(dm);
   };
 
@@ -37166,32 +37184,17 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance }) {
         })}
       </div>
 
-      {/* Result banner */}
-      {phase === 'result' && winner && (
-        <div style={{ width:'100%', padding:'10px 18px', borderRadius:14, background:'rgba(255,255,255,0.9)', boxShadow:T.shadow, textAlign:'center', animation:'popIn .3s' }}>
-          <span style={{ fontFamily:T.font, fontSize:14, color:T.ink }}>
-            🎰 A sors <span style={{ fontWeight:800, color:winner.color }}>{winner.name}</span>-t húzta — iszik!
-          </span>
-        </div>
-      )}
-
-      {/* Buttons */}
-      {phase !== 'result' ? (
-        <button onClick={spin} disabled={phase==='spinning'} style={{
-          width:'100%', padding:'14px', borderRadius:16,
-          background: phase==='spinning' ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.7)',
-          border:`2px solid ${T.mint}`, color:T.mint,
-          fontFamily:T.font, fontWeight:700, fontSize:16,
-          cursor: phase==='spinning' ? 'default' : 'pointer',
-          opacity: phase==='spinning' ? 0.65 : 1,
-        }}>
-          🎰 Sorsolás!
-        </button>
-      ) : (
-        <button onClick={proceed} style={{ width:'100%', padding:'14px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow }}>
-          Tovább →
-        </button>
-      )}
+      {/* Spin button */}
+      <button onClick={spin} disabled={phase !== 'ready'} style={{
+        width:'100%', padding:'14px', borderRadius:16,
+        background: phase !== 'ready' ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.7)',
+        border:`2px solid ${T.mint}`, color:T.mint,
+        fontFamily:T.font, fontWeight:700, fontSize:16,
+        cursor: phase !== 'ready' ? 'default' : 'pointer',
+        opacity: phase !== 'ready' ? 0.65 : 1,
+      }}>
+        {phase === 'spinning' ? '🎰 Pörög…' : phase === 'result' ? '🎰 Újra sorsolás' : '🎰 Sorsolás!'}
+      </button>
     </div>
   );
 }
@@ -39768,7 +39771,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, 
   if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
+  if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} mode={mode} gameMeta={gameMeta} />;
