@@ -34213,15 +34213,15 @@ const DIM_STYLES = {
 };
 
 const BP_TOURNAMENT_TYPES = [
-  { key:'se',          label:'Egylépcsős',  sub:'Single Elimination' },
-  { key:'rr',          label:'Egylépcsős',  sub:'Round Robin' },
-  { key:'grp_se_se',   label:'Kétlépcsős',  sub:'Csoportkör SE → Főszakasz SE' },
-  { key:'grp_se_rr',   label:'Kétlépcsős',  sub:'Csoportkör SE → Főszakasz RR' },
-  { key:'grp_rr_se',   label:'Kétlépcsős',  sub:'Csoportkör RR → Főszakasz SE' },
-  { key:'grp_rr_rr',   label:'Kétlépcsős',  sub:'Csoportkör RR → Főszakasz RR' },
+  { key:'se',        sub:'Kiesés' },
+  { key:'rr',        sub:'Körmérkőzés' },
+  { key:'grp_rr_se', sub:'Csoport RR → SE' },
+  { key:'grp_rr_rr', sub:'Csoport RR → RR' },
+  { key:'grp_se_se', sub:'Csoport SE → SE' },
+  { key:'grp_se_rr', sub:'Csoport SE → RR' },
 ];
 
-function BeerPongConfigSheet({ config, setConfig, onClose }) {
+function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
   const maxCups      = config.maxCups ?? 10;
   const drinksPerLoss = config.drinksPerLoss ?? 5;
   const mode         = config.mode || 'egyeni';
@@ -34264,21 +34264,17 @@ function BeerPongConfigSheet({ config, setConfig, onClose }) {
           </div>
         ))}
 
-        {/* Tournament type */}
+        {/* Tournament type — compact 2-col grid */}
         <div style={{ marginTop:8 }}>
           <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Bajnokság típusa</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
             {BP_TOURNAMENT_TYPES.map(t => {
               const on = tournament === t.key;
+              const disabled = playerCount >= 4 ? false : t.key.startsWith('grp_');
               return (
-                <button key={t.key} onClick={() => setConfig(c => ({...c, tournamentType:t.key}))} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', borderRadius:12, border: on ? '2px solid ' + T.mint : '2px solid rgba(20,30,50,0.08)', background: on ? T.mint + '14' : T.bg, cursor:'pointer', textAlign:'left' }}>
-                  <div style={{ width:18, height:18, borderRadius:'50%', border: '2px solid ' + (on ? T.mint : T.inkMute), background: on ? T.mint : 'transparent', flexShrink:0, display:'grid', placeItems:'center' }}>
-                    {on && <div style={{ width:7, height:7, borderRadius:'50%', background:'#fff' }}/>}
-                  </div>
-                  <div>
-                    <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink }}>{t.label}</div>
-                    <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{t.sub}</div>
-                  </div>
+                <button key={t.key} onClick={() => !disabled && setConfig(c => ({...c, tournamentType:t.key}))} disabled={disabled}
+                  style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, padding:'8px 6px', borderRadius:12, border: on ? '2px solid ' + T.mint : '2px solid rgba(20,30,50,0.08)', background: on ? T.mint + '14' : disabled ? 'rgba(20,30,50,0.04)' : T.bg, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1, minHeight:48 }}>
+                  <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color: on ? T.mint : T.ink, textAlign:'center', lineHeight:1.2 }}>{t.sub}</div>
                 </button>
               );
             })}
@@ -34479,7 +34475,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
       </SheetOverlay>}
       {info && <GameInfoModal game={GAMES.find(g=>g.id===info)} onClose={() => setInfo(null)} />}
       {buszSheet && <BuszConfigSheet config={buszConfig} setConfig={setBuszConfig} onClose={() => setBuszSheet(false)} />}
-      {beerpongSheet && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setBeerpongSheet(false)} />}
+      {beerpongSheet && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setBeerpongSheet(false)} playerCount={0} />}
       {filterSheet && (
         <SheetOverlay onClose={() => setFilterSheet(false)}>
           <div style={{ padding:'4px 18px 18px', display:'flex', flexDirection:'column', gap:10 }}>
@@ -35251,8 +35247,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
         if (st[m.p1.id]) { st[m.p1.id].draws++; st[m.p1.id].pts += 1; st[m.p1.id].setWins += p1pot; }
         if (st[m.p2.id]) { st[m.p2.id].draws++; st[m.p2.id].pts += 1; st[m.p2.id].setWins += p2pot; }
       } else if (m.winner) {
-        if (st[m.winner.id]) { st[m.winner.id].wins++; st[m.winner.id].pts += 3; }
-        if (st[m.loser.id]) st[m.loser.id].losses++;
+        if (m.winner && st[m.winner.id]) { st[m.winner.id].wins++; st[m.winner.id].pts += 3; }
+        if (m.loser && st[m.loser.id]) st[m.loser.id].losses++;
         const p1diff = p1pot - p2pot;
         if (st[m.p1.id]) { st[m.p1.id].setWins += p1pot; st[m.p1.id].diff += p1diff; }
         if (st[m.p2.id]) { st[m.p2.id].setWins += p2pot; st[m.p2.id].diff -= p1diff; }
@@ -35278,6 +35274,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   const [standingsExp, setStandingsExp] = React.useState(true);
   const [matchListExp, setMatchListExp] = React.useState(true);
   const [viewGroup, setViewGroup] = React.useState(0);
+  const [expandedGroups, setExpandedGroups_g] = React.useState({});
   const [timerSecs, setTimerSecs] = React.useState(0);
   const [timerRunning, setTimerRunning] = React.useState(false);
   const timerRef = React.useRef(null);
@@ -35323,7 +35320,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   React.useEffect(() => {
     doneRef.current = false;
     setCups1(MAX_CUPS); setCups2(MAX_CUPS);
-    setDrinkMap({}); setChampion(null); setExpandedRounds({}); setViewGroup(0);
+    setDrinkMap({}); setChampion(null); setExpandedRounds({}); setViewGroup(0); setExpandedGroups_g({});
 
     if (TOURNAMENT === 'se') {
       const br = buildSEBracket(players);
@@ -35423,7 +35420,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
 
     setMatchesCB(prev => {
       const nm = prev.map((mm, i) => i === idx ? { ...mm, winner, loser, score, draw: isDraw } : mm);
-      const nextIdx = nm.findIndex((mm, i) => i > idx && mm.winner === null);
+      const nextIdx = nm.findIndex(mm => mm.winner === null && !mm.draw);
       if (nextIdx !== -1) { setRrIdx(nextIdx); }
       else { onFinish(nm, newDrink); }
       return nm;
@@ -35492,7 +35489,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
       const ng = prev.map((g, gi) => {
         if (gi !== tsCurGroup) return g;
         const nm = g.matches.map((mm, i) => i === g.curIdx ? { ...mm, winner, loser, score, draw: isDraw } : mm);
-        const nextIdx = nm.findIndex((mm, i) => i > g.curIdx && mm.winner === null);
+        const nextIdx = nm.findIndex(mm => mm.winner === null && !mm.draw);
         const done = nextIdx === -1;
         return { ...g, matches: nm, curIdx: done ? g.curIdx : nextIdx, done };
       });
@@ -35772,7 +35769,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
                           onMouseLeave={() => clearTimeout(lpTimer.current)}
                           onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setSeRounds(prev => prev.slice(0,rIdx+1).map((r,ri) => ri!==rIdx?r:r.map((mm,mi) => mi!==mIdx?mm:{...mm,winner:null,loser:null,score:null}))); setChampion(null); doneRef.current=false; setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
                           onTouchEnd={() => clearTimeout(lpTimer.current)}
-                          style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', paddingTop: mIdx===0 ? 15 : 7, borderBottom: mIdx < round.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none', cursor: isSelectable ? 'pointer' : isDone ? 'context-menu' : 'default', borderRadius:8, background: isSelected ? T.blue+'18' : 'transparent', transition:'background .15s' }}>
+                          style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', paddingTop: mIdx===0 ? 20 : 7, borderBottom: mIdx < round.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none', cursor: isSelectable ? 'pointer' : isDone ? 'context-menu' : 'default', borderRadius:8, background: isSelected ? T.blue+'18' : 'transparent', transition:'background .15s' }}>
                           <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, color: isDone&&m.winner?.id===m.p1?.id?T.mint:isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1?m.p1.name:'BYE'}</div>
                           <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
                           <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isDone ? (m.winner?.id===m.p1?.id ? T.mint : m.winner?.id===m.p2?.id ? T.mint : T.inkSoft) : T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
@@ -35799,16 +35796,55 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
         {tsGroups.map((g, gi) => {
           const isCurrent = gi === tsCurGroup && tsPhase === 'groups';
           const isDone = g.done;
-          return (
-            <div key={gi} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow, border: isCurrent ? '1.5px solid ' + T.blue + '44' : '1.5px solid rgba(20,30,50,0.06)' }}>
-              <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color: isCurrent ? T.blue : T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>
-                {g.label} {isDone ? '✓' : isCurrent ? '● Folyamatban' : ''}
-              </div>
-              {groupType === 'rr' ? renderRRStandings(g.players, g.matches, null) : (
-                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                  {g.players.map(p => <div key={p.id} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', borderRadius:8, background: p.color + '22' }}><div style={{ width:16, height:16, borderRadius:'50%', background:p.color }}></div><span style={{ fontFamily:T.font, fontSize:12, fontWeight:600, color:T.ink }}>{p.name}</span></div>)}
+          const isExpG = expandedGroups_g[gi] !== false; // default open
+          if (groupType === 'rr') {
+            const st = getRRStandings(g.players, g.matches);
+            const hdr = { fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em', textAlign:'center', minWidth:38 };
+            return (
+              <div key={gi} style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadow, border: isCurrent ? '1.5px solid ' + T.blue + '44' : '1.5px solid rgba(20,30,50,0.06)' }}>
+                <div onClick={() => setExpandedGroups_g(s => ({...s, [gi]: !isExpG}))} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom: isExpG ? 8 : 0 }}>
+                  <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color: isCurrent ? T.blue : T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>
+                    {g.label} állás {isDone ? '✓' : isCurrent ? '●' : ''}
+                  </div>
+                  <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{isExpG ? '▲' : '▼'}</div>
                 </div>
-              )}
+                {isExpG && <React.Fragment>
+                  <div style={{ display:'grid', gridTemplateColumns:'20px 1fr 80px 36px 42px 32px', gap:'0 6px', alignItems:'center', paddingBottom:4, borderBottom:'1px solid rgba(20,30,50,0.08)' }}>
+                    <div></div><div></div>
+                    <div style={{...hdr, textAlign:'center'}}>GY-V-D</div>
+                    <div style={hdr}>Egál</div>
+                    <div style={hdr}>Pohár</div>
+                    <div style={{...hdr, color:T.yellow}}>Pont</div>
+                  </div>
+                  {st.map((s, i) => (
+                    <div key={s.player.id} style={{ display:'grid', gridTemplateColumns:'20px 1fr 80px 36px 42px 32px', gap:'0 6px', alignItems:'center', padding:'6px 0', borderBottom: i < st.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none' }}>
+                      <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:12, color: i===0 ? T.yellow : T.inkSoft }}>{i+1}</div>
+                      <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
+                        <div style={{ width:22, height:22, borderRadius:'50%', background:s.player.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:9, color:'#fff', flexShrink:0 }}>{s.player.name.charAt(0).toUpperCase()}</div>
+                        <div style={{ fontFamily:T.font, fontWeight: i===0?700:400, fontSize:12, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.player.name}</div>
+                      </div>
+                      <div style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft, textAlign:'center' }}>{s.wins}-{s.losses}-{s.draws}</div>
+                      <div style={{ fontFamily:'monospace', fontSize:11, color: s.diff>0?T.mint:s.diff<0?T.coral:T.inkSoft, textAlign:'center' }}>{s.diff>0?'+':''}{s.diff}</div>
+                      <div style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft, textAlign:'center' }}>{s.setWins}</div>
+                      <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:12, color: i===0?T.yellow:T.ink, textAlign:'center' }}>{s.pts}</div>
+                    </div>
+                  ))}
+                </React.Fragment>}
+              </div>
+            );
+          }
+          // SE group: show match results
+          return (
+            <div key={gi} style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadow, border: isCurrent ? '1.5px solid ' + T.blue + '44' : '1.5px solid rgba(20,30,50,0.06)' }}>
+              <div onClick={() => setExpandedGroups_g(s => ({...s, [gi]: !isExpG}))} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom: isExpG ? 8 : 0 }}>
+                <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color: isCurrent ? T.blue : T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>
+                  {g.label} {isDone ? '✓' : isCurrent ? '●' : ''}
+                </div>
+                <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{isExpG ? '▲' : '▼'}</div>
+              </div>
+              {isExpG && <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {g.players.map(p => <div key={p.id} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', borderRadius:8, background: p.color + '22' }}><div style={{ width:16, height:16, borderRadius:'50%', background:p.color }}></div><span style={{ fontFamily:T.font, fontSize:12, fontWeight:600, color:T.ink }}>{p.name}</span></div>)}
+              </div>}
             </div>
           );
         })}
@@ -35825,11 +35861,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
       {/* Phase label for two-stage */}
       {isTwoStage && (
         <div style={{ width:'100%', display:'flex', gap:8 }}>
-          {['groups','finals'].map(ph => (
-            <div key={ph} style={{ flex:1, padding:'8px 0', borderRadius:10, background: tsPhase===ph ? T.blue+'22' : T.surface, fontFamily:T.font, fontWeight:700, fontSize:12, color: tsPhase===ph ? T.blue : T.inkSoft, textAlign:'center' }}>
-              {ph==='groups' ? 'Csoportkör' : 'Főszakasz'}
-            </div>
-          ))}
+          <button onClick={() => setTsPhase('groups')} style={{ flex:1, padding:'8px 0', borderRadius:10, border:'none', cursor:'pointer', background: tsPhase==='groups' ? T.blue+'22' : T.surface, fontFamily:T.font, fontWeight:700, fontSize:12, color: tsPhase==='groups' ? T.blue : T.inkSoft }}>Csoportkör</button>
+          <button onClick={() => { if(seRounds.length || rrMatches.length) setTsPhase('finals'); }} style={{ flex:1, padding:'8px 0', borderRadius:10, border:'none', cursor: (seRounds.length || rrMatches.length) ? 'pointer' : 'default', background: tsPhase==='finals' ? T.blue+'22' : T.surface, fontFamily:T.font, fontWeight:700, fontSize:12, color: tsPhase==='finals' ? T.blue : (seRounds.length || rrMatches.length) ? T.inkSoft : T.inkMute }}>Főszakasz</button>
         </div>
       )}
 
@@ -35887,7 +35920,6 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
       {isTwoStage && tsPhase === 'finals' && finalsType === 'se' && renderSEBracket(seRounds, seCurRound, seCurMatch)}
       {isTwoStage && tsPhase === 'finals' && finalsType === 'rr' && renderRRStandings(rrParts, rrMatches, 'Főszakasz állás')}
       {isTwoStage && tsPhase === 'finals' && finalsType === 'rr' && !rrDone && renderRRMatchList(rrParts, rrMatches, rrIdx, setRrIdx, (i) => { setRrMatches(prev => prev.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})); setRrDone(false); doneRef.current=false; setChampion(null); })}
-      {isTwoStage && tsPhase === 'finals' && renderGroupOverview()}
     </div>
   );
 }
@@ -39952,7 +39984,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
 
       </div>
       {showInfo && <GameInfoModal game={currentGame} onClose={() => setShowInfo(false)} />}
-      {showBpConfig && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setShowBpConfig(false)} />}
+      {showBpConfig && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setShowBpConfig(false)} playerCount={players ? players.length : 0} />}
       {hostBurst && <HostDrinkAlert items={hostBurst} players={players} onDismiss={() => setHostBurst(null)} />}
       {showMenu && (() => {
         const mSorted = [...players].sort((a,b)=>(b.points-a.points)||(a.drinks-b.drinks));
