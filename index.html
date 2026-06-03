@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.49';
+const APP_VERSION = 'v6.50';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -39355,12 +39355,13 @@ function TicktakGame({ gameIdx, players, onAdvance }) {
   );
 }
 
-function EremGame({ gameIdx, challenger, opponent, onAdvance }) {
+function EremGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
   const [pick, setPick] = React.useState(null);
   const [phase, setPhase] = React.useState('pick');
   const [result, setResult] = React.useState(null);
+  const advancedRef = React.useRef(false);
 
-  React.useEffect(() => { setPick(null); setPhase('pick'); setResult(null); }, [gameIdx]);
+  React.useEffect(() => { setPick(null); setPhase('pick'); setResult(null); advancedRef.current = false; }, [gameIdx]);
 
   const doFlip = (choice) => {
     setPick(choice);
@@ -39370,18 +39371,21 @@ function EremGame({ gameIdx, challenger, opponent, onAdvance }) {
       setResult(r);
       setPhase('result');
       const isCorrect = choice === r;
-      setTimeout(() => advance(isCorrect), 2500);
+      if (!advancedRef.current) {
+        advancedRef.current = true;
+        const dm = {};
+        if (isCorrect && opponent) dm[opponent.id] = 1;
+        if (!isCorrect && challenger) dm[challenger.id] = 1;
+        const sub = isCorrect
+          ? `${challenger?.name||''} nyert — ${opponent?.name||'ellenfél'} iszik`
+          : `${challenger?.name||''} veszített — iszik egyet`;
+        onResult && onResult({ correct: isCorrect, playerName: isCorrect ? opponent?.name : challenger?.name, drinks: 1, subtitle: sub });
+        onAdvance && onAdvance(dm);
+      }
     }, 1600);
   };
 
   const correct = pick !== null && result !== null && pick === result;
-
-  const advance = (win) => {
-    const dm = {};
-    if (win && opponent) dm[opponent.id] = 1;
-    if (!win && challenger) dm[challenger.id] = 1;
-    onAdvance && onAdvance(dm);
-  };
 
   const CoinFace = ({ side }) => (
     <svg width="160" height="160" viewBox="-72 -72 144 144">
@@ -39450,16 +39454,7 @@ function EremGame({ gameIdx, challenger, opponent, onAdvance }) {
         </div>
       )}
 
-      {/* Result display */}
-      {phase === 'result' && (
-        <div style={{ width:'100%', padding:'18px 16px', borderRadius:16, animation:'popIn .3s', textAlign:'center',
-          background: correct ? `${T.mint}18` : `${T.coral}18`,
-          border: `2px solid ${correct ? T.mint : T.coral}` }}>
-          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:17, color: correct ? T.mint : T.coral }}>
-            {correct ? `🎉 Nyertél! ${opponent?.name||'Ellenfél'} iszik.` : `😅 Nem jött be — te iszol!`}
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }
@@ -40490,7 +40485,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, 
   if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} gameMeta={gameMeta} />;
   if (gameId === 'uveg') return <UvegGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'ticktak') return <TicktakGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
-  if (gameId === 'erem') return <EremGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} />;
+  if (gameId === 'erem') return <EremGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'tapper') return <TapperGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} />;
   if (gameId === 'anagramma') return <AnagrammaGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
   if (gameId === 'ringfire') return <RingFireGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
