@@ -33992,7 +33992,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Verzió 5.96 · DNR · 2026.06.02 18:30
+              Verzió 5.97 · DNR · 2026.06.02 18:30
             </div>
           </div>
         </div>
@@ -34212,27 +34212,93 @@ const DIM_STYLES = {
   none: { opacity:1 },
 };
 
+const BP_TOURNAMENT_TYPES = [
+  { key:'se',          label:'Egylépcsős',  sub:'Single Elimination' },
+  { key:'rr',          label:'Egylépcsős',  sub:'Round Robin' },
+  { key:'grp_se_se',   label:'Kétlépcsős',  sub:'Csoportkör SE → Főszakasz SE' },
+  { key:'grp_se_rr',   label:'Kétlépcsős',  sub:'Csoportkör SE → Főszakasz RR' },
+  { key:'grp_rr_se',   label:'Kétlépcsős',  sub:'Csoportkör RR → Főszakasz SE' },
+  { key:'grp_rr_rr',   label:'Kétlépcsős',  sub:'Csoportkör RR → Főszakasz RR' },
+];
+
 function BeerPongConfigSheet({ config, setConfig, onClose }) {
-  const maxCups = config.maxCups ?? 10;
+  const maxCups      = config.maxCups ?? 10;
   const drinksPerLoss = config.drinksPerLoss ?? 5;
+  const mode         = config.mode || 'egyeni';
+  const tournament   = config.tournamentType || 'se';
+  const groupAdvance = config.groupAdvance ?? 1;
+
+  const isTwo = tournament.startsWith('grp_');
+
+  const numCfg = [
+    { key:'maxCups',       label:'Kupák száma',    val:maxCups,       min:4, max:16, step:2 },
+    { key:'drinksPerLoss', label:'Vesztes korty',  val:drinksPerLoss, min:1, max:10, step:1 },
+  ];
+
   return (
     <SheetOverlay onClose={onClose}>
-      <div style={{ padding:'4px 18px 18px', display:'flex', flexDirection:'column', gap:2 }}>
-        <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginBottom:4 }}>Beer Pong beállítások</div>
-        {[
-          { key:'maxCups', label:'Kupák száma', val:maxCups, min:4, max:16, step:2 },
-          { key:'drinksPerLoss', label:'Vesztes korty', val:drinksPerLoss, min:1, max:10, step:1 },
-        ].map(s => (
-          <div key={s.key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'7px 0', borderBottom:`1px solid rgba(20,30,50,0.06)` }}>
+      <div style={{ padding:'4px 18px 18px', display:'flex', flexDirection:'column', gap:2, maxHeight:'85vh', overflowY:'auto' }}>
+        <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginBottom:6 }}>Beer Pong beállítások</div>
+
+        {/* Mode */}
+        <div style={{ marginBottom:4 }}>
+          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Játékmód</div>
+          <div style={{ display:'flex', gap:8 }}>
+            {[{key:'egyeni',label:'Egyéni 🧍'},{key:'csapat',label:'Csapat 👥'}].map(m => (
+              <button key={m.key} onClick={() => setConfig(c => ({...c, mode:m.key}))} style={{ flex:1, padding:'10px 0', borderRadius:12, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:14, background: mode===m.key ? T.mint : T.bg, color: mode===m.key ? '#fff' : T.ink, transition:'all .15s' }}>{m.label}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Numeric settings */}
+        {numCfg.map(s => (
+          <div key={s.key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'7px 0', borderBottom:'1px solid rgba(20,30,50,0.06)' }}>
             <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{s.label}</span>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <button onClick={() => setConfig(c => ({...c, [s.key]: Math.max(s.min, (c[s.key]??s.val)-s.step)}))} style={{ width:30, height:30, borderRadius:8, background:T.surface, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:18, color:T.coral, boxShadow:T.shadow, display:'grid', placeItems:'center' }}>−</button>
+              <button onClick={() => setConfig(c => ({...c, [s.key]: Math.max(s.min,(c[s.key]??s.val)-s.step)}))} style={{ width:30, height:30, borderRadius:8, background:T.surface, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:18, color:T.coral, boxShadow:T.shadow, display:'grid', placeItems:'center' }}>-</button>
               <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:18, color:T.ink, minWidth:22, textAlign:'center' }}>{s.val}</span>
-              <button onClick={() => setConfig(c => ({...c, [s.key]: Math.min(s.max, (c[s.key]??s.val)+s.step)}))} style={{ width:30, height:30, borderRadius:8, background:T.surface, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:18, color:T.mint, boxShadow:T.shadow, display:'grid', placeItems:'center' }}>+</button>
+              <button onClick={() => setConfig(c => ({...c, [s.key]: Math.min(s.max,(c[s.key]??s.val)+s.step)}))} style={{ width:30, height:30, borderRadius:8, background:T.surface, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:18, color:T.mint, boxShadow:T.shadow, display:'grid', placeItems:'center' }}>+</button>
             </div>
           </div>
         ))}
-        <div style={{ marginTop:4 }}>
+
+        {/* Tournament type */}
+        <div style={{ marginTop:8 }}>
+          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Bajnokság típusa</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {BP_TOURNAMENT_TYPES.map(t => {
+              const on = tournament === t.key;
+              return (
+                <button key={t.key} onClick={() => setConfig(c => ({...c, tournamentType:t.key}))} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', borderRadius:12, border: on ? '2px solid ' + T.mint : '2px solid rgba(20,30,50,0.08)', background: on ? T.mint + '14' : T.bg, cursor:'pointer', textAlign:'left' }}>
+                  <div style={{ width:18, height:18, borderRadius:'50%', border: '2px solid ' + (on ? T.mint : T.inkMute), background: on ? T.mint : 'transparent', flexShrink:0, display:'grid', placeItems:'center' }}>
+                    {on && <div style={{ width:7, height:7, borderRadius:'50%', background:'#fff' }}/>}
+                  </div>
+                  <div>
+                    <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink }}>{t.label}</div>
+                    <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{t.sub}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Group advance (two-stage only) */}
+        {isTwo && (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 0', borderTop:'1px solid rgba(20,30,50,0.06)', marginTop:4 }}>
+            <div>
+              <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>Továbbjutók/csoport</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>Hányan jutnak tovább a főszakaszra</div>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <button onClick={() => setConfig(c => ({...c, groupAdvance: Math.max(1,(c.groupAdvance??1)-1)}))} style={{ width:30, height:30, borderRadius:8, background:T.surface, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:18, color:T.coral, boxShadow:T.shadow, display:'grid', placeItems:'center' }}>-</button>
+              <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:18, color:T.ink, minWidth:22, textAlign:'center' }}>{groupAdvance}</span>
+              <button onClick={() => setConfig(c => ({...c, groupAdvance: Math.min(3,(c.groupAdvance??1)+1)}))} style={{ width:30, height:30, borderRadius:8, background:T.surface, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:18, color:T.mint, boxShadow:T.shadow, display:'grid', placeItems:'center' }}>+</button>
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginTop:8 }}>
           <PrimaryButton onClick={onClose}>Kész</PrimaryButton>
         </div>
       </div>
@@ -35133,261 +35199,479 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   const bpCfg = gameMeta?.beerpongConfig || {};
   const DRINKS_PER_LOSS = bpCfg.drinksPerLoss ?? 5;
   const MAX_CUPS = bpCfg.maxCups ?? 10;
-
-  const buildRound = (participants) => {
-    const matches = [];
-    for (let i = 0; i < participants.length; i += 2) {
-      const p1 = participants[i] || null;
-      const p2 = participants[i + 1] || null;
-      if (!p1 && !p2) continue; // skip empty bye-vs-bye slots
-      matches.push({ p1, p2, winner: !p2 ? p1 : !p1 ? p2 : null, loser: null, score: null });
-    }
-    return matches;
-  };
-
-  const buildFirstRound = (plrs) => {
-    const shuffled = [...plrs].sort(() => Math.random() - 0.5);
-    const size = Math.pow(2, Math.ceil(Math.log2(Math.max(shuffled.length, 2))));
-    while (shuffled.length < size) shuffled.push(null);
-    return buildRound(shuffled);
-  };
-
-  const [rounds, setRounds] = React.useState([]);
-  const [curRound, setCurRound] = React.useState(0);
-  const [curMatch, setCurMatch] = React.useState(0);
-  const [drinkMap, setDrinkMap] = React.useState({});
-  const [champion, setChampion] = React.useState(null);
-  const [cups1, setCups1] = React.useState(MAX_CUPS);
-  const [cups2, setCups2] = React.useState(MAX_CUPS);
+  const TOURNAMENT = bpCfg.tournamentType || 'se';
+  const GROUP_ADVANCE = bpCfg.groupAdvance ?? 1;
   const doneRef = React.useRef(false);
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const buildSERound = (parts) => {
+    const ms = [];
+    for (let i = 0; i < parts.length; i += 2) {
+      const p1 = parts[i] || null, p2 = parts[i+1] || null;
+      if (!p1 && !p2) continue;
+      ms.push({ p1, p2, winner: !p2 ? p1 : !p1 ? p2 : null, loser: null, score: null });
+    }
+    return ms;
+  };
+  const buildSEBracket = (parts) => {
+    const sh = [...parts].sort(() => Math.random() - 0.5);
+    const sz = Math.pow(2, Math.ceil(Math.log2(Math.max(sh.length, 2))));
+    while (sh.length < sz) sh.push(null);
+    return [buildSERound(sh)];
+  };
+  const buildRRMatches = (parts) => {
+    const ms = [];
+    for (let i = 0; i < parts.length; i++)
+      for (let j = i+1; j < parts.length; j++)
+        ms.push({ p1: parts[i], p2: parts[j], winner: null, loser: null, score: null });
+    return ms;
+  };
+  const getRRStandings = (parts, matches) => {
+    const st = {};
+    parts.forEach(p => { st[p.id] = { player: p, wins: 0, losses: 0, diff: 0 }; });
+    matches.forEach(m => {
+      if (!m.winner) return;
+      st[m.winner.id].wins++;
+      st[m.loser.id].losses++;
+      if (m.score) {
+        const wIsP1 = m.winner.id === m.p1.id;
+        const wCups = MAX_CUPS - (wIsP1 ? m.score.p1 : m.score.p2);
+        const lCups = MAX_CUPS - (wIsP1 ? m.score.p2 : m.score.p1);
+        st[m.winner.id].diff += wCups - lCups;
+        st[m.loser.id].diff -= wCups - lCups;
+      }
+    });
+    return Object.values(st).sort((a, b) => b.wins - a.wins || b.diff - a.diff);
+  };
+  const roundName = (rIdx, total) => {
+    const rem = total - rIdx;
+    if (rem === 1) return 'Döntő';
+    if (rem === 2) return 'Elődöntő';
+    if (rem === 3) return 'Negyeddöntő';
+    return (Math.pow(2, rem)) + 'ed döntő';
+  };
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  const [cups1, setCups1] = React.useState(MAX_CUPS);
+  const [cups2, setCups2] = React.useState(MAX_CUPS);
+  const [drinkMap, setDrinkMap] = React.useState({});
+  const [champion, setChampion] = React.useState(null);
+  const [expandedRounds, setExpandedRounds] = React.useState({});
+
+  // SE
+  const [seRounds, setSeRounds] = React.useState([]);
+  const [seCurRound, setSeCurRound] = React.useState(0);
+  const [seCurMatch, setSeCurMatch] = React.useState(0);
+
+  // RR
+  const [rrMatches, setRrMatches] = React.useState([]);
+  const [rrIdx, setRrIdx] = React.useState(0);
+  const [rrDone, setRrDone] = React.useState(false);
+
+  // Two-stage
+  const [tsPhase, setTsPhase] = React.useState('groups');
+  const [tsGroups, setTsGroups] = React.useState([]);
+  const [tsCurGroup, setTsCurGroup] = React.useState(0);
+  // finals reuse SE or RR state (seRounds/rrMatches)
+
+  // ── Init ──────────────────────────────────────────────────────────────────
   React.useEffect(() => {
-    if (!players || players.length < 2) return;
     doneRef.current = false;
-    const first = buildFirstRound(players);
-    setRounds([first]);
-    setCurRound(0);
-    setCurMatch(first.findIndex(m => m.winner === null));
-    setDrinkMap({});
-    setChampion(null);
     setCups1(MAX_CUPS); setCups2(MAX_CUPS);
+    setDrinkMap({}); setChampion(null); setExpandedRounds({});
+
+    if (TOURNAMENT === 'se') {
+      const br = buildSEBracket(players);
+      setSeRounds(br); setSeCurRound(0);
+      setSeCurMatch(br[0].findIndex(m => m.winner === null));
+    } else if (TOURNAMENT === 'rr') {
+      const ms = buildRRMatches([...players].sort(() => Math.random() - 0.5));
+      setRrMatches(ms); setRrIdx(0); setRrDone(false);
+    } else {
+      // Two-stage: split into 2 groups
+      const sh = [...players].sort(() => Math.random() - 0.5);
+      const half = Math.ceil(sh.length / 2);
+      const gPlayers = [sh.slice(0, half), sh.slice(half)];
+      const groupType = TOURNAMENT.startsWith('grp_rr') ? 'rr' : 'se';
+      const groups = gPlayers.map((gp, gi) => ({
+        id: gi, label: 'A B C D'.split(' ')[gi] + ' csoport',
+        players: gp,
+        matches: groupType === 'rr' ? buildRRMatches(gp) : buildSEBracket(gp).flat(),
+        seRounds: groupType === 'se' ? buildSEBracket(gp) : null,
+        seCurRound: 0,
+        curIdx: 0, done: false,
+      }));
+      setTsGroups(groups); setTsCurGroup(0); setTsPhase('groups');
+      setSeRounds([]); setRrMatches([]); setRrDone(false);
+    }
   }, [gameIdx]);
 
-  const roundName = (roundIdx, totalRounds) => {
-    const remaining = totalRounds - roundIdx;
-    if (remaining === 1) return '🏆 Döntő';
-    if (remaining === 2) return 'Elődöntő';
-    if (remaining === 3) return 'Negyeddöntő';
-    return `1/${Math.pow(2, remaining - 1)} döntő`;
-  };
-
-  const handleConfirm = () => {
+  // ── SE confirm ────────────────────────────────────────────────────────────
+  const handleSEConfirm = (rounds, curRound, curMatch, setCB) => {
     const match = rounds[curRound][curMatch];
-    // whoever has more cups remaining loses (they didn't sink as many)
-    const winner = cups1 <= cups2 ? match.p1 : match.p2;
-    const loser  = cups1 <= cups2 ? match.p2 : match.p1;
+    const winner = cups1 < cups2 ? match.p1 : match.p2;
+    const loser  = cups1 < cups2 ? match.p2 : match.p1;
     const score  = { p1: cups1, p2: cups2 };
-    handleWin(winner, loser, score);
-  };
 
-  const handleWin = (winner, loser, score) => {
+    const newDrink = { ...drinkMap };
+    if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + DRINKS_PER_LOSS;
+    setDrinkMap(newDrink);
     setCups1(MAX_CUPS); setCups2(MAX_CUPS);
-    setRounds(prevRounds => {
-      const newRounds = prevRounds.map(r => r.map(m => ({ ...m })));
-      newRounds[curRound][curMatch].winner = winner;
-      newRounds[curRound][curMatch].loser = loser;
-      newRounds[curRound][curMatch].score = score || null;
 
-      const newDrink = { ...drinkMap };
-      if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + DRINKS_PER_LOSS;
-      setDrinkMap(newDrink);
+    setCB(prevRounds => {
+      const nr = prevRounds.map(r => r.map(m => ({ ...m })));
+      nr[curRound][curMatch].winner = winner;
+      nr[curRound][curMatch].loser  = loser;
+      nr[curRound][curMatch].score  = score;
 
-      const nextInRound = newRounds[curRound].findIndex((m, i) => i > curMatch && m.winner === null);
-      if (nextInRound !== -1) { setCurMatch(nextInRound); return newRounds; }
+      const nextInRound = nr[curRound].findIndex((m, i) => i > curMatch && m.winner === null);
+      if (nextInRound !== -1) { setSeCurMatch(nextInRound); return nr; }
 
-      const winners = newRounds[curRound].map(m => m.winner).filter(Boolean);
+      const winners = nr[curRound].map(m => m.winner).filter(Boolean);
       if (winners.length === 1) {
-        if (!doneRef.current) {
-          doneRef.current = true;
-          setChampion(winners[0]);
-          setTimeout(() => {
-            onAdvance && onAdvance(newDrink);
-            onResult && onResult({ correct: true, playerName: winners[0].name, subtitle: `${winners[0].name} nyerte a tornát! 🏆` });
-          }, 0);
-        }
-        return newRounds;
+        finishSE(winners[0], newDrink);
+        return nr;
       }
-
-      const nextRound = buildRound(winners);
+      const nextRound = buildSERound(winners);
       const nextRoundIdx = curRound + 1;
-      setCurRound(nextRoundIdx);
-      setCurMatch(nextRound.findIndex(m => m.winner === null));
-      return [...newRounds, nextRound];
+      setSeCurRound(nextRoundIdx); setSeCurMatch(nextRound.findIndex(m => m.winner === null));
+      return [...nr, nextRound];
     });
   };
 
+  const finishSE = (champ, dm) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    setChampion(champ);
+    const finalDm = {};
+    Object.entries(dm).forEach(([id, cnt]) => { finalDm[id] = cnt; });
+    onAdvance && onAdvance(finalDm);
+    onResult && onResult({ correct: true, playerName: champ.name, drinks: 0, subtitle: champ.name + ' nyerte a Beer Pong tornát!' });
+  };
+
+  // ── RR confirm ────────────────────────────────────────────────────────────
+  const handleRRConfirm = (matches, idx, setMatchesCB, onFinish) => {
+    const m = matches[idx];
+    const winner = cups1 < cups2 ? m.p1 : m.p2;
+    const loser  = cups1 < cups2 ? m.p2 : m.p1;
+    const score  = { p1: cups1, p2: cups2 };
+
+    const newDrink = { ...drinkMap };
+    if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + DRINKS_PER_LOSS;
+    setDrinkMap(newDrink);
+    setCups1(MAX_CUPS); setCups2(MAX_CUPS);
+
+    setMatchesCB(prev => {
+      const nm = prev.map((mm, i) => i === idx ? { ...mm, winner, loser, score } : mm);
+      const nextIdx = nm.findIndex((mm, i) => i > idx && mm.winner === null);
+      if (nextIdx !== -1) { setRrIdx(nextIdx); }
+      else { onFinish(nm, newDrink); }
+      return nm;
+    });
+  };
+
+  const finishRR = (matches, dm, parts) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    setRrDone(true);
+    const standings = getRRStandings(parts, matches);
+    const champ = standings[0]?.player;
+    setChampion(champ);
+    const finalDm = {};
+    Object.entries(dm).forEach(([id, cnt]) => { finalDm[id] = cnt; });
+    onAdvance && onAdvance(finalDm);
+    onResult && onResult({ correct: true, playerName: champ?.name, drinks: 0, subtitle: (champ?.name || '') + ' nyerte a Beer Pong tornát!' });
+  };
+
+  // ── Two-stage group confirm ───────────────────────────────────────────────
+  const handleGroupConfirm = () => {
+    const grp = tsGroups[tsCurGroup];
+    const isRR = TOURNAMENT.startsWith('grp_rr');
+    const m = grp.matches[grp.curIdx];
+    const winner = cups1 < cups2 ? m.p1 : m.p2;
+    const loser  = cups1 < cups2 ? m.p2 : m.p1;
+    const score  = { p1: cups1, p2: cups2 };
+
+    const newDrink = { ...drinkMap };
+    if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + DRINKS_PER_LOSS;
+    setDrinkMap(newDrink);
+    setCups1(MAX_CUPS); setCups2(MAX_CUPS);
+
+    setTsGroups(prev => {
+      const ng = prev.map((g, gi) => {
+        if (gi !== tsCurGroup) return g;
+        const nm = g.matches.map((mm, i) => i === g.curIdx ? { ...mm, winner, loser, score } : mm);
+        const nextIdx = nm.findIndex((mm, i) => i > g.curIdx && mm.winner === null);
+        const done = nextIdx === -1;
+        return { ...g, matches: nm, curIdx: done ? g.curIdx : nextIdx, done };
+      });
+
+      // Check if this group is done
+      const grpDone = ng[tsCurGroup].done;
+      if (grpDone) {
+        const nextGroup = ng.findIndex((g, gi) => gi > tsCurGroup && !g.done);
+        if (nextGroup !== -1) {
+          setTsCurGroup(nextGroup);
+        } else {
+          // All groups done — start finals
+          const finalsType = TOURNAMENT.endsWith('_se') ? 'se' : 'rr';
+          const allAdvanced = ng.flatMap(g => {
+            const standings = getRRStandings(g.players, g.matches);
+            return standings.slice(0, GROUP_ADVANCE).map(s => s.player);
+          });
+          if (finalsType === 'se') {
+            const br = buildSEBracket(allAdvanced);
+            setSeRounds(br); setSeCurRound(0);
+            setSeCurMatch(br[0].findIndex(mm => mm.winner === null));
+          } else {
+            const ms = buildRRMatches(allAdvanced);
+            setRrMatches(ms); setRrIdx(0); setRrDone(false);
+          }
+          setTsPhase('finals');
+        }
+      }
+      return ng;
+    });
+  };
+
+  // ── CupCounter ────────────────────────────────────────────────────────────
   const CupCounter = ({ value, onChange, color, max }) => (
-    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-      <button onClick={() => onChange(Math.max(0, value - 1))} style={{ width:36, height:36, borderRadius:10, border:'none', background:`${color}22`, color, fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center' }}>−</button>
-      <div style={{ minWidth:32, textAlign:'center', fontFamily:T.font, fontWeight:900, fontSize:26, color }}>
-        {value}
-      </div>
-      <button onClick={() => onChange(Math.min(max, value + 1))} style={{ width:36, height:36, borderRadius:10, border:'none', background:`${color}22`, color, fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center' }}>+</button>
+    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+      <button onClick={() => onChange(Math.max(0, value - 1))} style={{ width:36, height:36, borderRadius:10, border:'none', background: color + '22', color, fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center' }}>-</button>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color, minWidth:28, textAlign:'center' }}>{value}</div>
+      <button onClick={() => onChange(Math.min(max, value + 1))} style={{ width:36, height:36, borderRadius:10, border:'none', background: color + '22', color, fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center' }}>+</button>
     </div>
   );
 
-  if (!players || players.length < 2) return (
-    <div style={{ fontFamily:T.font, color:T.inkSoft, textAlign:'center', padding:24 }}>Legalább 2 játékos kell a tornához.</div>
-  );
-  if (!rounds.length) return null;
+  if (!players.length) return null;
 
-  const totalRounds = Math.ceil(Math.log2(Math.max(players.length, 2)));
-  const match = rounds[curRound] && rounds[curRound][curMatch];
-  const canConfirm = match && cups1 !== cups2; // tie = can't confirm
+  // ── Determine current match & confirm handler ─────────────────────────────
+  let currentMatch = null, canConfirm = false, confirmHandler = null;
+  const finalsType = TOURNAMENT.endsWith('_rr') ? 'rr' : 'se';
 
-  return (
-    <div style={{ display:'flex', flexDirection:'column', gap:14, width:'100%' }}>
+  if (TOURNAMENT === 'se' && seRounds.length && !champion) {
+    currentMatch = seRounds[seCurRound]?.[seCurMatch];
+    canConfirm = currentMatch && currentMatch.p1 && currentMatch.p2 && cups1 !== cups2;
+    confirmHandler = () => handleSEConfirm(seRounds, seCurRound, seCurMatch, setSeRounds);
+  } else if (TOURNAMENT === 'rr' && !rrDone && rrMatches.length) {
+    currentMatch = rrMatches[rrIdx];
+    canConfirm = currentMatch && cups1 !== cups2;
+    confirmHandler = () => handleRRConfirm(rrMatches, rrIdx, setRrMatches, (ms, dm) => finishRR(ms, dm, players));
+  } else if (TOURNAMENT.startsWith('grp_') && tsPhase === 'groups' && tsGroups.length) {
+    const grp = tsGroups[tsCurGroup];
+    currentMatch = grp && !grp.done ? grp.matches[grp.curIdx] : null;
+    canConfirm = currentMatch && currentMatch.p1 && currentMatch.p2 && cups1 !== cups2;
+    confirmHandler = handleGroupConfirm;
+  } else if (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals') {
+    if (finalsType === 'se' && seRounds.length && !champion) {
+      currentMatch = seRounds[seCurRound]?.[seCurMatch];
+      canConfirm = currentMatch && currentMatch.p1 && currentMatch.p2 && cups1 !== cups2;
+      confirmHandler = () => handleSEConfirm(seRounds, seCurRound, seCurMatch, setSeRounds);
+    } else if (finalsType === 'rr' && !rrDone && rrMatches.length) {
+      currentMatch = rrMatches[rrIdx];
+      canConfirm = currentMatch && cups1 !== cups2;
+      const finalsPlayers = rrMatches.filter(Boolean).flatMap(m => [m.p1, m.p2]).filter((p, i, a) => p && a.findIndex(x => x && x.id === p.id) === i);
+      confirmHandler = () => handleRRConfirm(rrMatches, rrIdx, setRrMatches, (ms, dm) => finishRR(ms, dm, finalsPlayers));
+    }
+  }
 
-      {/* Champion screen */}
-      {champion && (
+  const totalSERounds = Math.ceil(Math.log2(Math.max(players.length, 2)));
+
+  // ── Render match card ─────────────────────────────────────────────────────
+  const renderMatchCard = () => {
+    if (champion) {
+      return (
         <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'28px 20px', textAlign:'center', boxShadow:T.shadow, display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
-          <div style={{ fontSize:48 }}>🏆</div>
-          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Bajnok</div>
-          <div style={{ width:80, height:80, borderRadius:'50%', background:champion.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:34, color:'#fff', boxShadow:`0 6px 24px ${champion.color}66` }}>
+          <div style={{ fontFamily:T.font, fontSize:28 }}>🏆</div>
+          <div style={{ width:80, height:80, borderRadius:'50%', background:champion.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:34, color:'#fff', boxShadow:'0 6px 24px ' + champion.color + '66' }}>
             {champion.name.charAt(0).toUpperCase()}
           </div>
-          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:28, color:T.ink }}>{champion.name}</div>
-          <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>Nyomj Kövi-t az eredmények rögzítéséhez</div>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink }}>{champion.name}</div>
+          <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>Beer Pong Bajnok!</div>
         </div>
-      )}
+      );
+    }
+    if (!currentMatch) return null;
 
-      {/* Current match */}
-      {!champion && match && (
-        <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'20px 16px', boxShadow:T.shadow }}>
-          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', textAlign:'center', marginBottom:14 }}>
-            {roundName(curRound, totalRounds)} · Meccs {curMatch + 1}
-          </div>
+    // Phase label
+    let phaseLabel = '';
+    if (TOURNAMENT.startsWith('grp_') && tsPhase === 'groups') {
+      phaseLabel = tsGroups[tsCurGroup]?.label || '';
+    } else if (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals') {
+      phaseLabel = 'Főszakasz';
+    }
 
-          {/* Players + cup counters */}
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
-              <div style={{ width:60, height:60, borderRadius:'50%', background:match.p1.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:24, color:'#fff', boxShadow:`0 4px 14px ${match.p1.color}55` }}>
-                {match.p1.name.charAt(0).toUpperCase()}
-              </div>
-              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink, textAlign:'center' }}>{match.p1.name}</div>
-              <div style={{ fontFamily:T.font, fontSize:10, color:T.inkSoft }}>maradt kupa</div>
-              <CupCounter value={cups1} onChange={setCups1} color={match.p1.color} max={MAX_CUPS} />
-            </div>
+    const matchLabel = TOURNAMENT === 'se' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'se')
+      ? roundName(seCurRound, totalSERounds) + ' · Meccs ' + (seCurMatch + 1)
+      : TOURNAMENT === 'rr' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'rr')
+        ? 'Meccs ' + (rrIdx + 1) + ' / ' + rrMatches.length
+        : 'Meccs ' + (tsGroups[tsCurGroup]?.curIdx + 1 || 1) + ' / ' + (tsGroups[tsCurGroup]?.matches.length || 1);
 
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, flexShrink:0 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:32, color: cups1 < cups2 ? match.p1.color : T.ink, lineHeight:1, minWidth:28, textAlign:'center' }}>{cups1}</div>
-                <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.inkSoft }}>VS</div>
-                <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:32, color: cups2 < cups1 ? match.p2.color : T.ink, lineHeight:1, minWidth:28, textAlign:'center' }}>{cups2}</div>
-              </div>
-              <div style={{ fontFamily:T.font, fontSize:11, color: cups1 === cups2 ? T.coral : T.inkSoft, fontWeight: cups1===cups2 ? 700 : 400 }}>
-                {cups1 === cups2 ? 'Döntetlen!' : ''}
-              </div>
-            </div>
-
-            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
-              <div style={{ width:60, height:60, borderRadius:'50%', background:match.p2.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:24, color:'#fff', boxShadow:`0 4px 14px ${match.p2.color}55` }}>
-                {match.p2.name.charAt(0).toUpperCase()}
-              </div>
-              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink, textAlign:'center' }}>{match.p2.name}</div>
-              <div style={{ fontFamily:T.font, fontSize:10, color:T.inkSoft }}>maradt kupa</div>
-              <CupCounter value={cups2} onChange={setCups2} color={match.p2.color} max={MAX_CUPS} />
-            </div>
-          </div>
-
-          {/* Confirm button */}
-          <button
-            onClick={handleConfirm}
-            disabled={!canConfirm}
-            style={{ width:'100%', marginTop:16, minHeight:54, border:'none', borderRadius:14, cursor: canConfirm ? 'pointer' : 'default', fontFamily:T.font, fontWeight:700, fontSize:16, color:'#fff', boxShadow: canConfirm ? T.shadow : 'none',
-              background: !canConfirm ? 'rgba(0,0,0,0.08)' : cups1 < cups2 ? match.p1.color : match.p2.color,
-              transition:'background .2s'
-            }}>
-            {!canConfirm ? 'Állítsd be az eredményt' : `🏆 ${cups1 < cups2 ? match.p1.name : match.p2.name} nyert (${Math.min(cups1,cups2)}–${Math.max(cups1,cups2)})`}
-          </button>
-          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, textAlign:'center', marginTop:8 }}>A vesztes {DRINKS_PER_LOSS} kortyt iszik</div>
+    return (
+      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'20px 16px', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', textAlign:'center', marginBottom:2 }}>
+          {phaseLabel ? phaseLabel + ' · ' : ''}{matchLabel}
         </div>
-      )}
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:12 }}>
+          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+            <div style={{ width:60, height:60, borderRadius:'50%', background:currentMatch.p1.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:24, color:'#fff', boxShadow:'0 4px 14px ' + currentMatch.p1.color + '55' }}>
+              {currentMatch.p1.name.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink, textAlign:'center' }}>{currentMatch.p1.name}</div>
+            <div style={{ fontFamily:T.font, fontSize:10, color:T.inkSoft }}>maradt kupa</div>
+            <CupCounter value={cups1} onChange={setCups1} color={currentMatch.p1.color} max={MAX_CUPS} />
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, flexShrink:0 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:32, color: cups1 < cups2 ? currentMatch.p1.color : T.ink, lineHeight:1, minWidth:28, textAlign:'center' }}>{cups1}</div>
+              <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.inkSoft }}>VS</div>
+              <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:32, color: cups2 < cups1 ? currentMatch.p2.color : T.ink, lineHeight:1, minWidth:28, textAlign:'center' }}>{cups2}</div>
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:11, color: cups1 === cups2 ? T.coral : T.inkSoft, fontWeight: cups1===cups2 ? 700 : 400 }}>
+              {cups1 === cups2 ? 'Döntetlen!' : ''}
+            </div>
+          </div>
+          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+            <div style={{ width:60, height:60, borderRadius:'50%', background:currentMatch.p2.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:24, color:'#fff', boxShadow:'0 4px 14px ' + currentMatch.p2.color + '55' }}>
+              {currentMatch.p2.name.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink, textAlign:'center' }}>{currentMatch.p2.name}</div>
+            <div style={{ fontFamily:T.font, fontSize:10, color:T.inkSoft }}>maradt kupa</div>
+            <CupCounter value={cups2} onChange={setCups2} color={currentMatch.p2.color} max={MAX_CUPS} />
+          </div>
+        </div>
+        <button onClick={confirmHandler} disabled={!canConfirm} style={{ width:'100%', marginTop:16, minHeight:54, border:'none', borderRadius:14, cursor: canConfirm ? 'pointer' : 'default', fontFamily:T.font, fontWeight:700, fontSize:16, color:'#fff', boxShadow: canConfirm ? T.shadow : 'none', background: !canConfirm ? 'rgba(0,0,0,0.08)' : cups1 < cups2 ? currentMatch.p1.color : currentMatch.p2.color, transition:'background .2s' }}>
+          {!canConfirm ? 'Állítsd be az eredményt' : ('Megerősítés — ' + (cups1 < cups2 ? currentMatch.p1.name : currentMatch.p2.name) + ' nyert')}
+        </button>
+        <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, textAlign:'center', marginTop:8 }}>A vesztes {DRINKS_PER_LOSS} kortyt iszik</div>
+      </div>
+    );
+  };
 
-      {/* Bracket overview */}
-      {(() => {
-        const [expandedRounds, setExpandedRounds] = React.useState({});
-        const toggleRound = rIdx => setExpandedRounds(s => ({...s, [rIdx]: !s[rIdx]}));
-        return (
-          <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 16px', boxShadow:T.shadow }}>
-            <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:10 }}>Bracket</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-              {rounds.map((round, rIdx) => {
-                const isPast = rIdx < curRound;
-                const isCurrent = rIdx === curRound;
-                const isExpanded = isCurrent || !!expandedRounds[rIdx];
-                const winners = round.map(m => m.winner).filter(Boolean);
-                return (
-                  <div key={rIdx} style={{ borderRadius:12, overflow:'hidden', border: isCurrent ? '1.5px solid ' + T.blue + '44' : '1.5px solid rgba(20,30,50,0.06)' }}>
-                    {/* Round header — always visible, tap to collapse/expand past rounds */}
-                    <div onClick={isPast ? () => toggleRound(rIdx) : undefined}
-                      style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 10px', background: isCurrent ? T.blue + '12' : isPast ? 'rgba(20,30,50,0.03)' : 'transparent', cursor: isPast ? 'pointer' : 'default' }}>
-                      <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color: isCurrent ? T.blue : T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em' }}>
-                        {roundName(rIdx, totalRounds)}
-                      </div>
-                      {isPast && (
-                        <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                          {winners.map(w => (
-                            <div key={w.id} style={{ width:18, height:18, borderRadius:'50%', background:w.color, display:'grid', placeItems:'center', fontSize:8, fontFamily:T.font, fontWeight:700, color:'#fff' }}>
-                              {w.name.charAt(0).toUpperCase()}
-                            </div>
-                          ))}
-                          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginLeft:4 }}>{isExpanded ? '▲' : '▼'}</div>
-                        </div>
-                      )}
+  // ── Render RR standings ───────────────────────────────────────────────────
+  const renderRRStandings = (parts, matches, title) => {
+    const st = getRRStandings(parts, matches);
+    return (
+      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 16px', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:10 }}>{title || 'Állás'}</div>
+        {st.map((s, i) => (
+          <div key={s.player.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 0', borderBottom: i < st.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none' }}>
+            <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:14, color: i===0 ? T.yellow : T.inkSoft, minWidth:18 }}>{i+1}.</div>
+            <div style={{ width:28, height:28, borderRadius:'50%', background:s.player.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:12, color:'#fff' }}>{s.player.name.charAt(0).toUpperCase()}</div>
+            <div style={{ flex:1, fontFamily:T.font, fontWeight: i===0 ? 700 : 400, fontSize:14, color:T.ink }}>{s.player.name}</div>
+            <div style={{ fontFamily:'monospace', fontSize:12, color:T.inkSoft }}>{s.wins}G {s.losses}V</div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // ── Render SE bracket ─────────────────────────────────────────────────────
+  const renderSEBracket = (rounds, curRound, curMatch) => {
+    if (!rounds.length) return null;
+    const total = Math.ceil(Math.log2(Math.max(players.length, 2)));
+    return (
+      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 16px', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:10 }}>Bracket</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+          {rounds.map((round, rIdx) => {
+            const isPast = rIdx < curRound, isCurrent = rIdx === curRound;
+            const isExp = isCurrent || !!expandedRounds[rIdx];
+            const winners = round.map(m => m.winner).filter(Boolean);
+            return (
+              <div key={rIdx} style={{ borderRadius:12, overflow:'hidden', border: isCurrent ? '1.5px solid ' + T.blue + '44' : '1.5px solid rgba(20,30,50,0.06)' }}>
+                <div onClick={isPast ? () => setExpandedRounds(s => ({...s, [rIdx]: !s[rIdx]})) : undefined} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 10px', background: isCurrent ? T.blue + '12' : 'rgba(20,30,50,0.03)', cursor: isPast ? 'pointer' : 'default' }}>
+                  <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color: isCurrent ? T.blue : T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em' }}>{roundName(rIdx, total)}</div>
+                  {isPast && (
+                    <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                      {winners.map(w => <div key={w.id} style={{ width:18, height:18, borderRadius:'50%', background:w.color, display:'grid', placeItems:'center', fontSize:8, fontFamily:T.font, fontWeight:700, color:'#fff' }}>{w.name.charAt(0).toUpperCase()}</div>)}
+                      <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginLeft:4 }}>{isExp ? '▲' : '▼'}</div>
                     </div>
-                    {/* Match rows — hidden for collapsed past rounds */}
-                    {isExpanded && (
-                      <div style={{ display:'flex', flexDirection:'column', gap:2, padding:'0 10px 8px' }}>
-                        {round.map((m, mIdx) => {
-                          const isActive = isCurrent && mIdx === curMatch && !champion;
-                          const isDone = m.winner !== null;
-                          return (
-                            <div key={mIdx} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 0', borderBottom: mIdx < round.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none' }}>
-                              <div style={{ flex:1, display:'flex', alignItems:'center', gap:6 }}>
-                                <div style={{ width:22, height:22, borderRadius:'50%', background: m.p1 ? (isDone && m.winner?.id === m.p1?.id ? m.p1.color : m.p1.color + '55') : '#ddd', display:'grid', placeItems:'center', fontSize:10, fontFamily:T.font, fontWeight:700, color:'#fff', flexShrink:0 }}>
-                                  {m.p1 ? m.p1.name.charAt(0).toUpperCase() : '?'}
-                                </div>
-                                <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone && m.winner?.id === m.p1?.id ? 700 : 400, color: isDone && m.loser?.id === m.p1?.id ? T.inkSoft : T.ink, textDecoration: isDone && m.loser?.id === m.p1?.id ? 'line-through' : 'none' }}>
-                                  {m.p1 ? m.p1.name : 'BYE'}
-                                </div>
-                              </div>
-                              <div style={{ fontFamily:T.font, fontSize:10, color:T.inkSoft, flexShrink:0 }}>vs</div>
-                              <div style={{ flex:1, display:'flex', alignItems:'center', gap:6, justifyContent:'flex-end' }}>
-                                <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone && m.winner?.id === m.p2?.id ? 700 : 400, color: isDone && m.loser?.id === m.p2?.id ? T.inkSoft : T.ink, textDecoration: isDone && m.loser?.id === m.p2?.id ? 'line-through' : 'none', textAlign:'right' }}>
-                                  {m.p2 ? m.p2.name : 'BYE'}
-                                </div>
-                                <div style={{ width:22, height:22, borderRadius:'50%', background: m.p2 ? (isDone && m.winner?.id === m.p2?.id ? m.p2.color : m.p2.color + '55') : '#ddd', display:'grid', placeItems:'center', fontSize:10, fontFamily:T.font, fontWeight:700, color:'#fff', flexShrink:0 }}>
-                                  {m.p2 ? m.p2.name.charAt(0).toUpperCase() : '?'}
-                                </div>
-                              </div>
-                              {isDone && m.score && <div style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft, flexShrink:0, fontWeight:700 }}>{Math.min(m.score.p1,m.score.p2)}-{Math.max(m.score.p1,m.score.p2)}</div>}
-                              {isDone && !m.score && <div style={{ fontSize:12, flexShrink:0 }}>✓</div>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                  )}
+                </div>
+                {isExp && (
+                  <div style={{ display:'flex', flexDirection:'column', gap:2, padding:'0 10px 8px' }}>
+                    {round.map((m, mIdx) => {
+                      const isDone = m.winner !== null;
+                      return (
+                        <div key={mIdx} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 0', borderBottom: mIdx < round.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none' }}>
+                          <div style={{ flex:1, display:'flex', alignItems:'center', gap:6 }}>
+                            <div style={{ width:22, height:22, borderRadius:'50%', background: m.p1 ? (isDone && m.winner?.id===m.p1?.id ? m.p1.color : m.p1.color+'55') : '#ddd', display:'grid', placeItems:'center', fontSize:10, fontFamily:T.font, fontWeight:700, color:'#fff', flexShrink:0 }}>{m.p1 ? m.p1.name.charAt(0).toUpperCase() : '?'}</div>
+                            <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, color: isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none' }}>{m.p1?m.p1.name:'BYE'}</div>
+                          </div>
+                          <div style={{ fontFamily:T.font, fontSize:10, color:T.inkSoft }}>vs</div>
+                          <div style={{ flex:1, display:'flex', alignItems:'center', gap:6, justifyContent:'flex-end' }}>
+                            <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, color: isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', textAlign:'right' }}>{m.p2?m.p2.name:'BYE'}</div>
+                            <div style={{ width:22, height:22, borderRadius:'50%', background: m.p2 ? (isDone&&m.winner?.id===m.p2?.id?m.p2.color:m.p2.color+'55') : '#ddd', display:'grid', placeItems:'center', fontSize:10, fontFamily:T.font, fontWeight:700, color:'#fff', flexShrink:0 }}>{m.p2?m.p2.name.charAt(0).toUpperCase():'?'}</div>
+                          </div>
+                          {isDone && m.score && <div style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft, flexShrink:0, fontWeight:700 }}>{Math.min(m.score.p1,m.score.p2)}-{Math.max(m.score.p1,m.score.p2)}</div>}
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // ── Render group overview ─────────────────────────────────────────────────
+  const renderGroupOverview = () => {
+    const groupType = TOURNAMENT.startsWith('grp_rr') ? 'rr' : 'se';
+    return (
+      <div style={{ display:'flex', flexDirection:'column', gap:10, width:'100%' }}>
+        {tsGroups.map((g, gi) => {
+          const isCurrent = gi === tsCurGroup && tsPhase === 'groups';
+          const isDone = g.done;
+          return (
+            <div key={gi} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow, border: isCurrent ? '1.5px solid ' + T.blue + '44' : '1.5px solid rgba(20,30,50,0.06)' }}>
+              <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color: isCurrent ? T.blue : T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>
+                {g.label} {isDone ? '✓' : isCurrent ? '● Folyamatban' : ''}
+              </div>
+              {groupType === 'rr' ? renderRRStandings(g.players, g.matches, null) : (
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                  {g.players.map(p => <div key={p.id} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', borderRadius:8, background: p.color + '22' }}><div style={{ width:16, height:16, borderRadius:'50%', background:p.color }}></div><span style={{ fontFamily:T.font, fontSize:12, fontWeight:600, color:T.ink }}>{p.name}</span></div>)}
+                </div>
+              )}
             </div>
-          </div>
-        );
-      })()}
+          );
+        })}
+      </div>
+    );
+  };
+
+  // ── Main render ───────────────────────────────────────────────────────────
+  const isTwoStage = TOURNAMENT.startsWith('grp_');
+  const rrParts = TOURNAMENT === 'rr' ? players : (rrMatches.flatMap(m => [m.p1, m.p2]).filter((p, i, a) => p && a.findIndex(x => x && x.id === p.id) === i));
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, width:'100%' }}>
+      {/* Phase label for two-stage */}
+      {isTwoStage && (
+        <div style={{ width:'100%', display:'flex', gap:8 }}>
+          {['groups','finals'].map(ph => (
+            <div key={ph} style={{ flex:1, padding:'8px 0', borderRadius:10, background: tsPhase===ph ? T.blue+'22' : T.surface, fontFamily:T.font, fontWeight:700, fontSize:12, color: tsPhase===ph ? T.blue : T.inkSoft, textAlign:'center' }}>
+              {ph==='groups' ? 'Csoportkör' : 'Főszakasz'}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {renderMatchCard()}
+
+      {/* Bracket / standings */}
+      {TOURNAMENT === 'se' && renderSEBracket(seRounds, seCurRound, seCurMatch)}
+      {TOURNAMENT === 'rr' && renderRRStandings(players, rrMatches, 'Állás')}
+      {isTwoStage && tsPhase === 'groups' && renderGroupOverview()}
+      {isTwoStage && tsPhase === 'finals' && finalsType === 'se' && renderSEBracket(seRounds, seCurRound, seCurMatch)}
+      {isTwoStage && tsPhase === 'finals' && finalsType === 'rr' && renderRRStandings(rrParts, rrMatches, 'Főszakasz állás')}
     </div>
   );
 }
+
 
 function MindenkiGame({ gameIdx, players, onAdvance, onResult }) {
   const doneRef = React.useRef(false);
