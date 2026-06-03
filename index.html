@@ -35223,10 +35223,21 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
     return [buildSERound(sh)];
   };
   const buildRRMatches = (parts) => {
+    if (parts.length < 2) return [];
     const ms = [];
-    for (let i = 0; i < parts.length; i++)
-      for (let j = i+1; j < parts.length; j++)
-        ms.push({ p1: parts[i], p2: parts[j], winner: null, loser: null, score: null });
+    const players = parts.length % 2 === 0 ? [...parts] : [...parts, null];
+    const numRounds = players.length - 1;
+    const half = players.length / 2;
+    const fixed = players[0];
+    const rotating = players.slice(1);
+    for (let r = 0; r < numRounds; r++) {
+      const pairs = [[fixed, rotating[0]]];
+      for (let i = 1; i < half; i++) pairs.push([rotating[i], rotating[rotating.length - i]]);
+      pairs.forEach(([a, b]) => {
+        if (a && b) ms.push({ p1: a, p2: b, winner: null, loser: null, score: null, draw: false });
+      });
+      rotating.unshift(rotating.pop());
+    }
     return ms;
   };
   const getRRStandings = (parts, matches) => {
@@ -35314,7 +35325,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
     if (TOURNAMENT === 'se') {
       const br = buildSEBracket(players);
       setSeRounds(br); setSeCurRound(0);
-      setSeCurMatch(br[0].findIndex(m => m.winner === null));
+      const firstPending = br[0].findIndex(m => m.winner === null);
+      setSeCurMatch(firstPending >= 0 ? firstPending : 0);
     } else if (TOURNAMENT === 'rr') {
       const ms = buildRRMatches([...players].sort(() => Math.random() - 0.5));
       setRrMatches(ms); setRrIdx(0); setRrDone(false);
@@ -35364,9 +35376,21 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
         finishSE(winners[0], newDrink);
         return nr;
       }
-      const nextRound = buildSERound(winners);
-      const nextRoundIdx = curRound + 1;
-      setSeCurRound(nextRoundIdx); setSeCurMatch(nextRound.findIndex(m => m.winner === null));
+      let nextRound = buildSERound(winners);
+      let nextRoundIdx = curRound + 1;
+      let nextPending = nextRound.findIndex(m => m.winner === null);
+      // Auto-advance BYE rounds
+      while (nextPending === -1 && nextRound.length > 1) {
+        const autoWinners = nextRound.map(m => m.winner).filter(Boolean);
+        if (autoWinners.length === 1) { finishSE(autoWinners[0], newDrink); return [...nr, nextRound]; }
+        nextRound = buildSERound(autoWinners);
+        nextRoundIdx++;
+        nextPending = nextRound.findIndex(m => m.winner === null);
+      }
+      if (nextPending === -1 && nextRound.length === 1 && nextRound[0].winner) {
+        finishSE(nextRound[0].winner, newDrink); return [...nr, nextRound];
+      }
+      setSeCurRound(nextRoundIdx); setSeCurMatch(nextPending);
       return [...nr, nextRound];
     });
   };
@@ -35584,7 +35608,6 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
             <CupCounter value={cups2} onChange={setCups2} color={currentMatch.p2.color} max={MAX_CUPS} />
           </div>
         </div>
-        {cups1 === cups2 && <div style={{ fontFamily:T.font, fontSize:11, color:T.coral, fontWeight:700, textAlign:'center', marginTop:4 }}>Döntetlen!</div>}
         <button onClick={confirmHandler} disabled={!canConfirm} style={{ width:'100%', marginTop:12, minHeight:48, border:'none', borderRadius:14, cursor: canConfirm ? 'pointer' : 'default', fontFamily:T.font, fontWeight:700, fontSize:15, color:'#fff', boxShadow: canConfirm ? T.shadow : 'none', background: !canConfirm ? 'rgba(0,0,0,0.08)' : cups1 === cups2 ? T.inkSoft : cups1 < cups2 ? currentMatch.p1.color : currentMatch.p2.color, transition:'background .2s' }}>
           {cups1 === cups2 ? 'Döntetlen megerősítése' : ('Megerősítés — ' + (cups1 < cups2 ? currentMatch.p1.name : currentMatch.p2.name) + ' nyert')}
         </button>
@@ -35594,7 +35617,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   };
 
   // ── Render RR match list ─────────────────────────────────────────────────
-  const renderRRMatchList = (parts, matches, curIdx, setIdx) => (
+  const renderRRMatchList = (parts, matches, curIdx, setIdx, onReset) => (
     <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 16px', boxShadow:T.shadow }}>
       <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:10 }}>Meccsek</div>
       <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
@@ -35605,17 +35628,17 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
           return (
             <div key={i}
               onClick={isPending ? () => { setIdx(i); setCups1(MAX_CUPS); setCups2(MAX_CUPS); } : undefined}
-              onMouseDown={isDone ? () => { lpTimer.current = setTimeout(() => { const updated = matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null}); setIdx(i); setCups1(MAX_CUPS); setCups2(MAX_CUPS); }, 600); } : undefined}
+              onMouseDown={isDone ? () => { lpTimer.current = setTimeout(() => { if(onReset) onReset(i); setIdx(i); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
               onMouseUp={() => clearTimeout(lpTimer.current)}
               onMouseLeave={() => clearTimeout(lpTimer.current)}
-              onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setIdx(i); setCups1(MAX_CUPS); setCups2(MAX_CUPS); }, 600); } : undefined}
+              onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { if(onReset) onReset(i); setIdx(i); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
               onTouchEnd={() => clearTimeout(lpTimer.current)}
               style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderRadius:10, cursor: isPending ? 'pointer' : isDone ? 'context-menu' : 'default', background: isSel ? T.blue+'18' : 'transparent', border: isSel ? '1.5px solid ' + T.blue + '44' : '1.5px solid transparent', transition:'background .15s' }}>
-              <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, color: isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name}</div>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, color: isDone&&m.winner?.id===m.p1?.id?T.mint:isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name}</div>
               <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
-              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isDone&&m.winner ? T.mint : T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
               <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
-              <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, color: isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2.name}</div>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, color: isDone&&m.winner?.id===m.p2?.id?T.mint:isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2.name}</div>
             </div>
           );
         })}
@@ -35686,17 +35709,17 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
                       return (
                         <div key={mIdx}
                           onClick={isSelectable ? () => { setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(MAX_CUPS); setCups2(MAX_CUPS); } : undefined}
-                          onMouseDown={isDone ? () => { lpTimer.current = setTimeout(() => { setSeRounds(prev => prev.map((r,ri) => ri!==rIdx?r:r.map((mm,mi) => mi!==mIdx?mm:{...mm,winner:null,loser:null,score:null}))); setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(MAX_CUPS); setCups2(MAX_CUPS); }, 600); } : undefined}
+                          onMouseDown={isDone ? () => { lpTimer.current = setTimeout(() => { setSeRounds(prev => prev.slice(0,rIdx+1).map((r,ri) => ri!==rIdx?r:r.map((mm,mi) => mi!==mIdx?mm:{...mm,winner:null,loser:null,score:null}))); setChampion(null); doneRef.current=false; setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
                           onMouseUp={() => clearTimeout(lpTimer.current)}
                           onMouseLeave={() => clearTimeout(lpTimer.current)}
-                          onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setSeRounds(prev => prev.map((r,ri) => ri!==rIdx?r:r.map((mm,mi) => mi!==mIdx?mm:{...mm,winner:null,loser:null,score:null}))); setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(MAX_CUPS); setCups2(MAX_CUPS); }, 600); } : undefined}
+                          onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setSeRounds(prev => prev.slice(0,rIdx+1).map((r,ri) => ri!==rIdx?r:r.map((mm,mi) => mi!==mIdx?mm:{...mm,winner:null,loser:null,score:null}))); setChampion(null); doneRef.current=false; setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
                           onTouchEnd={() => clearTimeout(lpTimer.current)}
-                          style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderBottom: mIdx < round.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none', cursor: isSelectable ? 'pointer' : isDone ? 'context-menu' : 'default', borderRadius:8, background: isSelected ? T.blue+'18' : 'transparent', transition:'background .15s' }}>
-                          <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, color: isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1?m.p1.name:'BYE'}</div>
+                          style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', paddingTop: mIdx===0 ? 12 : 7, borderBottom: mIdx < round.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none', cursor: isSelectable ? 'pointer' : isDone ? 'context-menu' : 'default', borderRadius:8, background: isSelected ? T.blue+'18' : 'transparent', transition:'background .15s' }}>
+                          <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, color: isDone&&m.winner?.id===m.p1?.id?T.mint:isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1?m.p1.name:'BYE'}</div>
                           <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
-                          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isDone ? (m.score.p1 < m.score.p2 ? currentMatch?.p2?.color || T.inkSoft : currentMatch?.p1?.color || T.inkSoft) : T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
+                          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isDone ? (m.winner?.id===m.p1?.id ? T.mint : m.winner?.id===m.p2?.id ? T.mint : T.inkSoft) : T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
                           <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
-                          <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, color: isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2?m.p2.name:'BYE'}</div>
+                          <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, color: isDone&&m.winner?.id===m.p2?.id?T.mint:isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2?m.p2.name:'BYE'}</div>
                         </div>
                       );
                     })}
@@ -35757,7 +35780,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
       {/* Bracket / standings */}
       {TOURNAMENT === 'se' && renderSEBracket(seRounds, seCurRound, seCurMatch)}
       {TOURNAMENT === 'rr' && renderRRStandings(players, rrMatches, 'Állás')}
-      {TOURNAMENT === 'rr' && !rrDone && renderRRMatchList(players, rrMatches, rrIdx, setRrIdx)}
+      {TOURNAMENT === 'rr' && !rrDone && renderRRMatchList(players, rrMatches, rrIdx, setRrIdx, (i) => { setRrMatches(prev => prev.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})); setRrDone(false); doneRef.current=false; setChampion(null); })}
       {isTwoStage && tsPhase === 'groups' && renderGroupOverview()}
       {isTwoStage && tsPhase === 'groups' && tsGroups[tsCurGroup] && !tsGroups[tsCurGroup].done && (
         <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 16px', boxShadow:T.shadow }}>
@@ -35775,11 +35798,11 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
                   onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setTsGroups(prev => prev.map((g, gi) => gi!==tsCurGroup?g:{...g, curIdx:i, matches:g.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null})})); setCups1(MAX_CUPS); setCups2(MAX_CUPS); }, 600); } : undefined}
                   onTouchEnd={() => clearTimeout(lpTimer.current)}
                   style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderRadius:10, cursor: !isDone?'pointer':isDone?'context-menu':'default', background: isSel?T.blue+'18':'transparent', border: isSel?'1.5px solid '+T.blue+'44':'1.5px solid transparent', transition:'background .15s' }}>
-                  <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name}</div>
+                  <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.winner?.id===m.p1?.id?T.mint:isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name}</div>
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
-                  <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
+                  <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isDone&&m.winner ? T.mint : T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
-                  <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2.name}</div>
+                  <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.winner?.id===m.p2?.id?T.mint:isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2.name}</div>
                 </div>
               );
             })}
@@ -35788,7 +35811,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
       )}
       {isTwoStage && tsPhase === 'finals' && finalsType === 'se' && renderSEBracket(seRounds, seCurRound, seCurMatch)}
       {isTwoStage && tsPhase === 'finals' && finalsType === 'rr' && renderRRStandings(rrParts, rrMatches, 'Főszakasz állás')}
-      {isTwoStage && tsPhase === 'finals' && finalsType === 'rr' && !rrDone && renderRRMatchList(rrParts, rrMatches, rrIdx, setRrIdx)}
+      {isTwoStage && tsPhase === 'finals' && finalsType === 'rr' && !rrDone && renderRRMatchList(rrParts, rrMatches, rrIdx, setRrIdx, (i) => { setRrMatches(prev => prev.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})); setRrDone(false); doneRef.current=false; setChampion(null); })}
     </div>
   );
 }
