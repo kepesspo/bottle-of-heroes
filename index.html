@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.48';
+const APP_VERSION = 'v6.49';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -38154,13 +38154,14 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
   const [timerTotal, setTimerTotal] = useState(0);
   const [timerEnd, setTimerEnd] = useState(0);
   const [timerLeft, setTimerLeft] = useState(0);
+  const [voteReady, setVoteReady] = useState(false);
   const resultFiredRef = useRef(false);
 
   useEffect(() => {
     setImpostorIdx(Math.floor(Math.random() * players.length));
     setWordIdx(gameIdx % IMPOSZTOR_SZAVAK_SHUFFLED.length);
     setPhase('reveal'); setRevealStep(0); setHolding(false); setVotes({}); setVoteStep(0);
-    setTimerTotal(0); setTimerEnd(0); setTimerLeft(0); resultFiredRef.current = false;
+    setTimerTotal(0); setTimerEnd(0); setTimerLeft(0); setVoteReady(false); resultFiredRef.current = false;
   }, [gameIdx]);
 
   useEffect(() => {
@@ -38168,7 +38169,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
     const iv = setInterval(() => {
       const left = Math.max(0, Math.ceil((timerEnd - Date.now()) / 1000));
       setTimerLeft(left);
-      if (left <= 0) clearInterval(iv);
+      if (left <= 0) { clearInterval(iv); setVoteReady(true); }
     }, 200);
     return () => clearInterval(iv);
   }, [timerEnd]);
@@ -38250,11 +38251,53 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
     const alreadyVoted = votes[voter.id] !== undefined;
     return (
       <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
-        <div style={{ background:'#1B2340', borderRadius:14, padding:'10px 16px', width:'100%', textAlign:'center' }}>
-          <div style={{ fontFamily:T.font, fontSize:13, color:'rgba(255,255,255,0.75)', lineHeight:1.5 }}>
-            Mindenki mondott egy tippet a szóra? <strong style={{ color:'#fff' }}>Szavazzatok</strong> — ki az imposztor!
+        {/* Timer / instruction area */}
+        {!voteReady ? (
+          <div style={{ background:'#1B2340', borderRadius:16, padding:'16px', width:'100%', display:'flex', flexDirection:'column', gap:12, alignItems:'center' }}>
+            <div style={{ fontFamily:T.font, fontSize:13, color:'rgba(255,255,255,0.75)', textAlign:'center', lineHeight:1.5 }}>
+              Mindenki mondjon <strong style={{ color:'#fff' }}>egy tippet</strong> a szóra. Az idő lejártakor szavazhattok.
+            </div>
+            {timerTotal === 0 && (
+              <>
+                <div style={{ display:'flex', gap:8 }}>
+                  {[1,2,3].map(m => (
+                    <button key={m} onClick={() => { const end=Date.now()+m*60000; setTimerTotal(m*60); setTimerEnd(end); setTimerLeft(m*60); }}
+                      style={{ padding:'10px 18px', background:'rgba(255,255,255,0.10)', border:`2px solid ${T.mint}`, color:T.mint, fontFamily:T.font, fontWeight:700, fontSize:16, borderRadius:12, cursor:'pointer' }}>
+                      {m} perc
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setVoteReady(true)}
+                  style={{ width:'100%', padding:'12px', background:'rgba(255,255,255,0.08)', border:`1.5px solid rgba(255,255,255,0.18)`, color:'rgba(255,255,255,0.6)', fontFamily:T.font, fontWeight:600, fontSize:13, borderRadius:12, cursor:'pointer' }}>
+                  Timer nélkül → Szavazás
+                </button>
+              </>
+            )}
+            {timerTotal > 0 && timerLeft > 0 && (
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+                <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:56, color: timerLeft<=10 ? T.coral : T.mint, lineHeight:1 }}>
+                  {Math.floor(timerLeft/60)}:{String(timerLeft%60).padStart(2,'0')}
+                </div>
+                <button onClick={() => { setTimerLeft(0); setVoteReady(true); }}
+                  style={{ padding:'8px 20px', background:'rgba(255,255,255,0.08)', border:`1.5px solid rgba(255,255,255,0.18)`, color:'rgba(255,255,255,0.6)', fontFamily:T.font, fontWeight:600, fontSize:13, borderRadius:12, cursor:'pointer' }}>
+                  Mindenki mondott → Szavazás
+                </button>
+              </div>
+            )}
+            {timerTotal > 0 && timerLeft <= 0 && (() => { if (!voteReady) setTimeout(() => setVoteReady(true), 0); return (
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+                <div style={{ fontSize:28 }}>⏱️</div>
+                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:15, color:T.mint }}>Idő lejárt!</div>
+              </div>
+            ); })()}
           </div>
-        </div>
+        ) : (
+          <div style={{ background:'#1B2340', borderRadius:12, padding:'10px 16px', width:'100%', textAlign:'center' }}>
+            <div style={{ fontFamily:T.font, fontSize:13, color:'rgba(255,255,255,0.75)' }}>
+              <strong style={{ color:'#fff' }}>Szavazzatok</strong> — ki az imposztor?
+            </div>
+          </div>
+        )}
         <div style={{ display:'flex', alignItems:'center', gap:10, background:T.surface, borderRadius:14, padding:'10px 14px', boxShadow:T.shadow, width:'100%' }}>
           <div style={{ width:36, height:36, borderRadius:'50%', background:voter.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:15, color:'#fff', flexShrink:0 }}>
             {voter.name.charAt(0).toUpperCase()}
@@ -38274,7 +38317,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
             if (pIdx === voteStep) return null;
             const picked = votes[voter.id] === pIdx;
             return (
-              <button key={p.id} disabled={alreadyVoted} onClick={() => {
+              <button key={p.id} disabled={alreadyVoted || !voteReady} onClick={() => {
                 const nv = {...votes, [voter.id]: pIdx};
                 setVotes(nv);
                 setTimeout(() => {
@@ -38309,7 +38352,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
                     }
                   }
                 }, 400);
-              }} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'8px 14px', border:`2px solid ${picked ? T.coral : 'transparent'}`, background: picked ? `${T.coral}18` : T.surfaceMuted, borderRadius:14, cursor: alreadyVoted ? 'default' : 'pointer' }}>
+              }} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'8px 14px', border:`2px solid ${picked ? T.coral : 'transparent'}`, background: picked ? `${T.coral}18` : T.surfaceMuted, borderRadius:14, cursor: (alreadyVoted||!voteReady) ? 'default' : 'pointer', opacity: !voteReady ? 0.35 : 1 }}>
                 <div style={{ width:40, height:40, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:17, color:'#fff' }}>{p.name.charAt(0).toUpperCase()}</div>
                 <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:11, color:T.ink }}>{p.name}</div>
               </button>
