@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.43';
+const APP_VERSION = 'v6.44';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -38086,9 +38086,55 @@ const IMPOSZTOR_SZAVAK = [
   'Kókusz','Tengerpart','Könyvtár','Gitár','Víziló',
   'Jégkrém','Karácsonyfa','Mentőautó','Mézeskalács','Labda',
   'Kaktusz','Nyaralás','Szivárvány','Cipőfűző','Tűzoltó',
+  'Akvárium','Almafa','Asztalitenisz','Autópálya','Bábszínház',
+  'Bagoly','Bajusz','Bambusz','Baseball','Benzinkút',
+  'Bicikli','Birkózás','Borbély','Bögrék','Búvár',
+  'Cápa','Cirkusz','Csúszda','Delfin','Diszkó',
+  'Dohányzás','Dzsungel','Édességbolt','Éjjeli őr','Elefánt',
+  'Erdő','Fagylalt','Farsang','Felhőkarcoló','Foci',
+  'Folyó','Fogorvos','Főzés','Fürdőszoba','Fürdőzés',
+  'Gasztronómia','Golf','Gorilla','Grillezés','Gyár',
+  'Gyerekjáték','Gyógyszer','Gyöngy','Gyümölcslé','Hajó',
+  'Hamutartó','Hegymászás','Hintó','Horgászat','Hotelszoba',
+  'Hurrikán','Időjárás','Iskola','Íjász','Jégkorong',
+  'Jógaóra','Kalandpark','Karate','Katicabogár','Kávézó',
+  'Kemping','Kert','Kerékpárút','Kesztyű','Kézimunka',
+  'Kínai étterem','Kosárlabda','Kosárfonás','Kovács','Körhinta',
+  'Labirintus','Légiforgalom','Lemezbolt','Lépcső','Lovagló',
+  'Lunapark','Mágnes','Majom','Márvány','Megálló',
+  'Mentőmellény','Mértani forma','Mozi','Múzeum','Napelem',
+  'Napraforgó','Narancslé','Naptej','Nyomda','Nyúl',
+  'Oktatás','Operaház','Optikus','Origami','Óceán',
+  'Óriáskerék','Pajta','Palota','Panda','Paradicsom',
+  'Parkoló','Pingpong','Piramis','Pizza','Pizsamaparti',
+  'Plázsa','Polip','Postahivatal','Programozás','Puszta',
+  'Rák','Recept','Robot','Ruházkodás','Safari',
+  'Sakk','Sarkvidék','Sajtárda','Sátortábor','Sci-fi',
+  'Sétálóutca','Sivatag','Snorkeling','Söröző','Sportcsarnok',
+  'Strandbár','Strandfoci','Sütemény','Szerszám','Szökőkút',
+  'Szőnyeg','Szupermarket','Tábortűz','Takarítás','Teknős',
+  'Tengerész','Természetjárás','Tigris','Torta','Trachoma',
+  'Trafik','Trambulin','Tüzijáték','Udvarmester','Ugróiskola',
+  'Úszómedence','Utazás','Útlap','Vadkacsa','Vadászat',
+  'Varjú','Vasút','Vendégfogadó','Verseny','Vígjáték',
+  'Vízesés','Vulkán','Zoológus','Zsemle','Zsírkréta',
+  'Asztronauta','Balerina','Boszorkány','Detektív','Dínó',
+  'Fényképész','Focista','Harangozó','Kalauz','Kapitány',
+  'Katona','Kertész','Kovboj','Mentős','Mérnök',
+  'Mészáros','Orvos','Pilóta','Postás','Rendőr',
+  'Szakács','Szerelő','Tanár','Tengerész','Vadőr',
+  'Zsonglőr','Állatkert','Bánya','Botanikus kert','Bölcsőde',
+  'Cirkuszpor','Erőmű','Fesztivál','Filmstúdió','Hangversenyterem',
+  'Jachtklub','Kastély','Kikötő','Kórház','Laborató',
+  'Múzeumkert','Napközi','Piactér','Repülőtér','Stadion',
+  'Strandfürdő','Szálloda','Teniszpálya','Uszoda','Vásárcsarnok',
+  'Aquapark','Bébiszitter','Bohóc','Csónakázó tó','Fogaskerekű',
+  'Galéria','Hóember','Játszóház','Kézműves piac','Lovasiskola',
+  'Medvebölcső','Naplemente','Obszervatórium','Palacsintázó','Régiséges bolt',
+  'Surf','Tengerpart bár','Urbánus kert','Vadkemping','Zipline',
 ];
 
-function ImposztorGame({ gameIdx, players, onAdvance }) {
+function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
   const [impostorIdx, setImpostorIdx] = useState(0);
   const [wordIdx, setWordIdx] = useState(0);
   const [phase, setPhase] = useState('reveal');
@@ -38099,12 +38145,13 @@ function ImposztorGame({ gameIdx, players, onAdvance }) {
   const [timerTotal, setTimerTotal] = useState(0);
   const [timerEnd, setTimerEnd] = useState(0);
   const [timerLeft, setTimerLeft] = useState(0);
+  const resultFiredRef = useRef(false);
 
   useEffect(() => {
     setImpostorIdx(Math.floor(Math.random() * players.length));
     setWordIdx(gameIdx % IMPOSZTOR_SZAVAK.length);
     setPhase('reveal'); setRevealStep(0); setHolding(false); setVotes({}); setVoteStep(0);
-    setTimerTotal(0); setTimerEnd(0); setTimerLeft(0);
+    setTimerTotal(0); setTimerEnd(0); setTimerLeft(0); resultFiredRef.current = false;
   }, [gameIdx]);
 
   useEffect(() => {
@@ -38198,13 +38245,19 @@ function ImposztorGame({ gameIdx, players, onAdvance }) {
           <div style={{ fontFamily:T.font, fontSize:14, color:T.ink, lineHeight:1.5 }}>Mindenki mondjon <strong>egy tippet</strong> a titkos szóra (anélkül hogy kimondaná). Az Imposztor blöfföljön!</div>
         </div>
         {timerTotal === 0 && (
-          <div style={{ display:'flex', gap:10 }}>
-            {[1,2,3].map(m => (
-              <button key={m} onClick={() => { const end=Date.now()+m*60000; setTimerTotal(m*60); setTimerEnd(end); setTimerLeft(m*60); }}
-                style={{ padding:'12px 22px', background:T.surface, border:`2px solid ${T.mint}`, color:T.mint, fontFamily:T.font, fontWeight:700, fontSize:17, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>
-                {m} perc
-              </button>
-            ))}
+          <div style={{ display:'flex', flexDirection:'column', gap:10, alignItems:'center', width:'100%' }}>
+            <div style={{ display:'flex', gap:10 }}>
+              {[1,2,3].map(m => (
+                <button key={m} onClick={() => { const end=Date.now()+m*60000; setTimerTotal(m*60); setTimerEnd(end); setTimerLeft(m*60); }}
+                  style={{ padding:'12px 22px', background:T.surface, border:`2px solid ${T.mint}`, color:T.mint, fontFamily:T.font, fontWeight:700, fontSize:17, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>
+                  {m} perc
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setPhase('vote')}
+              style={{ width:'100%', padding:'13px', background:'rgba(255,255,255,0.6)', border:`2px solid rgba(0,0,0,0.1)`, color:T.inkSoft, fontFamily:T.font, fontWeight:600, fontSize:14, borderRadius:14, cursor:'pointer' }}>
+              Timer nélkül → Szavazás
+            </button>
           </div>
         )}
         {timerRunning && (
@@ -38272,6 +38325,27 @@ function ImposztorGame({ gameIdx, players, onAdvance }) {
     );
   }
 
+  useEffect(() => {
+    if (phase !== 'result') return;
+    if (resultFiredRef.current) return;
+    resultFiredRef.current = true;
+    const impostor = players[impostorIdx];
+    const voteCounts2 = {};
+    Object.values(votes).forEach(idx => { voteCounts2[idx] = (voteCounts2[idx]||0)+1; });
+    const topIdx2 = Object.entries(voteCounts2).sort((a,b)=>b[1]-a[1])[0]?.[0];
+    const found2 = parseInt(topIdx2) === impostorIdx;
+    const dm = {};
+    if (found2) { dm[impostor.id] = 3; }
+    else { players.forEach(p => { if(p.id !== impostor.id) dm[p.id] = 2; }); }
+    const subtitle = found2
+      ? `${impostor.name} iszik 3-at! (Megtalálták)`
+      : `Mindenki más iszik 2-t! (Blöff sikerült)`;
+    setTimeout(() => {
+      onResult && onResult({ correct: found2, playerName: impostor.name, drinks: found2 ? 3 : 2, subtitle });
+      onAdvance && onAdvance(dm);
+    }, 800);
+  }, [phase]);
+
   if (phase === 'result') {
     const impostor = players[impostorIdx];
     const voteCounts = {};
@@ -38304,14 +38378,7 @@ function ImposztorGame({ gameIdx, players, onAdvance }) {
             </div>
           ))}
         </div>
-        <button onClick={() => {
-          const dm = {};
-          if (found) { dm[impostor.id] = 3; }
-          else { players.forEach(p => { if(p.id !== impostor.id) dm[p.id] = 2; }); }
-          if(onAdvance) onAdvance(dm);
-        }} style={{ width:'100%', padding:'12px 0', background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>
-          Következő ▶
-        </button>
+
       </div>
     );
   }
@@ -40404,7 +40471,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, 
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
+  if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} mode={mode} gameMeta={gameMeta} />;
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
   if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} gameMeta={gameMeta} />;
