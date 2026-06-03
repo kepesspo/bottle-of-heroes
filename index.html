@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.20';
+const APP_VERSION = 'v6.21';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -37346,7 +37346,7 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
   );
 }
 
-function LóversenyGame({ gameIdx, players, onAdvance }) {
+function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
   const FINISH = 12;
   const [phase, setPhase] = useState('bet');
   const [bets, setBets] = useState({});
@@ -37357,12 +37357,14 @@ function LóversenyGame({ gameIdx, players, onAdvance }) {
   const [gifts, setGifts] = useState({});
   const ivRef = useRef(null);
   const posRef = useRef([0,0,0,0]);
+  const advancedRef = useRef(false);
 
   useEffect(() => { return () => { if (ivRef.current) clearInterval(ivRef.current); }; }, []);
   useEffect(() => {
     setPhase('bet'); setBets({}); setBetStep(0); setPositions([0,0,0,0]);
     setRaceWinner(null); setFinalRanks([]); setGifts({});
     posRef.current = [0,0,0,0];
+    advancedRef.current = false;
     if (ivRef.current) { clearInterval(ivRef.current); ivRef.current = null; }
   }, [gameIdx]);
 
@@ -37387,13 +37389,27 @@ function LóversenyGame({ gameIdx, players, onAdvance }) {
     }, 480);
   };
 
-  const finishGame = () => {
+  const finishGame = (giftsArg) => {
+    if (advancedRef.current) return;
+    advancedRef.current = true;
     const drinkMap = {};
     players.forEach(p => {
       const b = bets[p.id];
-      if (b && b.horseId !== raceWinner) drinkMap[p.id] = (drinkMap[p.id]||0) + (b.amount||0);
+      if (b && b.horseId !== raceWinner) {
+        const drinks = b.amount || 0;
+        if (drinks > 0) {
+          drinkMap[p.id] = (drinkMap[p.id]||0) + drinks;
+          onResult && onResult({ correct: false, playerName: p.name, drinks, subtitle: p.name + ' iszik ' + drinks + ' kortyt!' });
+        }
+      }
     });
-    Object.entries(gifts).forEach(([pid, amt]) => { drinkMap[pid] = (drinkMap[pid]||0) + amt; });
+    Object.entries(giftsArg || {}).forEach(([pid, amt]) => {
+      if (amt > 0) {
+        drinkMap[pid] = (drinkMap[pid]||0) + amt;
+        const pname = players.find(p => p.id === pid)?.name;
+        if (pname) onResult && onResult({ correct: false, playerName: pname, drinks: amt, subtitle: pname + ' iszik ' + amt + ' kortyt!' });
+      }
+    });
     if (onAdvance) onAdvance(drinkMap);
   };
 
@@ -37402,9 +37418,20 @@ function LóversenyGame({ gameIdx, players, onAdvance }) {
     const rm = {}; sorted.forEach((h,i) => rm[h.id] = i+1); return rm;
   };
 
-  const winnerPool = players.filter(p => bets[p.id]?.horseId === raceWinner).reduce((s,p) => s+(bets[p.id]?.amount||0), 0);
+  // Pool = one player's bet worth even if multiple winners
+  const winners = players.filter(p => bets[p.id]?.horseId === raceWinner);
+  const winnerPool = winners.length > 0 ? Math.max(...winners.map(w => bets[w.id]?.amount || 0)) : 0;
   const totalGifted = Object.values(gifts).reduce((s,v) => s+v, 0);
   const remaining = winnerPool - totalGifted;
+
+  // Auto-advance when distribution complete (or no pool)
+  useEffect(() => {
+    if (phase !== 'result') return;
+    if (winnerPool === 0 || remaining === 0) {
+      const t = setTimeout(() => finishGame(gifts), winnerPool === 0 ? 400 : 0);
+      return () => clearTimeout(t);
+    }
+  }, [phase, remaining, winnerPool]);
 
   // ── Betting phase ──────────────────────────────────────────────────────────
   if (phase === 'bet') {
@@ -37574,7 +37601,6 @@ function LóversenyGame({ gameIdx, players, onAdvance }) {
             </div>
           </div>
         )}
-        <PrimaryButton onClick={finishGame}>Következő ▶</PrimaryButton>
       </div>
     );
   }
@@ -39919,7 +39945,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, 
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
+  if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} mode={mode} gameMeta={gameMeta} />;
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
