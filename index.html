@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.56';
+const APP_VERSION = 'v6.57';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -39475,7 +39475,7 @@ function EremGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
   );
 }
 
-function TapperGame({ gameIdx, challenger, opponent, onAdvance }) {
+function TapperGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
   const p1 = challenger;
   const p2 = opponent;
 
@@ -39515,11 +39515,17 @@ function TapperGame({ gameIdx, challenger, opponent, onAdvance }) {
     else if (p2Time < p1Time) r = 2;
     else r = 'draw';
     const dm = {};
-    if (r === 1 && p2) dm[p2.id] = 1;
-    else if (r === 2 && p1) dm[p1.id] = 1;
+    const pm = {};
+    if (r === 1) { if(p2) dm[p2.id]=1; if(p1) pm[p1.id]=1; }
+    else if (r === 2) { if(p1) dm[p1.id]=1; if(p2) pm[p2.id]=1; }
     else if (r === 'both-lose') { if(p1) dm[p1.id]=1; if(p2) dm[p2.id]=1; }
-    const t = setTimeout(() => { if(onAdvance) onAdvance(dm); }, 3000);
-    return () => clearTimeout(t);
+    const winner = r === 1 ? p1 : r === 2 ? p2 : null;
+    const loser = r === 1 ? p2 : r === 2 ? p1 : null;
+    const subtitle = r === 'both-lose' ? 'Mindkettő túlment — mindkettő iszik!'
+      : r === 'draw' ? 'Döntetlen!'
+      : `${winner?.name} nyert — ${loser?.name} iszik`;
+    onResult && onResult({ correct: r !== 'both-lose' && r !== 'draw', playerName: winner?.name, drinks: r === 'both-lose' ? 1 : loser ? 1 : 0, subtitle });
+    onAdvance && onAdvance(dm, pm);
   }, [p1Time, p2Time]);
 
   const tryStart = () => {
@@ -40502,7 +40508,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, 
   if (gameId === 'uveg') return <UvegGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'ticktak') return <TicktakGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'erem') return <EremGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'tapper') return <TapperGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} />;
+  if (gameId === 'tapper') return <TapperGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'anagramma') return <AnagrammaGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
   if (gameId === 'ringfire') return <RingFireGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
   if (gameId === 'kopapir') return <KoPapirGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
