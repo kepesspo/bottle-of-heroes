@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.51';
+const APP_VERSION = 'v6.52';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -39268,13 +39268,14 @@ function UvegGame({ gameIdx, players, onAdvance, onResult }) {
   );
 }
 
-function TicktakGame({ gameIdx, players, onAdvance }) {
+function TicktakGame({ gameIdx, players, onAdvance, onResult }) {
   const [phase, setPhase] = React.useState('ready');
   const [loserPid, setLoserPid] = React.useState(null);
   const timerRef = React.useRef(null);
+  const advancedRef = React.useRef(false);
 
   React.useEffect(() => {
-    setPhase('ready'); setLoserPid(null);
+    setPhase('ready'); setLoserPid(null); advancedRef.current = false;
     return () => clearTimeout(timerRef.current);
   }, [gameIdx]);
 
@@ -39284,11 +39285,13 @@ function TicktakGame({ gameIdx, players, onAdvance }) {
     timerRef.current = setTimeout(() => setPhase('buzz'), delay);
   };
 
-  const loser = loserPid ? players.find(p => p.id === loserPid) : null;
-
-  const proceed = () => {
-    const dm = {};
-    if (loserPid) dm[loserPid] = 1;
+  const selectLoser = (pid) => {
+    if (loserPid || advancedRef.current) return;
+    setLoserPid(pid);
+    const p = players.find(pl => pl.id === pid);
+    advancedRef.current = true;
+    const dm = { [pid]: 1 };
+    onResult && onResult({ correct: false, playerName: p?.name, drinks: 1, subtitle: `${p?.name} tartotta a tárgyat — iszik egyet` });
     onAdvance && onAdvance(dm);
   };
 
@@ -39298,10 +39301,10 @@ function TicktakGame({ gameIdx, players, onAdvance }) {
         ⏰
       </div>
       <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', lineHeight:1.5, maxWidth:260 }}>
-        Korbeadjatok a targyat! Az idozito titokban indul — mikor cseng, annal a jatekosnal aki epp tartja.
+        Körbeadjátok a tárgyat! Az időzítő titokban indul — mikor cseng, annál a játékosnál aki épp tartja.
       </div>
       <button onClick={start} style={{ width:'100%', padding:'15px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow }}>
-        ⏰ Idozito inditasa!
+        ⏰ Időzítő indítása!
       </button>
     </div>
   );
@@ -39312,7 +39315,7 @@ function TicktakGame({ gameIdx, players, onAdvance }) {
         ⏰
       </div>
       <div style={{ fontFamily:T.font, fontWeight:800, fontSize:24, color:T.mint, textTransform:'uppercase', letterSpacing:'0.1em' }}>Megy!</div>
-      <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>Adjatok korbe a targyat!</div>
+      <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>Adjátok körbe a tárgyat!</div>
     </div>
   );
 
@@ -39322,14 +39325,14 @@ function TicktakGame({ gameIdx, players, onAdvance }) {
         ⏰
       </div>
       <div style={{ fontFamily:T.font, fontWeight:800, fontSize:26, color:T.coral, textTransform:'uppercase', letterSpacing:'0.08em' }}>
-        CSOROG! 🔔
+        CSÖRÖG! 🔔
       </div>
-      <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginBottom:4 }}>Kinel volt a targy a kezeben?</div>
+      <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginBottom:4 }}>Kinél volt a tárgy a kezében?</div>
       <div style={{ display:'flex', gap:8, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:4 }}>
         {players.map(p => {
           const selected = loserPid === p.id;
           return (
-            <div key={p.id} onClick={() => !loserPid && setLoserPid(p.id)} style={{
+            <div key={p.id} onClick={() => selectLoser(p.id)} style={{
               display:'flex', flexDirection:'column', alignItems:'center', gap:6,
               padding:'10px 14px', borderRadius:14,
               background: selected ? '#FFF0EE' : '#fff',
@@ -39346,11 +39349,6 @@ function TicktakGame({ gameIdx, players, onAdvance }) {
           );
         })}
       </div>
-      {loser && (
-        <button onClick={proceed} style={{ width:'100%', padding:'15px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow, animation:'popIn .2s' }}>
-          {loser.name} iszik — uj kor →
-        </button>
-      )}
     </div>
   );
 }
@@ -40486,7 +40484,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, 
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
   if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} gameMeta={gameMeta} />;
   if (gameId === 'uveg') return <UvegGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'ticktak') return <TicktakGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
+  if (gameId === 'ticktak') return <TicktakGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'erem') return <EremGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'tapper') return <TapperGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} />;
   if (gameId === 'anagramma') return <AnagrammaGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
