@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.45';
+const APP_VERSION = 'v6.46';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -38322,7 +38322,29 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
               <button key={p.id} disabled={alreadyVoted} onClick={() => {
                 const nv = {...votes, [voter.id]: pIdx};
                 setVotes(nv);
-                setTimeout(() => { if(voteStep+1 < players.length) setVoteStep(voteStep+1); else setPhase('result'); }, 400);
+                setTimeout(() => {
+                  if (voteStep+1 < players.length) {
+                    setVoteStep(voteStep+1);
+                  } else {
+                    setPhase('result');
+                    if (!resultFiredRef.current) {
+                      resultFiredRef.current = true;
+                      const vc = {};
+                      Object.values(nv).forEach(idx => { vc[idx] = (vc[idx]||0)+1; });
+                      const top = Object.entries(vc).sort((a,b)=>b[1]-a[1])[0]?.[0];
+                      const isFound = parseInt(top) === impostorIdx;
+                      const imp = players[impostorIdx];
+                      const dm = {};
+                      if (isFound) { dm[imp.id] = 3; }
+                      else { players.forEach(p => { if(p.id !== imp.id) dm[p.id] = 2; }); }
+                      const sub = isFound ? `${imp.name} iszik 3-at! (Megtalálták)` : `Mindenki más iszik 2-t! (Blöff sikerült)`;
+                      setTimeout(() => {
+                        onResult && onResult({ correct: isFound, playerName: imp.name, drinks: isFound ? 3 : 2, subtitle: sub });
+                        onAdvance && onAdvance(dm);
+                      }, 900);
+                    }
+                  }
+                }, 400);
               }} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'8px 14px', border:`2px solid ${picked ? T.coral : 'transparent'}`, background: picked ? `${T.coral}18` : T.surfaceMuted, borderRadius:14, cursor: alreadyVoted ? 'default' : 'pointer' }}>
                 <div style={{ width:40, height:40, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:17, color:'#fff' }}>{p.name.charAt(0).toUpperCase()}</div>
                 <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:11, color:T.ink }}>{p.name}</div>
@@ -38333,27 +38355,6 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
       </div>
     );
   }
-
-  useEffect(() => {
-    if (phase !== 'result') return;
-    if (resultFiredRef.current) return;
-    resultFiredRef.current = true;
-    const impostor = players[impostorIdx];
-    const voteCounts2 = {};
-    Object.values(votes).forEach(idx => { voteCounts2[idx] = (voteCounts2[idx]||0)+1; });
-    const topIdx2 = Object.entries(voteCounts2).sort((a,b)=>b[1]-a[1])[0]?.[0];
-    const found2 = parseInt(topIdx2) === impostorIdx;
-    const dm = {};
-    if (found2) { dm[impostor.id] = 3; }
-    else { players.forEach(p => { if(p.id !== impostor.id) dm[p.id] = 2; }); }
-    const subtitle = found2
-      ? `${impostor.name} iszik 3-at! (Megtalálták)`
-      : `Mindenki más iszik 2-t! (Blöff sikerült)`;
-    setTimeout(() => {
-      onResult && onResult({ correct: found2, playerName: impostor.name, drinks: found2 ? 3 : 2, subtitle });
-      onAdvance && onAdvance(dm);
-    }, 800);
-  }, [phase]);
 
   if (phase === 'result') {
     const impostor = players[impostorIdx];
