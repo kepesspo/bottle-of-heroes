@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.47';
+const APP_VERSION = 'v6.48';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -38236,60 +38236,10 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
         </div>
 
         {/* Pass to next */}
-        <button onClick={() => { setHolding(false); if(revealStep+1 < players.length) setRevealStep(revealStep+1); else setPhase('describe'); }}
+        <button onClick={() => { setHolding(false); if(revealStep+1 < players.length) setRevealStep(revealStep+1); else setPhase('vote'); }}
           style={{ width:'100%', padding:'14px 0', background:'#1B2340', border:'none', borderRadius:14, color:'rgba(255,255,255,0.9)', fontFamily:T.font, fontWeight:700, fontSize:15, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
           <span>Láttam — adom tovább</span><span style={{ fontSize:14 }}>→</span>
         </button>
-      </div>
-    );
-  }
-
-  if (phase === 'describe') {
-    const timerDone = timerTotal > 0 && timerLeft <= 0;
-    const timerRunning = timerTotal > 0 && timerLeft > 0;
-    return (
-      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:14, alignItems:'center' }}>
-        <div style={{ background:T.surface, borderRadius:14, padding:'12px 16px', width:'100%', boxShadow:T.shadow, textAlign:'center' }}>
-          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6 }}>Mit kell tenni</div>
-          <div style={{ fontFamily:T.font, fontSize:14, color:T.ink, lineHeight:1.5 }}>Mindenki mondjon <strong>egy tippet</strong> a titkos szóra (anélkül hogy kimondaná). Az Imposztor blöfföljön!</div>
-        </div>
-        {timerTotal === 0 && (
-          <div style={{ display:'flex', flexDirection:'column', gap:10, alignItems:'center', width:'100%' }}>
-            <div style={{ display:'flex', gap:10 }}>
-              {[1,2,3].map(m => (
-                <button key={m} onClick={() => { const end=Date.now()+m*60000; setTimerTotal(m*60); setTimerEnd(end); setTimerLeft(m*60); }}
-                  style={{ padding:'12px 22px', background:T.surface, border:`2px solid ${T.mint}`, color:T.mint, fontFamily:T.font, fontWeight:700, fontSize:17, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>
-                  {m} perc
-                </button>
-              ))}
-            </div>
-            <button onClick={() => setPhase('vote')}
-              style={{ width:'100%', padding:'13px', background:'rgba(255,255,255,0.6)', border:`2px solid rgba(0,0,0,0.1)`, color:T.inkSoft, fontFamily:T.font, fontWeight:600, fontSize:14, borderRadius:14, cursor:'pointer' }}>
-              Timer nélkül → Szavazás
-            </button>
-          </div>
-        )}
-        {timerRunning && (
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
-            <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:60, color:timerLeft<=10 ? T.coral : T.mint, lineHeight:1 }}>
-              {Math.floor(timerLeft/60)}:{String(timerLeft%60).padStart(2,'0')}
-            </div>
-            <button onClick={() => setPhase('vote')}
-              style={{ padding:'8px 22px', background:'rgba(255,255,255,0.6)', border:`2px solid rgba(0,0,0,0.1)`, color:T.inkSoft, fontFamily:T.font, fontWeight:600, fontSize:14, borderRadius:14, cursor:'pointer' }}>
-              Mindenki mondott → Szavazás
-            </button>
-          </div>
-        )}
-        {timerDone && (
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
-            <div style={{ fontSize:36 }}>⏱️</div>
-            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:17, color:T.mint }}>Idő lejárt!</div>
-            <button onClick={() => setPhase('vote')}
-              style={{ padding:'13px 32px', background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>
-              Szavazás →
-            </button>
-          </div>
-        )}
       </div>
     );
   }
@@ -38300,6 +38250,11 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
     const alreadyVoted = votes[voter.id] !== undefined;
     return (
       <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
+        <div style={{ background:'#1B2340', borderRadius:14, padding:'10px 16px', width:'100%', textAlign:'center' }}>
+          <div style={{ fontFamily:T.font, fontSize:13, color:'rgba(255,255,255,0.75)', lineHeight:1.5 }}>
+            Mindenki mondott egy tippet a szóra? <strong style={{ color:'#fff' }}>Szavazzatok</strong> — ki az imposztor!
+          </div>
+        </div>
         <div style={{ display:'flex', alignItems:'center', gap:10, background:T.surface, borderRadius:14, padding:'10px 14px', boxShadow:T.shadow, width:'100%' }}>
           <div style={{ width:36, height:36, borderRadius:'50%', background:voter.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:15, color:'#fff', flexShrink:0 }}>
             {voter.name.charAt(0).toUpperCase()}
@@ -38335,12 +38290,21 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
                       const isFound = parseInt(top) === impostorIdx;
                       const imp = players[impostorIdx];
                       const dm = {};
-                      if (isFound) { dm[imp.id] = 3; }
-                      else { players.forEach(p => { if(p.id !== imp.id) dm[p.id] = 2; }); }
-                      const sub = isFound ? `${imp.name} iszik 3-at! (Megtalálták)` : `Mindenki más iszik 2-t! (Blöff sikerült)`;
+                      const pm = {};
+                      if (isFound) {
+                        dm[imp.id] = 3;
+                        players.forEach((p, i) => { if (nv[p.id] === impostorIdx) pm[p.id] = 1; });
+                      } else {
+                        pm[imp.id] = 1;
+                        players.forEach(p => { if (p.id !== imp.id) dm[p.id] = 2; });
+                      }
+                      const correctVoters = isFound ? players.filter((p,i) => nv[p.id] === impostorIdx) : [];
+                      const sub = isFound
+                        ? `${imp.name} iszik 3-at · ${correctVoters.map(p=>p.name).join(', ')} +1 pont`
+                        : `${imp.name} +1 pont · Mindenki más iszik 2-t`;
                       setTimeout(() => {
                         onResult && onResult({ correct: isFound, playerName: imp.name, drinks: isFound ? 3 : 2, subtitle: sub });
-                        onAdvance && onAdvance(dm);
+                        onAdvance && onAdvance(dm, pm);
                       }, 900);
                     }
                   }
