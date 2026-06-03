@@ -35257,6 +35257,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   const [drinkMap, setDrinkMap] = React.useState({});
   const [champion, setChampion] = React.useState(null);
   const [expandedRounds, setExpandedRounds] = React.useState({});
+  const lpTimer = React.useRef(null);
 
   // SE
   const [seRounds, setSeRounds] = React.useState([]);
@@ -35508,33 +35509,25 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
         : 'Meccs ' + (tsGroups[tsCurGroup]?.curIdx + 1 || 1) + ' / ' + (tsGroups[tsCurGroup]?.matches.length || 1);
 
     return (
-      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 14px 16px', boxShadow:T.shadow }}>
+      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'16px 16px 18px', boxShadow:T.shadow }}>
         <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', textAlign:'center', marginBottom:8 }}>
           {phaseLabel ? phaseLabel + ' · ' : ''}{matchLabel}
         </div>
-        {/* Horizontal layout: Name ---- [counter] VS [counter] ---- Name */}
-        <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4 }}>
-          {/* P1 name + avatar */}
-          <div style={{ flex:1, display:'flex', alignItems:'center', gap:6, minWidth:0, justifyContent:'flex-start' }}>
-            <div style={{ width:36, height:36, borderRadius:'50%', background:currentMatch.p1.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:15, color:'#fff', flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
+          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+            <div style={{ width:54, height:54, borderRadius:'50%', background:currentMatch.p1.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:22, color:'#fff', boxShadow:'0 4px 14px ' + currentMatch.p1.color + '55' }}>
               {currentMatch.p1.name.charAt(0).toUpperCase()}
             </div>
-            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p1.name}</div>
-          </div>
-          {/* Dashes + counter */}
-          <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0 }}>
-            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute }}>----</div>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p1.name}</div>
             <CupCounter value={cups1} onChange={setCups1} color={currentMatch.p1.color} max={MAX_CUPS} />
-            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:14, color:T.inkSoft, marginLeft:2 }}>VS</div>
-            <CupCounter value={cups2} onChange={setCups2} color={currentMatch.p2.color} max={MAX_CUPS} />
-            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute }}>----</div>
           </div>
-          {/* P2 avatar + name */}
-          <div style={{ flex:1, display:'flex', alignItems:'center', gap:6, minWidth:0, justifyContent:'flex-end' }}>
-            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{currentMatch.p2.name}</div>
-            <div style={{ width:36, height:36, borderRadius:'50%', background:currentMatch.p2.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:15, color:'#fff', flexShrink:0 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', paddingTop:18, fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.inkSoft, flexShrink:0 }}>VS</div>
+          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+            <div style={{ width:54, height:54, borderRadius:'50%', background:currentMatch.p2.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:22, color:'#fff', boxShadow:'0 4px 14px ' + currentMatch.p2.color + '55' }}>
               {currentMatch.p2.name.charAt(0).toUpperCase()}
             </div>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p2.name}</div>
+            <CupCounter value={cups2} onChange={setCups2} color={currentMatch.p2.color} max={MAX_CUPS} />
           </div>
         </div>
         {cups1 === cups2 && <div style={{ fontFamily:T.font, fontSize:11, color:T.coral, fontWeight:700, textAlign:'center', marginTop:4 }}>Döntetlen!</div>}
@@ -35556,19 +35549,19 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
           const isSel = i === curIdx && !isDone;
           const isPending = !isDone;
           return (
-            <div key={i} onClick={isPending ? () => { setIdx(i); setCups1(MAX_CUPS); setCups2(MAX_CUPS); } : undefined}
-              style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 8px', borderRadius:10, cursor: isPending ? 'pointer' : 'default', background: isSel ? T.blue + '18' : isDone ? 'rgba(20,30,50,0.02)' : 'transparent', border: isSel ? '1.5px solid ' + T.blue + '44' : '1.5px solid transparent', transition:'background .15s' }}>
-              <div style={{ flex:1, display:'flex', alignItems:'center', gap:6 }}>
-                <div style={{ width:22, height:22, borderRadius:'50%', background: isDone && m.winner?.id===m.p1?.id ? m.p1.color : m.p1.color + '55', display:'grid', placeItems:'center', fontSize:10, fontFamily:T.font, fontWeight:700, color:'#fff', flexShrink:0 }}>{m.p1.name.charAt(0).toUpperCase()}</div>
-                <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, color: isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none' }}>{m.p1.name}</div>
-              </div>
-              <div style={{ fontFamily:T.font, fontSize:10, color:T.inkSoft, flexShrink:0 }}>
-                {isDone && m.score ? (Math.min(m.score.p1,m.score.p2) + '-' + Math.max(m.score.p1,m.score.p2)) : 'vs'}
-              </div>
-              <div style={{ flex:1, display:'flex', alignItems:'center', gap:6, justifyContent:'flex-end' }}>
-                <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, color: isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', textAlign:'right' }}>{m.p2.name}</div>
-                <div style={{ width:22, height:22, borderRadius:'50%', background: isDone&&m.winner?.id===m.p2?.id?m.p2.color:m.p2.color+'55', display:'grid', placeItems:'center', fontSize:10, fontFamily:T.font, fontWeight:700, color:'#fff', flexShrink:0 }}>{m.p2.name.charAt(0).toUpperCase()}</div>
-              </div>
+            <div key={i}
+              onClick={isPending ? () => { setIdx(i); setCups1(MAX_CUPS); setCups2(MAX_CUPS); } : undefined}
+              onMouseDown={isDone ? () => { lpTimer.current = setTimeout(() => { const updated = matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null}); setIdx(i); setCups1(MAX_CUPS); setCups2(MAX_CUPS); }, 600); } : undefined}
+              onMouseUp={() => clearTimeout(lpTimer.current)}
+              onMouseLeave={() => clearTimeout(lpTimer.current)}
+              onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setIdx(i); setCups1(MAX_CUPS); setCups2(MAX_CUPS); }, 600); } : undefined}
+              onTouchEnd={() => clearTimeout(lpTimer.current)}
+              style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderRadius:10, cursor: isPending ? 'pointer' : isDone ? 'context-menu' : 'default', background: isSel ? T.blue+'18' : 'transparent', border: isSel ? '1.5px solid ' + T.blue + '44' : '1.5px solid transparent', transition:'background .15s' }}>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, color: isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name}</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, color: isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2.name}</div>
             </div>
           );
         })}
@@ -35624,18 +35617,19 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
                       const isSelectable = isCurrent && !isDone && m.p1 && m.p2;
                       const isSelected = isCurrent && mIdx === curMatch;
                       return (
-                        <div key={mIdx} onClick={isSelectable ? () => { setSeCurMatch(mIdx); setCups1(MAX_CUPS); setCups2(MAX_CUPS); } : undefined}
-                          style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 0', borderBottom: mIdx < round.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none', cursor: isSelectable ? 'pointer' : 'default', borderRadius: isSelected ? 8 : 0, background: isSelected ? T.blue + '18' : 'transparent', paddingLeft: isSelected ? 6 : 0, paddingRight: isSelected ? 6 : 0, transition:'background .15s' }}>
-                          <div style={{ flex:1, display:'flex', alignItems:'center', gap:6 }}>
-                            <div style={{ width:22, height:22, borderRadius:'50%', background: m.p1 ? (isDone && m.winner?.id===m.p1?.id ? m.p1.color : m.p1.color+'55') : '#ddd', display:'grid', placeItems:'center', fontSize:10, fontFamily:T.font, fontWeight:700, color:'#fff', flexShrink:0 }}>{m.p1 ? m.p1.name.charAt(0).toUpperCase() : '?'}</div>
-                            <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, color: isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none' }}>{m.p1?m.p1.name:'BYE'}</div>
-                          </div>
-                          <div style={{ fontFamily:T.font, fontSize:10, color:T.inkSoft }}>vs</div>
-                          <div style={{ flex:1, display:'flex', alignItems:'center', gap:6, justifyContent:'flex-end' }}>
-                            <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, color: isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', textAlign:'right' }}>{m.p2?m.p2.name:'BYE'}</div>
-                            <div style={{ width:22, height:22, borderRadius:'50%', background: m.p2 ? (isDone&&m.winner?.id===m.p2?.id?m.p2.color:m.p2.color+'55') : '#ddd', display:'grid', placeItems:'center', fontSize:10, fontFamily:T.font, fontWeight:700, color:'#fff', flexShrink:0 }}>{m.p2?m.p2.name.charAt(0).toUpperCase():'?'}</div>
-                          </div>
-                          {isDone && m.score && <div style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft, flexShrink:0, fontWeight:700 }}>{Math.min(m.score.p1,m.score.p2)}-{Math.max(m.score.p1,m.score.p2)}</div>}
+                        <div key={mIdx}
+                          onClick={isSelectable ? () => { setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(MAX_CUPS); setCups2(MAX_CUPS); } : undefined}
+                          onMouseDown={isDone ? () => { lpTimer.current = setTimeout(() => { setSeRounds(prev => prev.map((r,ri) => ri!==rIdx?r:r.map((mm,mi) => mi!==mIdx?mm:{...mm,winner:null,loser:null,score:null}))); setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(MAX_CUPS); setCups2(MAX_CUPS); }, 600); } : undefined}
+                          onMouseUp={() => clearTimeout(lpTimer.current)}
+                          onMouseLeave={() => clearTimeout(lpTimer.current)}
+                          onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setSeRounds(prev => prev.map((r,ri) => ri!==rIdx?r:r.map((mm,mi) => mi!==mIdx?mm:{...mm,winner:null,loser:null,score:null}))); setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(MAX_CUPS); setCups2(MAX_CUPS); }, 600); } : undefined}
+                          onTouchEnd={() => clearTimeout(lpTimer.current)}
+                          style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderBottom: mIdx < round.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none', cursor: isSelectable ? 'pointer' : isDone ? 'context-menu' : 'default', borderRadius:8, background: isSelected ? T.blue+'18' : 'transparent', transition:'background .15s' }}>
+                          <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, color: isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1?m.p1.name:'BYE'}</div>
+                          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
+                          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isDone ? (m.score.p1 < m.score.p2 ? currentMatch?.p2?.color || T.inkSoft : currentMatch?.p1?.color || T.inkSoft) : T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
+                          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
+                          <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, color: isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2?m.p2.name:'BYE'}</div>
                         </div>
                       );
                     })}
@@ -35706,17 +35700,19 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
               const isDone = m.winner !== null;
               const isSel = i === tsGroups[tsCurGroup].curIdx && !isDone;
               return (
-                <div key={i} onClick={!isDone ? () => { setTsGroups(prev => prev.map((g, gi) => gi===tsCurGroup ? {...g, curIdx:i} : g)); setCups1(MAX_CUPS); setCups2(MAX_CUPS); } : undefined}
-                  style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 8px', borderRadius:10, cursor: !isDone?'pointer':'default', background: isSel?T.blue+'18':'transparent', border: isSel?'1.5px solid '+T.blue+'44':'1.5px solid transparent', transition:'background .15s' }}>
-                  <div style={{ flex:1, display:'flex', alignItems:'center', gap:6 }}>
-                    <div style={{ width:20, height:20, borderRadius:'50%', background: isDone&&m.winner?.id===m.p1?.id?m.p1.color:m.p1.color+'55', display:'grid', placeItems:'center', fontSize:9, fontFamily:T.font, fontWeight:700, color:'#fff' }}>{m.p1.name.charAt(0).toUpperCase()}</div>
-                    <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none' }}>{m.p1.name}</div>
-                  </div>
-                  <div style={{ fontFamily:T.font, fontSize:10, color:T.inkSoft }}>{isDone&&m.score?(Math.min(m.score.p1,m.score.p2)+'-'+Math.max(m.score.p1,m.score.p2)):'vs'}</div>
-                  <div style={{ flex:1, display:'flex', alignItems:'center', gap:6, justifyContent:'flex-end' }}>
-                    <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', textAlign:'right' }}>{m.p2.name}</div>
-                    <div style={{ width:20, height:20, borderRadius:'50%', background: isDone&&m.winner?.id===m.p2?.id?m.p2.color:m.p2.color+'55', display:'grid', placeItems:'center', fontSize:9, fontFamily:T.font, fontWeight:700, color:'#fff' }}>{m.p2.name.charAt(0).toUpperCase()}</div>
-                  </div>
+                <div key={i}
+                  onClick={!isDone ? () => { setTsGroups(prev => prev.map((g, gi) => gi===tsCurGroup ? {...g, curIdx:i} : g)); setCups1(MAX_CUPS); setCups2(MAX_CUPS); } : undefined}
+                  onMouseDown={isDone ? () => { lpTimer.current = setTimeout(() => { setTsGroups(prev => prev.map((g, gi) => gi!==tsCurGroup?g:{...g, curIdx:i, matches:g.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null})})); setCups1(MAX_CUPS); setCups2(MAX_CUPS); }, 600); } : undefined}
+                  onMouseUp={() => clearTimeout(lpTimer.current)}
+                  onMouseLeave={() => clearTimeout(lpTimer.current)}
+                  onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setTsGroups(prev => prev.map((g, gi) => gi!==tsCurGroup?g:{...g, curIdx:i, matches:g.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null})})); setCups1(MAX_CUPS); setCups2(MAX_CUPS); }, 600); } : undefined}
+                  onTouchEnd={() => clearTimeout(lpTimer.current)}
+                  style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderRadius:10, cursor: !isDone?'pointer':isDone?'context-menu':'default', background: isSel?T.blue+'18':'transparent', border: isSel?'1.5px solid '+T.blue+'44':'1.5px solid transparent', transition:'background .15s' }}>
+                  <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name}</div>
+                  <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
+                  <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
+                  <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
+                  <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2.name}</div>
                 </div>
               );
             })}
@@ -39587,7 +39583,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
       {/* ── Top bar ── */}
       <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:8, padding:'10px 16px 6px', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
         <div style={{ width:54, height:54, display:'grid', placeItems:'center', flexShrink:0 }}>
-          <button onClick={() => currentGameId==='beerpong' ? setShowBpConfig(true) : setShowInfo(true)} style={{ width:44, height:44, borderRadius:'50%', background:T.surface, border:'none', boxShadow:'0 2px 10px rgba(0,0,0,0.10)', cursor:'pointer', display:'grid', placeItems:'center', padding:0 }}>{currentGameId==='beerpong' ? <span style={{fontSize:18}}>⚙️</span> : Icon.info(T.inkSoft)}</button>
+          <button onClick={() => setShowInfo(true)} style={{ width:44, height:44, borderRadius:'50%', background:T.surface, border:'none', boxShadow:'0 2px 10px rgba(0,0,0,0.10)', cursor:'pointer', display:'grid', placeItems:'center', padding:0 }}>{Icon.info(T.inkSoft)}</button>
         </div>
         <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:8, overflow:'hidden' }}>
           {currentGame.banner ? (
