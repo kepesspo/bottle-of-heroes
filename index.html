@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.16';
+const APP_VERSION = 'v6.17';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -33748,7 +33748,7 @@ const GAMES = [
   { id:'loverseny', name:'Lóverseny',             difficulty:'közepes', category:'Csapat', emoji:'🐎', symbol:IMGS['loverseny_symbol.png'], img:IMGS['loverseny_icon.png'], banner:IMGS['loverseny_banner.png'], color:'#84CC16', desc:'Minden játékos 1–3 egységben fogadhat a négy ló egyikére. A versenylovak a Sárga, a Zöld, a Kék és a Piros. Ha az a ló ér be először akire fogadott, akkor annyi piát kioszthat. Ha nem az nyer akire fogadott, akkor a megtett mennyiséget kell elfogyasztania.' },
   { id:'otdolog',   name:'5 dolog',               difficulty:'könnyű',  category:'Egyéni', emoji:'5️⃣', symbol:IMGS['otdolog_symbol.png'], img:IMGS['otdolog_icon.png'], banner:IMGS['otdolog_banner.png'], color:'#EC4899', desc:'Az app kisorsol egy játékost aki játszani fog. Meg fog jelenni a képernyőn egy kategória. Ebben a kategóriában kell a játékosnak 5 mp alatt 5 odatartozó szót mondania. Amennyiben ez nem sikerül innia kell.' },
   { id:'szerencse', name:'Szerencsekerék',        difficulty:'közepes', category:'Csapat', emoji:'🎡', symbol:IMGS['szerencse_symbol.png'], img:IMGS['szerencse_icon.png'], banner:IMGS['szerencse_banner.png'], color:'#14B8A6', desc:'A játék kiválaszt egy játékost akinek meg kell pörgetnie a szerencsekereket. Akit a szerencsekerék kisorsol annak innia kell.' },
-  { id:'sohanem',   name:'Én még soha',           difficulty:'közepes', category:'Egyéni', emoji:'🙅', symbol:IMGS['sohanem_symbol.png'], img:IMGS['sohanem_icon.png'], banner:IMGS['sohanem_banner.png'], color:'#D946EF', desc:'Jön egy állítás és ha az igaz rád akkor innod kell, ha nem igaz rád akkor nem kell.' },
+  { id:'sohanem',   name:'Én még soha',           difficulty:'közepes', category:'Csapat', emoji:'🙅', symbol:IMGS['sohanem_symbol.png'], img:IMGS['sohanem_icon.png'], banner:IMGS['sohanem_banner.png'], color:'#D946EF', desc:'Jön egy állítás és ha az igaz rád akkor innod kell, ha nem igaz rád akkor nem kell.' },
   { id:'collect',   name:'Collect and Boom',      difficulty:'közepes', category:'Csapat', emoji:'💣', symbol:IMGS['collect_symbol.png'], img:IMGS['collect_icon.png'], banner:IMGS['collect_banner.png'], color:'#0EA5E9', desc:'Az app kisorsol egy játékost aki el fogja kezdeni a kört. A játéktábláról ki kell választania egy cellát. Utána a tőle jobbra ülő fog választani egyet, addig választanak a játékosok ameddig egy bombát találnak — ekkor a játék véget ért és az addig összegyűjtött egységet kell meginnia a vesztesnek.' },
   { id:'kivagyok',  name:'Ki Vagyok Én',          difficulty:'közepes', category:'Egyéni', emoji:'🕵️', symbol:IMGS['kivagyok_symbol.png'], img:IMGS['kivagyok_icon.png'], banner:IMGS['kivagyok_banner.png'], color:'#F472B6', desc:'Az app mutat egy híresség fotóját és ki kell találni ki van a képen. Ebben a játékban csak egy játékos vesz részt. Ha pontosan meg tudja mondani a híresség életkorát vagy foglalkozását akkor kioszthat egy piát.' },
   { id:'mindenki',  name:'Mindenki Iszik',difficulty:'könnyű',  category:'Csapat', emoji:'🍻', symbol:IMGS['mindenki_symbol.png'], img:IMGS['mindenki_icon.png'], banner:IMGS['mindenki_banner.png'], color:'#F4C95A', desc:'A játék kiválaszt egy játékost akinek innia kell. Ezt az app sorsolja ki, ha elfogyta az emberek akkor előről megy a kör.' },
@@ -36137,59 +36137,92 @@ function MindenkiGame({ gameIdx, players, onAdvance, onResult }) {
   );
 }
 
-function SohanemGame({ gameIdx, challenger, onAdvance }) {
+function SohanemGame({ gameIdx, players, onAdvance, onResult }) {
   const card = SOHANEM_CARDS[gameIdx % SOHANEM_CARDS.length];
   const cardNum = (gameIdx % SOHANEM_CARDS.length) + 1;
   const total = SOHANEM_CARDS.length;
-  const levelMap = { alap:{label:'ALAP',color:T.mint,emoji:'\U0001f336'}, kozepes:{label:'KÖZEPES',color:T.yellow,emoji:'\U0001f525'}, vad:{label:'VAD',color:T.coral,emoji:'\U0001f525'} };
+  const levelMap = { alap:{label:'ALAP',color:T.mint,emoji:'🌶'}, kozepes:{label:'KÖZEPES',color:T.yellow,emoji:'🔥'}, vad:{label:'VAD',color:T.coral,emoji:'🔥'} };
   const lv = levelMap[card.l] || levelMap.alap;
   const backColors = ['#5BA0DB','#E985B8','#F4C95A'];
-  const doIgaz = () => onAdvance && onAdvance(challenger ? {[challenger.id]:1} : {});
-  const doNem = () => onAdvance && onAdvance({});
+  const [selected, setSelected] = React.useState({});
+
+  const togglePlayer = (id) => setSelected(prev => ({ ...prev, [id]: !prev[id] }));
+  const drinkers = players.filter(p => selected[p.id]);
+
+  const doConfirm = () => {
+    const dm = {};
+    drinkers.forEach(p => { dm[p.id] = 1; });
+    drinkers.forEach(p => {
+      onResult && onResult({ correct: false, playerName: p.name, drinks: 1, subtitle: p.name + ' iszik egyet!' });
+    });
+    onAdvance && onAdvance(dm);
+  };
+
+  const doNobody = () => onAdvance && onAdvance({});
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12, width:'100%' }}>
-      <div style={{ position:'relative', width:'100%', paddingTop:'115%' }}>
-        <div style={{ position:'absolute', left:'3%', right:'3%', top:10, bottom:-10, background:backColors[gameIdx%backColors.length], borderRadius:22, transform:'rotate(-7deg)', transformOrigin:'center bottom' }} />
-        <div style={{ position:'absolute', left:'2%', right:'2%', top:5, bottom:-5, background:backColors[(gameIdx+1)%backColors.length], borderRadius:22, transform:'rotate(5deg)', transformOrigin:'center bottom' }} />
-        <div style={{ position:'absolute', inset:0, background:T.surface, borderRadius:22, boxShadow:'0 6px 32px rgba(0,0,0,0.13)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'space-between', padding:'24px 20px 20px' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:6, background:`${lv.color}20`, borderRadius:999, padding:'6px 14px' }}>
-            <span style={{ fontSize:14 }}>{lv.emoji}</span>
-            <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:lv.color, letterSpacing:'0.06em' }}>{lv.label}</span>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10, width:'100%' }}>
+      {/* Card */}
+      <div style={{ position:'relative', width:'100%', paddingTop:'62%' }}>
+        <div style={{ position:'absolute', left:'3%', right:'3%', top:6, bottom:-6, background:backColors[gameIdx%backColors.length], borderRadius:18, transform:'rotate(-5deg)', transformOrigin:'center bottom' }} />
+        <div style={{ position:'absolute', left:'2%', right:'2%', top:3, bottom:-3, background:backColors[(gameIdx+1)%backColors.length], borderRadius:18, transform:'rotate(4deg)', transformOrigin:'center bottom' }} />
+        <div style={{ position:'absolute', inset:0, background:T.surface, borderRadius:18, boxShadow:'0 4px 20px rgba(0,0,0,0.12)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'space-between', padding:'14px 16px 12px' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:5, background:`${lv.color}20`, borderRadius:999, padding:'4px 10px' }}>
+              <span style={{ fontSize:12 }}>{lv.emoji}</span>
+              <span style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:lv.color, letterSpacing:'0.06em' }}>{lv.label}</span>
+            </div>
+            <span style={{ fontFamily:T.font, fontSize:11, fontWeight:600, color:T.inkSoft }}>
+              <span style={{ fontWeight:800, color:T.ink }}>{String(cardNum).padStart(2,'0')}</span>/{total}
+            </span>
           </div>
-          <div style={{ textAlign:'center', padding:'0 8px' }}>
-            <div style={{ fontFamily:T.font, fontSize:15, fontWeight:500, color:T.inkSoft, marginBottom:10 }}>Én még soha nem…</div>
-            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, lineHeight:1.3 }}>{card.t}.</div>
+          <div style={{ textAlign:'center', padding:'8px 8px 4px' }}>
+            <div style={{ fontFamily:T.font, fontSize:12, fontWeight:500, color:T.inkSoft, marginBottom:6 }}>Én még soha nem…</div>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:19, color:T.ink, lineHeight:1.3 }}>{card.t}.</div>
           </div>
-          <div style={{ fontFamily:T.font, fontSize:14, fontWeight:600, color:T.inkSoft }}>
-            <span style={{ fontWeight:800, color:T.ink }}>{String(cardNum).padStart(2,'0')}</span> / {total} kártya
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display:'flex', justifyContent:'space-between', width:'100%', padding:'0 4px' }}>
-        <div>
-          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, marginBottom:4 }}>Fűszer</div>
           <div style={{ display:'flex', gap:3 }}>
             {['alap','alap','kozepes','kozepes','vad'].map((l,i) => {
               const lvls=['alap','kozepes','vad'];
               const lit = lvls.indexOf(l) <= lvls.indexOf(card.l);
               const bc = l==='vad'?T.coral:l==='kozepes'?T.yellow:T.mint;
-              return <div key={i} style={{ width:22, height:7, borderRadius:4, background:lit?bc:`${T.inkMute}28` }} />;
+              return <div key={i} style={{ width:20, height:6, borderRadius:4, background:lit?bc:`${T.inkMute}28` }} />;
             })}
-          </div>
-        </div>
-        <div style={{ textAlign:'right' }}>
-          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, marginBottom:4 }}>Vad kör</div>
-          <div style={{ display:'flex', gap:3, justifyContent:'flex-end' }}>
-            {[0,1,2].map(i => <div key={i} style={{ width:22, height:7, borderRadius:4, background:card.l==='vad'&&i===0?T.coral:`${T.inkMute}28` }} />)}
           </div>
         </div>
       </div>
 
+      {/* Player selector */}
+      <div style={{ width:'100%' }}>
+        <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>Kire igaz?</div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+          {players.map(p => {
+            const sel = !!selected[p.id];
+            return (
+              <button key={p.id} onClick={() => togglePlayer(p.id)} style={{
+                padding:'8px 14px', borderRadius:20, border:`2px solid ${sel ? p.color : T.border}`,
+                background: sel ? p.color + '22' : T.surface,
+                color: sel ? p.color : T.inkSoft,
+                fontFamily:T.font, fontWeight:700, fontSize:13,
+                cursor:'pointer', transition:'all .15s',
+              }}>
+                {p.emoji} {p.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Action buttons */}
       <div style={{ display:'flex', gap:10, width:'100%' }}>
-        <button onClick={doIgaz} style={{ flex:1, padding:'14px 10px', background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow, lineHeight:1.3 }}>Igaz rám —{'\n'}iszom</button>
-        <button onClick={doNem} style={{ flex:1, padding:'14px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow }}>Nem igaz rám</button>
+        {drinkers.length > 0 ? (
+          <button onClick={doConfirm} style={{ flex:1, padding:'13px', background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow }}>
+            🍺 {drinkers.length === 1 ? drinkers[0].name + ' iszik!' : drinkers.length + ' játékos iszik!'}
+          </button>
+        ) : (
+          <button onClick={doNobody} style={{ flex:1, padding:'13px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow }}>
+            Senki sem iszik →
+          </button>
+        )}
       </div>
     </div>
   );
@@ -39789,7 +39822,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, 
   if (gameId === 'memoria') return <MemoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'kezcsere') return <KezCsereGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'otdolog') return <OtdologGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'sohanem') return <SohanemGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} />;
+  if (gameId === 'sohanem') return <SohanemGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   return null;
 }
 
