@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.26';
+const APP_VERSION = 'v6.27';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -37432,11 +37432,10 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
     const rm = {}; sorted.forEach((h,i) => rm[h.id] = i+1); return rm;
   };
 
-  // Pool = winner's own bet amount (what they wagered, they get to hand out)
-  const winnerPool = (() => {
-    const w = players.find(p => bets[p.id]?.horseId === raceWinner);
-    return w ? (bets[w.id]?.amount || 0) : 0;
-  })();
+  // Pool = sum of all winners' bets (each winner contributes their wager)
+  const winnerPool = players
+    .filter(p => bets[p.id]?.horseId === raceWinner)
+    .reduce((s, p) => s + (bets[p.id]?.amount || 0), 0);
   const totalGifted = Object.values(gifts).reduce((s,v) => s+v, 0);
   const remaining = winnerPool - totalGifted;
 
@@ -37526,7 +37525,7 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
       <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:14 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
           <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>Rajt — verseny indul!</div>
-          <div style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 10px 4px 6px', borderRadius:999, background:leader.color+'20', border:`1.5px solid ${leader.color}` }}>
+          <div style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 10px 4px 6px', borderRadius:999, background:'#ffffff', border:`1.5px solid ${leader.color}`, boxShadow:'0 1px 6px rgba(0,0,0,0.10)' }}>
             <div style={{ width:14, height:14, borderRadius:'50%', background:leader.color }} />
             <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:leader.color }}>Élen: {leader.name}</div>
           </div>
@@ -37595,8 +37594,11 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
                   <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
                   <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:2 }}>
                     {horse && <div style={{ width:10, height:10, borderRadius:'50%', background:horse.color, flexShrink:0 }} />}
-                    <div style={{ fontFamily:T.font, fontSize:11, color: won ? T.mint : T.coral, fontWeight:700 }}>
-                      {won ? `🎉 nyert · ${bet} 🍺 kioszt` : `${bet} 🍺 tét${given>0?' · +'+given+' kapott':''}`}
+                    <div style={{ fontFamily:T.font, fontSize:12, color: won ? T.mint : T.coral, fontWeight:700 }}>
+                      {won
+                        ? <span>🎉 nyert · <b style={{fontSize:14}}>{bet}</b> 🍺 kioszt</span>
+                        : <span><b style={{fontSize:14}}>{bet}</b> 🍺 fogadott{given>0 ? <span> · <b style={{fontSize:14,color:T.coral}}>+{given}</b> kapott</span> : null}</span>
+                      }
                     </div>
                   </div>
                 </div>
