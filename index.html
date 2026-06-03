@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.77';
+const APP_VERSION = 'v6.78';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -35816,9 +35816,25 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   };
   const buildSEBracket = (parts) => {
     const sh = [...parts].sort(() => Math.random() - 0.5);
-    const sz = Math.pow(2, Math.ceil(Math.log2(Math.max(sh.length, 2))));
-    while (sh.length < sz) sh.push(null);
-    return [buildSERound(sh)];
+    const n = sh.length;
+    if (n < 2) return [];
+    const base = Math.pow(2, Math.floor(Math.log2(n)));
+    const extra = n - base;
+    if (extra === 0) return [buildSERound(sh)];
+    // Prelim round: only the extra*2 lowest-seeded players play
+    const direct = sh.slice(0, base - extra);  // skip prelim
+    const prelim = sh.slice(base - extra);      // play in prelim
+    const round0 = buildSERound(prelim);        // extra real matches
+    // Round 1: direct players + TBD slots for prelim winners
+    const round1 = [];
+    for (let i = 0; i < extra; i++) {
+      round1.push({ p1: direct[i], p2: null, winner: null, loser: null, score: null, tbd: true });
+    }
+    for (let i = extra; i < direct.length; i += 2) {
+      const p1 = direct[i], p2 = direct[i+1] || null;
+      round1.push({ p1, p2, winner: p2 ? null : p1, loser: null, score: null });
+    }
+    return [round0, round1];
   };
   const buildRRMatches = (parts) => {
     if (parts.length < 2) return [];
@@ -36002,18 +36018,29 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       nr[curRound][curMatch].loser  = loser;
       nr[curRound][curMatch].score  = score;
 
-      const nextInRound = nr[curRound].findIndex(m => m.winner === null);
+      // Fill TBD slot in pre-built round1 when a prelim match finishes
+      if (nr[curRound + 1]?.[curMatch]?.tbd) {
+        nr[curRound + 1][curMatch] = { ...nr[curRound + 1][curMatch], p2: winner, tbd: false };
+      }
+
+      // Next pending in current round (skip TBD placeholders)
+      const nextInRound = nr[curRound].findIndex(m => m.winner === null && !m.tbd);
       if (nextInRound !== -1) { setSeCurMatch(nextInRound); return nr; }
 
-      const winners = nr[curRound].map(m => m.winner).filter(Boolean);
-      if (winners.length === 1) {
-        finishSE(winners[0], newDrink);
-        return nr;
+      // Current round done — advance to pre-built next round if it exists
+      if (nr[curRound + 1]) {
+        const nextPre = nr[curRound + 1].findIndex(m => m.winner === null && !m.tbd);
+        if (nextPre !== -1) { setSeCurRound(curRound + 1); setSeCurMatch(nextPre); return nr; }
+        const preWinners = nr[curRound + 1].map(m => m.winner).filter(Boolean);
+        if (preWinners.length === 1) { finishSE(preWinners[0], newDrink); return nr; }
       }
+
+      // Build next round from winners of current round
+      const winners = nr[curRound].map(m => m.winner).filter(Boolean);
+      if (winners.length === 1) { finishSE(winners[0], newDrink); return nr; }
       let nextRound = buildSERound(winners);
-      let nextRoundIdx = curRound + 1;
+      let nextRoundIdx = (nr[curRound + 1] ? curRound + 2 : curRound + 1);
       let nextPending = nextRound.findIndex(m => m.winner === null);
-      // Auto-advance BYE rounds
       while (nextPending === -1 && nextRound.length > 1) {
         const autoWinners = nextRound.map(m => m.winner).filter(Boolean);
         if (autoWinners.length === 1) { finishSE(autoWinners[0], newDrink); return [...nr, nextRound]; }
@@ -36190,10 +36217,14 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     }
   }
 
-  const totalSERounds = seRounds.length > 0 ? Math.ceil(Math.log2(Math.max(seRounds[0].length * 2, 2))) : Math.ceil(Math.log2(Math.max(players.length, 2)));
+  const totalSERounds = seRounds.length > 1
+    ? 1 + Math.ceil(Math.log2(Math.max(seRounds[1].length * 2, 2)))
+    : seRounds.length > 0
+      ? Math.ceil(Math.log2(Math.max(seRounds[0].length * 2, 2)))
+      : Math.ceil(Math.log2(Math.max(players.length, 2)));
 
   const canReshuffle = (() => {
-    if (TOURNAMENT === 'se') return seRounds.length > 0 && seRounds[0].every(m => !m.winner);
+    if (TOURNAMENT === 'se') return seRounds.length > 0 && seRounds[0].every(m => !m.winner) && (!seRounds[1] || seRounds[1].every(m => m.tbd || !m.winner));
     if (TOURNAMENT === 'rr') return rrMatches.length > 0 && rrMatches.every(m => !m.winner && !m.draw);
     if (TOURNAMENT.startsWith('grp_') && tsPhase === 'groups')
       return tsGroups.length > 0 && tsGroups.every(g => !g.done && g.matches.every(m => !m.winner && !m.draw));
@@ -36417,8 +36448,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
                 <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                   {round.map((m, mIdx) => {
                     const isDone = m.winner !== null;
-                    const isSelectable = isCurrent && !isDone && m.p1 && m.p2;
-                    const isSelected = isCurrent && mIdx === curMatch;
+                    const isSelectable = isCurrent && !isDone && !m.tbd && m.p1 && m.p2;
+                    const isSelected = isCurrent && mIdx === curMatch && !m.tbd;
                     const p1win = isDone && m.winner?.id === m.p1?.id;
                     const p2win = isDone && m.winner?.id === m.p2?.id;
                     return (
@@ -36441,7 +36472,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
                           ) : '– vs –'}
                         </div>
                         {/* P2 name */}
-                        <div style={{ flex:1, fontFamily:T.font, fontWeight: p2win?800:600, fontSize:13, color: p2win?T.ink:isDone?T.inkSoft:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right', textDecoration: isDone&&!p2win?'line-through':'none' }}>{m.p2?m.p2.name:'BYE'}</div>
+                        <div style={{ flex:1, fontFamily:T.font, fontWeight: p2win?800:600, fontSize:13, color: m.tbd?T.inkMute:p2win?T.ink:isDone?T.inkSoft:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right', textDecoration: isDone&&!p2win?'line-through':'none', fontStyle: m.tbd?'italic':'normal' }}>{m.p2?m.p2.name:m.tbd?'...':'BYE'}</div>
                         {/* P2 dot */}
                         <div style={{ width:10, height:10, borderRadius:'50%', background: m.p2?.color || T.inkMute, flexShrink:0, opacity: isDone&&!p2win ? 0.35 : 1 }} />
                       </div>
