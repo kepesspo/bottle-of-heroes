@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.29';
+const APP_VERSION = 'v6.30';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -37439,15 +37439,6 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
   const totalGifted = Object.values(gifts).reduce((s,v) => s+v, 0);
   const remaining = winnerPool - totalGifted;
 
-  // Auto-advance when distribution complete (or no pool)
-  useEffect(() => {
-    if (phase !== 'result') return;
-    if (winnerPool === 0 || remaining === 0) {
-      const t = setTimeout(() => finishGame(gifts), winnerPool === 0 ? 400 : 0);
-      return () => clearTimeout(t);
-    }
-  }, [phase, remaining, winnerPool]);
-
   // ── Betting phase ──────────────────────────────────────────────────────────
   if (phase === 'bet') {
     const cp = players[betStep];
@@ -37621,12 +37612,15 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
             );
           })}
         </div>
-        {/* Remaining indicator */}
-        {winnerPool > 0 && (
-          <div style={{ textAlign:'center', fontFamily:T.font, fontSize:12, fontWeight:700, color: remaining>0 ? T.inkSoft : T.mint }}>
-            {remaining > 0 ? `Még ${remaining} korty kiosztható` : '✓ Mindet kiosztotta'}
-          </div>
-        )}
+        {/* Advance button — active only when all distributed (or no pool) */}
+        <PrimaryButton
+          disabled={winnerPool > 0 && remaining > 0}
+          onClick={() => finishGame(gifts)}
+        >
+          {winnerPool > 0 && remaining > 0
+            ? `Még ${remaining} korty kiosztható…`
+            : '✓ Kész — Tovább'}
+        </PrimaryButton>
       </div>
     );
   }
