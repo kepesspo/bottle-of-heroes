@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.11';
+const APP_VERSION = 'v6.12';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -35533,7 +35533,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
 
   // ── Two-stage group confirm ───────────────────────────────────────────────
   const handleGroupConfirm = () => {
-    const grp = tsGroups[tsCurGroup];
+    const grp = tsGroups[viewGroup];
     const isRR = TOURNAMENT.startsWith('grp_rr');
     const m = grp.matches[grp.curIdx];
     const isDraw = cups1 === cups2;
@@ -35548,20 +35548,16 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
 
     setTsGroups(prev => {
       const ng = prev.map((g, gi) => {
-        if (gi !== tsCurGroup) return g;
+        if (gi !== viewGroup) return g;
         const nm = g.matches.map((mm, i) => i === g.curIdx ? { ...mm, winner, loser, score, draw: isDraw } : mm);
         const nextIdx = nm.findIndex(mm => mm.winner === null && !mm.draw);
         const done = nextIdx === -1;
         return { ...g, matches: nm, curIdx: done ? g.curIdx : nextIdx, done };
       });
 
-      // Check if this group is done
-      const grpDone = ng[tsCurGroup].done;
-      if (grpDone) {
-        const nextGroup = ng.findIndex((g, gi) => gi > tsCurGroup && !g.done);
-        if (nextGroup !== -1) {
-          setTsCurGroup(nextGroup);
-        } else {
+      // Check if ALL groups are done → start finals
+      const allDone = ng.every(g => g.done);
+      if (allDone) {
           // All groups done — start finals
           const finalsType = TOURNAMENT.endsWith('_se') ? 'se' : 'rr';
           const allAdvanced = ng.flatMap(g => {
@@ -35577,7 +35573,6 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
             setRrMatches(ms); setRrIdx(0); setRrDone(false);
           }
           setTsPhase('finals');
-        }
       }
       return ng;
     });
@@ -35607,7 +35602,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
     canConfirm = true;
     confirmHandler = () => handleRRConfirm(rrMatches, rrIdx, setRrMatches, (ms, dm) => finishRR(ms, dm, players));
   } else if (TOURNAMENT.startsWith('grp_') && tsPhase === 'groups' && tsGroups.length) {
-    const grp = tsGroups[tsCurGroup];
+    const grp = tsGroups[viewGroup];
     currentMatch = grp && !grp.done ? grp.matches[grp.curIdx] : null;
     canConfirm = currentMatch && currentMatch.p1 && currentMatch.p2;
     confirmHandler = handleGroupConfirm;
@@ -35630,7 +35625,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
     if (TOURNAMENT === 'se') return seRounds.length > 0 && seRounds[0].every(m => !m.winner);
     if (TOURNAMENT === 'rr') return rrMatches.length > 0 && rrMatches.every(m => !m.winner && !m.draw);
     if (TOURNAMENT.startsWith('grp_') && tsPhase === 'groups')
-      return tsGroups.length > 0 && tsGroups.every(g => g.matches.every(m => !m.winner && !m.draw));
+      return tsGroups.length > 0 && tsGroups.every(g => !g.done && g.matches.every(m => !m.winner && !m.draw));
     return false;
   })();
 
@@ -35653,7 +35648,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
     // Phase label
     let phaseLabel = '';
     if (TOURNAMENT.startsWith('grp_') && tsPhase === 'groups') {
-      phaseLabel = tsGroups[tsCurGroup]?.label || '';
+      phaseLabel = tsGroups[viewGroup]?.label || '';
     } else if (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals') {
       phaseLabel = 'Főszakasz';
     }
@@ -35662,7 +35657,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
       ? roundName(seCurRound, totalSERounds) + ' · Meccs ' + (seCurMatch + 1)
       : TOURNAMENT === 'rr' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'rr')
         ? 'Meccs ' + (rrIdx + 1) + ' / ' + rrMatches.length
-        : 'Meccs ' + (tsGroups[tsCurGroup]?.curIdx + 1 || 1) + ' / ' + (tsGroups[tsCurGroup]?.matches.length || 1);
+        : 'Meccs ' + (tsGroups[viewGroup]?.curIdx + 1 || 1) + ' / ' + (tsGroups[viewGroup]?.matches.length || 1);
 
     return (
       <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'16px 16px 18px', boxShadow:T.shadow }}>
@@ -35996,30 +35991,30 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
             <div style={{ display:'flex', gap:6, marginBottom:10 }}>
               {tsGroups.map((g, gi) => (
                 <button key={gi} onClick={() => setViewGroup(gi)} style={{ flex:1, padding:'6px 0', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:12, background: viewGroup===gi ? T.blue+'22' : 'rgba(20,30,50,0.05)', color: viewGroup===gi ? T.blue : T.inkSoft, transition:'all .15s' }}>
-                  {g.label.replace(' csoport','')} {g.done ? '✓' : gi===tsCurGroup ? '●' : ''}
+                  {g.label.replace(' csoport','')} {g.done ? '✓' : !g.done && g.matches.some(m => m.winner || m.draw) ? '●' : ''}
                 </button>
               ))}
             </div>
           )}
           {tsGroups[viewGroup] && (
           <React.Fragment>
-          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color: viewGroup===tsCurGroup ? T.blue : T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:8 }}>
-            {tsGroups[viewGroup].label} {tsGroups[viewGroup].done ? '— kész ✓' : viewGroup===tsCurGroup ? '— folyamatban' : '— vár'}
+          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color: !tsGroups[viewGroup].done ? T.blue : T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:8 }}>
+            {tsGroups[viewGroup].label} {tsGroups[viewGroup].done ? '— kész ✓' : '— folyamatban'}
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
             {tsGroups[viewGroup].matches.map((m, i) => {
               const g = tsGroups[viewGroup];
               const isDone = m.winner !== null || m.draw;
-              const isSel = viewGroup===tsCurGroup && i === tsGroups[tsCurGroup].curIdx && !isDone;
+              const isSel = !g.done && i === g.curIdx && !isDone;
               return (
                 <div key={i}
-                  onClick={!isDone && viewGroup===tsCurGroup ? () => { setTsGroups(prev => prev.map((g, gi) => gi===tsCurGroup ? {...g, curIdx:i} : g)); setCups1(MAX_CUPS); setCups2(MAX_CUPS); } : undefined}
-                  onMouseDown={isDone && viewGroup===tsCurGroup ? () => { lpTimer.current = setTimeout(() => { setTsGroups(prev => prev.map((g, gi) => gi!==tsCurGroup?g:{...g, curIdx:i, done:false, matches:g.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})})); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
+                  onClick={!isDone && !g.done ? () => { setTsGroups(prev => prev.map((gg, gi) => gi===viewGroup ? {...gg, curIdx:i} : gg)); setCups1(MAX_CUPS); setCups2(MAX_CUPS); } : undefined}
+                  onMouseDown={isDone ? () => { lpTimer.current = setTimeout(() => { setTsGroups(prev => prev.map((gg, gi) => gi!==viewGroup?gg:{...gg, curIdx:i, done:false, matches:gg.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})})); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
                   onMouseUp={() => clearTimeout(lpTimer.current)}
                   onMouseLeave={() => clearTimeout(lpTimer.current)}
-                  onTouchStart={isDone && viewGroup===tsCurGroup ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setTsGroups(prev => prev.map((g, gi) => gi!==tsCurGroup?g:{...g, curIdx:i, done:false, matches:g.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})})); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
+                  onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setTsGroups(prev => prev.map((gg, gi) => gi!==viewGroup?gg:{...gg, curIdx:i, done:false, matches:gg.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})})); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
                   onTouchEnd={() => clearTimeout(lpTimer.current)}
-                  style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderRadius:10, cursor: !isDone&&viewGroup===tsCurGroup?'pointer':isDone&&viewGroup===tsCurGroup?'context-menu':'default', background: isSel?T.blue+'18':'transparent', border: isSel?'1.5px solid '+T.blue+'44':'1.5px solid transparent', transition:'background .15s' }}>
+                  style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderRadius:10, cursor: !isDone&&!g.done?'pointer':isDone?'context-menu':'default', background: isSel?T.blue+'18':'transparent', border: isSel?'1.5px solid '+T.blue+'44':'1.5px solid transparent', transition:'background .15s' }}>
                   <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.winner?.id===m.p1?.id?T.mint:isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name}</div>
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
                   <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isDone&&m.winner ? T.mint : T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
