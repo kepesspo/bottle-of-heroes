@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.53';
+const APP_VERSION = 'v6.54';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -38843,23 +38843,44 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
 }
 
 
-function RulettGame({ gameIdx, onAdvance }) {
+function RulettGame({ gameIdx, challenger, onAdvance, onResult }) {
   const [layout, setLayout] = useState(null);
   const [picked, setPicked] = useState(null);
   const [stress] = useState(() => Math.floor(Math.random() * 45) + 28);
+  const advancedRef = React.useRef(false);
 
   useEffect(() => {
     const cards = ['pia','pia','fire'];
     for (let i = 2; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [cards[i],cards[j]]=[cards[j],cards[i]]; }
     setLayout(cards);
     setPicked(null);
+    advancedRef.current = false;
   }, [gameIdx]);
+
+  const handlePick = (i) => {
+    if (picked !== null || advancedRef.current) return;
+    setPicked(i);
+    const res = layout[i];
+    advancedRef.current = true;
+    const isDrink = res === 'pia';
+    const dm = {};
+    if (isDrink && challenger) dm[challenger.id] = 1;
+    onResult && onResult({ correct: !isDrink, playerName: challenger?.name, drinks: isDrink ? 1 : 0, subtitle: isDrink ? `${challenger?.name||'Játékos'} iszik egyet` : `${challenger?.name||'Játékos'} megúszta!` });
+    onAdvance && onAdvance(dm);
+  };
 
   if (!layout) return null;
   const result = picked !== null ? layout[picked] : null;
 
   return (
     <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+
+      {/* Challenger label */}
+      {challenger && (
+        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:15, color:T.ink }}>
+          🎯 {challenger.name} húz!
+        </div>
+      )}
 
       {/* Outcome chips */}
       <div style={{ display:'flex', gap:10 }}>
@@ -38887,7 +38908,7 @@ function RulettGame({ gameIdx, onAdvance }) {
           const res = isSelected ? layout[i] : null;
           return (
             <div key={i}
-              onClick={() => picked === null && setPicked(i)}
+              onClick={() => handlePick(i)}
               style={{
                 width:104, height:148,
                 cursor: picked===null ? 'pointer' : 'default',
@@ -38914,13 +38935,6 @@ function RulettGame({ gameIdx, onAdvance }) {
         <div style={{ fontFamily:T.font, fontWeight:700, fontSize:16, color: result==='pia' ? '#D05040' : '#50A882', animation:'popIn .3s', textAlign:'center' }}>
           {result === 'pia' ? '🍺 Pia! Iszol!' : '🔥 Tűz! Megúsztad!'}
         </div>
-      )}
-
-      {/* Next game button */}
-      {result && (
-        <button onClick={() => onAdvance && onAdvance({})} style={{ width:'100%', padding:'14px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow }}>
-          Következő játék →
-        </button>
       )}
 
       {/* Stress meter */}
@@ -40481,7 +40495,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, 
   if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} mode={mode} gameMeta={gameMeta} />;
-  if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
+  if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} gameMeta={gameMeta} />;
   if (gameId === 'uveg') return <UvegGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'ticktak') return <TicktakGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
