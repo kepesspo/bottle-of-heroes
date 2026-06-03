@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.67';
+const APP_VERSION = 'v6.68';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -34748,7 +34748,6 @@ function GameSettingsContent({ meta, setMeta, onDone, go }) {
   const modes = [
     { id:'points', label:'Pontgyűjtés' },
     { id:'bonus',  label:'Bonus Képernyő' },
-    { id:'random', label:'Random Pictogram' },
     { id:'group',  label:'Csoportos Ivás' },
   ];
   const diffs = [
@@ -40640,20 +40639,22 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
     commitRound(newPlayers, fb, newTurn, newGameIdx, newRound);
   };
 
+  const diffDrinks = gameMeta?.difficulty === 'hard' ? 3 : gameMeta?.difficulty === 'mid' ? 2 : 1;
+
   // Egyéni: current player wins or loses
   const advance = success => {
     if (transitioning) return;
     const newPlayers = trackScores
-      ? players.map((p,i) => i===turn ? {...p, [success?'points':'drinks']: p[success?'points':'drinks']+1} : p)
+      ? players.map((p,i) => i===turn ? {...p, [success?'points':'drinks']: p[success?'points':'drinks']+(success?1:diffDrinks)} : p)
       : players;
     setPendingCommit({ newPlayers, fb:success?'win':'lose', newTurn:(turn+1)%players.length, newGameIdx:gameIdx+1, newRound:round+1 });
   };
 
-  // Csapat: winner gets +1 point, everyone else +1 drink
+  // Csapat: winner gets +1 point, everyone else drinks based on difficulty
   const advanceTeam = winnerIdx => {
     if (transitioning) return;
     const newPlayers = trackScores
-      ? players.map((p,i) => i===winnerIdx ? {...p,points:p.points+1} : {...p,drinks:p.drinks+1})
+      ? players.map((p,i) => i===winnerIdx ? {...p,points:p.points+1} : {...p,drinks:p.drinks+diffDrinks})
       : players;
     commitRound(newPlayers, 'win', (turn+1)%players.length, gameIdx+1, round+1);
   };
@@ -40664,8 +40665,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
     const opIdx = players.findIndex(p => p.id===selectedOpponent.id);
     const newPlayers = trackScores
       ? players.map((p,i) => {
-          if (i===turn) return {...p, ...(currentPlayerWon ? {points:p.points+1} : {drinks:p.drinks+1})};
-          if (i===opIdx) return {...p, ...(currentPlayerWon ? {drinks:p.drinks+1} : {points:p.points+1})};
+          if (i===turn) return {...p, ...(currentPlayerWon ? {points:p.points+1} : {drinks:p.drinks+diffDrinks})};
+          if (i===opIdx) return {...p, ...(currentPlayerWon ? {drinks:p.drinks+diffDrinks} : {points:p.points+1})};
           return p;
         })
       : players;
