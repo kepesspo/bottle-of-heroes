@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.30';
+const APP_VERSION = 'v6.31';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -37375,6 +37375,7 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
   const ivRef = useRef(null);
   const posRef = useRef([0,0,0,0]);
   const advancedRef = useRef(false);
+  const giftsRef = useRef({});
 
   useEffect(() => { return () => { if (ivRef.current) clearInterval(ivRef.current); }; }, []);
   useEffect(() => {
@@ -37432,12 +37433,22 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
     const rm = {}; sorted.forEach((h,i) => rm[h.id] = i+1); return rm;
   };
 
+  giftsRef.current = gifts;
+
   // Pool = sum of all winners' bets (each winner contributes their wager)
   const winnerPool = players
     .filter(p => bets[p.id]?.horseId === raceWinner)
     .reduce((s, p) => s + (bets[p.id]?.amount || 0), 0);
   const totalGifted = Object.values(gifts).reduce((s,v) => s+v, 0);
   const remaining = winnerPool - totalGifted;
+
+  useEffect(() => {
+    if (phase !== 'result') return;
+    if (winnerPool === 0 || remaining === 0) {
+      const t = setTimeout(() => finishGame(giftsRef.current), winnerPool === 0 ? 400 : 0);
+      return () => clearTimeout(t);
+    }
+  }, [phase, remaining, winnerPool]);
 
   // ── Betting phase ──────────────────────────────────────────────────────────
   if (phase === 'bet') {
@@ -37612,15 +37623,12 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
             );
           })}
         </div>
-        {/* Advance button — active only when all distributed (or no pool) */}
-        <PrimaryButton
-          disabled={winnerPool > 0 && remaining > 0}
-          onClick={() => finishGame(gifts)}
-        >
-          {winnerPool > 0 && remaining > 0
-            ? `Még ${remaining} korty kiosztható…`
-            : '✓ Kész — Tovább'}
-        </PrimaryButton>
+        {/* Indicator — auto-advance fires via useEffect when remaining hits 0 */}
+        {winnerPool > 0 && remaining > 0 && (
+          <div style={{ textAlign:'center', fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft }}>
+            Még {remaining} korty kiosztható
+          </div>
+        )}
       </div>
     );
   }
