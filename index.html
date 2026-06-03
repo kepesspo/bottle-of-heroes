@@ -35430,6 +35430,36 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
     });
   };
 
+  const handleReshuffle = () => {
+    doneRef.current = false;
+    setCups1(MAX_CUPS); setCups2(MAX_CUPS);
+    setDrinkMap({}); setChampion(null); setExpandedRounds({});
+    resetTimer();
+    if (TOURNAMENT === 'se') {
+      const br = buildSEBracket(players);
+      setSeRounds(br); setSeCurRound(0);
+      const fp = br[0].findIndex(m => m.winner === null);
+      setSeCurMatch(fp >= 0 ? fp : 0);
+    } else if (TOURNAMENT === 'rr') {
+      const ms = buildRRMatches([...players].sort(() => Math.random() - 0.5));
+      setRrMatches(ms); setRrIdx(0); setRrDone(false);
+    } else {
+      const sh = [...players].sort(() => Math.random() - 0.5);
+      const half = Math.ceil(sh.length / 2);
+      const gPlayers = [sh.slice(0, half), sh.slice(half)];
+      const groupType = TOURNAMENT.startsWith('grp_rr') ? 'rr' : 'se';
+      const groups = gPlayers.map((gp, gi) => ({
+        id: gi, label: 'A B C D'.split(' ')[gi] + ' csoport',
+        players: gp,
+        matches: groupType === 'rr' ? buildRRMatches(gp) : buildSEBracket(gp).flat(),
+        seRounds: groupType === 'se' ? buildSEBracket(gp) : null,
+        seCurRound: 0, curIdx: 0, done: false,
+      }));
+      setTsGroups(groups); setTsCurGroup(0); setTsPhase('groups');
+      setSeRounds([]); setRrMatches([]); setRrDone(false); setViewGroup(0);
+    }
+  };
+
   const finishRR = (matches, dm, parts) => {
     if (doneRef.current) return;
     doneRef.current = true;
@@ -35538,6 +35568,14 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
 
   const totalSERounds = Math.ceil(Math.log2(Math.max(players.length, 2)));
 
+  const canReshuffle = (() => {
+    if (TOURNAMENT === 'se') return seRounds.length > 0 && seRounds[0].every(m => !m.winner);
+    if (TOURNAMENT === 'rr') return rrMatches.length > 0 && rrMatches.every(m => !m.winner && !m.draw);
+    if (TOURNAMENT.startsWith('grp_') && tsPhase === 'groups')
+      return tsGroups.length > 0 && tsGroups.every(g => g.matches.every(m => !m.winner && !m.draw));
+    return false;
+  })();
+
   // ── Render match card ─────────────────────────────────────────────────────
   const renderMatchCard = () => {
     if (champion) {
@@ -35570,8 +35608,13 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
 
     return (
       <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'16px 16px 18px', boxShadow:T.shadow }}>
-        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', textAlign:'center', marginBottom: MATCH_MINUTES > 0 ? 4 : 8 }}>
-          {phaseLabel ? phaseLabel + ' · ' : ''}{matchLabel}
+        <div style={{ position:'relative', display:'flex', alignItems:'center', justifyContent:'center', marginBottom: MATCH_MINUTES > 0 ? 4 : 8 }}>
+          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', textAlign:'center' }}>
+            {phaseLabel ? phaseLabel + ' · ' : ''}{matchLabel}
+          </div>
+          {canReshuffle && (
+            <button onClick={handleReshuffle} title="Újra sorsol" style={{ position:'absolute', right:0, top:'50%', transform:'translateY(-50%)', width:28, height:28, borderRadius:8, border:'none', cursor:'pointer', background:'rgba(20,30,50,0.07)', display:'grid', placeItems:'center', fontSize:14, lineHeight:1 }}>🔀</button>
+          )}
         </div>
         {MATCH_MINUTES > 0 && (
           <div style={{ textAlign:'center', marginBottom:10 }}>
