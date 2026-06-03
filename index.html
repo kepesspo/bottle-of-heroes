@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.40';
+const APP_VERSION = 'v6.41';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -34395,15 +34395,80 @@ function BuszConfigSheet({ config, setConfig, onClose }) {
   );
 }
 
+function KisebbConfigSheet({ config, setConfig, onClose }) {
+  const decks = config.decks ?? 1;
+  const stackMode = config.stackMode ?? 'plus1';
+  const livesOn = config.lives ?? false;
+  const lifeCount = config.lifeCount ?? 3;
+  const Toggle = ({ on, onToggle }) => (
+    <button onClick={onToggle} style={{ width:44, height:26, borderRadius:13, background:on?T.mint:'rgba(20,30,50,0.1)', border:'none', cursor:'pointer', position:'relative', transition:'background .2s', flexShrink:0 }}>
+      <div style={{ position:'absolute', top:3, left:on?21:3, width:20, height:20, borderRadius:'50%', background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.25)', transition:'left .2s' }}/>
+    </button>
+  );
+  const Stepper = ({ value, min, max, onChange }) => (
+    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+      <button onClick={() => onChange(Math.max(min, value-1))} style={{ width:30, height:30, borderRadius:8, background:T.surface, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:18, color:T.coral, boxShadow:T.shadow, display:'grid', placeItems:'center' }}>−</button>
+      <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:18, color:T.ink, minWidth:22, textAlign:'center' }}>{value}</span>
+      <button onClick={() => onChange(Math.min(max, value+1))} style={{ width:30, height:30, borderRadius:8, background:T.surface, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:18, color:T.mint, boxShadow:T.shadow, display:'grid', placeItems:'center' }}>+</button>
+    </div>
+  );
+  const Row = ({ label, sub, right }) => (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 0', borderBottom:`1px solid rgba(20,30,50,0.06)` }}>
+      <div>
+        <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{label}</div>
+        {sub && <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>{sub}</div>}
+      </div>
+      {right}
+    </div>
+  );
+  return (
+    <SheetOverlay onClose={onClose}>
+      <div style={{ padding:'4px 18px 18px', display:'flex', flexDirection:'column', gap:2 }}>
+        <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginBottom:4 }}>Kisebb / Nagyobb beállítások</div>
+
+        <Row label="Paklik száma" sub="Hány franciakártyával játszik"
+          right={<Stepper value={decks} min={1} max={4} onChange={v => setConfig(c => ({...c, decks:v}))} />} />
+
+        <Row label="Azonos érték (Stack)"
+          sub={stackMode === 'plus1' ? 'Tét növekszik +1-gyel' : 'Tét megduplázódik (×2)'}
+          right={
+            <div style={{ display:'flex', gap:6 }}>
+              {['plus1','times2'].map(m => (
+                <button key={m} onClick={() => setConfig(c => ({...c, stackMode:m}))} style={{ padding:'6px 12px', borderRadius:10, border:'none', background: stackMode===m ? T.mint : T.surface, color: stackMode===m ? '#fff' : T.inkSoft, fontFamily:T.font, fontWeight:700, fontSize:13, cursor:'pointer', boxShadow:T.shadow }}>
+                  {m === 'plus1' ? '+1' : '×2'}
+                </button>
+              ))}
+            </div>
+          } />
+
+        <Row label="Életek" sub="Játékosnak legyen életszáma"
+          right={<Toggle on={livesOn} onToggle={() => setConfig(c => ({...c, lives:!livesOn}))} />} />
+
+        {livesOn && (
+          <Row label="Élet kártyák száma" sub="Ennyi hibát enged meg"
+            right={<Stepper value={lifeCount} min={1} max={5} onChange={v => setConfig(c => ({...c, lifeCount:v}))} />} />
+        )}
+
+        <div style={{ marginTop:8 }}>
+          <PrimaryButton onClick={onClose}>Kész</PrimaryButton>
+        </div>
+      </div>
+    </SheetOverlay>
+  );
+}
+
 function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, go }) {
   const [info, setInfo] = useState(null);
   const [sheet, setSheet] = useState(false);
   const [buszSheet, setBuszSheet] = useState(false);
   const [beerpongSheet, setBeerpongSheet] = useState(false);
+  const [kisebbSheet, setKisebbSheet] = useState(false);
   const [filterSheet, setFilterSheet] = useState(false);
   const [activeFilters, setActiveFilters] = useState([]); // [] = show all
   const buszConfig = gameMeta?.buszConfig || {};
   const setBuszConfig = cfg => setGameMeta(m => ({...m, buszConfig: typeof cfg === 'function' ? cfg(m?.buszConfig||{}) : cfg}));
+  const kisebbConfig = gameMeta?.kisebbConfig || {};
+  const setKisebbConfig = cfg => setGameMeta(m => ({...m, kisebbConfig: typeof cfg === 'function' ? cfg(m?.kisebbConfig||{}) : cfg}));
   const beerpongConfig = gameMeta?.beerpongConfig || {};
   const setBeerpongConfig = cfg => setGameMeta(m => ({...m, beerpongConfig: typeof cfg === 'function' ? cfg(m?.beerpongConfig||{}) : cfg}));
 
@@ -34493,7 +34558,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
             return (
               <GameTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked}
                 onClick={() => toggle(g.id)} onInfo={() => setInfo(g.id)}
-                onLongPress={g.id==='busz' ? ()=>setBuszSheet(true) : g.id==='beerpong' ? ()=>setBeerpongSheet(true) : undefined} />
+                onLongPress={g.id==='busz' ? ()=>setBuszSheet(true) : g.id==='beerpong' ? ()=>setBeerpongSheet(true) : g.id==='kisebb' ? ()=>setKisebbSheet(true) : undefined} />
             );
           })}
         </div>
@@ -34517,6 +34582,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
       </SheetOverlay>}
       {info && <GameInfoModal game={GAMES.find(g=>g.id===info)} onClose={() => setInfo(null)} />}
       {buszSheet && <BuszConfigSheet config={buszConfig} setConfig={setBuszConfig} onClose={() => setBuszSheet(false)} />}
+      {kisebbSheet && <KisebbConfigSheet config={kisebbConfig} setConfig={setKisebbConfig} onClose={() => setKisebbSheet(false)} />}
       {beerpongSheet && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setBeerpongSheet(false)} playerCount={99} />}
       {filterSheet && (
         <SheetOverlay onClose={() => setFilterSheet(false)}>
@@ -38790,7 +38856,7 @@ function RulettGame({ gameIdx, onAdvance }) {
   );
 }
 
-function KisebbGame({ gameIdx, players, onAdvance }) {
+function KisebbGame({ gameIdx, players, onAdvance, gameMeta }) {
   const [gs, setGs] = React.useState(null);
   const gsRef = React.useRef(null);
   const pendRef = React.useRef(false);
@@ -38805,9 +38871,12 @@ function KisebbGame({ gameIdx, players, onAdvance }) {
   };
 
   React.useEffect(()=>{
-    const d = shuffleDeck(generateDeck(1));
+    const cfg = gameMeta?.kisebbConfig || {};
+    const numDecks = cfg.decks ?? 1;
+    const liveCount = cfg.lives ? (cfg.lifeCount ?? 3) : 1;
+    const d = shuffleDeck(generateDeck(numDecks));
     const st = { deck:d, deckPos:0, activePids:players.map(p=>p.id), turnPos:0, drinkMap:{}, playerLives:{}, pot:1 };
-    players.forEach(p=>{ st.playerLives[p.id]=1; });
+    players.forEach(p=>{ st.playerLives[p.id]=liveCount; });
     gsRef.current=st; setGs({...st}); setGuessRes(null); setGameOver(false); pendRef.current=false;
   },[gameIdx]);
 
@@ -38837,7 +38906,8 @@ function KisebbGame({ gameIdx, players, onAdvance }) {
 
       if (same) {
         // Same value: same player stays, pot grows
-        nst = { ...nst, pot:(st.pot||1)+1 };
+        const cfg2 = (gameMeta?.kisebbConfig)||{}; const sm = cfg2.stackMode??'plus1';
+        nst = { ...nst, pot: sm==='times2' ? (st.pot||1)*2 : (st.pot||1)+1 };
       } else if (!ok) {
         // Wrong: player drinks pot, next player, pot resets
         const newLives = { ...st.playerLives, [pid]:(st.playerLives[pid]||1)-1 };
@@ -38912,6 +38982,10 @@ function KisebbGame({ gameIdx, players, onAdvance }) {
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:3 }}>
             {activePids.map((_,i) => <div key={i} style={{ width:7, height:7, borderRadius:'50%', background: i===turnPos%Math.max(activePids.length,1) ? (currentPlayer?.color||T.mint) : T.inkMute+'40' }} />)}
+            {(gameMeta?.kisebbConfig?.lives) && (() => {
+              const lv = playerLives[currentPid]??0;
+              return <span style={{ fontFamily:T.font, fontSize:12, color:'#E55', marginLeft:4 }}>{'♥'.repeat(Math.max(0,lv))}</span>;
+            })()}
             <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginLeft:3 }}>{(turnPos%Math.max(activePids.length,1))+1}/{activePids.length}</div>
           </div>
         </div>
@@ -38935,7 +39009,7 @@ function KisebbGame({ gameIdx, players, onAdvance }) {
           border: `2px solid ${guessRes.same ? '#E0A030' : guessRes.correct ? T.mint : T.coral}` }}>
           <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color: guessRes.same ? '#C08020' : guessRes.correct ? T.mint : T.coral }}>
             {guessRes.same
-              ? `🔄 Ugyanaz az érték! Tét: +1 → ${guessRes.pot+1} korty`
+              ? (() => { const sm2=(gameMeta?.kisebbConfig?.stackMode??'plus1'); const np=sm2==='times2'?(guessRes.pot||1)*2:(guessRes.pot||1)+1; return `🔄 Ugyanaz az érték! Tét: ${sm2==='times2'?'×2':''+'+1'} → ${np} korty`; })()
               : guessRes.correct
                 ? '✓ Helyes! Következő játékos.'
                 : `✗ Rontott! ${players.find(p=>p.id===guessRes.pid)?.name} iszik ${guessRes.pot} kortyt!`
@@ -40330,7 +40404,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, 
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} mode={mode} gameMeta={gameMeta} />;
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
-  if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
+  if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} gameMeta={gameMeta} />;
   if (gameId === 'uveg') return <UvegGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'ticktak') return <TicktakGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'erem') return <EremGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} />;
@@ -40358,8 +40432,11 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
   const [transitioning, setTransitioning] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [showBpConfig, setShowBpConfig] = useState(false);
+  const [showKisebbConfig, setShowKisebbConfig] = useState(false);
   const beerpongConfig = gameMeta?.beerpongConfig || {};
   const setBeerpongConfig = cfg => setGameMeta && setGameMeta(m => ({...m, beerpongConfig: typeof cfg === 'function' ? cfg(m?.beerpongConfig||{}) : cfg}));
+  const kisebbConfigPS = gameMeta?.kisebbConfig || {};
+  const setKisebbConfigPS = cfg => setGameMeta && setGameMeta(m => ({...m, kisebbConfig: typeof cfg === 'function' ? cfg(m?.kisebbConfig||{}) : cfg}));
   const [showMenu, setShowMenu] = useState(false);
   const [pendingCommit, setPendingCommit] = useState(null);
   const [hostBurst, setHostBurst] = useState(null);
@@ -40687,6 +40764,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
       </div>
       {showInfo && <GameInfoModal game={currentGame} onClose={() => setShowInfo(false)} />}
       {showBpConfig && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setShowBpConfig(false)} playerCount={players ? players.length : 0} />}
+      {showKisebbConfig && <KisebbConfigSheet config={kisebbConfigPS} setConfig={setKisebbConfigPS} onClose={() => setShowKisebbConfig(false)} />}
       {hostBurst && <HostDrinkAlert items={hostBurst} players={players} onDismiss={() => setHostBurst(null)} />}
       {showMenu && (() => {
         const mSorted = [...players].sort((a,b)=>(b.points-a.points)||(a.drinks-b.drinks));
@@ -40739,6 +40817,11 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
                   <span style={{ fontFamily:T.font, fontSize:11, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:'0.1em' }}>Szobakód</span>
                   <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:16, color:'#fff', letterSpacing:'0.15em', marginLeft:'auto' }}>{roomCode}</span>
                 </div>
+              )}
+              {currentGameId === 'kisebb' && (
+                <button onClick={() => { setShowMenu(false); setShowKisebbConfig(true); }} style={{ width:'100%', padding:'14px', border:'none', background:T.surface, color:T.ink, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, boxShadow:T.shadow }}>
+                  {Icon.settings(T.ink)} Kisebb/Nagyobb beállítások
+                </button>
               )}
               <div style={{ display:'flex', gap:10 }}>
                 <button onClick={() => { setGameIdx(g=>g+1); setShowMenu(false); }} style={{ flex:1, minHeight:56, border:`2px solid ${T.ink}`, background:'transparent', color:T.ink, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer' }}>⏭ Következő</button>
