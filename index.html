@@ -34230,9 +34230,11 @@ function BeerPongConfigSheet({ config, setConfig, onClose }) {
 
   const isTwo = tournament.startsWith('grp_');
 
+  const matchMinutes = config.matchMinutes ?? 5;
   const numCfg = [
     { key:'maxCups',       label:'Poharak száma',    val:maxCups,       min:4, max:16, step:2 },
-    { key:'drinksPerLoss', label:'Vesztes korty',  val:drinksPerLoss, min:1, max:10, step:1 },
+    { key:'drinksPerLoss', label:'Vesztes korty',    val:drinksPerLoss, min:1, max:10, step:1 },
+    { key:'matchMinutes',  label:'Meccs hossza (perc)',val:matchMinutes, min:0, max:20, step:1 },
   ];
 
   return (
@@ -35201,6 +35203,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   const MAX_CUPS = bpCfg.maxCups ?? 10;
   const TOURNAMENT = bpCfg.tournamentType || 'se';
   const GROUP_ADVANCE = bpCfg.groupAdvance ?? 1;
+  const MATCH_MINUTES = bpCfg.matchMinutes ?? 5;
   const doneRef = React.useRef(false);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -35228,20 +35231,23 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   };
   const getRRStandings = (parts, matches) => {
     const st = {};
-    parts.forEach(p => { st[p.id] = { player: p, wins: 0, losses: 0, diff: 0 }; });
+    parts.forEach(p => { st[p.id] = { player:p, wins:0, losses:0, draws:0, setWins:0, diff:0, pts:0 }; });
     matches.forEach(m => {
-      if (!m.winner) return;
-      st[m.winner.id].wins++;
-      st[m.loser.id].losses++;
-      if (m.score) {
-        const wIsP1 = m.winner.id === m.p1.id;
-        const wCups = MAX_CUPS - (wIsP1 ? m.score.p1 : m.score.p2);
-        const lCups = MAX_CUPS - (wIsP1 ? m.score.p2 : m.score.p1);
-        st[m.winner.id].diff += wCups - lCups;
-        st[m.loser.id].diff -= wCups - lCups;
+      if (!m.score) return;
+      const p1cups = m.score.p1, p2cups = m.score.p2;
+      const p1pot = MAX_CUPS - p1cups, p2pot = MAX_CUPS - p2cups;
+      if (m.draw) {
+        if (st[m.p1.id]) { st[m.p1.id].draws++; st[m.p1.id].pts += 1; st[m.p1.id].setWins += p1pot; }
+        if (st[m.p2.id]) { st[m.p2.id].draws++; st[m.p2.id].pts += 1; st[m.p2.id].setWins += p2pot; }
+      } else if (m.winner) {
+        if (st[m.winner.id]) { st[m.winner.id].wins++; st[m.winner.id].pts += 3; }
+        if (st[m.loser.id]) st[m.loser.id].losses++;
+        const p1diff = p1pot - p2pot;
+        if (st[m.p1.id]) { st[m.p1.id].setWins += p1pot; st[m.p1.id].diff += p1diff; }
+        if (st[m.p2.id]) { st[m.p2.id].setWins += p2pot; st[m.p2.id].diff -= p1diff; }
       }
     });
-    return Object.values(st).sort((a, b) => b.wins - a.wins || b.diff - a.diff);
+    return Object.values(st).sort((a, b) => b.pts - a.pts || b.diff - a.diff || b.setWins - a.setWins);
   };
   const roundName = (rIdx, total) => {
     const rem = total - rIdx;
@@ -35258,6 +35264,30 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   const [champion, setChampion] = React.useState(null);
   const [expandedRounds, setExpandedRounds] = React.useState({});
   const lpTimer = React.useRef(null);
+  const [timerSecs, setTimerSecs] = React.useState(0);
+  const [timerRunning, setTimerRunning] = React.useState(false);
+  const timerRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (timerRunning) {
+      timerRef.current = setInterval(() => {
+        setTimerSecs(s => {
+          if (s <= 1) { setTimerRunning(false); clearInterval(timerRef.current); return 0; }
+          return s - 1;
+        });
+      }, 1000);
+    } else {
+      clearInterval(timerRef.current);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [timerRunning]);
+
+  const startTimer = () => {
+    if (timerSecs === 0) setTimerSecs(MATCH_MINUTES * 60);
+    setTimerRunning(true);
+  };
+  const stopTimer = () => setTimerRunning(false);
+  const resetTimer = () => { setTimerRunning(false); setTimerSecs(0); };
 
   // SE
   const [seRounds, setSeRounds] = React.useState([]);
@@ -35313,6 +35343,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
     const winner = cups1 < cups2 ? match.p1 : match.p2;
     const loser  = cups1 < cups2 ? match.p2 : match.p1;
     const score  = { p1: cups1, p2: cups2 };
+    resetTimer();
 
     const newDrink = { ...drinkMap };
     if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + DRINKS_PER_LOSS;
@@ -35353,17 +35384,18 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   // ── RR confirm ────────────────────────────────────────────────────────────
   const handleRRConfirm = (matches, idx, setMatchesCB, onFinish) => {
     const m = matches[idx];
-    const winner = cups1 < cups2 ? m.p1 : m.p2;
-    const loser  = cups1 < cups2 ? m.p2 : m.p1;
+    const isDraw = cups1 === cups2;
+    const winner = isDraw ? null : (cups1 < cups2 ? m.p1 : m.p2);
+    const loser  = isDraw ? null : (cups1 < cups2 ? m.p2 : m.p1);
     const score  = { p1: cups1, p2: cups2 };
 
     const newDrink = { ...drinkMap };
     if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + DRINKS_PER_LOSS;
     setDrinkMap(newDrink);
-    setCups1(MAX_CUPS); setCups2(MAX_CUPS);
+    setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer();
 
     setMatchesCB(prev => {
-      const nm = prev.map((mm, i) => i === idx ? { ...mm, winner, loser, score } : mm);
+      const nm = prev.map((mm, i) => i === idx ? { ...mm, winner, loser, score, draw: isDraw } : mm);
       const nextIdx = nm.findIndex((mm, i) => i > idx && mm.winner === null);
       if (nextIdx !== -1) { setRrIdx(nextIdx); }
       else { onFinish(nm, newDrink); }
@@ -35389,19 +35421,20 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
     const grp = tsGroups[tsCurGroup];
     const isRR = TOURNAMENT.startsWith('grp_rr');
     const m = grp.matches[grp.curIdx];
-    const winner = cups1 < cups2 ? m.p1 : m.p2;
-    const loser  = cups1 < cups2 ? m.p2 : m.p1;
+    const isDraw = cups1 === cups2;
+    const winner = isDraw ? null : (cups1 < cups2 ? m.p1 : m.p2);
+    const loser  = isDraw ? null : (cups1 < cups2 ? m.p2 : m.p1);
     const score  = { p1: cups1, p2: cups2 };
 
     const newDrink = { ...drinkMap };
     if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + DRINKS_PER_LOSS;
     setDrinkMap(newDrink);
-    setCups1(MAX_CUPS); setCups2(MAX_CUPS);
+    setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer();
 
     setTsGroups(prev => {
       const ng = prev.map((g, gi) => {
         if (gi !== tsCurGroup) return g;
-        const nm = g.matches.map((mm, i) => i === g.curIdx ? { ...mm, winner, loser, score } : mm);
+        const nm = g.matches.map((mm, i) => i === g.curIdx ? { ...mm, winner, loser, score, draw: isDraw } : mm);
         const nextIdx = nm.findIndex((mm, i) => i > g.curIdx && mm.winner === null);
         const done = nextIdx === -1;
         return { ...g, matches: nm, curIdx: done ? g.curIdx : nextIdx, done };
@@ -35456,12 +35489,12 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
     confirmHandler = () => handleSEConfirm(seRounds, seCurRound, seCurMatch, setSeRounds);
   } else if (TOURNAMENT === 'rr' && !rrDone && rrMatches.length) {
     currentMatch = rrMatches[rrIdx];
-    canConfirm = currentMatch && cups1 !== cups2;
+    canConfirm = true;
     confirmHandler = () => handleRRConfirm(rrMatches, rrIdx, setRrMatches, (ms, dm) => finishRR(ms, dm, players));
   } else if (TOURNAMENT.startsWith('grp_') && tsPhase === 'groups' && tsGroups.length) {
     const grp = tsGroups[tsCurGroup];
     currentMatch = grp && !grp.done ? grp.matches[grp.curIdx] : null;
-    canConfirm = currentMatch && currentMatch.p1 && currentMatch.p2 && cups1 !== cups2;
+    canConfirm = currentMatch && currentMatch.p1 && currentMatch.p2;
     confirmHandler = handleGroupConfirm;
   } else if (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals') {
     if (finalsType === 'se' && seRounds.length && !champion) {
@@ -35470,7 +35503,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
       confirmHandler = () => handleSEConfirm(seRounds, seCurRound, seCurMatch, setSeRounds);
     } else if (finalsType === 'rr' && !rrDone && rrMatches.length) {
       currentMatch = rrMatches[rrIdx];
-      canConfirm = currentMatch && cups1 !== cups2;
+      canConfirm = true;
       const finalsPlayers = rrMatches.filter(Boolean).flatMap(m => [m.p1, m.p2]).filter((p, i, a) => p && a.findIndex(x => x && x.id === p.id) === i);
       confirmHandler = () => handleRRConfirm(rrMatches, rrIdx, setRrMatches, (ms, dm) => finishRR(ms, dm, finalsPlayers));
     }
@@ -35510,9 +35543,30 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
 
     return (
       <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'16px 16px 18px', boxShadow:T.shadow }}>
-        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', textAlign:'center', marginBottom:8 }}>
+        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', textAlign:'center', marginBottom: MATCH_MINUTES > 0 ? 4 : 8 }}>
           {phaseLabel ? phaseLabel + ' · ' : ''}{matchLabel}
         </div>
+        {MATCH_MINUTES > 0 && (
+          <div style={{ textAlign:'center', marginBottom:10 }}>
+            <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:38, color: timerSecs === 0 ? T.inkMute : timerSecs < 30 ? T.coral : T.ink, letterSpacing:2 }}>
+              {Math.floor(timerSecs/60).toString().padStart(2,'0')}:{(timerSecs%60).toString().padStart(2,'0')}
+            </div>
+            <div style={{ display:'flex', gap:8, justifyContent:'center', marginTop:6 }}>
+              {!timerRunning ? (
+                <button onClick={startTimer} style={{ padding:'6px 18px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:13, background:T.blue, color:'#fff', boxShadow:T.shadow }}>
+                  {timerSecs === 0 ? '▶ Start' : '▶ Folytat'}
+                </button>
+              ) : (
+                <button onClick={stopTimer} style={{ padding:'6px 18px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:13, background:T.coral, color:'#fff', boxShadow:T.shadow }}>
+                  ⏸ Megállít
+                </button>
+              )}
+              {timerSecs > 0 && !timerRunning && (
+                <button onClick={resetTimer} style={{ padding:'6px 14px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:13, background:'rgba(0,0,0,0.08)', color:T.inkSoft }}>↺</button>
+              )}
+            </div>
+          </div>
+        )}
         <div style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
           <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
             <div style={{ width:54, height:54, borderRadius:'50%', background:currentMatch.p1.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:22, color:'#fff', boxShadow:'0 4px 14px ' + currentMatch.p1.color + '55' }}>
@@ -35531,8 +35585,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
           </div>
         </div>
         {cups1 === cups2 && <div style={{ fontFamily:T.font, fontSize:11, color:T.coral, fontWeight:700, textAlign:'center', marginTop:4 }}>Döntetlen!</div>}
-        <button onClick={confirmHandler} disabled={!canConfirm} style={{ width:'100%', marginTop:12, minHeight:48, border:'none', borderRadius:14, cursor: canConfirm ? 'pointer' : 'default', fontFamily:T.font, fontWeight:700, fontSize:15, color:'#fff', boxShadow: canConfirm ? T.shadow : 'none', background: !canConfirm ? 'rgba(0,0,0,0.08)' : cups1 < cups2 ? currentMatch.p1.color : currentMatch.p2.color, transition:'background .2s' }}>
-          {!canConfirm ? 'Állítsd be az eredményt' : ('Megerősítés — ' + (cups1 < cups2 ? currentMatch.p1.name : currentMatch.p2.name) + ' nyert')}
+        <button onClick={confirmHandler} disabled={!canConfirm} style={{ width:'100%', marginTop:12, minHeight:48, border:'none', borderRadius:14, cursor: canConfirm ? 'pointer' : 'default', fontFamily:T.font, fontWeight:700, fontSize:15, color:'#fff', boxShadow: canConfirm ? T.shadow : 'none', background: !canConfirm ? 'rgba(0,0,0,0.08)' : cups1 === cups2 ? T.inkSoft : cups1 < cups2 ? currentMatch.p1.color : currentMatch.p2.color, transition:'background .2s' }}>
+          {cups1 === cups2 ? 'Döntetlen megerősítése' : ('Megerősítés — ' + (cups1 < cups2 ? currentMatch.p1.name : currentMatch.p2.name) + ' nyert')}
         </button>
         <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, textAlign:'center', marginTop:6 }}>A vesztes {DRINKS_PER_LOSS} kortyt iszik</div>
       </div>
@@ -35572,15 +35626,28 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   // ── Render RR standings ───────────────────────────────────────────────────
   const renderRRStandings = (parts, matches, title) => {
     const st = getRRStandings(parts, matches);
+    const hdr = { fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em', textAlign:'center', minWidth:38 };
     return (
-      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 16px', boxShadow:T.shadow }}>
-        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:10 }}>{title || 'Állás'}</div>
+      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadow, overflowX:'auto' }}>
+        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:8 }}>{title || 'Állás'}</div>
+        <div style={{ display:'grid', gridTemplateColumns:'20px 1fr 80px 36px 42px 32px', gap:'0 6px', alignItems:'center', paddingBottom:4, borderBottom:'1px solid rgba(20,30,50,0.08)' }}>
+          <div></div><div></div>
+          <div style={{...hdr, textAlign:'center'}}>GY-V-D</div>
+          <div style={hdr}>Egál</div>
+          <div style={hdr}>Pohár</div>
+          <div style={{...hdr, color:T.yellow}}>Pont</div>
+        </div>
         {st.map((s, i) => (
-          <div key={s.player.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 0', borderBottom: i < st.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none' }}>
-            <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:14, color: i===0 ? T.yellow : T.inkSoft, minWidth:18 }}>{i+1}.</div>
-            <div style={{ width:28, height:28, borderRadius:'50%', background:s.player.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:12, color:'#fff' }}>{s.player.name.charAt(0).toUpperCase()}</div>
-            <div style={{ flex:1, fontFamily:T.font, fontWeight: i===0 ? 700 : 400, fontSize:14, color:T.ink }}>{s.player.name}</div>
-            <div style={{ fontFamily:'monospace', fontSize:12, color:T.inkSoft }}>{s.wins}G {s.losses}V</div>
+          <div key={s.player.id} style={{ display:'grid', gridTemplateColumns:'20px 1fr 80px 36px 42px 32px', gap:'0 6px', alignItems:'center', padding:'6px 0', borderBottom: i < st.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none' }}>
+            <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:12, color: i===0 ? T.yellow : T.inkSoft }}>{i+1}</div>
+            <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
+              <div style={{ width:24, height:24, borderRadius:'50%', background:s.player.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:10, color:'#fff', flexShrink:0 }}>{s.player.name.charAt(0).toUpperCase()}</div>
+              <div style={{ fontFamily:T.font, fontWeight: i===0?700:400, fontSize:13, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.player.name}</div>
+            </div>
+            <div style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft, textAlign:'center' }}>{s.wins}-{s.losses}-{s.draws}</div>
+            <div style={{ fontFamily:'monospace', fontSize:11, color: s.diff > 0 ? T.mint : s.diff < 0 ? T.coral : T.inkSoft, textAlign:'center' }}>{s.diff > 0 ? '+' : ''}{s.diff}</div>
+            <div style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft, textAlign:'center' }}>{s.setWins}</div>
+            <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:13, color: i===0 ? T.yellow : T.ink, textAlign:'center' }}>{s.pts}</div>
           </div>
         ))}
       </div>
