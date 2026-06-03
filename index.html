@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.61';
+const APP_VERSION = 'v6.62';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -38555,7 +38555,8 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
     const newPending = {...pendingGuesses};
     ridersAtPos.forEach(rid => delete newPending[rid]);
     const nextCurrent = [...busRiders].filter(rid => !newDone[rid]).sort((a,b) => (newPositions[a]||0) - (newPositions[b]||0))[0] || busRiders[0];
-    return { newPositions, newDone, newBonus, newDrawn, newDrinks, newRevealed, newPending, results, allDone, nextCurrent, drawnCard };
+    const newPositionDrawnCards = {...(st.busPositionDrawnCards||{}), [posIdx]: drawnCard};
+    return { newPositions, newDone, newBonus, newDrawn, newDrinks, newRevealed, newPending, results, allDone, nextCurrent, drawnCard, newPositionDrawnCards };
   };
 
   const makeGuess = async (guess, isBonus=false) => {
@@ -38592,7 +38593,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
         await firebase.firestore().collection('rooms').doc(roomCode).update({players:updated});
       } catch(e){}
     }
-    await persist({...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:r.newDrawn, busRiderPositions:r.newPositions, busRiderDone:r.newDone, busRiderBonusUsed:r.newBonus, busRiderDrinks:r.newDrinks, busRiderPendingGuesses:r.newPending, busRevealedPositions:r.newRevealed, currentTurnRiderId:r.nextCurrent, ...(r.allDone?{phase:'done'}:{})});
+    await persist({...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:r.newDrawn, busPositionDrawnCards:r.newPositionDrawnCards, busRiderPositions:r.newPositions, busRiderDone:r.newDone, busRiderBonusUsed:r.newBonus, busRiderDrinks:r.newDrinks, busRiderPendingGuesses:r.newPending, busRevealedPositions:r.newRevealed, currentTurnRiderId:r.nextCurrent, ...(r.allDone?{phase:'done'}:{})});
   };
 
   if (!ready) return (
@@ -38758,7 +38759,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
     const { busRouteCards, busRiders, busRiderPositions, busRiderDone, busRiderDrawnCards, currentTurnRiderId } = buszState;
     const currentRider = players.find(p => p.id === currentTurnRiderId);
     const myStep = busRiderPositions?.[currentTurnRiderId] || 0;
-    const riderDrawn = busRiderDrawnCards?.[currentTurnRiderId] || [];
+    const positionDrawnCards = buszState.busPositionDrawnCards || {};
     return (
       <div style={{display:'flex',flexDirection:'column',gap:14,paddingTop:8,width:'100%'}}>
         {/* current rider */}
@@ -38792,8 +38793,8 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta }) {
           <div style={{fontFamily:T.font,fontSize:9,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em',textAlign:'center',marginBottom:2}}>Húzott lapok</div>
           <div style={{display:'flex',justifyContent:'center',gap:4}}>
             {(busRouteCards||[]).map((_, i) => {
-              const dc = riderDrawn[i] || (guessResult?.card && guessResult.step === i ? guessResult.card : null);
-              const isResult = guessResult?.step === i && !riderDrawn[i];
+              const dc = positionDrawnCards[i] || (guessResult?.card && guessResult.step === i ? guessResult.card : null);
+              const isResult = guessResult?.step === i && !positionDrawnCards[i];
               const glow = isResult && !guessResult?.correct;
               return dc
                 ? <PlayingCard key={i} card={dc} size='lg' glow={glow} />
@@ -41181,7 +41182,8 @@ function BuszPlayerView({ room, roomCode }) {
         setTimeout(() => setBusGuessResult(null), myRes.correct ? 1800 : 2200);
         const rPlayers = snap.data()?.players || [];
         const updatedPlayers = rPlayers.map(p => { const d=results[p.id]?.drinks||0; return d>0?{...p,drinks:(p.drinks||0)+d}:p; });
-        const newSt = {...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawn, busRiderPositions:newPositions, busRiderDone:newDone, busRiderBonusUsed:newBonus, busRiderDrinks:newDrinks, busRiderPendingGuesses:newPending, busRevealedPositions:newRevealed, currentTurnRiderId:nextCurrent, ...(allDone?{phase:'done'}:{})};
+        const newPositionDrawnCards2 = {...(st.busPositionDrawnCards||{}), [myStep]: drawnCard};
+        const newSt = {...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawn, busPositionDrawnCards:newPositionDrawnCards2, busRiderPositions:newPositions, busRiderDone:newDone, busRiderBonusUsed:newBonus, busRiderDrinks:newDrinks, busRiderPendingGuesses:newPending, busRevealedPositions:newRevealed, currentTurnRiderId:nextCurrent, ...(allDone?{phase:'done'}:{})};
         await firebase.firestore().collection('rooms').doc(roomCode).update({players:updatedPlayers, buszState:newSt});
       } catch(e) { console.error(e); }
     };
@@ -41236,7 +41238,7 @@ function BuszPlayerView({ room, roomCode }) {
     const myStep = busRiderPositions?.[playerId] || 0;
     const myDone = !!(busRiderDone?.[playerId]);
     const myPendingGuess = !!(buszState.busRiderPendingGuesses||{})[playerId];
-    const activeDrawn = busRiderDrawnCards?.[playerId] || [];
+    const activeDrawn = buszState.busPositionDrawnCards || {};
     const canGuess = onBus && !myDone && !myPendingGuess && !busGuessResult;
 
     const _busRidersKey = (busRiders||[]).join(',')+'_'+(playerId||'');
@@ -41303,7 +41305,7 @@ function BuszPlayerView({ room, roomCode }) {
               {(busRouteCards||[]).map((_, i) => {
                 const isCurr = i === activeStep2;
                 const dc = activeDrawn[i] || (busGuessResult?.card && busGuessResult.step === i ? busGuessResult.card : null);
-                const isResult = busGuessResult?.step === i && !activeDrawn[i];
+                const isResult = busGuessResult?.step === i && !activeDrawn[i] && busGuessResult?.card;
                 const glow = isResult && !busGuessResult?.correct;
                 return dc
                   ? <div key={i} style={{ flexShrink:0 }}><PlayingCard card={dc} size='lg' glow={glow} /></div>
