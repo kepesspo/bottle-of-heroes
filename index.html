@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.37';
+const APP_VERSION = 'v6.38';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -38994,79 +38994,105 @@ function UvegGame({ gameIdx, players, onAdvance, onResult }) {
     }, 3600);
   };
 
+  const SIZE = 280;
+  const CX = SIZE / 2, CY = SIZE / 2;
+  const RING_R = 118;   // outer ring radius
+  const LABEL_R = 100;  // where name labels sit (inside ring)
+  const DOT_R = 6;      // small dot on ring
+
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14 }}>
 
-      {/* Bottle spinner */}
-      <div style={{ position:'relative', width:220, height:220, display:'flex', alignItems:'center', justifyContent:'center' }}>
-        {/* Static outer ring */}
-        <svg width="220" height="220" viewBox="0 0 220 220" style={{ position:'absolute', top:0, left:0 }}>
-          <circle cx="110" cy="110" r="106" fill="rgba(255,255,255,0.55)" stroke="rgba(27,35,64,0.10)" strokeWidth="2"/>
-          {/* subtle segment lines */}
-          {players.map((_, i) => {
-            const a = (i * 360 / n - 90) * Math.PI / 180;
-            return <line key={i} x1="110" y1="110"
-              x2={(110 + 106 * Math.cos(a)).toFixed(1)}
-              y2={(110 + 106 * Math.sin(a)).toFixed(1)}
-              stroke="rgba(27,35,64,0.08)" strokeWidth="1.5"/>;
+      <div style={{ position:'relative', width:SIZE, height:SIZE }}>
+        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+
+          {/* Outer ring */}
+          <circle cx={CX} cy={CY} r={RING_R} fill="rgba(255,255,255,0.60)"
+            stroke="rgba(27,35,64,0.12)" strokeWidth="2"/>
+
+          {/* Segment dividers + player name labels */}
+          {players.map((p, i) => {
+            const isW = winner && winner.id === p.id;
+            const segA = (i * 360 / n - 90) * Math.PI / 180;
+            // divider line
+            const lx2 = (CX + RING_R * Math.cos(segA)).toFixed(1);
+            const ly2 = (CY + RING_R * Math.sin(segA)).toFixed(1);
+            // label position — midpoint of segment
+            const midA = ((i + 0.5) * 360 / n - 90) * Math.PI / 180;
+            const lbx = (CX + LABEL_R * Math.cos(midA)).toFixed(1);
+            const lby = (CY + LABEL_R * Math.sin(midA)).toFixed(1);
+            // dot on ring at midpoint
+            const dotx = (CX + RING_R * Math.cos(midA)).toFixed(1);
+            const doty = (CY + RING_R * Math.sin(midA)).toFixed(1);
+            return (
+              <g key={p.id}>
+                {/* divider */}
+                <line x1={CX} y1={CY} x2={lx2} y2={ly2}
+                  stroke="rgba(27,35,64,0.08)" strokeWidth="1.5"/>
+                {/* winner segment highlight */}
+                {isW && (() => {
+                  const a1 = (i * 360 / n - 90) * Math.PI / 180;
+                  const a2 = ((i+1) * 360 / n - 90) * Math.PI / 180;
+                  const x1 = CX + RING_R * Math.cos(a1);
+                  const y1 = CY + RING_R * Math.sin(a1);
+                  const x2 = CX + RING_R * Math.cos(a2);
+                  const y2 = CY + RING_R * Math.sin(a2);
+                  const large = (360 / n) > 180 ? 1 : 0;
+                  return <path
+                    d={`M${CX},${CY} L${x1.toFixed(1)},${y1.toFixed(1)} A${RING_R},${RING_R} 0 ${large},1 ${x2.toFixed(1)},${y2.toFixed(1)} Z`}
+                    fill={p.color} opacity="0.18"/>;
+                })()}
+                {/* dot */}
+                <circle cx={dotx} cy={doty} r={DOT_R}
+                  fill={isW ? p.color : 'rgba(27,35,64,0.18)'}
+                  stroke="#fff" strokeWidth="1.5"/>
+                {/* name label */}
+                <text x={lbx} y={lby} textAnchor="middle" dominantBaseline="middle"
+                  fill={isW ? p.color : '#1B2340'}
+                  fontSize={isW ? 13 : 11}
+                  fontWeight={isW ? '800' : '600'}
+                  fontFamily="'Nunito', sans-serif"
+                  style={{ userSelect:'none' }}>
+                  {p.name}
+                </text>
+              </g>
+            );
           })}
-          {/* Center hub */}
-          <circle cx="110" cy="110" r="14" fill="#1B2340"/>
-          <circle cx="110" cy="110" r="5" fill="#fff"/>
-        </svg>
 
-        {/* Spinning bottle */}
-        <div style={{
-          position:'absolute',
-          width:'100%', height:'100%',
-          transform: `rotate(${angle}deg)`,
-          transformOrigin: 'center center',
-          transition: spinning ? 'transform 3.6s cubic-bezier(0.13,0.60,0.06,1)' : 'none',
-          display:'flex', alignItems:'center', justifyContent:'center',
-        }}>
-          <svg width="48" height="160" viewBox="0 0 48 160">
-            {/* Tail arrow */}
-            <polygon points="24,158 19,146 29,146" fill="rgba(27,35,64,0.25)"/>
-            <line x1="24" y1="146" x2="24" y2="120" stroke="rgba(27,35,64,0.20)" strokeWidth="3" strokeLinecap="round"/>
-            {/* Bottle body */}
-            <rect x="15" y="72" width="18" height="50" rx="8" fill="#2D6A4F"/>
-            {/* Shoulder */}
-            <path d="M15,72 Q9,64 9,56 L39,56 Q39,64 33,72 Z" fill="#2D6A4F"/>
-            {/* Neck */}
-            <rect x="19" y="32" width="10" height="26" rx="4" fill="#2D6A4F"/>
-            {/* Cap */}
-            <rect x="17" y="24" width="14" height="10" rx="3" fill="#1B2340"/>
-            {/* Label */}
-            <rect x="17" y="78" width="14" height="28" rx="3" fill="rgba(255,255,255,0.18)"/>
-            {/* Arrow tip */}
-            <polygon points="24,2 17,18 31,18" fill="#E55555"/>
-          </svg>
-        </div>
-      </div>
+          {/* Inner circle */}
+          <circle cx={CX} cy={CY} r="38" fill="rgba(255,255,255,0.85)"
+            stroke="rgba(27,35,64,0.08)" strokeWidth="1.5"/>
 
-      {/* Player pills */}
-      <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center', padding:'0 8px' }}>
-        {players.map(p => {
-          const isW = winner && winner.id === p.id;
-          return (
-            <div key={p.id} style={{
-              padding: isW ? '8px 18px' : '6px 14px',
-              borderRadius:99,
-              background: isW ? p.color : 'rgba(255,255,255,0.75)',
-              color: isW ? '#fff' : T.ink,
-              fontFamily: T.font,
-              fontWeight: isW ? 800 : 600,
-              fontSize: isW ? 15 : 13,
-              boxShadow: isW ? `0 4px 16px ${p.color}55` : '0 1px 6px rgba(0,0,0,0.08)',
-              border: isW ? 'none' : '2px solid rgba(27,35,64,0.10)',
-              transform: isW ? 'scale(1.1)' : 'scale(1)',
-              transition: 'all .3s cubic-bezier(.2,.9,.3,1.2)',
-              animation: isW ? 'popIn .4s' : 'none',
+          {/* Spinning bottle */}
+          <g transform={`translate(${CX} ${CY})`}
+            style={{
+              transform: `translate(${CX}px,${CY}px) rotate(${angle}deg)`,
+              transformOrigin: `${CX}px ${CY}px`,
+              transition: spinning ? 'transform 3.6s cubic-bezier(0.13,0.60,0.06,1)' : 'none',
             }}>
-              {isW ? '🍺 ' : ''}{p.name}
-            </div>
-          );
-        })}
+            {/* Tip arrow */}
+            <polygon points="0,-112 -5,-100 5,-100" fill="#E55555"/>
+            {/* Pointer line */}
+            <line x1="0" y1="-100" x2="0" y2="-42"
+              stroke="#E55555" strokeWidth="2.5" strokeLinecap="round"/>
+            {/* Bottle — pointing up (tip) */}
+            <rect x="-5" y="-39" width="10" height="6" rx="2" fill="#1B2340"/>
+            <rect x="-4" y="-33" width="8" height="14" rx="3" fill="#2D6A4F"/>
+            <path d="M-4,-19 Q-11,-14 -11,-8 L11,-8 Q11,-14 4,-19 Z" fill="#2D6A4F"/>
+            <rect x="-11" y="-8" width="22" height="30" rx="7" fill="#2D6A4F"/>
+            <rect x="-8" y="-4" width="16" height="16" rx="3" fill="rgba(255,255,255,0.18)"/>
+            <rect x="-11" y="22" width="22" height="5" rx="3" fill="#1B4332"/>
+            {/* tail */}
+            <line x1="0" y1="28" x2="0" y2="38"
+              stroke="rgba(27,35,64,0.20)" strokeWidth="3" strokeLinecap="round"/>
+            <polygon points="0,42 -5,30 5,30" fill="rgba(27,35,64,0.15)"/>
+          </g>
+
+          {/* Center hub */}
+          <circle cx={CX} cy={CY} r="10" fill="#1B2340"/>
+          <circle cx={CX} cy={CY} r="4" fill="#fff"/>
+
+        </svg>
       </div>
 
       {/* Spin button */}
@@ -40509,7 +40535,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
       </div>{/* end scrollable */}
 
       {/* ── Action buttons (flexShrink:0) ── */}
-      {currentGame.category === 'Egyéni' && scenario.cta.length > 0 && currentGameId !== 'otdolog' && currentGameId !== 'sohanem' && currentGameId !== 'zene' && (
+      {currentGame.category === 'Egyéni' && scenario.cta.length > 0 && currentGameId !== 'otdolog' && currentGameId !== 'sohanem' && currentGameId !== 'zene' && currentGameId !== 'uveg' && (
         <div className='play-actions' style={{ flexShrink:0, maxWidth:680, margin:'0 auto', width:'100%', boxSizing:'border-box' }}>
           <button onClick={() => advance(false)} disabled={transitioning} style={{ flex:1, minHeight:60, border:'none', background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>{scenario.cta[0]}</button>
           <button onClick={() => advance(true)} disabled={transitioning} style={{ flex:1, minHeight:60, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>{scenario.cta[1]}</button>
