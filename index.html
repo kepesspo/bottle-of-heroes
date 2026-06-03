@@ -35275,6 +35275,9 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   const [champion, setChampion] = React.useState(null);
   const [expandedRounds, setExpandedRounds] = React.useState({});
   const lpTimer = React.useRef(null);
+  const [standingsExp, setStandingsExp] = React.useState(true);
+  const [matchListExp, setMatchListExp] = React.useState(true);
+  const [viewGroup, setViewGroup] = React.useState(0);
   const [timerSecs, setTimerSecs] = React.useState(0);
   const [timerRunning, setTimerRunning] = React.useState(false);
   const timerRef = React.useRef(null);
@@ -35320,7 +35323,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   React.useEffect(() => {
     doneRef.current = false;
     setCups1(MAX_CUPS); setCups2(MAX_CUPS);
-    setDrinkMap({}); setChampion(null); setExpandedRounds({});
+    setDrinkMap({}); setChampion(null); setExpandedRounds({}); setViewGroup(0);
 
     if (TOURNAMENT === 'se') {
       const br = buildSEBracket(players);
@@ -35619,7 +35622,12 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   // ── Render RR match list ─────────────────────────────────────────────────
   const renderRRMatchList = (parts, matches, curIdx, setIdx, onReset) => (
     <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 16px', boxShadow:T.shadow }}>
-      <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:10 }}>Meccsek</div>
+      <div onClick={() => setMatchListExp(v => !v)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom: matchListExp ? 10 : 0 }}>
+        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>Meccsek</div>
+        <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{matchListExp ? '▲' : '▼'}</div>
+      </div>
+      {!matchListExp && null}
+      {matchListExp && <React.Fragment>
       <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
         {matches.map((m, i) => {
           const isDone = m.winner !== null;
@@ -35643,6 +35651,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
           );
         })}
       </div>
+      </React.Fragment>}
     </div>
   );
 
@@ -35652,7 +35661,12 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
     const hdr = { fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em', textAlign:'center', minWidth:38 };
     return (
       <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadow, overflowX:'auto' }}>
-        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:8 }}>{title || 'Állás'}</div>
+        <div onClick={() => setStandingsExp(v => !v)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom: standingsExp ? 8 : 0 }}>
+          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>{title || 'Állás'}</div>
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{standingsExp ? '▲' : '▼'}</div>
+        </div>
+        {!standingsExp && null}
+        {standingsExp && <React.Fragment>
         <div style={{ display:'grid', gridTemplateColumns:'20px 1fr 80px 36px 42px 32px', gap:'0 6px', alignItems:'center', paddingBottom:4, borderBottom:'1px solid rgba(20,30,50,0.08)' }}>
           <div></div><div></div>
           <div style={{...hdr, textAlign:'center'}}>GY-V-D</div>
@@ -35673,6 +35687,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
             <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:13, color: i===0 ? T.yellow : T.ink, textAlign:'center' }}>{s.pts}</div>
           </div>
         ))}
+        </React.Fragment>}
       </div>
     );
   };
@@ -35714,7 +35729,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
                           onMouseLeave={() => clearTimeout(lpTimer.current)}
                           onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setSeRounds(prev => prev.slice(0,rIdx+1).map((r,ri) => ri!==rIdx?r:r.map((mm,mi) => mi!==mIdx?mm:{...mm,winner:null,loser:null,score:null}))); setChampion(null); doneRef.current=false; setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
                           onTouchEnd={() => clearTimeout(lpTimer.current)}
-                          style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', paddingTop: mIdx===0 ? 12 : 7, borderBottom: mIdx < round.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none', cursor: isSelectable ? 'pointer' : isDone ? 'context-menu' : 'default', borderRadius:8, background: isSelected ? T.blue+'18' : 'transparent', transition:'background .15s' }}>
+                          style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', paddingTop: mIdx===0 ? 15 : 7, borderBottom: mIdx < round.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none', cursor: isSelectable ? 'pointer' : isDone ? 'context-menu' : 'default', borderRadius:8, background: isSelected ? T.blue+'18' : 'transparent', transition:'background .15s' }}>
                           <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, color: isDone&&m.winner?.id===m.p1?.id?T.mint:isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1?m.p1.name:'BYE'}</div>
                           <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
                           <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isDone ? (m.winner?.id===m.p1?.id ? T.mint : m.winner?.id===m.p2?.id ? T.mint : T.inkSoft) : T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
@@ -35782,22 +35797,37 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
       {TOURNAMENT === 'rr' && renderRRStandings(players, rrMatches, 'Állás')}
       {TOURNAMENT === 'rr' && !rrDone && renderRRMatchList(players, rrMatches, rrIdx, setRrIdx, (i) => { setRrMatches(prev => prev.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})); setRrDone(false); doneRef.current=false; setChampion(null); })}
       {isTwoStage && tsPhase === 'groups' && renderGroupOverview()}
-      {isTwoStage && tsPhase === 'groups' && tsGroups[tsCurGroup] && !tsGroups[tsCurGroup].done && (
+      {isTwoStage && tsPhase === 'groups' && (
         <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 16px', boxShadow:T.shadow }}>
-          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:10 }}>{tsGroups[tsCurGroup].label} — Meccsek</div>
+          {/* Group tabs */}
+          {tsGroups.length > 1 && (
+            <div style={{ display:'flex', gap:6, marginBottom:10 }}>
+              {tsGroups.map((g, gi) => (
+                <button key={gi} onClick={() => setViewGroup(gi)} style={{ flex:1, padding:'6px 0', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:12, background: viewGroup===gi ? T.blue+'22' : 'rgba(20,30,50,0.05)', color: viewGroup===gi ? T.blue : T.inkSoft, transition:'all .15s' }}>
+                  {g.label.replace(' csoport','')} {g.done ? '✓' : gi===tsCurGroup ? '●' : ''}
+                </button>
+              ))}
+            </div>
+          )}
+          {tsGroups[viewGroup] && (
+          <React.Fragment>
+          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color: viewGroup===tsCurGroup ? T.blue : T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:8 }}>
+            {tsGroups[viewGroup].label} {tsGroups[viewGroup].done ? '— kész ✓' : viewGroup===tsCurGroup ? '— folyamatban' : '— vár'}
+          </div>
           <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-            {tsGroups[tsCurGroup].matches.map((m, i) => {
-              const isDone = m.winner !== null;
-              const isSel = i === tsGroups[tsCurGroup].curIdx && !isDone;
+            {tsGroups[viewGroup].matches.map((m, i) => {
+              const g = tsGroups[viewGroup];
+              const isDone = m.winner !== null || m.draw;
+              const isSel = viewGroup===tsCurGroup && i === tsGroups[tsCurGroup].curIdx && !isDone;
               return (
                 <div key={i}
-                  onClick={!isDone ? () => { setTsGroups(prev => prev.map((g, gi) => gi===tsCurGroup ? {...g, curIdx:i} : g)); setCups1(MAX_CUPS); setCups2(MAX_CUPS); } : undefined}
-                  onMouseDown={isDone ? () => { lpTimer.current = setTimeout(() => { setTsGroups(prev => prev.map((g, gi) => gi!==tsCurGroup?g:{...g, curIdx:i, matches:g.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null})})); setCups1(MAX_CUPS); setCups2(MAX_CUPS); }, 600); } : undefined}
+                  onClick={!isDone && viewGroup===tsCurGroup ? () => { setTsGroups(prev => prev.map((g, gi) => gi===tsCurGroup ? {...g, curIdx:i} : g)); setCups1(MAX_CUPS); setCups2(MAX_CUPS); } : undefined}
+                  onMouseDown={isDone && viewGroup===tsCurGroup ? () => { lpTimer.current = setTimeout(() => { setTsGroups(prev => prev.map((g, gi) => gi!==tsCurGroup?g:{...g, curIdx:i, done:false, matches:g.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})})); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
                   onMouseUp={() => clearTimeout(lpTimer.current)}
                   onMouseLeave={() => clearTimeout(lpTimer.current)}
-                  onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setTsGroups(prev => prev.map((g, gi) => gi!==tsCurGroup?g:{...g, curIdx:i, matches:g.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null})})); setCups1(MAX_CUPS); setCups2(MAX_CUPS); }, 600); } : undefined}
+                  onTouchStart={isDone && viewGroup===tsCurGroup ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setTsGroups(prev => prev.map((g, gi) => gi!==tsCurGroup?g:{...g, curIdx:i, done:false, matches:g.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})})); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
                   onTouchEnd={() => clearTimeout(lpTimer.current)}
-                  style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderRadius:10, cursor: !isDone?'pointer':isDone?'context-menu':'default', background: isSel?T.blue+'18':'transparent', border: isSel?'1.5px solid '+T.blue+'44':'1.5px solid transparent', transition:'background .15s' }}>
+                  style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderRadius:10, cursor: !isDone&&viewGroup===tsCurGroup?'pointer':isDone&&viewGroup===tsCurGroup?'context-menu':'default', background: isSel?T.blue+'18':'transparent', border: isSel?'1.5px solid '+T.blue+'44':'1.5px solid transparent', transition:'background .15s' }}>
                   <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.winner?.id===m.p1?.id?T.mint:isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name}</div>
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
                   <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isDone&&m.winner ? T.mint : T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
@@ -35807,11 +35837,14 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
               );
             })}
           </div>
+          </React.Fragment>
+          )}
         </div>
       )}
       {isTwoStage && tsPhase === 'finals' && finalsType === 'se' && renderSEBracket(seRounds, seCurRound, seCurMatch)}
       {isTwoStage && tsPhase === 'finals' && finalsType === 'rr' && renderRRStandings(rrParts, rrMatches, 'Főszakasz állás')}
       {isTwoStage && tsPhase === 'finals' && finalsType === 'rr' && !rrDone && renderRRMatchList(rrParts, rrMatches, rrIdx, setRrIdx, (i) => { setRrMatches(prev => prev.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})); setRrDone(false); doneRef.current=false; setChampion(null); })}
+      {isTwoStage && tsPhase === 'finals' && renderGroupOverview()}
     </div>
   );
 }
