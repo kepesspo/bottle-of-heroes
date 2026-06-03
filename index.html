@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.74';
+const APP_VERSION = 'v6.75';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -36150,10 +36150,10 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   };
 
   // ── CupCounter ────────────────────────────────────────────────────────────
-  const CupCounter = ({ value, onChange, color, max }) => (
+  const CupCounter = ({ value, onChange, color, max, winning }) => (
     <div style={{ display:'flex', alignItems:'center', gap:10 }}>
       <button onClick={() => onChange(Math.max(0, value - 1))} style={{ width:42, height:42, borderRadius:14, border:'none', background:T.coralSoft, color:'#D85F5C', fontFamily:T.font, fontWeight:900, fontSize:22, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>−</button>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:30, color:T.ink, minWidth:32, textAlign:'center', fontVariantNumeric:'tabular-nums' }}>{value}</div>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:30, color: winning ? T.mint : T.ink, minWidth:32, textAlign:'center', fontVariantNumeric:'tabular-nums', transition:'color .2s' }}>{value}</div>
       <button onClick={() => onChange(Math.min(max, value + 1))} style={{ width:42, height:42, borderRadius:14, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:22, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>+</button>
     </div>
   );
@@ -36271,7 +36271,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
               {currentMatch.p1.name.charAt(0).toUpperCase()}
             </div>
             <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p1.name}</div>
-            <CupCounter value={cups1} onChange={setCups1} color={currentMatch.p1.color} max={MAX_CUPS} />
+            <CupCounter value={cups1} onChange={setCups1} color={currentMatch.p1.color} max={MAX_CUPS} winning={cups1 < cups2} />
           </div>
 
           {/* VS */}
@@ -36283,7 +36283,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
               {currentMatch.p2.name.charAt(0).toUpperCase()}
             </div>
             <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p2.name}</div>
-            <CupCounter value={cups2} onChange={setCups2} color={currentMatch.p2.color} max={MAX_CUPS} />
+            <CupCounter value={cups2} onChange={setCups2} color={currentMatch.p2.color} max={MAX_CUPS} winning={cups2 < cups1} />
           </div>
         </div>
 
@@ -36306,7 +36306,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   // ── Render RR match list ─────────────────────────────────────────────────
   const renderRRMatchList = (parts, matches, curIdx, setIdx, onReset) => (
     <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 16px', boxShadow:T.shadow }}>
-      <div onClick={() => setMatchListExp(v => !v)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom: matchListExp ? 10 : 0 }}>
+      <div onClick={() => setMatchListExp(v => !v)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding:'4px 0', marginBottom: matchListExp ? 6 : 0 }}>
         <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>Meccsek</div>
         <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{matchListExp ? '▲' : '▼'}</div>
       </div>
@@ -36351,7 +36351,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     const hdr = { fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em', textAlign:'center', minWidth:38 };
     return (
       <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadow, overflowX:'auto' }}>
-        <div onClick={() => setStandingsExp(v => !v)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom: standingsExp ? 8 : 0 }}>
+        <div onClick={() => setStandingsExp(v => !v)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding:'4px 0', marginBottom: standingsExp ? 6 : 0 }}>
           <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>{title || 'Állás'}</div>
           <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{standingsExp ? '▲' : '▼'}</div>
         </div>
@@ -36395,11 +36395,11 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
           {rounds.map((round, rIdx) => {
             const isPast = rIdx < curRound, isCurrent = rIdx === curRound;
-            const isExp = isCurrent || !!expandedRounds[rIdx];
+            const isExp = expandedRounds[rIdx] !== false;
             const winners = round.map(m => m.winner).filter(Boolean);
-            if (!isExp && !isCurrent) return (
-              <div key={rIdx} onClick={() => setExpandedRounds(s => ({...s, [rIdx]: !s[rIdx]}))}
-                style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'7px 8px', borderRadius:10, cursor:'pointer', background:'rgba(20,30,50,0.03)' }}>
+            if (!isExp) return (
+              <div key={rIdx} onClick={() => setExpandedRounds(s => ({...s, [rIdx]: true}))}
+                style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 8px', borderRadius:10, cursor:'pointer', background:'rgba(20,30,50,0.03)' }}>
                 <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em' }}>{roundName(rIdx, total)}</div>
                 <div style={{ display:'flex', alignItems:'center', gap:3 }}>
                   {winners.map(w => <div key={w.id} style={{ width:14, height:14, borderRadius:'50%', background:w.color }} />)}
@@ -36409,13 +36409,11 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
             );
             return (
               <div key={rIdx}>
-                {rIdx > 0 && (
-                  <div onClick={() => setExpandedRounds(s => ({...s, [rIdx]: !isExp}))}
-                    style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 4px', cursor:'pointer' }}>
+                <div onClick={() => setExpandedRounds(s => ({...s, [rIdx]: false}))}
+                    style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 8px', cursor:'pointer' }}>
                     <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color: isCurrent ? T.inkSoft : T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em' }}>{roundName(rIdx, total)}</div>
                     <span style={{ fontSize:10, color:T.inkMute }}>{isExp ? '▲' : '▼'}</span>
                   </div>
-                )}
                 <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                   {round.map((m, mIdx) => {
                     const isDone = m.winner !== null;
@@ -36470,7 +36468,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
             const hdr = { fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em', textAlign:'center', minWidth:38 };
             return (
               <div key={gi} style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadow, border: isCurrent ? '1.5px solid ' + T.blue + '44' : '1.5px solid rgba(20,30,50,0.06)' }}>
-                <div onClick={() => setExpandedGroups_g(s => ({...s, [gi]: !isExpG}))} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom: isExpG ? 8 : 0 }}>
+                <div onClick={() => setExpandedGroups_g(s => ({...s, [gi]: !isExpG}))} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding:'4px 0', marginBottom: isExpG ? 6 : 0 }}>
                   <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color: isCurrent ? T.blue : T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>
                     {g.label} állás {isDone ? '✓' : isCurrent ? '●' : ''}
                   </div>
@@ -36504,7 +36502,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           // SE group: show match results
           return (
             <div key={gi} style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadow, border: isCurrent ? '1.5px solid ' + T.blue + '44' : '1.5px solid rgba(20,30,50,0.06)' }}>
-              <div onClick={() => setExpandedGroups_g(s => ({...s, [gi]: !isExpG}))} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom: isExpG ? 8 : 0 }}>
+              <div onClick={() => setExpandedGroups_g(s => ({...s, [gi]: !isExpG}))} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding:'4px 0', marginBottom: isExpG ? 6 : 0 }}>
                 <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color: isCurrent ? T.blue : T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>
                   {g.label} {isDone ? '✓' : isCurrent ? '●' : ''}
                 </div>
@@ -36610,7 +36608,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           )}
           {tsGroups[viewGroup] && (
           <React.Fragment>
-          <div onClick={() => setGroupMatchExp(v => !v)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', marginBottom: groupMatchExp ? 8 : 0 }}>
+          <div onClick={() => setGroupMatchExp(v => !v)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding:'4px 0', marginBottom: groupMatchExp ? 6 : 0 }}>
             <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color: !tsGroups[viewGroup].done ? T.blue : T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>
               {tsGroups[viewGroup].label} {tsGroups[viewGroup].done ? '— kész ✓' : '— folyamatban'}
             </div>
