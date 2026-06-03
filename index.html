@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.17';
+const APP_VERSION = 'v6.18';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -36137,32 +36137,16 @@ function MindenkiGame({ gameIdx, players, onAdvance, onResult }) {
   );
 }
 
-function SohanemGame({ gameIdx, players, onAdvance, onResult }) {
+function SohanemGame({ gameIdx, onAdvance }) {
   const card = SOHANEM_CARDS[gameIdx % SOHANEM_CARDS.length];
   const cardNum = (gameIdx % SOHANEM_CARDS.length) + 1;
   const total = SOHANEM_CARDS.length;
   const levelMap = { alap:{label:'ALAP',color:T.mint,emoji:'🌶'}, kozepes:{label:'KÖZEPES',color:T.yellow,emoji:'🔥'}, vad:{label:'VAD',color:T.coral,emoji:'🔥'} };
   const lv = levelMap[card.l] || levelMap.alap;
   const backColors = ['#5BA0DB','#E985B8','#F4C95A'];
-  const [selected, setSelected] = React.useState({});
-
-  const togglePlayer = (id) => setSelected(prev => ({ ...prev, [id]: !prev[id] }));
-  const drinkers = players.filter(p => selected[p.id]);
-
-  const doConfirm = () => {
-    const dm = {};
-    drinkers.forEach(p => { dm[p.id] = 1; });
-    drinkers.forEach(p => {
-      onResult && onResult({ correct: false, playerName: p.name, drinks: 1, subtitle: p.name + ' iszik egyet!' });
-    });
-    onAdvance && onAdvance(dm);
-  };
-
-  const doNobody = () => onAdvance && onAdvance({});
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10, width:'100%' }}>
-      {/* Card */}
       <div style={{ position:'relative', width:'100%', paddingTop:'62%' }}>
         <div style={{ position:'absolute', left:'3%', right:'3%', top:6, bottom:-6, background:backColors[gameIdx%backColors.length], borderRadius:18, transform:'rotate(-5deg)', transformOrigin:'center bottom' }} />
         <div style={{ position:'absolute', left:'2%', right:'2%', top:3, bottom:-3, background:backColors[(gameIdx+1)%backColors.length], borderRadius:18, transform:'rotate(4deg)', transformOrigin:'center bottom' }} />
@@ -36189,40 +36173,6 @@ function SohanemGame({ gameIdx, players, onAdvance, onResult }) {
             })}
           </div>
         </div>
-      </div>
-
-      {/* Player selector */}
-      <div style={{ width:'100%' }}>
-        <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>Kire igaz?</div>
-        <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-          {players.map(p => {
-            const sel = !!selected[p.id];
-            return (
-              <button key={p.id} onClick={() => togglePlayer(p.id)} style={{
-                padding:'8px 14px', borderRadius:20, border:`2px solid ${sel ? p.color : T.border}`,
-                background: sel ? p.color + '22' : T.surface,
-                color: sel ? p.color : T.inkSoft,
-                fontFamily:T.font, fontWeight:700, fontSize:13,
-                cursor:'pointer', transition:'all .15s',
-              }}>
-                {p.emoji} {p.name}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Action buttons */}
-      <div style={{ display:'flex', gap:10, width:'100%' }}>
-        {drinkers.length > 0 ? (
-          <button onClick={doConfirm} style={{ flex:1, padding:'13px', background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow }}>
-            🍺 {drinkers.length === 1 ? drinkers[0].name + ' iszik!' : drinkers.length + ' játékos iszik!'}
-          </button>
-        ) : (
-          <button onClick={doNobody} style={{ flex:1, padding:'13px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow }}>
-            Senki sem iszik →
-          </button>
-        )}
       </div>
     </div>
   );
@@ -39822,7 +39772,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, 
   if (gameId === 'memoria') return <MemoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'kezcsere') return <KezCsereGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'otdolog') return <OtdologGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'sohanem') return <SohanemGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'sohanem') return <SohanemGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
   return null;
 }
 
@@ -40029,7 +39979,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
       )}
       {currentGame.category === 'Csapat' && currentGameId !== 'loverseny' && currentGameId !== 'imposztor' && currentGameId !== 'busz' && currentGameId !== 'kisebb' && currentGameId !== 'ticktak' && currentGameId !== 'szerencse' && currentGameId !== 'kategoria' && currentGameId !== 'collect' && currentGameId !== 'kopapir' && currentGameId !== 'memoria' && currentGameId !== 'kezcsere' && currentGameId !== 'mindenki' && currentGameId !== 'beerpong' && (
         <div style={{ padding:'0 18px 14px', display:'flex', flexDirection:'column', gap:10 }}>
-          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', textAlign:'center' }}>Ki rontott?</div>
+          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', textAlign:'center' }}>{currentGameId === 'sohanem' ? 'Kire igaz?' : 'Ki rontott?'}</div>
           <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:4, WebkitOverflowScrolling:'touch' }}>
             {players.map(p => {
               const sel = csapatLosers.has(p.id);
@@ -40057,7 +40007,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
             </button>
           ) : (
             <button onClick={() => { if(transitioning) return; advanceLoverseny({}); }} style={{ width:'100%', padding:'14px', background:'rgba(255,255,255,0.6)', color:T.inkSoft, fontFamily:T.font, fontWeight:600, fontSize:15, borderRadius:16, border:`2px solid rgba(0,0,0,0.1)`, cursor:'pointer' }}>
-              Senki nem rontott ✔
+              {currentGameId === 'sohanem' ? 'Senki sem igaz rá ✔' : 'Senki nem rontott ✔'}
             </button>
           )}
         </div>
