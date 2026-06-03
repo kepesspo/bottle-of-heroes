@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.57';
+const APP_VERSION = 'v6.58';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -39678,16 +39678,17 @@ function TapperGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
   );
 }
 
-function AnagrammaGame({ gameIdx, onAdvance }) {
-  const WORDS = [
-    'ALMA','BÉKA','KERT','BOLT','PARK','VERS','FILM','HOLD',
-    'KARD','BORS','GOMB','TALP','RÉPA','AJTÓ','AUTÓ','ÉLET',
-    'KÁVÉ','RÓKA','ÉNEK','PART','BIKA','HIBA','IKER','FOLT',
-    'RÉGI','TELI','EPER','KEFE','VÉGE','KAPA',
+const ANAGRAMMA_SZAVAK_SHUFFLED = (() => {
+  const arr = [
+    'ALMA', 'BÉKA', 'KERT', 'BOLT', 'PARK', 'VERS', 'FILM', 'HOLD', 'KARD', 'BORS', 'GOMB', 'TALP', 'RÉPA', 'AJTÓ', 'AUTÓ', 'ÉLET', 'KÁVÉ', 'RÓKA', 'ÉNEK', 'BIKA', 'HIBA', 'IKER', 'FOLT', 'RÉGI', 'TELI', 'EPER', 'KEFE', 'VÉGE', 'KAPA', 'SZÉL', 'KÖNYV', 'ABLAK', 'CIPŐ', 'EGÉR', 'FÉNY', 'GYÁR', 'HANG', 'IGEN', 'JOBB', 'LÁNG', 'NYÁR', 'PÁRT', 'RIZS', 'SZÉK', 'ZÖLD', 'ÁBRA', 'BÁNYA', 'CSONT', 'DOLOG', 'ERDŐ', 'FOGÓ', 'HATÁR', 'LÁMPA', 'MALOM', 'NAPLÓ', 'OLDAL', 'SALAK', 'SZOBA', 'UJSÁG', 'VONAL', 'ASZTAL', 'BARÁT', 'CERUZA', 'DINNYE', 'GARÁZS', 'SÁTOR', 'TÁBLA', 'VÁSÁR', 'OLTÓ', 'CSEND', 'DRÁGA', 'FEKETE', 'GOMBA', 'HAMIS', 'KALAND', 'KALAP', 'KAPU', 'KASZA', 'LAZAC', 'MADÁR', 'MASZK', 'MEDVE', 'MÉREG', 'MEZŐ', 'PALACK', 'PAPÍR', 'RETEK', 'RIGÓ', 'SAJT', 'SZABAD', 'TALAJ', 'ÜNNEP', 'ÜVEG', 'VAKOND', 'ZOKNI', 'CSIGA', 'CSODA', 'CSUKA', 'DARAB', 'DERÉK', 'FAROK', 'GERLE', 'IRODA', 'KACSA', 'KAKAS', 'KARMA', 'LAPOS', 'LAPÁT', 'LÁRMA', 'MINTA', 'OSZTÁS', 'ÖBÖL', 'PÁLYA', 'ROHAM', 'VEDER', 'ZABLA'
   ];
-  const TILE_COLORS = ['#4A90D9','#50C882','#F4A4A0','#F0C840'];
+  for (let i = arr.length-1; i>0; i--) { const j = Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+  return arr;
+})();
 
-  const word = WORDS[gameIdx % WORDS.length];
+function AnagrammaGame({ gameIdx, challenger, onAdvance, onResult }) {
+  const TILE_COLORS = ['#4A90D9','#50C882','#F4A4A0','#F0C840'];
+  const word = ANAGRAMMA_SZAVAK_SHUFFLED[gameIdx % ANAGRAMMA_SZAVAK_SHUFFLED.length];
 
   const shuffled = React.useMemo(() => {
     const arr = word.split('');
@@ -39706,11 +39707,12 @@ function AnagrammaGame({ gameIdx, onAdvance }) {
   const [timeLeft, setTimeLeft] = React.useState(5);
   const [wrongFlash, setWrongFlash] = React.useState(false);
   const flashRef = React.useRef(false);
+  const advancedRef = React.useRef(false);
   const ivRef = React.useRef(null);
 
   React.useEffect(() => {
     setPhase('hidden'); setPressed([]); setTimeLeft(5); setWrongFlash(false);
-    flashRef.current = false;
+    flashRef.current = false; advancedRef.current = false;
     clearInterval(ivRef.current);
     return () => clearInterval(ivRef.current);
   }, [gameIdx]);
@@ -39721,7 +39723,15 @@ function AnagrammaGame({ gameIdx, onAdvance }) {
     ivRef.current = setInterval(() => {
       const rem = Math.max(0, (endTime - Date.now()) / 1000);
       setTimeLeft(parseFloat(rem.toFixed(1)));
-      if (rem <= 0) { clearInterval(ivRef.current); setPhase('lost'); }
+      if (rem <= 0) {
+        clearInterval(ivRef.current);
+        setPhase('lost');
+        if (!advancedRef.current) {
+          advancedRef.current = true;
+          onResult && onResult({ correct: false, playerName: challenger?.name, drinks: 1, subtitle: (challenger?.name||'Játékos') + ' nem fejtette meg — iszik egyet' });
+          onAdvance && onAdvance(challenger ? { [challenger.id]: 1 } : {});
+        }
+      }
     }, 80);
   };
 
@@ -39747,6 +39757,11 @@ function AnagrammaGame({ gameIdx, onAdvance }) {
       if (next.length === word.length) {
         clearInterval(ivRef.current);
         setPhase('won');
+        if (!advancedRef.current) {
+          advancedRef.current = true;
+          onResult && onResult({ correct: true, playerName: challenger?.name, drinks: 0, subtitle: (challenger?.name||'Játékos') + ' megfejtette — +1 pont!' });
+          onAdvance && onAdvance({}, challenger ? { [challenger.id]: 1 } : {});
+        }
       }
     } else {
       flashRef.current = true;
@@ -39861,12 +39876,7 @@ function AnagrammaGame({ gameIdx, onAdvance }) {
         </div>
       )}
 
-      {/* Tovább button (shown on won/lost) */}
-      {(phase === 'won' || phase === 'lost') && (
-        <button onClick={() => onAdvance && onAdvance({})} style={{ marginTop:4, padding:'12px 28px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, borderRadius:14, border:'none', cursor:'pointer', boxShadow:T.shadow }}>
-          Tovább →
-        </button>
-      )}
+
     </div>
   );
 }
@@ -40509,7 +40519,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, 
   if (gameId === 'ticktak') return <TicktakGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'erem') return <EremGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'tapper') return <TapperGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'anagramma') return <AnagrammaGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
+  if (gameId === 'anagramma') return <AnagrammaGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'ringfire') return <RingFireGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
   if (gameId === 'kopapir') return <KoPapirGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'collect') return <CollectBoomGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
