@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.25';
+const APP_VERSION = 'v6.26';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -37432,10 +37432,11 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
     const rm = {}; sorted.forEach((h,i) => rm[h.id] = i+1); return rm;
   };
 
-  // Pool = total of all losers' bets (winner gets to distribute what losers owe)
-  const winnerPool = raceWinner !== null
-    ? players.filter(p => bets[p.id] && bets[p.id].horseId !== raceWinner).reduce((s,p) => s+(bets[p.id]?.amount||0), 0)
-    : 0;
+  // Pool = winner's own bet amount (what they wagered, they get to hand out)
+  const winnerPool = (() => {
+    const w = players.find(p => bets[p.id]?.horseId === raceWinner);
+    return w ? (bets[w.id]?.amount || 0) : 0;
+  })();
   const totalGifted = Object.values(gifts).reduce((s,v) => s+v, 0);
   const remaining = winnerPool - totalGifted;
 
@@ -37577,45 +37578,46 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
             );
           })}
         </div>
-        {/* Player rows */}
+        {/* Player rows with inline gift +/- */}
         <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
           {players.map(p => {
             const b = bets[p.id];
             const horse = HORSES.find(h => h.id === b?.horseId);
             const won = b?.horseId === raceWinner;
+            const given = gifts[p.id] || 0;
+            const bet = b?.amount || 0;
             return (
-              <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:T.surface, borderRadius:14, boxShadow:T.shadow }}>
+              <div key={p.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:T.surface, borderRadius:14, boxShadow:T.shadow }}>
+                {/* Avatar */}
                 <div style={{ width:32, height:32, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:13, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-                <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{p.name}</div>
-                {horse && <div style={{ width:16, height:16, borderRadius:'50%', background:horse.color, flexShrink:0 }} />}
-                <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color: won ? T.mint : T.coral }}>
-                  {won ? `🎉 Oszthat ${winnerPool > 0 ? winnerPool : '—'}` : `🍺 ×${b?.amount||0}`}
+                {/* Name + horse dot */}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:2 }}>
+                    {horse && <div style={{ width:10, height:10, borderRadius:'50%', background:horse.color, flexShrink:0 }} />}
+                    <div style={{ fontFamily:T.font, fontSize:11, color: won ? T.mint : T.coral, fontWeight:700 }}>
+                      {won ? `🎉 nyert · ${bet} 🍺 kioszt` : `${bet} 🍺 tét${given>0?' · +'+given+' kapott':''}`}
+                    </div>
+                  </div>
                 </div>
+                {/* +/- only for non-winners, only if there's pool remaining or they already got some */}
+                {!won && winnerPool > 0 && (
+                  <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0 }}>
+                    <button onClick={() => setGifts(g => ({...g,[p.id]:Math.max(0,(g[p.id]||0)-1)})) } disabled={given<=0}
+                      style={{ width:30, height:30, borderRadius:8, border:'none', background: given>0 ? T.coral+'22' : T.surfaceMuted, color: given>0 ? T.coral : T.inkMute, fontFamily:T.font, fontSize:18, cursor:given>0?'pointer':'default', fontWeight:700 }}>−</button>
+                    <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color: given>0 ? T.coral : T.inkMute, minWidth:18, textAlign:'center' }}>{given}</div>
+                    <button onClick={() => { if(remaining>0) setGifts(g=>({...g,[p.id]:(g[p.id]||0)+1})); }} disabled={remaining<=0}
+                      style={{ width:30, height:30, borderRadius:8, border:'none', background: remaining>0 ? T.mint+'22' : T.surfaceMuted, color: remaining>0 ? T.mint : T.inkMute, fontFamily:T.font, fontSize:18, cursor:remaining>0?'pointer':'default', fontWeight:700 }}>+</button>
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
-        {/* Gift distribution */}
+        {/* Remaining indicator */}
         {winnerPool > 0 && (
-          <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft }}>🎁 Győztes kioszt</div>
-              <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:remaining>0?T.mint:T.inkMute }}>{remaining} / {winnerPool} korty</div>
-            </div>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-              {players.map(p => {
-                const given = gifts[p.id]||0;
-                return (
-                  <button key={p.id} onClick={() => { if(remaining>0) setGifts(g=>({...g,[p.id]:(g[p.id]||0)+1})); }} disabled={remaining<=0}
-                    style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px', border:'none', background: given>0 ? T.mint+'22' : T.surfaceMuted, borderRadius:10, cursor:remaining>0?'pointer':'default', opacity:remaining<=0&&!given?0.5:1, transition:'all .15s' }}>
-                    <div style={{ width:24, height:24, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontSize:10, fontWeight:700, color:'#fff' }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-                    <div style={{ fontFamily:T.font, fontSize:12, fontWeight:600, color:T.ink }}>{p.name}</div>
-                    {given>0 && <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.mint }}>+{given}</div>}
-                    <div style={{ fontFamily:T.font, fontSize:16, color:remaining>0?T.mint:T.inkMute+'60' }}>+</div>
-                  </button>
-                );
-              })}
-            </div>
+          <div style={{ textAlign:'center', fontFamily:T.font, fontSize:12, fontWeight:700, color: remaining>0 ? T.inkSoft : T.mint }}>
+            {remaining > 0 ? `Még ${remaining} korty kiosztható` : '✓ Mindet kiosztotta'}
           </div>
         )}
       </div>
