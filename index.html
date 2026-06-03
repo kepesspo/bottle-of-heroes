@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.23';
+const APP_VERSION = 'v6.24';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -37414,22 +37414,15 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
       const b = bets[p.id];
       if (!b) return;
       if (b.horseId === raceWinner) {
+        // Winner gets +1 point (negative drinkMap = point in scoring system)
         drinkMap[p.id] = (drinkMap[p.id]||0) - 1;
-        onResult && onResult({ correct: true, playerName: p.name, drinks: 0, subtitle: p.name + ' helyesen tippelt — +1 pont!' });
       } else {
         const drinks = b.amount || 0;
-        if (drinks > 0) {
-          drinkMap[p.id] = (drinkMap[p.id]||0) + drinks;
-          onResult && onResult({ correct: false, playerName: p.name, drinks, subtitle: p.name + ' iszik ' + drinks + ' kortyt!' });
-        }
+        if (drinks > 0) drinkMap[p.id] = (drinkMap[p.id]||0) + drinks;
       }
     });
     Object.entries(giftsArg || {}).forEach(([pid, amt]) => {
-      if (amt > 0) {
-        drinkMap[pid] = (drinkMap[pid]||0) + amt;
-        const pname = players.find(p => p.id === pid)?.name;
-        if (pname) onResult && onResult({ correct: false, playerName: pname, drinks: amt, subtitle: pname + ' iszik ' + amt + ' kortyt!' });
-      }
+      if (amt > 0) drinkMap[pid] = (drinkMap[pid]||0) + amt;
     });
     if (onAdvance) onAdvance(drinkMap);
   };
@@ -37439,9 +37432,10 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
     const rm = {}; sorted.forEach((h,i) => rm[h.id] = i+1); return rm;
   };
 
-  // Pool = one player's bet worth even if multiple winners
-  const winners = players.filter(p => bets[p.id]?.horseId === raceWinner);
-  const winnerPool = winners.length > 0 ? Math.max(...winners.map(w => bets[w.id]?.amount || 0)) : 0;
+  // Pool = total of all losers' bets (winner gets to distribute what losers owe)
+  const winnerPool = raceWinner !== null
+    ? players.filter(p => bets[p.id] && bets[p.id].horseId !== raceWinner).reduce((s,p) => s+(bets[p.id]?.amount||0), 0)
+    : 0;
   const totalGifted = Object.values(gifts).reduce((s,v) => s+v, 0);
   const remaining = winnerPool - totalGifted;
 
@@ -37543,9 +37537,9 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
             return (
               <div key={h.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <div style={{ width:26, height:26, borderRadius:'50%', background:h.color, flexShrink:0, boxShadow:`0 2px 6px ${h.color}55` }} />
-                <div style={{ flex:1, height:34, background:T.surfaceMuted, borderRadius:17, overflow:'hidden', position:'relative' }}>
+                <div style={{ flex:1, height:34, background:T.surfaceMuted, borderRadius:17, overflow:'hidden', position:'relative', boxShadow:`0 0 0 1.5px rgba(0,0,0,0.08)` }}>
                   <div style={{ position:'absolute', right:0, top:0, bottom:0, width:18, zIndex:2, background:'repeating-linear-gradient(135deg,rgba(0,0,0,0.13) 0px,rgba(0,0,0,0.13) 3px,transparent 3px,transparent 7px)', borderLeft:`2px solid ${T.inkMute}40` }} />
-                  <div style={{ width:`${Math.max(pct*100,0)}%`, height:'100%', background:`linear-gradient(90deg,${h.color}cc,${h.color})`, borderRadius:17, transition:'width .25s ease', display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:8, minWidth: pct>0?36:0, position:'relative', zIndex:1 }}>
+                  <div style={{ width:`${Math.max(pct*100,0)}%`, height:'100%', background:`linear-gradient(90deg,${h.color}cc,${h.color})`, borderRadius:17, transition:'width .25s ease', display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:8, minWidth: pct>0?36:0, position:'relative', zIndex:1, boxShadow:`inset 0 0 0 2px rgba(255,255,255,0.3), 0 1px 4px ${h.color}88` }}>
                     {pct > 0 && <span style={{ fontSize:18 }}>🏇</span>}
                   </div>
                 </div>
@@ -37595,7 +37589,7 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
                 <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{p.name}</div>
                 {horse && <div style={{ width:16, height:16, borderRadius:'50%', background:horse.color, flexShrink:0 }} />}
                 <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color: won ? T.mint : T.coral }}>
-                  {won ? `🎉 +1 pont · Oszthat ${winnerPool}` : `🍺 ×${b?.amount||0}`}
+                  {won ? `🎉 Oszthat ${winnerPool > 0 ? winnerPool : '—'}` : `🍺 ×${b?.amount||0}`}
                 </div>
               </div>
             );
