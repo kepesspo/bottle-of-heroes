@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.09';
+const APP_VERSION = 'v6.10';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -34213,14 +34213,17 @@ const DIM_STYLES = {
   none: { opacity:1 },
 };
 
-const BP_TOURNAMENT_TYPES = [
-  { key:'se',        sub:'Kiesés' },
-  { key:'rr',        sub:'Körmérkőzés' },
-  { key:'grp_rr_se', sub:'Csoport RR → SE' },
-  { key:'grp_rr_rr', sub:'Csoport RR → RR' },
-  { key:'grp_se_se', sub:'Csoport SE → SE' },
-  { key:'grp_se_rr', sub:'Csoport SE → RR' },
+const BP_TOURNAMENT_TYPES_1 = [
+  { key:'se', label:'Kieséses', icon:'🏆', desc:'Vesztes kiesik' },
+  { key:'rr', label:'Körmérkőzés', icon:'🔄', desc:'Mindenki mindenkivel' },
 ];
+const BP_TOURNAMENT_TYPES_2 = [
+  { key:'grp_rr_se', label:'Csoport → Kieséses', icon:'🔄→🏆', desc:'RR csoportkör, majd SE főszakasz' },
+  { key:'grp_rr_rr', label:'Csoport → Csoport',  icon:'🔄→🔄', desc:'RR csoportkör, majd RR főszakasz' },
+  { key:'grp_se_se', label:'Kieséses → Kieséses', icon:'🏆→🏆', desc:'SE csoportkör, majd SE főszakasz' },
+  { key:'grp_se_rr', label:'Kieséses → Csoport',  icon:'🏆→🔄', desc:'SE csoportkör, majd RR főszakasz' },
+];
+const BP_TOURNAMENT_TYPES = [...BP_TOURNAMENT_TYPES_1, ...BP_TOURNAMENT_TYPES_2];
 
 function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
   const maxCups      = config.maxCups ?? 10;
@@ -34265,21 +34268,61 @@ function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
           </div>
         ))}
 
-        {/* Tournament type — compact 2-col grid */}
+        {/* Tournament type — two-stage selector */}
         <div style={{ marginTop:8 }}>
-          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6 }}>Bajnokság típusa</div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
-            {BP_TOURNAMENT_TYPES.map(t => {
-              const on = tournament === t.key;
-              const disabled = (playerCount < 99 && playerCount < 4) && t.key.startsWith('grp_');
+          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>Bajnokság típusa</div>
+          {/* Stage toggle */}
+          <div style={{ display:'flex', gap:6, marginBottom:10 }}>
+            {[{key:'1', label:'1 lépcsős'},{key:'2', label:'2 lépcsős'}].map(s => {
+              const active = s.key === '1' ? !tournament.startsWith('grp_') : tournament.startsWith('grp_');
+              const grpDisabled = s.key === '2' && playerCount < 99 && playerCount < 4;
               return (
-                <button key={t.key} onClick={() => !disabled && setConfig(c => ({...c, tournamentType:t.key}))} disabled={disabled}
-                  style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, padding:'8px 6px', borderRadius:12, border: on ? '2px solid ' + T.mint : '2px solid rgba(20,30,50,0.08)', background: on ? T.mint + '14' : disabled ? 'rgba(20,30,50,0.04)' : T.bg, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1, minHeight:48 }}>
-                  <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color: on ? T.mint : T.ink, textAlign:'center', lineHeight:1.2 }}>{t.sub}</div>
+                <button key={s.key} disabled={grpDisabled} onClick={() => {
+                  if (grpDisabled) return;
+                  if (s.key === '1' && tournament.startsWith('grp_')) setConfig(c => ({...c, tournamentType:'se'}));
+                  if (s.key === '2' && !tournament.startsWith('grp_')) setConfig(c => ({...c, tournamentType:'grp_rr_se'}));
+                }} style={{ flex:1, padding:'9px 0', borderRadius:12, border: active ? '2px solid ' + T.mint : '2px solid rgba(20,30,50,0.08)', background: active ? T.mint + '18' : T.bg, cursor: grpDisabled ? 'not-allowed' : 'pointer', fontFamily:T.font, fontWeight:700, fontSize:13, color: active ? T.mint : T.ink, opacity: grpDisabled ? 0.4 : 1 }}>
+                  {s.label}
                 </button>
               );
             })}
           </div>
+          {/* 1-stage options */}
+          {!tournament.startsWith('grp_') && (
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              {BP_TOURNAMENT_TYPES_1.map(t => {
+                const on = tournament === t.key;
+                return (
+                  <button key={t.key} onClick={() => setConfig(c => ({...c, tournamentType:t.key}))}
+                    style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:12, border: on ? '2px solid ' + T.mint : '2px solid rgba(20,30,50,0.08)', background: on ? T.mint + '14' : T.bg, cursor:'pointer', textAlign:'left' }}>
+                    <div style={{ fontSize:18, lineHeight:1 }}>{t.icon}</div>
+                    <div>
+                      <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color: on ? T.mint : T.ink }}>{t.label}</div>
+                      <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{t.desc}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {/* 2-stage options */}
+          {tournament.startsWith('grp_') && (
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              {BP_TOURNAMENT_TYPES_2.map(t => {
+                const on = tournament === t.key;
+                return (
+                  <button key={t.key} onClick={() => setConfig(c => ({...c, tournamentType:t.key}))}
+                    style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:12, border: on ? '2px solid ' + T.mint : '2px solid rgba(20,30,50,0.08)', background: on ? T.mint + '14' : T.bg, cursor:'pointer', textAlign:'left' }}>
+                    <div style={{ fontSize:14, lineHeight:1, fontFamily:'monospace', color: on ? T.mint : T.inkSoft, minWidth:36 }}>{t.icon}</div>
+                    <div>
+                      <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color: on ? T.mint : T.ink }}>{t.label}</div>
+                      <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{t.desc}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Group advance (two-stage only) */}
@@ -39692,7 +39735,7 @@ function KezCsereGame({ gameIdx, players, onAdvance }) {
 
 function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, mode, gameMeta, challenger, opponent }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} />;
-  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
+  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx + '_' + (gameMeta?.beerpongConfig?.tournamentType||'se')} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
   if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
