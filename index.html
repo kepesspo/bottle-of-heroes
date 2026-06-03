@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.21';
+const APP_VERSION = 'v6.22';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -37064,12 +37064,28 @@ const IGAZ_HAMIS = [
 // Shuffle once per page load so questions appear in random order
 (()=>{ for(let i=IGAZ_HAMIS.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [IGAZ_HAMIS[i],IGAZ_HAMIS[j]]=[IGAZ_HAMIS[j],IGAZ_HAMIS[i]]; } })();
 
-const HORSES = [
-  { id:1, color:'#EF4444', emoji:'🔴', name:'Vörös' },
-  { id:2, color:'#F4C95A', emoji:'🟡', name:'Sárga' },
-  { id:3, color:'#4FC2A0', emoji:'🟢', name:'Zöld' },
-  { id:4, color:'#5BA0DB', emoji:'🔵', name:'Kék' },
+const HORSE_NAME_POOL = [
+  'Gyorslábú Géza','Sörivó Sándor','Csülök','Lassú Lóri','Turbó Tóni',
+  'Fékezhetetlen Feri','Röfögős Rudi','Pálinka Pista','Táncos Tibor','Kócos Kálmán',
+  'Büdös Barnabás','Szédülős Szabi','Remegő Rezső','Falánk Frigyes','Csúszós Csaba',
+  'Iszákos Imre','Furcsa Flóri','Zabálós Zoltán','Botladozó Béla','Álmos Árpád',
+  'Nyerítős Norbi','Vágtatós Vili','Csiklandós Csilla','Szuszogós Szilárd','Kancsal Kornél',
+  'Rogyadozó Robi','Puffogós Péter','Lötyögős László','Maszatos Máté','Bamba Balázs',
 ];
+const HORSE_COLORS = ['#EF4444','#F4C95A','#4FC2A0','#5BA0DB','#A78BFA','#F97316','#EC4899','#14B8A6'];
+function pickHorses(seed) {
+  const rng = (n) => { let x = Math.sin(seed * 9301 + n * 49297) * 233280; return x - Math.floor(x); };
+  const usedNames = new Set(); const usedColors = new Set();
+  return [1,2,3,4].map((id, i) => {
+    let ni = Math.floor(rng(i*3) * HORSE_NAME_POOL.length);
+    while (usedNames.has(ni)) ni = (ni+1) % HORSE_NAME_POOL.length;
+    usedNames.add(ni);
+    let ci = Math.floor(rng(i*3+1) * HORSE_COLORS.length);
+    while (usedColors.has(ci)) ci = (ci+1) % HORSE_COLORS.length;
+    usedColors.add(ci);
+    return { id, color: HORSE_COLORS[ci], name: HORSE_NAME_POOL[ni] };
+  });
+}
 
 function IgazHamisGame({ gameIdx, challenger, onAdvance, onResult }) {
   const item = IGAZ_HAMIS[gameIdx % IGAZ_HAMIS.length];
@@ -37348,6 +37364,7 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
 
 function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
   const FINISH = 12;
+  const HORSES = React.useMemo(() => pickHorses(gameIdx), [gameIdx]);
   const [phase, setPhase] = useState('bet');
   const [bets, setBets] = useState({});
   const [betStep, setBetStep] = useState(0);
@@ -37395,7 +37412,11 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
     const drinkMap = {};
     players.forEach(p => {
       const b = bets[p.id];
-      if (b && b.horseId !== raceWinner) {
+      if (!b) return;
+      if (b.horseId === raceWinner) {
+        drinkMap[p.id] = (drinkMap[p.id]||0) - 1;
+        onResult && onResult({ correct: true, playerName: p.name, drinks: 0, subtitle: p.name + ' helyesen tippelt — +1 pont!' });
+      } else {
         const drinks = b.amount || 0;
         if (drinks > 0) {
           drinkMap[p.id] = (drinkMap[p.id]||0) + drinks;
@@ -37572,7 +37593,7 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
                 <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{p.name}</div>
                 {horse && <div style={{ width:16, height:16, borderRadius:'50%', background:horse.color, flexShrink:0 }} />}
                 <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color: won ? T.mint : T.coral }}>
-                  {won ? `🎉 Oszthat ${winnerPool}` : `🍺 ×${b?.amount||0}`}
+                  {won ? `🎉 +1 pont · Oszthat ${winnerPool}` : `🍺 ×${b?.amount||0}`}
                 </div>
               </div>
             );
