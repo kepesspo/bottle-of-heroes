@@ -33589,7 +33589,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.13';
+const APP_VERSION = 'v6.15';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -34220,8 +34220,6 @@ const BP_TOURNAMENT_TYPES_1 = [
 const BP_TOURNAMENT_TYPES_2 = [
   { key:'grp_rr_se', label:'Csoport → Kieséses', icon:'🔄→🏆', desc:'RR csoportkör, majd SE főszakasz' },
   { key:'grp_rr_rr', label:'Csoport → Csoport',  icon:'🔄→🔄', desc:'RR csoportkör, majd RR főszakasz' },
-  { key:'grp_se_se', label:'Kieséses → Kieséses', icon:'🏆→🏆', desc:'SE csoportkör, majd SE főszakasz' },
-  { key:'grp_se_rr', label:'Kieséses → Csoport',  icon:'🏆→🔄', desc:'SE csoportkör, majd RR főszakasz' },
 ];
 const BP_TOURNAMENT_TYPES = [...BP_TOURNAMENT_TYPES_1, ...BP_TOURNAMENT_TYPES_2];
 
@@ -35237,7 +35235,7 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult }) {
   );
 }
 
-function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
+function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCode, mode }) {
   const bpCfg = gameMeta?.beerpongConfig || {};
   const DRINKS_PER_LOSS = bpCfg.drinksPerLoss ?? 5;
   const MAX_CUPS = bpCfg.maxCups ?? 10;
@@ -35406,6 +35404,19 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
     initTournament(players);
   }, [gameIdx]);
 
+  // ── Sync BP state to room for observer ──────────────────────────────────
+  React.useEffect(() => {
+    if (!roomCode || mode !== 'Online' || typeof syncRoom !== 'function') return;
+    syncRoom(roomCode, { bpState: {
+      tournament: TOURNAMENT,
+      phase: tsPhase,
+      seRounds, seCurRound, seCurMatch,
+      rrMatches, rrIdx, rrDone,
+      tsGroups, champion: champion ? { id: champion.id, name: champion.name, color: champion.color } : null,
+      drinkMap,
+    }});
+  }, [seRounds, rrMatches, tsGroups, champion, rrDone, tsPhase]);
+
   React.useEffect(() => {
     if (!teamsReady || !teamPlayersRef.current) return;
     initTournament(teamPlayersRef.current);
@@ -35545,6 +35556,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
     const newDrink = { ...drinkMap };
     if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + DRINKS_PER_LOSS;
     setDrinkMap(newDrink);
+    if (loser) onResult && onResult({ correct:true, playerName:loser.name, drinks:DRINKS_PER_LOSS, subtitle:loser.name + ' iszik ' + DRINKS_PER_LOSS + ' kortyt!' });
     setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer();
 
     setTsGroups(prev => {
@@ -35741,7 +35753,13 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
               style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderRadius:10, cursor: isPending ? 'pointer' : isDone ? 'context-menu' : 'default', background: isSel ? T.blue+'18' : 'transparent', border: isSel ? '1.5px solid ' + T.blue + '44' : '1.5px solid transparent', transition:'background .15s' }}>
               <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, color: isDone&&m.winner?.id===m.p1?.id?T.mint:isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name}</div>
               <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
-              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isDone&&m.winner ? T.mint : T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
+              <div style={{ display:'flex', alignItems:'center', gap:2, flexShrink:0 }}>
+                {isDone&&m.score ? (<>
+                  <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: m.winner?.id===m.p1?.id ? T.mint : T.inkSoft }}>{m.score.p1}</span>
+                  <span style={{ fontFamily:T.font, fontSize:11, color:T.inkMute }}> VS </span>
+                  <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: m.winner?.id===m.p2?.id ? T.mint : T.inkSoft }}>{m.score.p2}</span>
+                </>) : <span style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>vs</span>}
+              </div>
               <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
               <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, color: isDone&&m.winner?.id===m.p2?.id?T.mint:isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2.name}</div>
             </div>
@@ -35829,7 +35847,13 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
                           style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', paddingTop: 7, borderBottom: mIdx < round.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none', cursor: isSelectable ? 'pointer' : isDone ? 'context-menu' : 'default', borderRadius:8, background: isSelected ? T.blue+'18' : 'transparent', transition:'background .15s' }}>
                           <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, color: isDone&&m.winner?.id===m.p1?.id?T.mint:isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1?m.p1.name:'BYE'}</div>
                           <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
-                          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isDone ? (m.winner?.id===m.p1?.id ? T.mint : m.winner?.id===m.p2?.id ? T.mint : T.inkSoft) : T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
+                          <div style={{ display:'flex', alignItems:'center', gap:2, flexShrink:0 }}>
+                            {isDone&&m.score ? (<>
+                              <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: m.winner?.id===m.p1?.id ? T.mint : T.inkSoft }}>{m.score.p1}</span>
+                              <span style={{ fontFamily:T.font, fontSize:11, color:T.inkMute }}> VS </span>
+                              <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: m.winner?.id===m.p2?.id ? T.mint : T.inkSoft }}>{m.score.p2}</span>
+                            </>) : <span style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>vs</span>}
+                          </div>
                           <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
                           <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, color: isDone&&m.winner?.id===m.p2?.id?T.mint:isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2?m.p2.name:'BYE'}</div>
                         </div>
@@ -36021,7 +36045,13 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
                   style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderRadius:10, cursor: !isDone&&!g.done?'pointer':isDone?'context-menu':'default', background: isSel?T.blue+'18':'transparent', border: isSel?'1.5px solid '+T.blue+'44':'1.5px solid transparent', transition:'background .15s' }}>
                   <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.winner?.id===m.p1?.id?T.mint:isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name}</div>
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
-                  <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isDone&&m.winner ? T.mint : T.inkSoft, flexShrink:0 }}>{isDone&&m.score ? (m.score.p1 + ' VS ' + m.score.p2) : 'vs'}</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:2, flexShrink:0 }}>
+                    {isDone&&m.score ? (<>
+                      <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: m.winner?.id===m.p1?.id ? T.mint : T.inkSoft }}>{m.score.p1}</span>
+                      <span style={{ fontFamily:T.font, fontSize:11, color:T.inkMute }}> VS </span>
+                      <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: m.winner?.id===m.p2?.id ? T.mint : T.inkSoft }}>{m.score.p2}</span>
+                    </>) : <span style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>vs</span>}
+                  </div>
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
                   <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.winner?.id===m.p2?.id?T.mint:isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2.name}</div>
                 </div>
@@ -39734,7 +39764,7 @@ function KezCsereGame({ gameIdx, players, onAdvance }) {
 
 function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, mode, gameMeta, challenger, opponent }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} />;
-  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx + '_' + (gameMeta?.beerpongConfig?.tournamentType||'se')} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
+  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx + '_' + (gameMeta?.beerpongConfig?.tournamentType||'se')} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} mode={mode} />;
   if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
@@ -41116,6 +41146,128 @@ function ObserverWatching({ code, observerName, onLeave }) {
             <div style={{ display:'flex', alignItems:'center', gap:4 }}>{Icon.beer(T.coral)}<span style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:14, color:T.ink, fontVariantNumeric:'tabular-nums' }}>{totalDrinks}</span><span style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase' }}>korty</span></div>
           </div>
         </div>
+
+        {/* Beer Pong live state */}
+        {currentGameId === 'beerpong' && room.bpState && (() => {
+          const bp = room.bpState;
+          const T2 = TOURNAMENT_LABELS || {};
+          const getRRSt = (parts, matches) => {
+            if (!parts || !matches) return [];
+            const st = {};
+            parts.forEach(p => { if (p) st[p.id] = { player:p, wins:0, losses:0, draws:0, pts:0, diff:0 }; });
+            matches.forEach(m => {
+              if (!m || !m.score) return;
+              const MAX = 10;
+              const p1pot = MAX - m.score.p1, p2pot = MAX - m.score.p2;
+              if (m.draw) {
+                if (st[m.p1?.id]) { st[m.p1.id].draws++; st[m.p1.id].pts++; }
+                if (st[m.p2?.id]) { st[m.p2.id].draws++; st[m.p2.id].pts++; }
+              } else if (m.winner) {
+                if (st[m.winner.id]) { st[m.winner.id].wins++; st[m.winner.id].pts += 3; }
+                if (m.loser && st[m.loser.id]) st[m.loser.id].losses++;
+                const d = p1pot - p2pot;
+                if (st[m.p1?.id]) st[m.p1.id].diff += d;
+                if (st[m.p2?.id]) st[m.p2.id].diff -= d;
+              }
+            });
+            return Object.values(st).sort((a,b) => b.pts - a.pts || b.diff - a.diff);
+          };
+          return (
+            <div style={{ background:T.surface, borderRadius:18, boxShadow:T.shadow, padding:'14px 14px', display:'flex', flexDirection:'column', gap:10 }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>🏓 Beer Pong · {bp.phase === 'finals' ? 'Főszakasz' : 'Csoportkör'}</div>
+                {bp.champion && <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.yellow }}>🏆 {bp.champion.name}</div>}
+              </div>
+
+              {/* SE bracket summary */}
+              {bp.tournament === 'se' && bp.seRounds && bp.seRounds.length > 0 && (
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  {bp.seRounds.map((round, ri) => (
+                    <div key={ri}>
+                      <div style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:3 }}>
+                        {ri === bp.seRounds.length - 1 ? (round.length === 1 ? 'Döntő' : 'Elődöntő') : (ri + 1) + '. kör'}
+                      </div>
+                      {round.map((m, mi) => m && m.p1 && m.p2 ? (
+                        <div key={mi} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 6px', borderRadius:8, background: !m.winner ? T.blue+'10' : 'transparent' }}>
+                          <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: m.winner?.id===m.p1?.id ? T.mint : T.ink, flex:1 }}>{m.p1.name}</span>
+                          <span style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft }}>
+                            {m.score ? m.score.p1 + ' – ' + m.score.p2 : 'vs'}
+                          </span>
+                          <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: m.winner?.id===m.p2?.id ? T.mint : T.ink, flex:1, textAlign:'right' }}>{m.p2.name}</span>
+                        </div>
+                      ) : null)}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* RR standings */}
+              {bp.tournament === 'rr' && bp.rrMatches && (() => {
+                const parts = bp.rrMatches.flatMap(m => [m.p1, m.p2]).filter((p,i,a) => p && a.findIndex(x=>x&&x.id===p.id)===i);
+                const st = getRRSt(parts, bp.rrMatches);
+                return (
+                  <div>
+                    <div style={{ display:'flex', gap:4, padding:'3px 4px', borderBottom:'1px solid rgba(20,30,50,0.08)', marginBottom:4 }}>
+                      <div style={{ flex:1, fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkMute, textTransform:'uppercase' }}>Játékos</div>
+                      <div style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkMute, textTransform:'uppercase', minWidth:20, textAlign:'center' }}>GY</div>
+                      <div style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkMute, textTransform:'uppercase', minWidth:20, textAlign:'center' }}>D</div>
+                      <div style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkMute, textTransform:'uppercase', minWidth:20, textAlign:'center' }}>V</div>
+                      <div style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkMute, textTransform:'uppercase', minWidth:24, textAlign:'center' }}>Pt</div>
+                    </div>
+                    {st.map((s,i) => (
+                      <div key={s.player.id} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 4px', borderRadius:6, background: i===0 ? T.yellow+'12' : 'transparent' }}>
+                        <div style={{ fontFamily:T.font, fontSize:11, color: i===0?T.yellow:T.inkSoft, fontWeight:700, minWidth:14 }}>{i+1}.</div>
+                        <div style={{ flex:1, fontFamily:T.font, fontSize:12, fontWeight:700, color:T.ink }}>{s.player.name}</div>
+                        <div style={{ fontFamily:'monospace', fontSize:11, color:T.mint, minWidth:20, textAlign:'center' }}>{s.wins}</div>
+                        <div style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft, minWidth:20, textAlign:'center' }}>{s.draws}</div>
+                        <div style={{ fontFamily:'monospace', fontSize:11, color:T.coral, minWidth:20, textAlign:'center' }}>{s.losses}</div>
+                        <div style={{ fontFamily:'monospace', fontSize:12, fontWeight:700, color:T.ink, minWidth:24, textAlign:'center' }}>{s.pts}</div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Group phase summary */}
+              {bp.tournament && bp.tournament.startsWith('grp_') && bp.tsGroups && bp.tsGroups.length > 0 && bp.phase === 'groups' && (
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  {bp.tsGroups.map((g, gi) => {
+                    const parts = g.players || [];
+                    const st = getRRSt(parts, g.matches || []);
+                    return (
+                      <div key={gi}>
+                        <div style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.blue, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>
+                          {g.label} {g.done ? '✓' : '●'}
+                        </div>
+                        {st.map((s,si) => (
+                          <div key={s.player.id} style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 4px' }}>
+                            <div style={{ fontFamily:T.font, fontSize:11, color:si===0?T.yellow:T.inkSoft, minWidth:14 }}>{si+1}.</div>
+                            <div style={{ flex:1, fontFamily:T.font, fontSize:12, color:T.ink }}>{s.player.name}</div>
+                            <div style={{ fontFamily:'monospace', fontSize:11, color:T.ink, fontWeight:700 }}>{s.pts}pt</div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Finals SE bracket when in finals phase */}
+              {bp.tournament && bp.tournament.startsWith('grp_') && bp.phase === 'finals' && bp.seRounds && bp.seRounds.length > 0 && (
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  <div style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:3 }}>Főszakasz</div>
+                  {bp.seRounds.map((round, ri) => round.map((m, mi) => m && m.p1 && m.p2 ? (
+                    <div key={ri+'-'+mi} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 6px', borderRadius:8, background: !m.winner ? T.blue+'10' : 'transparent' }}>
+                      <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: m.winner?.id===m.p1?.id ? T.mint : T.ink, flex:1 }}>{m.p1.name}</span>
+                      <span style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft }}>{m.score ? m.score.p1 + ' – ' + m.score.p2 : 'vs'}</span>
+                      <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: m.winner?.id===m.p2?.id ? T.mint : T.ink, flex:1, textAlign:'right' }}>{m.p2.name}</span>
+                    </div>
+                  ) : null))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* leaderboard */}
         <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
