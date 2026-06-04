@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.04';
+const APP_VERSION = 'v7.05';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -40818,12 +40818,15 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
     // 10% bónusz esély
     if (bonusEnabled && Math.random() < 0.10) {
       const sorted = [...newPlayers].sort((a,b) => (b.points-a.points)||(a.drinks-b.drinks));
-      const last = sorted[sorted.length - 1];
       const first = sorted[0];
+      const minPoints = sorted[sorted.length - 1].points;
+      const lastTied = sorted.filter(p => p.points === minPoints);
+      const last = lastTied[Math.floor(Math.random() * lastTied.length)];
       const type = Math.random() < 0.5 ? 'top' : 'last';
+      const lastDrinks = Math.max(1, last.drinks) * 2;
       const bonus = type === 'top'
         ? { type:'top', player: first, drinks: 3 }
-        : { type:'last', player: last, drinks: last.drinks };
+        : { type:'last', player: last, drinks: lastDrinks };
       bonusPendingRef.current = {newPlayers, fb, newTurn, newGameIdx, newRound, bonus};
       setPendingCommit(null);
       setBonusOverlay(bonus);
@@ -40842,7 +40845,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
     const { bonus, newPlayers, fb, newTurn, newGameIdx, newRound } = p;
     const updated = newPlayers.map(pl => {
       if (bonus.type === 'top' && pl.id === bonus.player.id) return {...pl, drinks: pl.drinks + 3};
-      if (bonus.type === 'last' && pl.id === bonus.player.id) return {...pl, drinks: pl.drinks * 2};
+      if (bonus.type === 'last' && pl.id === bonus.player.id) return {...pl, drinks: pl.drinks + bonus.drinks};
       return pl;
     });
     commitRound(updated, fb, newTurn, newGameIdx, newRound);
