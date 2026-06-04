@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.15';
+const APP_VERSION = 'v7.16';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -38950,16 +38950,17 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
             </div>
           </div>
         )}
-        {/* K/N buttons */}
-        {!guessResult && (
+        {/* K/N buttons — only show on host in offline mode; online players use their own device */}
+        {!guessResult && !isOnline && (
           <div style={{display:'flex',gap:10}}>
             <button onClick={()=>makeGuess('K')} style={{flex:1,minHeight:52,border:`2px solid ${T.coral}`,background:'transparent',color:T.coral,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:16,borderRadius:14,cursor:'pointer'}}>▼ Kisebb</button>
             <button onClick={()=>makeGuess('N')} style={{flex:1,minHeight:52,border:`2px solid ${T.mint}`,background:'transparent',color:T.mint,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:16,borderRadius:14,cursor:'pointer'}}>▲ Nagyobb</button>
           </div>
         )}
-        {/* Pontos tipp — jelez ha valaki él a lehetőséggel */}
-        {buszState.busRiderBonusUsed?.[currentTurnRiderId] && (
-          <div style={{textAlign:'center',fontFamily:T.font,fontSize:12,color:T.yellow}}>🃏 Big Pick aktiválva</div>
+        {!guessResult && isOnline && (
+          <div style={{textAlign:'center',padding:'14px',borderRadius:14,background:T.surfaceMuted,fontFamily:T.font,fontSize:14,color:T.inkSoft}}>
+            ⏳ Várjuk {currentRider?.name || '?'} tippjét a saját telefonján…
+          </div>
         )}
       </div>
     );
@@ -41548,7 +41549,8 @@ function BuszPlayerView({ room, roomCode }) {
         const allSubmitted = ridersAtPos.every(rid => pending[rid] !== undefined);
         if (!allSubmitted) {
           setBusGuessResult({waiting:true, step:myStep});
-          await firebase.firestore().collection('rooms').doc(roomCode).update({buszState:{...st, busRiderPendingGuesses:pending}});
+          const nextAtPos = ridersAtPos.find(rid => !pending[rid]);
+          await firebase.firestore().collection('rooms').doc(roomCode).update({buszState:{...st, busRiderPendingGuesses:pending, currentTurnRiderId:nextAtPos||st.currentTurnRiderId}});
           return;
         }
         // All at position submitted → resolve
