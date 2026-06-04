@@ -33590,34 +33590,65 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.17';
-const T = {
-  bg: '#F4C57E',
-  bgSoft: '#F8D69A',
-  bgDeep: '#E8B260',
-  surface: '#FFFFFF',
-  surfaceMuted: '#FBEFD8',
-  ink: '#1A2A4A',
-  inkSoft: '#4A5878',
-  inkMute: '#8A93A8',
-  mint: '#4FC2A0',
-  mintSoft: '#D9F1E8',
-  mintDeep: '#3DA888',
-  coral: '#F2A0A0',
-  coralSoft: '#FBDADA',
-  purple: '#A88AE8',
-  yellow: '#F4C95A',
-  blue: '#5BA0DB',
-  pink: '#E985B8',
-  font: '"Nunito", -apple-system, system-ui, sans-serif',
-  weightDisplay: 900,
-  weightTitle: 800,
-  weightBody: 600,
-  letter: '-0.01em',
-  letterDisplay: '-0.02em',
-  shadow: '0 2px 0 rgba(20,30,50,0.04), 0 6px 20px rgba(20,30,50,0.06)',
-  shadowLift: '0 4px 0 rgba(20,30,50,0.06), 0 12px 32px rgba(20,30,50,0.10)',
+const APP_VERSION = 'v7.18';
+const THEMES = {
+  warm: {
+    bg: '#F4C57E',
+    bgSoft: '#F8D69A',
+    bgDeep: '#E8B260',
+    surface: '#FFFFFF',
+    surfaceMuted: '#FBEFD8',
+    ink: '#1A2A4A',
+    inkSoft: '#4A5878',
+    inkMute: '#8A93A8',
+    mint: '#4FC2A0',
+    mintSoft: '#D9F1E8',
+    mintDeep: '#3DA888',
+    coral: '#F2A0A0',
+    coralSoft: '#FBDADA',
+    purple: '#A88AE8',
+    yellow: '#F4C95A',
+    blue: '#5BA0DB',
+    pink: '#E985B8',
+    font: '"Nunito", -apple-system, system-ui, sans-serif',
+    weightDisplay: 900,
+    weightTitle: 800,
+    weightBody: 600,
+    letter: '-0.01em',
+    letterDisplay: '-0.02em',
+    shadow: '0 2px 0 rgba(20,30,50,0.04), 0 6px 20px rgba(20,30,50,0.06)',
+    shadowLift: '0 4px 0 rgba(20,30,50,0.06), 0 12px 32px rgba(20,30,50,0.10)',
+  },
+  dark: {
+    bg: '#181C2E',
+    bgSoft: '#202540',
+    bgDeep: '#0F1220',
+    surface: '#252B3E',
+    surfaceMuted: '#1E2338',
+    ink: '#E8EDF8',
+    inkSoft: '#8A96B8',
+    inkMute: '#4A5278',
+    mint: '#4FC2A0',
+    mintSoft: '#1A3D35',
+    mintDeep: '#3DA888',
+    coral: '#F28080',
+    coralSoft: '#3D1A1A',
+    purple: '#A88AE8',
+    yellow: '#F4C95A',
+    blue: '#5BA0DB',
+    pink: '#E985B8',
+    font: '"Nunito", -apple-system, system-ui, sans-serif',
+    weightDisplay: 900,
+    weightTitle: 800,
+    weightBody: 600,
+    letter: '-0.01em',
+    letterDisplay: '-0.02em',
+    shadow: '0 2px 0 rgba(0,0,0,0.2), 0 6px 20px rgba(0,0,0,0.3)',
+    shadowLift: '0 4px 0 rgba(0,0,0,0.25), 0 12px 32px rgba(0,0,0,0.4)',
+  },
 };
+
+let T = THEMES[localStorage.getItem('boh_theme') || 'warm'];
 
 const R = (base) => Math.round(base); // radius at scale 1
 
@@ -33983,12 +34014,12 @@ function InstallModal({ onClose }) {
   );
 }
 
-function HomeScreen({ go, mode, setMode, onStartGame }) {
+function HomeScreen({ go, mode, setMode, onStartGame, setTheme, currentTheme }) {
   const [showInstall, setShowInstall] = React.useState(false);
   const isStandalone = typeof window !== 'undefined' && (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches);
 
   return (
-    <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg }}>
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, position:'relative' }}>
       {showInstall && <InstallModal onClose={() => setShowInstall(false)} />}
       <div className="home-inner">
         <div className="home-brand">
@@ -34008,6 +34039,13 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               {APP_VERSION} · 2026.06.04 · DNR
             </div>
           </div>
+        </div>
+        {/* Theme toggle button */}
+        <div style={{ position:'absolute', top:14, right:18, zIndex:10 }}>
+          <button onClick={() => setTheme && setTheme(currentTheme === 'warm' ? 'dark' : 'warm')}
+            style={{ width:42, height:42, borderRadius:'50%', border:'none', background:T.surface, boxShadow:T.shadow, cursor:'pointer', display:'grid', placeItems:'center', fontSize:20 }}>
+            {currentTheme === 'dark' ? '☀️' : '🌙'}
+          </button>
         </div>
         <div className="home-actions">
           <div style={{ display:'flex', padding:6, background:T.surface, borderRadius:999, boxShadow:T.shadow }}>
@@ -42595,6 +42633,13 @@ function BottleApp() {
   const [selectedGames, setSelectedGames] = useState(['busz','memoria','erem']);
   const [gameMeta, setGameMeta] = useState({ modes:['points'], difficulty:'easy', observerAllowed:false });
 
+  const [appTheme, setAppTheme] = React.useState(() => localStorage.getItem('boh_theme') || 'warm');
+  const handleSetTheme = (name) => {
+    localStorage.setItem('boh_theme', name);
+    T = THEMES[name];
+    setAppTheme(name);
+  };
+
   const [roomCode, setRoomCode] = React.useState(null);
   const [creatingRoom, setCreatingRoom] = React.useState(false);
   const roomUnsubRef = React.useRef(null);
@@ -42629,9 +42674,9 @@ function BottleApp() {
   const dir = order.indexOf(screen) >= order.indexOf(prev||'home') ? 1 : -1;
 
   return (
-    <div style={{ minHeight:'100dvh', width:'100%', position:'relative', fontFamily:T.font, color:T.ink, WebkitFontSmoothing:'antialiased', overflow:'hidden', background:T.bg }}>
+    <div style={{ minHeight:'100dvh', width:'100%', position:'relative', fontFamily:T.font, color:T.ink, WebkitFontSmoothing:'antialiased', overflow:'hidden', background:T.bg }} data-theme={appTheme}>
       <div key={screen} style={{ height:'100dvh', width:'100%', display:'flex', flexDirection:'column', animation:`slide${dir>0?'In':'Back'} .35s cubic-bezier(.2,.85,.3,1.05)` }}>
-        {screen==='home'     && <HomeScreen     go={go} mode={mode} setMode={setMode} onStartGame={onStartGame} />}
+        {screen==='home'     && <HomeScreen     go={go} mode={mode} setMode={setMode} onStartGame={onStartGame} setTheme={handleSetTheme} currentTheme={appTheme} />}
         {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
         {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} mode={mode} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
