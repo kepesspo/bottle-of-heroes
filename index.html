@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.05';
+const APP_VERSION = 'v7.06';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -40714,6 +40714,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
   const [groupDrinkOverlay, setGroupDrinkOverlay] = useState(null); // { drinks }
   const [bonusOverlay, setBonusOverlay] = useState(null); // { type, player, drinks } | null
   const bonusPendingRef = React.useRef(null);
+  const undoRef = React.useRef(null); // stores previous state for undo
   const [pendingCommit, setPendingCommit] = useState(null);
   const [hostBurst, setHostBurst] = useState(null);
   const [selectedOpponent, setSelectedOpponent] = useState(null);
@@ -40797,6 +40798,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
   };
 
   const commitRound = (newPlayers, fb, newTurn, newGameIdx, newRound) => {
+    undoRef.current = { players, turn, gameIdx, round };
     transRef.current = true;
     setTransitioning(true);
     setFeedback(fb);
@@ -40824,8 +40826,13 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
       const last = lastTied[Math.floor(Math.random() * lastTied.length)];
       const type = Math.random() < 0.5 ? 'top' : 'last';
       const lastDrinks = Math.max(1, last.drinks) * 2;
+      // top: pick 3 random OTHER players to receive 1 drink each
+      const others = newPlayers.filter(p => p.id !== first.id);
+      const recipients = others.length > 0
+        ? Array.from({length:3}, () => others[Math.floor(Math.random()*others.length)])
+        : [];
       const bonus = type === 'top'
-        ? { type:'top', player: first, drinks: 3 }
+        ? { type:'top', player: first, recipients, drinks: 3 }
         : { type:'last', player: last, drinks: lastDrinks };
       bonusPendingRef.current = {newPlayers, fb, newTurn, newGameIdx, newRound, bonus};
       setPendingCommit(null);
@@ -40836,6 +40843,14 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
     commitRound(newPlayers, fb, newTurn, newGameIdx, newRound);
   };
 
+  const undoLast = () => {
+    if (!undoRef.current) return;
+    const { players: p, turn: t, gameIdx: g, round: r } = undoRef.current;
+    undoRef.current = null;
+    setPlayers(p); setTurn(t); setGameIdx(g); setRound(r);
+    setPendingCommit(null); setTransitioning(false); transRef.current = false;
+  };
+
   const dismissBonus = () => {
     const p = bonusPendingRef.current;
     if (!p) return;
@@ -40844,7 +40859,10 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
     // Apply bonus drinks to players
     const { bonus, newPlayers, fb, newTurn, newGameIdx, newRound } = p;
     const updated = newPlayers.map(pl => {
-      if (bonus.type === 'top' && pl.id === bonus.player.id) return {...pl, drinks: pl.drinks + 3};
+      if (bonus.type === 'top') {
+        const extra = (bonus.recipients||[]).filter(r => r.id === pl.id).length;
+        return extra > 0 ? {...pl, drinks: pl.drinks + extra} : pl;
+      }
       if (bonus.type === 'last' && pl.id === bonus.player.id) return {...pl, drinks: pl.drinks + bonus.drinks};
       return pl;
     });
@@ -41131,14 +41149,22 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
             {bonusOverlay.type === 'top' ? (
               <>
                 <div style={{ width:52, height:52, borderRadius:'50%', background:bonusOverlay.player.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:22, color:'#fff' }}>{bonusOverlay.player.name.charAt(0).toUpperCase()}</div>
-                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:17, color:T.ink }}>{bonusOverlay.player.name}</div>
-                <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center', lineHeight:1.5 }}>A legtöbb pontú játékos<br/>oszt ki <span style={{ color:T.coral, fontWeight:900 }}>3 kortyt</span> tetszés szerint</div>
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:17, color:T.ink }}>{bonusOverlay.player.name} oszt!</div>
+                <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', lineHeight:1.5 }}>A legtöbb pontú játékos<br/>3 kortyt oszt ki:</div>
+                <div style={{ display:'flex', gap:8, justifyContent:'center', flexWrap:'wrap' }}>
+                  {(bonusOverlay.recipients||[]).map((r,i) => (
+                    <div key={i} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+                      <div style={{ width:38, height:38, borderRadius:'50%', background:r.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:15, color:'#fff' }}>{r.name.charAt(0).toUpperCase()}</div>
+                      <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft }}>{r.name}</div>
+                    </div>
+                  ))}
+                </div>
               </>
             ) : (
               <>
                 <div style={{ width:52, height:52, borderRadius:'50%', background:bonusOverlay.player.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:22, color:'#fff' }}>{bonusOverlay.player.name.charAt(0).toUpperCase()}</div>
                 <div style={{ fontFamily:T.font, fontWeight:800, fontSize:17, color:T.ink }}>{bonusOverlay.player.name}</div>
-                <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center', lineHeight:1.5 }}>Az utolsó helyen álló<br/>duplán iszik — <span style={{ color:T.coral, fontWeight:900 }}>{bonusOverlay.drinks * 2} korty</span></div>
+                <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center', lineHeight:1.5 }}>Az utolsó helyen álló<br/>duplán iszik — <span style={{ color:T.coral, fontWeight:900 }}>{bonusOverlay.drinks} korty</span></div>
               </>
             )}
             <button onClick={dismissBonus} style={{ width:'100%', padding:'16px 0', borderRadius:16, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:T.shadow, marginTop:4 }}>Értettem, tovább!</button>
@@ -41202,6 +41228,11 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
               )}
 
 
+              {undoRef.current && (
+                <button onClick={() => { undoLast(); setShowMenu(false); }} style={{ width:'100%', padding:'13px', border:`2px solid ${T.inkMute}55`, background:'transparent', color:T.inkSoft, fontFamily:T.font, fontWeight:700, fontSize:14, borderRadius:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+                  ↩ Visszavonás
+                </button>
+              )}
               <div style={{ display:'flex', gap:10 }}>
                 <button onClick={() => { setGameIdx(g=>g+1); setShowMenu(false); }} style={{ flex:1, minHeight:56, border:`2px solid ${T.ink}`, background:'transparent', color:T.ink, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer' }}>⏭ Következő</button>
                 <button onClick={() => { setShowMenu(false); go('end'); }} style={{ flex:1, minHeight:56, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>🏁 Kilépés</button>
@@ -41215,33 +41246,102 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
   );
 }
 
+// ─── CONFETTI ─────────────────────────────────────────────────
+function Confetti() {
+  const canvasRef = React.useRef(null);
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const colors = ['#4FC2A0','#E8A090','#FFD23F','#7C3AED','#F97316','#14B8A6','#EC4899'];
+    const pieces = Array.from({length:90}, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * -canvas.height,
+      w: 8 + Math.random() * 8,
+      h: 4 + Math.random() * 4,
+      color: colors[Math.floor(Math.random()*colors.length)],
+      rot: Math.random() * Math.PI * 2,
+      vx: (Math.random() - 0.5) * 2,
+      vy: 2 + Math.random() * 3,
+      vr: (Math.random() - 0.5) * 0.15,
+    }));
+    let raf;
+    const draw = () => {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      pieces.forEach(p => {
+        p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+        if (p.y > canvas.height) { p.y = -20; p.x = Math.random()*canvas.width; }
+        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot);
+        ctx.fillStyle = p.color; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+        ctx.restore();
+      });
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+    const t = setTimeout(() => cancelAnimationFrame(raf), 4000);
+    return () => { cancelAnimationFrame(raf); clearTimeout(t); };
+  }, []);
+  return <canvas ref={canvasRef} style={{ position:'fixed', inset:0, pointerEvents:'none', zIndex:99 }} />;
+}
+
 // ─── END SCREEN ───────────────────────────────────────────────
 function EndScreen({ players, go, resetGame }) {
   const sorted = [...players].sort((a,b) => (b.points-a.points)||(a.drinks-b.drinks));
-  const winner = sorted[0];
-  const drunkWinner = [...players].sort((a,b) => (b.drinks-a.drinks)||(a.points-b.points))[0];
+  const drunkSorted = [...players].sort((a,b) => (b.drinks-a.drinks)||(a.points-b.points));
   const maxScore = Math.max(1, ...players.map(p=>p.points));
+  const podium = sorted.slice(0,3);
+  const podiumOrder = podium.length >= 3 ? [podium[1], podium[0], podium[2]] : podium.length === 2 ? [podium[1], podium[0]] : [podium[0]];
+  const podiumHeights = [80, 110, 60];
+  const podiumLabels = ['2.', '1.', '3.'];
+  const podiumTones = ['#C0C0C0', T.yellow, '#CD7F32'];
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
-      <AppBar title="Vége!" />
+      <Confetti />
+      <AppBar title="Játék vége! 🎉" />
       <div style={{ flex:1, overflowY:'auto', minHeight:0, WebkitOverflowScrolling:'touch' }}>
-      <div className="content-box screen-pad" style={{ paddingTop:20, paddingBottom:24, display:'flex', flexDirection:'column', gap:16 }}>
+      <div className="content-box screen-pad" style={{ paddingTop:20, paddingBottom:24, display:'flex', flexDirection:'column', gap:18 }}>
+
+        {/* Podium */}
+        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'center', gap:6, paddingTop:8 }}>
+          {podiumOrder.map((p, i) => {
+            const oi = podium.length >= 3 ? [1,0,2][i] : i===0 ? 1 : 0;
+            const h = podiumHeights[oi] ?? 60;
+            const tone = podiumTones[oi] ?? '#aaa';
+            const lbl = podiumLabels[oi] ?? '';
+            return (
+              <div key={p.id} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, flex:1 }}>
+                <div style={{ width:52, height:52, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:22, color:'#fff', boxShadow:`0 0 0 3px ${tone}`, animation:'popIn .4s cubic-bezier(.2,.9,.3,1.4)' }}>{p.name.charAt(0).toUpperCase()}</div>
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.ink, textOverflow:'ellipsis', overflow:'hidden', whiteSpace:'nowrap', maxWidth:80, textAlign:'center' }}>{p.name}</div>
+                <div style={{ width:'100%', height:h, background:tone, borderRadius:'10px 10px 0 0', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-start', paddingTop:8, gap:2 }}>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:'#fff', lineHeight:1 }}>{lbl}</div>
+                  <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.8)' }}>{p.points} pt</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Stats cards */}
         <div style={{ display:'flex', gap:10 }}>
-          <div style={{ flex:1, background:T.surface, borderRadius:18, boxShadow:T.shadowLift, padding:'14px 10px 14px', display:'flex', flexDirection:'column', alignItems:'center', gap:7 }}>
+          <div style={{ flex:1, background:T.surface, borderRadius:18, boxShadow:T.shadowLift, padding:'14px 10px', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
             <div style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Pont Győztes</div>
             <div style={{ color:T.yellow }}>{Icon.trophy(T.yellow)}</div>
-            <div style={{ width:64, height:64, borderRadius:'50%', background:winner.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:'#fff' }}>{winner.name.charAt(0).toUpperCase()||'?'}</div>
-            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, lineHeight:1, textAlign:'center', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{winner.name}</div>
-            <Stat value={winner.points} label="pont" tone={T.mint}/>
+            <div style={{ width:48, height:48, borderRadius:'50%', background:sorted[0].color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:'#fff' }}>{sorted[0].name.charAt(0).toUpperCase()}</div>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'100%' }}>{sorted[0].name}</div>
+            <Stat value={sorted[0].points} label="pont" tone={T.mint}/>
           </div>
-          <div style={{ flex:1, background:T.surface, borderRadius:18, boxShadow:T.shadowLift, padding:'14px 10px 14px', display:'flex', flexDirection:'column', alignItems:'center', gap:7 }}>
+          <div style={{ flex:1, background:T.surface, borderRadius:18, boxShadow:T.shadowLift, padding:'14px 10px', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
             <div style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Legtöbb Korty</div>
             <div style={{ color:T.coral, lineHeight:0 }}>{Icon.beer(T.coral)}</div>
-            <div style={{ width:64, height:64, borderRadius:'50%', background:drunkWinner.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:'#fff' }}>{drunkWinner.name.charAt(0).toUpperCase()||'?'}</div>
-            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, lineHeight:1, textAlign:'center', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{drunkWinner.name}</div>
-            <Stat value={drunkWinner.drinks} label="korty" tone={T.coral}/>
+            <div style={{ width:48, height:48, borderRadius:'50%', background:drunkSorted[0].color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:'#fff' }}>{drunkSorted[0].name.charAt(0).toUpperCase()}</div>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'100%' }}>{drunkSorted[0].name}</div>
+            <Stat value={drunkSorted[0].drinks} label="korty" tone={T.coral}/>
           </div>
         </div>
+
+        {/* Full leaderboard */}
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
           {sorted.map((p,i) => <LeaderRow key={p.id} p={p} rank={i+1} maxScore={maxScore} />)}
         </div>
