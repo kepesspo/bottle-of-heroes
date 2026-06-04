@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.99';
+const APP_VERSION = 'v7.00';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -40678,8 +40678,13 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
   const kisebbConfigPS = gameMeta?.kisebbConfig || {};
   const setKisebbConfigPS = cfg => setGameMeta && setGameMeta(m => ({...m, kisebbConfig: typeof cfg === 'function' ? cfg(m?.kisebbConfig||{}) : cfg}));
   const [showMenu, setShowMenu] = useState(false);
-  const [gameOrderMode, setGameOrderMode] = useState('sorban'); // 'sorban' | 'random'
+  const [gameOrderMode, setGameOrderMode] = useState('sorban');
   const [randomOrder, setRandomOrder] = useState(() => []);
+  const [groupDrinkEnabled, setGroupDrinkEnabled] = useState(false);
+  const [bonusEnabled, setBonusEnabled] = useState(false);
+  const [groupDrinkOverlay, setGroupDrinkOverlay] = useState(null); // { drinks }
+  const [bonusOverlay, setBonusOverlay] = useState(null); // { type, player, drinks } | null
+  const bonusPendingRef = React.useRef(null);
   const [pendingCommit, setPendingCommit] = useState(null);
   const [hostBurst, setHostBurst] = useState(null);
   const [selectedOpponent, setSelectedOpponent] = useState(null);
@@ -40733,6 +40738,18 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
     }
   }, [gameIdx]);
 
+  // Csoportos ivászat — random 5-10 perces timer
+  React.useEffect(() => {
+    if (!groupDrinkEnabled) return;
+    const ms = (5 + Math.random() * 5) * 60 * 1000;
+    const t = setTimeout(() => {
+      const diff = currentGame.difficulty;
+      const drinks = diff === 'nehéz' ? 3 : diff === 'közepes' ? 2 : 1;
+      setGroupDrinkOverlay({ drinks });
+    }, ms);
+    return () => clearTimeout(t);
+  }, [groupDrinkEnabled, groupDrinkOverlay]); // re-arm after each event
+
   const processPendingDrinks = () => {
     if (!roomCode || mode!=='Online' || typeof popPendingDrinks!=='function') return;
     popPendingDrinks(roomCode).then(items => {
@@ -40769,8 +40786,37 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
   const commitPending = () => {
     if (!pendingCommit || transitioning) return;
     const {newPlayers, fb, newTurn, newGameIdx, newRound} = pendingCommit;
+    // 10% bónusz esély
+    if (bonusEnabled && Math.random() < 0.10) {
+      const sorted = [...newPlayers].sort((a,b) => (b.points-a.points)||(a.drinks-b.drinks));
+      const last = sorted[sorted.length - 1];
+      const first = sorted[0];
+      const type = Math.random() < 0.5 ? 'top' : 'last';
+      const bonus = type === 'top'
+        ? { type:'top', player: first, drinks: 3 }
+        : { type:'last', player: last, drinks: last.drinks };
+      bonusPendingRef.current = {newPlayers, fb, newTurn, newGameIdx, newRound, bonus};
+      setPendingCommit(null);
+      setBonusOverlay(bonus);
+      return;
+    }
     setPendingCommit(null);
     commitRound(newPlayers, fb, newTurn, newGameIdx, newRound);
+  };
+
+  const dismissBonus = () => {
+    const p = bonusPendingRef.current;
+    if (!p) return;
+    bonusPendingRef.current = null;
+    setBonusOverlay(null);
+    // Apply bonus drinks to players
+    const { bonus, newPlayers, fb, newTurn, newGameIdx, newRound } = p;
+    const updated = newPlayers.map(pl => {
+      if (bonus.type === 'top' && pl.id === bonus.player.id) return {...pl, drinks: pl.drinks + 3};
+      if (bonus.type === 'last' && pl.id === bonus.player.id) return {...pl, drinks: pl.drinks * 2};
+      return pl;
+    });
+    commitRound(updated, fb, newTurn, newGameIdx, newRound);
   };
 
   const diffDrinks = gameMeta?.difficulty === 'hard' ? 3 : gameMeta?.difficulty === 'mid' ? 2 : 1;
@@ -41030,6 +41076,43 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
 
       </div>
       {showInfo && <GameInfoModal game={currentGame} onClose={() => setShowInfo(false)} />}
+      {groupDrinkOverlay && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.72)', zIndex:60, display:'flex', alignItems:'center', justifyContent:'center', padding:28, animation:'fadeIn .2s' }}>
+          <div style={{ background:T.surface, borderRadius:28, padding:'32px 28px 28px', width:'100%', maxWidth:340, display:'flex', flexDirection:'column', alignItems:'center', gap:16, boxShadow:'0 24px 64px rgba(0,0,0,0.3)', animation:'popIn .3s cubic-bezier(.2,.9,.3,1.3)' }}>
+            <div style={{ fontSize:52, lineHeight:1 }}>🍺</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, textAlign:'center', letterSpacing:'-0.02em' }}>Csoportos Ivászat!</div>
+            <div style={{ fontFamily:T.font, fontSize:15, color:T.inkSoft, textAlign:'center', lineHeight:1.5 }}>Mindenki iszik</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:48, color:T.coral, lineHeight:1 }}>{groupDrinkOverlay.drinks}</div>
+            <div style={{ fontFamily:T.font, fontSize:15, color:T.inkSoft }}>kortyt</div>
+            <button onClick={() => {
+              setPlayers(prev => prev.map(p => ({...p, drinks: p.drinks + groupDrinkOverlay.drinks})));
+              setGroupDrinkOverlay(null);
+            }} style={{ width:'100%', padding:'16px 0', borderRadius:16, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:T.shadow, marginTop:4 }}>Megiszom! 🍻</button>
+          </div>
+        </div>
+      )}
+      {bonusOverlay && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.72)', zIndex:60, display:'flex', alignItems:'center', justifyContent:'center', padding:28, animation:'fadeIn .2s' }}>
+          <div style={{ background:T.surface, borderRadius:28, padding:'32px 28px 28px', width:'100%', maxWidth:340, display:'flex', flexDirection:'column', alignItems:'center', gap:14, boxShadow:'0 24px 64px rgba(0,0,0,0.3)', animation:'popIn .3s cubic-bezier(.2,.9,.3,1.3)' }}>
+            <div style={{ fontSize:52, lineHeight:1 }}>{bonusOverlay.type === 'top' ? '🏆' : '😵'}</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink, textAlign:'center', letterSpacing:'-0.02em' }}>Bónusz esemény!</div>
+            {bonusOverlay.type === 'top' ? (
+              <>
+                <div style={{ width:52, height:52, borderRadius:'50%', background:bonusOverlay.player.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:22, color:'#fff' }}>{bonusOverlay.player.name.charAt(0).toUpperCase()}</div>
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:17, color:T.ink }}>{bonusOverlay.player.name}</div>
+                <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center', lineHeight:1.5 }}>A legtöbb pontú játékos<br/>oszt ki <span style={{ color:T.coral, fontWeight:900 }}>3 kortyt</span> tetszés szerint</div>
+              </>
+            ) : (
+              <>
+                <div style={{ width:52, height:52, borderRadius:'50%', background:bonusOverlay.player.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:22, color:'#fff' }}>{bonusOverlay.player.name.charAt(0).toUpperCase()}</div>
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:17, color:T.ink }}>{bonusOverlay.player.name}</div>
+                <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center', lineHeight:1.5 }}>Az utolsó helyen álló<br/>duplán iszik — <span style={{ color:T.coral, fontWeight:900 }}>{bonusOverlay.drinks * 2} korty</span></div>
+              </>
+            )}
+            <button onClick={dismissBonus} style={{ width:'100%', padding:'16px 0', borderRadius:16, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:T.shadow, marginTop:4 }}>Értettem, tovább!</button>
+          </div>
+        </div>
+      )}
       {showBpConfig && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setShowBpConfig(false)} playerCount={players ? players.length : 0} />}
       {showKisebbConfig && <KisebbConfigSheet config={kisebbConfigPS} setConfig={setKisebbConfigPS} onClose={() => setShowKisebbConfig(false)} />}
       {hostBurst && <HostDrinkAlert items={hostBurst} players={players} onDismiss={() => setHostBurst(null)} />}
@@ -41092,6 +41175,22 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
                   <button key={o.key} onClick={() => setGameOrderMode(o.key)} style={{ flex:1, padding:'10px 0', border:'none', background:'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, color: gameOrderMode===o.key ? T.ink : T.inkMute, position:'relative', zIndex:1, transition:'color .2s' }}>{o.label}</button>
                 ))}
               </div>
+              {/* Csoportos ivászat toggle */}
+              <button onClick={() => setGroupDrinkEnabled(v => !v)} style={{ width:'100%', padding:'14px', border:'none', background:'transparent', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', borderTop:`1px solid rgba(20,30,50,0.06)` }}>
+                <div style={{ textAlign:'left' }}>
+                  <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>🍺 Csoportos ivászat</div>
+                  <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:2 }}>5-10 percenként mindenki iszik</div>
+                </div>
+                <div style={{ width:26, height:26, borderRadius:'50%', border: groupDrinkEnabled ? `2.5px solid ${T.mint}` : `2px solid ${T.inkMute}`, background: groupDrinkEnabled ? T.mint : 'transparent', display:'grid', placeItems:'center', transition:'background .15s,border .15s', flexShrink:0 }}>{groupDrinkEnabled && Icon.check('#fff')}</div>
+              </button>
+              {/* Bónusz képernyő toggle */}
+              <button onClick={() => setBonusEnabled(v => !v)} style={{ width:'100%', padding:'14px', border:'none', background:'transparent', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', borderTop:`1px solid rgba(20,30,50,0.06)` }}>
+                <div style={{ textAlign:'left' }}>
+                  <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>🎲 Bónusz események</div>
+                  <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:2 }}>10% esély különleges eseményre</div>
+                </div>
+                <div style={{ width:26, height:26, borderRadius:'50%', border: bonusEnabled ? `2.5px solid ${T.mint}` : `2px solid ${T.inkMute}`, background: bonusEnabled ? T.mint : 'transparent', display:'grid', placeItems:'center', transition:'background .15s,border .15s', flexShrink:0 }}>{bonusEnabled && Icon.check('#fff')}</div>
+              </button>
               <div style={{ display:'flex', gap:10 }}>
                 <button onClick={() => { setGameIdx(g=>g+1); setShowMenu(false); }} style={{ flex:1, minHeight:56, border:`2px solid ${T.ink}`, background:'transparent', color:T.ink, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer' }}>⏭ Következő</button>
                 <button onClick={() => { setShowMenu(false); go('end'); }} style={{ flex:1, minHeight:56, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>🏁 Kilépés</button>
