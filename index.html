@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.35';
+const APP_VERSION = 'v7.36';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -42501,6 +42501,45 @@ function BeerPongObserverView({ room, code, onLeave }) {
             })()}
           </div>
         )}
+
+        {/* Match results */}
+        {(() => {
+          let results = [];
+          if (bp.tournament === 'rr') {
+            results = rrMatchesArr.filter(m => m.score).map(m => ({ p1: m.p1, p2: m.p2, score: m.score, winner: m.winner }));
+          } else if (bp.tournament === 'se') {
+            results = seRoundsArr.flatMap(r => r).filter(m => m.score).map(m => ({ p1: m.p1, p2: m.p2, score: m.score, winner: m.winner }));
+          } else if (bp.tournament?.startsWith('grp_')) {
+            if (bp.phase === 'groups') {
+              results = tsGroupsArr.flatMap(g => {
+                const ms = Array.isArray(g.matches) ? g.matches : Object.values(g.matches || {});
+                return ms.filter(m => m.score).map(m => ({ p1: m.p1, p2: m.p2, score: m.score, winner: m.winner, group: g.label }));
+              });
+            } else {
+              results = seRoundsArr.flatMap(r => r).filter(m => m.score).map(m => ({ p1: m.p1, p2: m.p2, score: m.score, winner: m.winner }));
+            }
+          }
+          if (results.length === 0) return null;
+          return (
+            <div style={{ background:T.surface, borderRadius:18, boxShadow:T.shadow, padding:'14px 14px' }}>
+              <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>📋 Eredmények</div>
+              {[...results].reverse().map((m, i) => {
+                const w1 = m.winner && m.p1 && m.winner.id === m.p1.id;
+                const w2 = m.winner && m.p2 && m.winner.id === m.p2.id;
+                return (
+                  <div key={i} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 4px', borderBottom: i < results.length-1 ? `1px solid ${T.surfaceMuted}` : 'none' }}>
+                    {m.group && <div style={{ fontFamily:T.font, fontSize:9, color:T.blue, fontWeight:700, minWidth:20 }}>{m.group?.replace(' csoport','')}</div>}
+                    <div style={{ flex:1, fontFamily:T.font, fontSize:12, fontWeight: w1 ? 800 : 500, color: w1 ? T.ink : T.inkSoft, textAlign:'right', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1?.name}</div>
+                    <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:13, color:T.ink, flexShrink:0, minWidth:48, textAlign:'center' }}>
+                      {m.score.p1}<span style={{ color:T.inkMute }}> – </span>{m.score.p2}
+                    </div>
+                    <div style={{ flex:1, fontFamily:T.font, fontSize:12, fontWeight: w2 ? 800 : 500, color: w2 ? T.ink : T.inkSoft, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p2?.name}</div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {/* SE Bracket */}
         {bp.tournament === 'se' && (
