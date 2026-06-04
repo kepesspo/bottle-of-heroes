@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.27';
+const APP_VERSION = 'v7.28';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34279,6 +34279,7 @@ function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
   const mode         = config.mode || 'egyeni';
   const tournament   = config.tournamentType || 'se';
   const groupAdvance = config.groupAdvance ?? 1;
+  const playersPerGroup = config.playersPerGroup ?? 4;
 
   const isTwo = tournament.startsWith('grp_');
 
@@ -34372,8 +34373,20 @@ function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
           </div>
         )}
 
-        {/* Group advance (two-stage only) */}
+        {/* Group settings (two-stage only) */}
         {isTwo && (
+          <>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'1px solid rgba(26,42,74,0.10)' }}>
+            <div>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>Játékosok/csoport</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>Hány játékos kerüljön egy csoportba</div>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <button onClick={() => setConfig(c => ({...c, playersPerGroup: Math.max(3,(c.playersPerGroup??4)-1)}))} style={{ width:33, height:33, borderRadius:10, background:T.surfaceMuted, border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:'#D85F5C' }}>-</button>
+              <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:18, color:T.ink, minWidth:30, textAlign:'center' }}>{playersPerGroup}</span>
+              <button onClick={() => setConfig(c => ({...c, playersPerGroup: Math.min(8,(c.playersPerGroup??4)+1)}))} style={{ width:33, height:33, borderRadius:10, background:T.surfaceMuted, border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:T.mintDeep }}>+</button>
+            </div>
+          </div>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'1px solid rgba(26,42,74,0.10)' }}>
             <div>
               <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>Továbbjutók/csoport</div>
@@ -34385,6 +34398,7 @@ function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
               <button onClick={() => setConfig(c => ({...c, groupAdvance: Math.min(3,(c.groupAdvance??1)+1)}))} style={{ width:33, height:33, borderRadius:10, background:T.surfaceMuted, border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:T.mintDeep }}>+</button>
             </div>
           </div>
+          </>
         )}
 
         <button onClick={onClose} style={{ width:'100%', padding:'15px', borderRadius:16, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)', marginTop:16 }}>Kész</button>
@@ -35853,6 +35867,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const MAX_CUPS = bpCfg.maxCups ?? 10;
   const TOURNAMENT = bpCfg.tournamentType || 'se';
   const GROUP_ADVANCE = bpCfg.groupAdvance ?? 1;
+  const PLAYERS_PER_GROUP = bpCfg.playersPerGroup ?? 4;
   const MATCH_MINUTES = bpCfg.matchMinutes ?? 5;
   const MODE = bpCfg.mode || 'egyeni';
   const doneRef = React.useRef(false);
@@ -36013,11 +36028,15 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       setRrMatches(ms); setRrIdx(0); setRrDone(false);
     } else {
       const sh = [...tp].sort(() => Math.random() - 0.5);
-      const half = Math.ceil(sh.length / 2);
-      const gPlayers = [sh.slice(0, half), sh.slice(half)];
+      const numGroups = Math.max(2, Math.ceil(sh.length / PLAYERS_PER_GROUP));
+      const gPlayers = Array.from({ length: numGroups }, (_, gi) => {
+        const start = Math.floor(gi * sh.length / numGroups);
+        const end = Math.floor((gi + 1) * sh.length / numGroups);
+        return sh.slice(start, end);
+      }).filter(g => g.length > 0);
       const groupType = TOURNAMENT.startsWith('grp_rr') ? 'rr' : 'se';
       const groups = gPlayers.map((gp, gi) => ({
-        id: gi, label: 'A B C D'.split(' ')[gi] + ' csoport',
+        id: gi, label: 'A B C D E F G H'.split(' ')[gi] + ' csoport',
         players: gp,
         matches: groupType === 'rr' ? buildRRMatches(gp) : buildSEBracket(gp).flat(),
         seRounds: groupType === 'se' ? buildSEBracket(gp) : null,
@@ -36167,11 +36186,15 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       setRrMatches(ms); setRrIdx(0); setRrDone(false);
     } else {
       const sh = [...ep].sort(() => Math.random() - 0.5);
-      const half = Math.ceil(sh.length / 2);
-      const gPlayers = [sh.slice(0, half), sh.slice(half)];
+      const numGroups2 = Math.max(2, Math.ceil(sh.length / PLAYERS_PER_GROUP));
+      const gPlayers = Array.from({ length: numGroups2 }, (_, gi) => {
+        const start = Math.floor(gi * sh.length / numGroups2);
+        const end = Math.floor((gi + 1) * sh.length / numGroups2);
+        return sh.slice(start, end);
+      }).filter(g => g.length > 0);
       const groupType = TOURNAMENT.startsWith('grp_rr') ? 'rr' : 'se';
       const groups = gPlayers.map((gp, gi) => ({
-        id: gi, label: 'A B C D'.split(' ')[gi] + ' csoport',
+        id: gi, label: 'A B C D E F G H'.split(' ')[gi] + ' csoport',
         players: gp,
         matches: groupType === 'rr' ? buildRRMatches(gp) : buildSEBracket(gp).flat(),
         seRounds: groupType === 'se' ? buildSEBracket(gp) : null,
@@ -36220,6 +36243,13 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         const done = nextIdx === -1;
         return { ...g, matches: nm, curIdx: done ? g.curIdx : nextIdx, done };
       });
+
+      // Auto-switch to next incomplete group
+      const thisGroupDone = ng[viewGroup]?.done;
+      if (thisGroupDone) {
+        const nextGroup = ng.findIndex((g, gi) => gi > viewGroup && !g.done);
+        if (nextGroup !== -1) setViewGroup(nextGroup);
+      }
 
       // Check if ALL groups are done → start finals
       const allDone = ng.every(g => g.done);
