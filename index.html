@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.07';
+const APP_VERSION = 'v7.08';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -41282,10 +41282,14 @@ function Confetti() {
       raf = requestAnimationFrame(draw);
     };
     draw();
-    const t = setTimeout(() => cancelAnimationFrame(raf), 4000);
+    const t = setTimeout(() => {
+      cancelAnimationFrame(raf);
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      canvas.style.opacity = '0';
+    }, 3500);
     return () => { cancelAnimationFrame(raf); clearTimeout(t); };
   }, []);
-  return <canvas ref={canvasRef} style={{ position:'fixed', inset:0, pointerEvents:'none', zIndex:99 }} />;
+  return <canvas ref={canvasRef} style={{ position:'fixed', inset:0, pointerEvents:'none', zIndex:99, transition:'opacity .5s ease' }} />;
 }
 
 // ─── END SCREEN ───────────────────────────────────────────────
@@ -41294,8 +41298,9 @@ function EndScreen({ players, go, resetGame }) {
   const drunkSorted = [...players].sort((a,b) => (b.drinks-a.drinks)||(a.points-b.points));
   const maxScore = Math.max(1, ...players.map(p=>p.points));
   const podium = sorted.slice(0,3);
+  // Display order: [2nd left, 1st center, 3rd right]
   const podiumOrder = podium.length >= 3 ? [podium[1], podium[0], podium[2]] : podium.length === 2 ? [podium[1], podium[0]] : [podium[0]];
-  const podiumHeights = [80, 110, 60];
+  const podiumHeights = [75, 115, 55]; // left=2nd, center=1st, right=3rd
   const podiumLabels = ['2.', '1.', '3.'];
   const podiumTones = ['#C0C0C0', T.yellow, '#CD7F32'];
   return (
@@ -41308,13 +41313,12 @@ function EndScreen({ players, go, resetGame }) {
         {/* Podium */}
         <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'center', gap:6, paddingTop:8 }}>
           {podiumOrder.map((p, i) => {
-            const oi = podium.length >= 3 ? [1,0,2][i] : i===0 ? 1 : 0;
-            const h = podiumHeights[oi] ?? 60;
-            const tone = podiumTones[oi] ?? '#aaa';
-            const lbl = podiumLabels[oi] ?? '';
+            const h = podiumHeights[i] ?? 55;
+            const tone = podiumTones[i] ?? '#aaa';
+            const lbl = podiumLabels[i] ?? '';
             return (
               <div key={p.id} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, flex:1 }}>
-                <div style={{ width:52, height:52, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:22, color:'#fff', boxShadow:`0 0 0 3px ${tone}`, animation:'popIn .4s cubic-bezier(.2,.9,.3,1.4)' }}>{p.name.charAt(0).toUpperCase()}</div>
+                <div style={{ width: lbl==='1.' ? 64 : 48, height: lbl==='1.' ? 64 : 48, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize: lbl==='1.' ? 26 : 20, color:'#fff', boxShadow:`0 0 0 3px ${tone}`, animation:'popIn .4s cubic-bezier(.2,.9,.3,1.4)' }}>{p.name.charAt(0).toUpperCase()}</div>
                 <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.ink, textOverflow:'ellipsis', overflow:'hidden', whiteSpace:'nowrap', maxWidth:80, textAlign:'center' }}>{p.name}</div>
                 <div style={{ width:'100%', height:h, background:tone, borderRadius:'10px 10px 0 0', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-start', paddingTop:8, gap:2 }}>
                   <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:'#fff', lineHeight:1 }}>{lbl}</div>
