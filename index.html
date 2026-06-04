@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.98';
+const APP_VERSION = 'v6.99';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -40678,6 +40678,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
   const kisebbConfigPS = gameMeta?.kisebbConfig || {};
   const setKisebbConfigPS = cfg => setGameMeta && setGameMeta(m => ({...m, kisebbConfig: typeof cfg === 'function' ? cfg(m?.kisebbConfig||{}) : cfg}));
   const [showMenu, setShowMenu] = useState(false);
+  const [gameOrderMode, setGameOrderMode] = useState('sorban'); // 'sorban' | 'random'
+  const [randomOrder, setRandomOrder] = useState(() => []);
   const [pendingCommit, setPendingCommit] = useState(null);
   const [hostBurst, setHostBurst] = useState(null);
   const [selectedOpponent, setSelectedOpponent] = useState(null);
@@ -40707,11 +40709,29 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
   }, [roomCode]);
 
   const games = selectedGames.length ? selectedGames : GAMES.slice(0,6).map(g=>g.id);
-  const currentGameId = games[gameIdx % games.length];
+  const effectiveOrder = gameOrderMode === 'random' && randomOrder.length === games.length
+    ? randomOrder
+    : games.map((_,i)=>i);
+  const currentGameId = games[effectiveOrder[gameIdx % games.length]];
   const currentGame = GAMES.find(g=>g.id===currentGameId) || GAMES[0];
   const currentPlayer = players[turn];
   const scenario = SCENARIOS[currentGameId] || SCENARIO_DEFAULTS[currentGame.category] || SCENARIO_DEFAULTS['Egyéni'];
   const totalDrinks = players.reduce((s,p) => s+p.drinks, 0);
+
+  React.useEffect(() => {
+    if (gameOrderMode === 'random') {
+      setRandomOrder(games.map((_,i)=>i).sort(()=>Math.random()-.5));
+    } else {
+      setRandomOrder([]);
+    }
+  }, [gameOrderMode, games.length]);
+
+  // Re-shuffle when we complete a full cycle in random mode
+  React.useEffect(() => {
+    if (gameOrderMode === 'random' && gameIdx > 0 && gameIdx % games.length === 0) {
+      setRandomOrder(games.map((_,i)=>i).sort(()=>Math.random()-.5));
+    }
+  }, [gameIdx]);
 
   const processPendingDrinks = () => {
     if (!roomCode || mode!=='Online' || typeof popPendingDrinks!=='function') return;
@@ -41065,6 +41085,13 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
                   <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:16, color:'#fff', letterSpacing:'0.15em', marginLeft:'auto' }}>{roomCode}</span>
                 </div>
               )}
+              {/* Game order toggle */}
+              <div style={{ display:'flex', background:T.surfaceMuted, padding:4, borderRadius:14, gap:4, position:'relative' }}>
+                <div style={{ position:'absolute', top:4, bottom:4, left: gameOrderMode==='sorban' ? 4 : 'calc(50% + 2px)', right: gameOrderMode==='sorban' ? 'calc(50% + 2px)' : 4, background:T.surface, borderRadius:10, boxShadow:'0 1px 6px rgba(0,0,0,0.10)', transition:'left .2s ease, right .2s ease' }} />
+                {[{key:'sorban',label:'Sorban'},{key:'random',label:'Random'}].map(o => (
+                  <button key={o.key} onClick={() => setGameOrderMode(o.key)} style={{ flex:1, padding:'10px 0', border:'none', background:'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, color: gameOrderMode===o.key ? T.ink : T.inkMute, position:'relative', zIndex:1, transition:'color .2s' }}>{o.label}</button>
+                ))}
+              </div>
               <div style={{ display:'flex', gap:10 }}>
                 <button onClick={() => { setGameIdx(g=>g+1); setShowMenu(false); }} style={{ flex:1, minHeight:56, border:`2px solid ${T.ink}`, background:'transparent', color:T.ink, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer' }}>⏭ Következő</button>
                 <button onClick={() => { setShowMenu(false); go('end'); }} style={{ flex:1, minHeight:56, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>🏁 Kilépés</button>
