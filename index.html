@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.87';
+const APP_VERSION = 'v6.88';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -36090,20 +36090,21 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   };
 
   const handleReshuffle = () => {
+    const ep = (MODE === 'csapat' && teamsReady && teamPlayersRef.current) ? teamPlayersRef.current : players;
     doneRef.current = false;
     setCups1(MAX_CUPS); setCups2(MAX_CUPS);
     setDrinkMap({}); setChampion(null); setExpandedRounds({});
     resetTimer();
     if (TOURNAMENT === 'se') {
-      const br = buildSEBracket(players);
+      const br = buildSEBracket(ep);
       setSeRounds(br); setSeCurRound(0);
       const fp = br[0].findIndex(m => m.winner === null);
       setSeCurMatch(fp >= 0 ? fp : 0);
     } else if (TOURNAMENT === 'rr') {
-      const ms = buildRRMatches([...players].sort(() => Math.random() - 0.5));
+      const ms = buildRRMatches([...ep].sort(() => Math.random() - 0.5));
       setRrMatches(ms); setRrIdx(0); setRrDone(false);
     } else {
-      const sh = [...players].sort(() => Math.random() - 0.5);
+      const sh = [...ep].sort(() => Math.random() - 0.5);
       const half = Math.ceil(sh.length / 2);
       const gPlayers = [sh.slice(0, half), sh.slice(half)];
       const groupType = TOURNAMENT.startsWith('grp_rr') ? 'rr' : 'se';
@@ -36632,13 +36633,19 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, width:'100%' }}>
-      {/* Phase label for two-stage */}
-      {isTwoStage && (
-        <div style={{ width:'100%', display:'flex', gap:8 }}>
-          <button onClick={() => setTsPhase('groups')} style={{ flex:1, padding:'8px 0', borderRadius:10, border:'none', cursor:'pointer', background: tsPhase==='groups' ? T.blue+'22' : T.surface, fontFamily:T.font, fontWeight:700, fontSize:12, color: tsPhase==='groups' ? T.blue : T.inkSoft }}>Csoportkör</button>
-          <button onClick={() => { if(seRounds.length || rrMatches.length) setTsPhase('finals'); }} style={{ flex:1, padding:'8px 0', borderRadius:10, border:'none', cursor: (seRounds.length || rrMatches.length) ? 'pointer' : 'default', background: tsPhase==='finals' ? T.blue+'22' : T.surface, fontFamily:T.font, fontWeight:700, fontSize:12, color: tsPhase==='finals' ? T.blue : (seRounds.length || rrMatches.length) ? T.inkSoft : T.inkMute }}>Főszakasz</button>
-        </div>
-      )}
+      {/* Phase switcher for two-stage */}
+      {isTwoStage && (() => {
+        const finalsReady = seRounds.length > 0 || rrMatches.length > 0;
+        return (
+          <div style={{ width:'100%', background:'rgba(20,30,50,0.08)', borderRadius:14, padding:4, display:'flex', position:'relative' }}>
+            <div style={{ position:'absolute', top:4, bottom:4, left: tsPhase==='groups' ? 4 : 'calc(50% + 2px)', right: tsPhase==='groups' ? 'calc(50% + 2px)' : 4, background:T.surface, borderRadius:10, boxShadow:'0 1px 6px rgba(0,0,0,0.10)', transition:'left .2s ease, right .2s ease' }} />
+            <button onClick={() => setTsPhase('groups')} style={{ flex:1, padding:'10px 0', border:'none', background:'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, color: tsPhase==='groups' ? T.ink : T.inkMute, position:'relative', zIndex:1, transition:'color .2s' }}>Csoportkör</button>
+            <button onClick={() => { if(finalsReady) setTsPhase('finals'); }} style={{ flex:1, padding:'10px 0', border:'none', background:'transparent', cursor: finalsReady ? 'pointer' : 'default', fontFamily:T.font, fontWeight:800, fontSize:13, color: tsPhase==='finals' ? T.ink : finalsReady ? T.inkMute : T.inkMute+'66', position:'relative', zIndex:1, transition:'color .2s' }}>
+              Főszakasz {!finalsReady && <span style={{ fontSize:10 }}>🔒</span>}
+            </button>
+          </div>
+        );
+      })()}
 
       {renderMatchCard()}
 
