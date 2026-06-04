@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.00';
+const APP_VERSION = 'v7.01';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -34779,6 +34779,13 @@ function GameSettingsContent({ meta, setMeta, onDone, go }) {
           const on = meta.difficulty===d.id;
           return <button key={d.id} onClick={() => setMeta({...meta,difficulty:d.id})} style={{ flex:1, padding:'11px 6px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background:on?T.mint:'transparent', color:on?'#fff':T.inkSoft, boxShadow:on?'0 2px 7px -1px rgba(79,194,160,0.5)':'none', transition:'all .15s' }}>{d.label}</button>;
         })}
+      </div>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:10, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'16px 0 8px' }}>Játéksorrend</div>
+      <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4, position:'relative' }}>
+        <div style={{ position:'absolute', top:5, bottom:5, left: (meta.gameOrder||'sorban')==='sorban' ? 5 : 'calc(50% + 2px)', right: (meta.gameOrder||'sorban')==='sorban' ? 'calc(50% + 2px)' : 5, background:T.surface, borderRadius:9, boxShadow:'0 1px 6px rgba(0,0,0,0.10)', transition:'left .2s ease, right .2s ease' }} />
+        {[{key:'sorban',label:'Sorban'},{key:'random',label:'Random'}].map(o => (
+          <button key={o.key} onClick={() => setMeta({...meta, gameOrder: o.key})} style={{ flex:1, padding:'11px 6px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background:'transparent', color:(meta.gameOrder||'sorban')===o.key?T.ink:T.inkSoft, position:'relative', zIndex:1, transition:'color .2s' }}>{o.label}</button>
+        ))}
       </div>
       <div style={{ fontFamily:T.font, fontWeight:900, fontSize:10, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'16px 0 8px' }}>Csatlakozás</div>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'1px solid rgba(26,42,74,0.10)' }}>
@@ -36951,8 +36958,17 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult }) {
 }
 
 function KivagyokGame({ gameIdx, challenger, onAdvance, onResult }) {
-  const [offset, setOffset] = React.useState(0);
-  const celeb = KIVAGYOK_CELEBS[(gameIdx + offset) % KIVAGYOK_CELEBS.length];
+  const usedRef = React.useRef(new Set());
+  const pickIdx = () => {
+    const n = KIVAGYOK_CELEBS.length;
+    if (usedRef.current.size >= n) usedRef.current = new Set();
+    let idx;
+    do { idx = Math.floor(Math.random() * n); } while (usedRef.current.has(idx));
+    usedRef.current.add(idx);
+    return idx;
+  };
+  const [celebIdx, setCelebIdx] = React.useState(() => pickIdx());
+  const celeb = KIVAGYOK_CELEBS[celebIdx];
   const [revealed, setRevealed] = useState(false);
   const [decided, setDecided] = useState(null);
   const [imgState, setImgState] = useState('loading'); // 'loading' | 'ok' | 'err'
@@ -36963,7 +36979,7 @@ function KivagyokGame({ gameIdx, challenger, onAdvance, onResult }) {
     setRevealed(false);
     setDecided(null);
     setImgState('loading');
-    setOffset(0);
+    setCelebIdx(pickIdx());
   }, [gameIdx]);
 
   const infoParts = (celeb.info || '').split(' · ');
@@ -37012,7 +37028,7 @@ function KivagyokGame({ gameIdx, challenger, onAdvance, onResult }) {
               alt="celeb"
               style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', display: imgState === 'ok' ? 'block' : 'none' }}
               onLoad={() => setImgState('ok')}
-              onError={() => { setOffset(o => o + 1); setImgState('loading'); }}
+              onError={() => { setCelebIdx(pickIdx()); setImgState('loading'); }}
             />
           </div>
 
@@ -39174,11 +39190,11 @@ function KisebbGame({ gameIdx, players, onAdvance, gameMeta }) {
 
       {/* Player turn indicator + pot */}
       <div style={{ display:'flex', alignItems:'center', gap:8, width:'100%' }}>
-        <div style={{ flex:1, display:'flex', alignItems:'center', gap:10, background:T.surface, borderRadius:14, padding:'10px 14px', boxShadow:T.shadow }}>
+        <div style={{ flex:1, display:'flex', alignItems:'center', gap:10, background:T.surface, borderRadius:14, padding:'10px 14px', boxShadow:T.shadow, minHeight:58 }}>
           <div style={{ width:36, height:36, borderRadius:'50%', background:currentPlayer?.color||T.coral, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:15, color:'#fff', flexShrink:0 }}>
             {(currentPlayer?.name||'?').charAt(0).toUpperCase()}
           </div>
-          <div style={{ flex:1, fontFamily:T.font, fontWeight:700, fontSize:15, color:T.ink }}>
+          <div style={{ flex:1, fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink, lineHeight:1.3, wordBreak:'break-word' }}>
             {currentPlayer?.name||'?'} tippel
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:3 }}>
@@ -39204,20 +39220,29 @@ function KisebbGame({ gameIdx, players, onAdvance, gameMeta }) {
       </div>
 
       {/* Result feedback */}
-      {guessRes && (
-        <div style={{ padding:'8px 20px', borderRadius:12, textAlign:'center', animation:'popIn .3s',
-          background: guessRes.same ? 'rgba(240,192,64,0.18)' : guessRes.correct ? `${T.mint}22` : `${T.coral}22`,
-          border: `2px solid ${guessRes.same ? '#E0A030' : guessRes.correct ? T.mint : T.coral}` }}>
-          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color: guessRes.same ? '#C08020' : guessRes.correct ? T.mint : T.coral }}>
-            {guessRes.same
-              ? (() => { const sm2=(gameMeta?.kisebbConfig?.stackMode??'plus1'); const np=sm2==='times2'?(guessRes.pot||1)*2:(guessRes.pot||1)+1; return `🔄 Ugyanaz az érték! Tét: ${sm2==='times2'?'×2':''+'+1'} → ${np} korty`; })()
-              : guessRes.correct
-                ? '✓ Helyes! Következő játékos.'
-                : `✗ Rontott! ${players.find(p=>p.id===guessRes.pid)?.name} iszik ${guessRes.pot} kortyt!`
-            }
+      {guessRes && (() => {
+        const sm2 = gameMeta?.kisebbConfig?.stackMode ?? 'plus1';
+        const np = sm2==='times2' ? (guessRes.pot||1)*2 : (guessRes.pot||1)+1;
+        const bg = guessRes.same ? 'rgba(240,192,64,0.18)' : guessRes.correct ? `${T.mint}22` : `${T.coral}22`;
+        const border = guessRes.same ? '#E0A030' : guessRes.correct ? T.mint : T.coral;
+        const loser = !guessRes.same && !guessRes.correct ? players.find(p=>p.id===guessRes.pid) : null;
+        return (
+          <div style={{ borderRadius:16, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, animation:'popIn .3s cubic-bezier(.2,.9,.3,1.2)', background:bg, border:`2px solid ${border}`, width:'100%', boxSizing:'border-box' }}>
+            {loser && <div style={{ width:36, height:36, borderRadius:'50%', background:loser.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:15, color:'#fff', flexShrink:0 }}>{loser.name.charAt(0).toUpperCase()}</div>}
+            <div style={{ flex:1 }}>
+              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color: guessRes.same ? '#C08020' : guessRes.correct ? T.mint : T.coral }}>
+                {guessRes.same
+                  ? `🔄 Ugyanaz! Tét: ${sm2==='times2'?'×2':'+1'} → ${np} korty`
+                  : guessRes.correct
+                    ? '✓ Helyes! Következő játékos.'
+                    : `✗ Rontott! ${loser?.name} iszik`
+                }
+              </div>
+              {!guessRes.same && !guessRes.correct && <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.coral, lineHeight:1.1 }}>{guessRes.pot} korty</div>}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Kisebb / Nagyobb buttons */}
       {!guessRes && (
@@ -40678,10 +40703,10 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
   const kisebbConfigPS = gameMeta?.kisebbConfig || {};
   const setKisebbConfigPS = cfg => setGameMeta && setGameMeta(m => ({...m, kisebbConfig: typeof cfg === 'function' ? cfg(m?.kisebbConfig||{}) : cfg}));
   const [showMenu, setShowMenu] = useState(false);
-  const [gameOrderMode, setGameOrderMode] = useState('sorban');
+  const gameOrderMode = gameMeta?.gameOrder || 'sorban';
   const [randomOrder, setRandomOrder] = useState(() => []);
-  const [groupDrinkEnabled, setGroupDrinkEnabled] = useState(false);
-  const [bonusEnabled, setBonusEnabled] = useState(false);
+  const groupDrinkEnabled = (gameMeta?.modes || []).includes('group');
+  const bonusEnabled = (gameMeta?.modes || []).includes('bonus');
   const [groupDrinkOverlay, setGroupDrinkOverlay] = useState(null); // { drinks }
   const [bonusOverlay, setBonusOverlay] = useState(null); // { type, player, drinks } | null
   const bonusPendingRef = React.useRef(null);
@@ -40729,7 +40754,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
     } else {
       setRandomOrder([]);
     }
-  }, [gameOrderMode, games.length]);
+  }, [gameOrderMode, games.join(',')]);
 
   // Re-shuffle when we complete a full cycle in random mode
   React.useEffect(() => {
@@ -41168,29 +41193,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
                   <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:16, color:'#fff', letterSpacing:'0.15em', marginLeft:'auto' }}>{roomCode}</span>
                 </div>
               )}
-              {/* Game order toggle */}
-              <div style={{ display:'flex', background:T.surfaceMuted, padding:4, borderRadius:14, gap:4, position:'relative' }}>
-                <div style={{ position:'absolute', top:4, bottom:4, left: gameOrderMode==='sorban' ? 4 : 'calc(50% + 2px)', right: gameOrderMode==='sorban' ? 'calc(50% + 2px)' : 4, background:T.surface, borderRadius:10, boxShadow:'0 1px 6px rgba(0,0,0,0.10)', transition:'left .2s ease, right .2s ease' }} />
-                {[{key:'sorban',label:'Sorban'},{key:'random',label:'Random'}].map(o => (
-                  <button key={o.key} onClick={() => setGameOrderMode(o.key)} style={{ flex:1, padding:'10px 0', border:'none', background:'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, color: gameOrderMode===o.key ? T.ink : T.inkMute, position:'relative', zIndex:1, transition:'color .2s' }}>{o.label}</button>
-                ))}
-              </div>
-              {/* Csoportos ivászat toggle */}
-              <button onClick={() => setGroupDrinkEnabled(v => !v)} style={{ width:'100%', padding:'14px', border:'none', background:'transparent', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', borderTop:`1px solid rgba(20,30,50,0.06)` }}>
-                <div style={{ textAlign:'left' }}>
-                  <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>🍺 Csoportos ivászat</div>
-                  <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:2 }}>5-10 percenként mindenki iszik</div>
-                </div>
-                <div style={{ width:26, height:26, borderRadius:'50%', border: groupDrinkEnabled ? `2.5px solid ${T.mint}` : `2px solid ${T.inkMute}`, background: groupDrinkEnabled ? T.mint : 'transparent', display:'grid', placeItems:'center', transition:'background .15s,border .15s', flexShrink:0 }}>{groupDrinkEnabled && Icon.check('#fff')}</div>
-              </button>
-              {/* Bónusz képernyő toggle */}
-              <button onClick={() => setBonusEnabled(v => !v)} style={{ width:'100%', padding:'14px', border:'none', background:'transparent', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', borderTop:`1px solid rgba(20,30,50,0.06)` }}>
-                <div style={{ textAlign:'left' }}>
-                  <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>🎲 Bónusz események</div>
-                  <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:2 }}>10% esély különleges eseményre</div>
-                </div>
-                <div style={{ width:26, height:26, borderRadius:'50%', border: bonusEnabled ? `2.5px solid ${T.mint}` : `2px solid ${T.inkMute}`, background: bonusEnabled ? T.mint : 'transparent', display:'grid', placeItems:'center', transition:'background .15s,border .15s', flexShrink:0 }}>{bonusEnabled && Icon.check('#fff')}</div>
-              </button>
+
+
               <div style={{ display:'flex', gap:10 }}>
                 <button onClick={() => { setGameIdx(g=>g+1); setShowMenu(false); }} style={{ flex:1, minHeight:56, border:`2px solid ${T.ink}`, background:'transparent', color:T.ink, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer' }}>⏭ Következő</button>
                 <button onClick={() => { setShowMenu(false); go('end'); }} style={{ flex:1, minHeight:56, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>🏁 Kilépés</button>
