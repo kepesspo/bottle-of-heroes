@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.08';
+const APP_VERSION = 'v7.09';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -34005,7 +34005,7 @@ function HomeScreen({ go, mode, setMode, onStartGame }) {
               color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap',
             }}>
               <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              {APP_VERSION} · 2026.06.03 · DNR
+              {APP_VERSION} · 2026.06.04 · DNR
             </div>
           </div>
         </div>
@@ -39073,7 +39073,7 @@ function RulettGame({ gameIdx, challenger, onAdvance, onResult }) {
   );
 }
 
-function KisebbGame({ gameIdx, players, onAdvance, gameMeta }) {
+function KisebbGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   const [gs, setGs] = React.useState(null);
   const gsRef = React.useRef(null);
   const pendRef = React.useRef(false);
@@ -39129,6 +39129,8 @@ function KisebbGame({ gameIdx, players, onAdvance, gameMeta }) {
         // Wrong: player drinks pot, next player, pot resets
         const newLives = { ...st.playerLives, [pid]:(st.playerLives[pid]||1)-1 };
         const dm = { ...st.drinkMap, [pid]:(st.drinkMap[pid]||0)+(st.pot||1) };
+        const loserPlayer = players.find(p=>p.id===pid);
+        onResult && onResult({ correct: false, playerName: loserPlayer?.name, drinks: st.pot||1, subtitle: `${loserPlayer?.name||'Játékos'} iszik ${st.pot||1} kortyt` });
         nst = { ...nst, drinkMap:dm, playerLives:newLives, pot:1,
                 turnPos:(st.turnPos+1)%st.activePids.length };
         if ((newLives[pid]||0)<=0) {
@@ -39146,17 +39148,22 @@ function KisebbGame({ gameIdx, players, onAdvance, gameMeta }) {
   };
 
   if(gameOver) return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
       <div style={{ fontSize:48 }}>🏆</div>
       <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.mint }}>Játék vége!</div>
       <div style={{ display:'flex', flexDirection:'column', gap:6, width:'100%' }}>
         {players.map(p=>{
           const d=drinkMap[p.id]||0, won=activePids.includes(p.id);
-          return <div key={p.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', background:won?`${T.mint}18`:T.surfaceMuted, borderRadius:10 }}>
-            <div style={{ width:28, height:28, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:12, color:'#fff' }}>{p.name.charAt(0)}</div>
-            <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{p.name}</div>
-            <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:14, color:won?T.mint:T.coral }}>{won?'🏆 Győztes':`${d} korty`}</div>
-          </div>;
+          return (
+            <div key={p.id} style={{ borderRadius:14, padding:'10px 14px', display:'flex', alignItems:'center', gap:12, background: won ? `${T.mint}15` : `${T.coral}15`, border:`2px solid ${won ? T.mint : T.coral}` }}>
+              <div style={{ width:36, height:36, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:15, color:'#fff', flexShrink:0 }}>{p.name.charAt(0).toUpperCase()}</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color: won ? T.mint : T.coral }}>{won ? '🏆 Győztes!' : 'Inni kell!'}</div>
+                {d > 0 && <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:1 }}>{p.name} — {d} korty összesen</div>}
+              </div>
+              {d > 0 && <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.coral }}>{d}🍺</div>}
+            </div>
+          );
         })}
       </div>
     </div>
@@ -40673,7 +40680,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} mode={mode} gameMeta={gameMeta} />;
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} gameMeta={gameMeta} />;
+  if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
   if (gameId === 'uveg') return <UvegGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'ticktak') return <TicktakGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'erem') return <EremGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
