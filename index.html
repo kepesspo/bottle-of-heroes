@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.93';
+const APP_VERSION = 'v6.94';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -37856,7 +37856,7 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
   );
 }
 
-function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
+function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult }) {
   const FINISH = 12;
   const HORSES = React.useMemo(() => pickHorses(gameIdx), [gameIdx]);
   const [phase, setPhase] = useState('bet');
@@ -37902,7 +37902,6 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
   };
 
   const finishGame = (giftsArg) => {
-    if (advancedRef.current) return;
     advancedRef.current = true;
     const drinkMap = {};
     const pointsMap = {};
@@ -37942,7 +37941,15 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
       const t = setTimeout(() => finishGame(giftsRef.current), 400);
       return () => clearTimeout(t);
     }
-  }, [phase, winnerPool]);
+    // winnerPool > 0: auto-advance when all drinks distributed, un-ready if taken back
+    if (remaining === 0) {
+      advancedRef.current = false; // allow re-fire after un-ready
+      finishGame(giftsRef.current);
+    } else {
+      advancedRef.current = false;
+      if (onUnready) onUnready();
+    }
+  }, [phase, remaining, winnerPool]);
 
   // ── Betting phase ──────────────────────────────────────────────────────────
   if (phase === 'bet') {
@@ -38121,12 +38128,6 @@ function LóversenyGame({ gameIdx, players, onAdvance, onResult }) {
           <div style={{ textAlign:'center', fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft }}>
             Még {remaining} korty kiosztható
           </div>
-        )}
-        {winnerPool > 0 && remaining === 0 && (
-          <button onClick={() => finishGame(giftsRef.current)}
-            style={{ display:'block', width:'100%', padding:'14px 0', borderRadius:16, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontSize:16, fontWeight:700, cursor:'pointer', marginTop:4 }}>
-            Kész, tovább →
-          </button>
         )}
       </div>
     );
@@ -40618,14 +40619,14 @@ function KezCsereGame({ gameIdx, players, onAdvance }) {
   );
 }
 
-function GameContent({ gameId, gameIdx, players, onAdvance, onResult, roomCode, mode, gameMeta, challenger, opponent }) {
+function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, roomCode, mode, gameMeta, challenger, opponent }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'beerpong') return <BeerPongGame key={gameIdx + '_' + (gameMeta?.beerpongConfig?.tournamentType||'se')} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} mode={mode} />;
   if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onUnready={onUnready} onResult={onResult} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} mode={mode} gameMeta={gameMeta} />;
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
@@ -40838,7 +40839,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
           </div>
         )}
 
-        <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} onResult={setGameResult} roomCode={roomCode} mode={mode} gameMeta={gameMeta} challenger={currentPlayer} opponent={selectedOpponent} />
+        <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={setGameResult} roomCode={roomCode} mode={mode} gameMeta={gameMeta} challenger={currentPlayer} opponent={selectedOpponent} />
       </div>
         </div>
       </div>{/* end scrollable */}
