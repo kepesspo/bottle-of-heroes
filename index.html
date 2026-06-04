@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.31';
+const APP_VERSION = 'v7.32';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -42625,21 +42625,28 @@ function ObserverWatching({ code, observerName, onLeave }) {
   const [kortyUsed, setKortyUsed] = useState(false);
 
   useEffect(() => {
-    const unsub = subscribeRoom(code, data => {
-      if (!data) return;
-      setRoom(prev => {
-        if (prev && prev.players && data.players) {
-          data.players.forEach((p, i) => {
-            const pp = prev.players[i];
-            if (!pp) return;
-            if (p.points > pp.points) { setPulseId(p.id+':p'); setTimeout(()=>setPulseId(null),700); }
-            else if (p.drinks > pp.drinks) { setPulseId(p.id+':d'); setTimeout(()=>setPulseId(null),700); }
-          });
-        }
-        return data;
+    let unsub = null;
+    const subscribe = () => {
+      if (unsub) unsub();
+      unsub = subscribeRoom(code, data => {
+        if (!data) return;
+        setRoom(prev => {
+          if (prev && prev.players && data.players) {
+            data.players.forEach((p, i) => {
+              const pp = prev.players[i];
+              if (!pp) return;
+              if (p.points > pp.points) { setPulseId(p.id+':p'); setTimeout(()=>setPulseId(null),700); }
+              else if (p.drinks > pp.drinks) { setPulseId(p.id+':d'); setTimeout(()=>setPulseId(null),700); }
+            });
+          }
+          return data;
+        });
       });
-    });
-    return unsub;
+    };
+    subscribe();
+    const onVisible = () => { if (document.visibilityState === 'visible') subscribe(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { if (unsub) unsub(); document.removeEventListener('visibilitychange', onVisible); };
   }, [code]);
 
   if (!room) return <ObserverStatus icon="📡" title="Csatlakozás…" sub={`Szoba: ${code}`} spinning />;
