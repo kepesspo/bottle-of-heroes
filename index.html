@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v6.80';
+const APP_VERSION = 'v6.81';
 const T = {
   bg: '#F4C57E',
   bgSoft: '#F8D69A',
@@ -36562,53 +36562,63 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
   if (MODE === 'csapat' && !teamsReady) {
     const teamColors = [T.mint, T.coral, T.blue, '#FACC15'];
+    const teamLetters = ['A', 'B', 'C', 'D'];
     const numTeams = Math.max(2, Math.min(4, Math.ceil(players.length / 2)));
     const teamCounts = Array.from({length: numTeams}, (_, ti) => players.filter(p => (teamAssign[p.id] ?? (players.indexOf(p) % 2)) === ti).length);
     return (
-      <div style={{ display:'flex', flexDirection:'column', gap:12, padding:'16px 12px' }}>
-        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textAlign:'center', textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Csapatok összeállítása</div>
-        <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, textAlign:'center', marginTop:-4 }}>Érintsd meg a játékost a csapat váltásához</div>
-        {/* Team name editors */}
-        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+      <div style={{ display:'flex', flexDirection:'column', gap:16, padding:'4px 0 12px' }}>
+        {/* Header */}
+        <div style={{ textAlign:'center' }}>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink }}>Csapatok összeállítása</div>
+          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:4 }}>Koppints egy játékosra a csapat váltásához</div>
+        </div>
+
+        {/* Team tabs */}
+        <div style={{ display:'flex', gap:8 }}>
           {Array.from({length: numTeams}, (_, ti) => (
-            <div key={ti} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', borderRadius:12, background: teamColors[ti] + '15', border:'1.5px solid ' + teamColors[ti] + '55' }}>
-              <div style={{ width:10, height:10, borderRadius:5, background: teamColors[ti], flexShrink:0 }} />
-              <input value={teamNames[ti]} onChange={e => setTeamNames(prev => prev.map((n,i) => i===ti ? e.target.value : n))}
-                style={{ flex:1, border:'none', background:'transparent', fontFamily:T.font, fontWeight:700, fontSize:13, color: teamColors[ti], outline:'none' }} />
-              <span style={{ fontFamily:T.font, fontSize:11, color: teamColors[ti], opacity:0.7 }}>{teamCounts[ti]} fő</span>
+            <div key={ti} style={{ flex:1, background: teamCounts[ti] > 0 ? teamColors[ti]+'22' : T.surfaceMuted, borderRadius:14, padding:'10px 6px', display:'flex', flexDirection:'column', alignItems:'center', gap:3, border: `1.5px solid ${teamColors[ti]}44` }}>
+              <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                <div style={{ width:9, height:9, borderRadius:'50%', background: teamColors[ti] }} />
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color: teamCounts[ti] > 0 ? teamColors[ti] : T.inkMute }}>{teamLetters[ti]}</span>
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:11, color: teamCounts[ti] > 0 ? T.inkSoft : T.inkMute }}>{teamCounts[ti]} fő</div>
             </div>
           ))}
         </div>
-        {/* Player assignments */}
-        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-          {players.map(p => {
+
+        {/* Player list */}
+        <div style={{ background:T.surface, borderRadius:18, overflow:'hidden', boxShadow:T.shadow }}>
+          {players.map((p, idx) => {
             const ti = teamAssign[p.id] ?? (players.indexOf(p) % 2);
             const nextTi = (ti + 1) % numTeams;
+            const tc = teamColors[ti];
             return (
               <div key={p.id} onClick={() => setTeamAssign(prev => ({...prev, [p.id]: nextTi}))}
-                style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:14, background:T.surface, boxShadow:T.shadow, cursor:'pointer', border:'2px solid ' + teamColors[ti] + '88', transition:'all .15s' }}>
-                <div style={{ width:10, height:10, borderRadius:5, background: teamColors[ti], flexShrink:0 }} />
-                <div style={{ flex:1, fontFamily:T.font, fontWeight:700, fontSize:15, color:T.ink }}>{p.name}</div>
-                <div style={{ fontFamily:T.font, fontSize:12, color: teamColors[ti], fontWeight:700 }}>{teamNames[ti]}</div>
+                style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', cursor:'pointer', borderBottom: idx < players.length-1 ? '1px solid rgba(20,30,50,0.07)' : 'none', transition:'background .1s' }}>
+                <div style={{ width:12, height:12, borderRadius:'50%', background: tc, flexShrink:0 }} />
+                <div style={{ flex:1, fontFamily:T.font, fontWeight:700, fontSize:16, color:T.ink }}>{p.name}</div>
+                <div style={{ display:'flex', alignItems:'center', gap:5, background: tc+'22', borderRadius:20, padding:'6px 12px' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M7 16l-4-4 4-4M17 8l4 4-4 4M14 4l-4 16" stroke={tc} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color: tc }}>{teamLetters[ti]} csapat</span>
+                </div>
               </div>
             );
           })}
         </div>
-        <div style={{ marginTop:8 }}>
-          <PrimaryButton onClick={() => {
-            const numT = numTeams;
-            const builtTeams = Array.from({length: numT}, (_, ti) => ({
-              id: 'team_' + ti,
-              name: teamNames[ti] || ('Csapat ' + (ti+1)),
-              emoji: ['🟢','🔴','🔵','🟡'][ti],
-              avatar: null,
-              color: teamColors[ti],
-              members: players.filter(p => (teamAssign[p.id] ?? (players.indexOf(p) % 2)) === ti),
-            })).filter(t => t.members.length > 0);
-            teamPlayersRef.current = builtTeams;
-            setTeamsReady(true);
-          }}>Torna indítása ▶</PrimaryButton>
-        </div>
+
+        <PrimaryButton onClick={() => {
+          const numT = numTeams;
+          const builtTeams = Array.from({length: numT}, (_, ti) => ({
+            id: 'team_' + ti,
+            name: teamNames[ti] || ('Csapat ' + (ti+1)),
+            emoji: ['🟢','🔴','🔵','🟡'][ti],
+            avatar: null,
+            color: teamColors[ti],
+            members: players.filter(p => (teamAssign[p.id] ?? (players.indexOf(p) % 2)) === ti),
+          })).filter(t => t.members.length > 0);
+          teamPlayersRef.current = builtTeams;
+          setTeamsReady(true);
+        }}>Torna indítása ▶</PrimaryButton>
       </div>
     );
   }
