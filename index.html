@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.25';
+const APP_VERSION = 'v7.26';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -36044,11 +36044,12 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       tournament: TOURNAMENT,
       phase: tsPhase,
       seRounds: seRoundsObj, seCurRound, seCurMatch,
+      cups1, cups2,
       rrMatches, rrIdx, rrDone,
       tsGroups: tsGroupsFlat, champion: champion ? { id: champion.id, name: champion.name, color: champion.color } : null,
       drinkMap,
     }});
-  }, [seRounds, seCurRound, seCurMatch, rrMatches, tsGroups, champion, rrDone, tsPhase]);
+  }, [seRounds, seCurRound, seCurMatch, cups1, cups2, rrMatches, tsGroups, champion, rrDone, tsPhase]);
 
   React.useEffect(() => {
     if (!teamsReady || !teamPlayersRef.current) return;
@@ -42424,16 +42425,33 @@ function BeerPongObserverView({ room, code, onLeave }) {
             </div>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
               <PlayerChip p={curMatch.p1} highlight />
-              {curMatch.score ? (
-                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0 }}>
-                  <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:22, color:T.ink, lineHeight:1 }}>
-                    {curMatch.score.p1}<span style={{ color:T.inkMute, fontSize:16 }}> – </span>{curMatch.score.p2}
-                  </div>
-                  <div style={{ fontFamily:T.font, fontSize:9, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em' }}>pohár</div>
-                </div>
-              ) : (
-                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.inkSoft, flexShrink:0 }}>VS</div>
-              )}
+              {(() => {
+                const liveCups1 = bp.cups1 ?? null;
+                const liveCups2 = bp.cups2 ?? null;
+                const hasLive = liveCups1 !== null && liveCups2 !== null;
+                const s = curMatch.score;
+                if (s) {
+                  return (
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0 }}>
+                      <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:22, color:T.ink, lineHeight:1 }}>
+                        {s.p1}<span style={{ color:T.inkMute, fontSize:16 }}> – </span>{s.p2}
+                      </div>
+                      <div style={{ fontFamily:T.font, fontSize:9, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em' }}>pohár marad</div>
+                    </div>
+                  );
+                }
+                if (hasLive) {
+                  return (
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0 }}>
+                      <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:22, color:T.mint, lineHeight:1 }}>
+                        {liveCups1}<span style={{ color:T.inkMute, fontSize:16 }}> – </span>{liveCups2}
+                      </div>
+                      <div style={{ fontFamily:T.font, fontSize:9, color:T.mint, textTransform:'uppercase', letterSpacing:'0.06em' }}>marad</div>
+                    </div>
+                  );
+                }
+                return <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.inkSoft, flexShrink:0 }}>VS</div>;
+              })()}
               <PlayerChip p={curMatch.p2} highlight />
             </div>
           </div>
@@ -42520,12 +42538,12 @@ function BeerPongObserverView({ room, code, onLeave }) {
         {players.length > 0 && (
           <div style={{ background:T.surface, borderRadius:18, boxShadow:T.shadow, padding:'14px 14px' }}>
             <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>🍺 Korty összesítő</div>
-            {[...players].sort((a,b) => (b.drinks - a.drinks)).map((p, i) => (
-              <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 6px', borderRadius:10, background: i===0 && p.drinks > 0 ? `${T.coral}12` : 'transparent' }}>
+            {[...players].map(p => ({ ...p, bpDrinks: (bp.drinkMap && bp.drinkMap[p.id]) || p.drinks || 0 })).sort((a,b) => b.bpDrinks - a.bpDrinks).map((p, i) => (
+              <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 6px', borderRadius:10, background: i===0 && p.bpDrinks > 0 ? `${T.coral}12` : 'transparent' }}>
                 <div style={{ width:28, height:28, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:12, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
                 <div style={{ flex:1, fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>{p.name}</div>
                 <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color: p.drinks > 0 ? T.coral : T.inkMute }}>{p.drinks}</span>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color: p.bpDrinks > 0 ? T.coral : T.inkMute }}>{p.bpDrinks}</span>
                   <span style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>korty</span>
                 </div>
               </div>
