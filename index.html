@@ -33594,7 +33594,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.11';
+const APP_VERSION = 'v8.12';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34705,12 +34705,20 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
 
   const toggle = id => {
     if (isLocked(id)) return;
-    setSelectedGames(selectedGames.includes(id) ? selectedGames.filter(x=>x!==id) : [...selectedGames, id]);
+    if (selectedGames.includes(id)) {
+      setSelectedGames(selectedGames.filter(x=>x!==id));
+    } else if (id === 'powerhour') {
+      // Power Hour can only be played alone
+      setSelectedGames(['powerhour']);
+    } else {
+      // Deselect Power Hour if other game added
+      setSelectedGames([...selectedGames.filter(x=>x!=='powerhour'), id]);
+    }
   };
-  const selectAll = () => setSelectedGames(GAMES.filter(g=>g.id!=='busz'&&g.id!=='beerpong').map(g=>g.id));
+  const selectAll = () => setSelectedGames(GAMES.filter(g=>g.id!=='busz'&&g.id!=='beerpong'&&g.id!=='powerhour').map(g=>g.id));
   const clearAll = () => setSelectedGames([]);
   const shuffle = () => {
-    const pool = GAMES.filter(g=>g.id!=='busz'&&g.id!=='beerpong');
+    const pool = GAMES.filter(g=>g.id!=='busz'&&g.id!=='beerpong'&&g.id!=='powerhour');
     const n = 4 + Math.floor(Math.random()*4);
     setSelectedGames([...pool].sort(()=>Math.random()-.5).slice(0,n).map(g=>g.id));
   };
@@ -40686,7 +40694,6 @@ function PowerHourGame({ players, onAdvance }) {
   const CLIP_SECS = 20;
   const DRINK_EVERY = 60;
 
-  // Shuffled song list (enough for full hour + skips)
   const songsRef = React.useRef(null);
   if (!songsRef.current) {
     const arr = [...ZENE_SONGS];
@@ -40703,14 +40710,22 @@ function PowerHourGame({ players, onAdvance }) {
   const [clipSec, setClipSec] = React.useState(0);
   const [showDrink, setShowDrink] = React.useState(false);
   const [ended, setEnded] = React.useState(false);
-  const [spState, setSpState] = React.useState('idle'); // idle|loading|playing|skip|error|noauth
+  const [spState, setSpState] = React.useState('idle'); // idle|loading|playing|skip|error
 
+  // Two DOM slots for IFrame API controllers (alternating)
+  const cont0 = React.useRef(null);
+  const cont1 = React.useRef(null);
+  const ctrls = React.useRef([null, null]); // [ctrl for slot0, ctrl for slot1]
+  const slotRef = React.useRef(0);         // which slot is currently active
+  const nextReadyRef = React.useRef(false);
   const clipIdxRef = React.useRef(0);
   const elapsedRef = React.useRef(0);
   const clipSecRef = React.useRef(0);
   const advancedRef = React.useRef(false);
-  const verifyRef = React.useRef(null);
-  const tryPlayRef = React.useRef(null);
+  const advanceClipRef = React.useRef(null);
+
+  const curCont = () => slotRef.current === 0 ? cont0.current : cont1.current;
+  const nextCont = () => slotRef.current === 0 ? cont1.current : cont0.current;
 
   const song = songs[clipIdx % songs.length];
   const nextSong = songs[(clipIdx + 1) % songs.length];
@@ -40737,58 +40752,143 @@ function PowerHourGame({ players, onAdvance }) {
     } catch(e) {}
   };
 
-  // Try to play song at index idx, verify after 2.5s, skip on failure
-  const tryPlay = (idx, skipCount) => {
-    if (skipCount > 12) { setSpState('error'); return; }
-    if (!window.getSpotifyToken()) { setSpState('noauth'); return; }
-    if (!window._spotifyPlayerReady || !window._spotifyDeviceId) {
-      clearTimeout(verifyRef.current);
-      setSpState('loading');
-      verifyRef.current = setTimeout(() => tryPlayRef.current && tryPlayRef.current(idx, skipCount), 1200);
-      return;
-    }
-    const s = songs[idx % songs.length];
-    const startMs = (s.start || 0) * 1000;
-    clipIdxRef.current = idx;
-    setClipIdx(idx);
-    setSpState('loading');
-    clearTimeout(verifyRef.current);
-    window.spotifyPlay(s.spotifyId, s.start || 0).then(res => {
-      if (res.status === 204 || (res.status >= 200 && res.status < 300)) {
-        verifyRef.current = setTimeout(() => {
-          if (!window._spotifyPlayer) { setSpState('playing'); return; }
-          window._spotifyPlayer.getCurrentState().then(state => {
-            if (state && !state.paused) {
-              setSpState('playing');
-            } else {
-              setSpState('skip');
-              tryPlayRef.current && tryPlayRef.current(idx + 1, skipCount + 1);
-            }
-          }).catch(() => setSpState('playing'));
-        }, 2500);
-      } else {
-        setSpState('skip');
-        tryPlayRef.current && tryPlayRef.current(idx + 1, skipCount + 1);
-      }
-    }).catch(() => {
-      setSpState('skip');
-      tryPlayRef.current && tryPlayRef.current(idx + 1, skipCount + 1);
+  // Preload next song into the inactive slot (no play)
+  const preloadNext = (nextIdx) => {
+    const IFrameAPI = window._spotifyIFrameAPI;
+    if (!IFrameAPI) return;
+    const nc = nextCont();
+    if (!nc) return;
+    nc.innerHTML = '';
+    nextReadyRef.current = false;
+    const s = songs[nextIdx % songs.length];
+    IFrameAPI.createController(nc, { uri:`spotify:track:${s.spotifyId}`, width:'100%', height:80 }, ctrl => {
+      ctrls.current[1 - slotRef.current] = ctrl;
+      nextReadyRef.current = true;
     });
   };
 
-  // Always keep ref fresh
-  React.useEffect(() => { tryPlayRef.current = tryPlay; });
+  // Play a song index in the current slot; skip on failure
+  const playInCurSlot = (idx, skipCount) => {
+    if (skipCount > 12) { setSpState('error'); return; }
+    const IFrameAPI = window._spotifyIFrameAPI;
+    if (!IFrameAPI) {
+      // Wait for IFrame API to load
+      setTimeout(() => playInCurSlot(idx, skipCount), 400);
+      return;
+    }
+    const cc = curCont();
+    if (!cc) return;
+    cc.innerHTML = '';
+    ctrls.current[slotRef.current] = null;
+    const s = songs[idx % songs.length];
+    clipIdxRef.current = idx;
+    setClipIdx(idx);
+    setSpState('loading');
 
+    let verified = false;
+    let failTimer;
+
+    IFrameAPI.createController(cc, { uri:`spotify:track:${s.spotifyId}`, width:'100%', height:80 }, ctrl => {
+      ctrls.current[slotRef.current] = ctrl;
+
+      ctrl.addListener('playback_update', e => {
+        if (!verified && e.data && !e.data.isPaused && e.data.position > 0) {
+          verified = true;
+          clearTimeout(failTimer);
+          setSpState('playing');
+          // Start preloading next song
+          preloadNext(idx + 1);
+        }
+      });
+
+      failTimer = setTimeout(() => {
+        if (!verified) {
+          // Song can't play — skip to next, stay in same slot
+          try { ctrl.pause(); } catch(ex) {}
+          setSpState('skip');
+          playInCurSlot(idx + 1, skipCount + 1);
+        }
+      }, 4000);
+
+      ctrl.play();
+    });
+  };
+
+  // Advance to next clip: use preloaded controller if ready
+  const advanceClip = () => {
+    const oldSlot = slotRef.current;
+    const newIdx = clipIdxRef.current + 1;
+    clipIdxRef.current = newIdx;
+    setClipIdx(newIdx);
+    clipSecRef.current = 0;
+    setClipSec(0);
+
+    // Pause old controller
+    try { if (ctrls.current[oldSlot]) ctrls.current[oldSlot].pause(); } catch(e) {}
+
+    // Swap slot
+    slotRef.current = 1 - oldSlot;
+
+    if (nextReadyRef.current && ctrls.current[slotRef.current]) {
+      // Preloaded controller ready — play it
+      const ctrl = ctrls.current[slotRef.current];
+      nextReadyRef.current = false;
+      setSpState('loading');
+      let verified = false;
+      let failTimer;
+
+      ctrl.addListener('playback_update', e => {
+        if (!verified && e.data && !e.data.isPaused && e.data.position > 0) {
+          verified = true;
+          clearTimeout(failTimer);
+          setSpState('playing');
+          // Clear old slot container, preload next+1
+          const oldCont = oldSlot === 0 ? cont0.current : cont1.current;
+          if (oldCont) oldCont.innerHTML = '';
+          ctrls.current[oldSlot] = null;
+          preloadNext(newIdx + 1);
+        }
+      });
+
+      failTimer = setTimeout(() => {
+        if (!verified) {
+          // Preloaded failed — clear and play fresh in current slot
+          try { ctrl.pause(); } catch(ex) {}
+          const cc = curCont();
+          if (cc) cc.innerHTML = '';
+          ctrls.current[slotRef.current] = null;
+          setSpState('skip');
+          playInCurSlot(newIdx, 0);
+        }
+      }, 4000);
+
+      try { ctrl.play(); } catch(e) { playInCurSlot(newIdx, 0); }
+    } else {
+      // No preloaded — fresh play in new current slot
+      const oldCont = oldSlot === 0 ? cont0.current : cont1.current;
+      if (oldCont) oldCont.innerHTML = '';
+      ctrls.current[oldSlot] = null;
+      playInCurSlot(newIdx, 0);
+    }
+  };
+
+  advanceClipRef.current = advanceClip;
+
+  // Start
   React.useEffect(() => {
     if (!started) return;
     clipIdxRef.current = 0; elapsedRef.current = 0; clipSecRef.current = 0;
-    tryPlayRef.current(0, 0);
+    nextReadyRef.current = false; slotRef.current = 0;
+    ctrls.current = [null, null];
+    playInCurSlot(0, 0);
     return () => {
-      clearTimeout(verifyRef.current);
-      try { window.spotifyPause(); } catch(e) {}
+      try { ctrls.current.forEach(c => { if (c) c.pause(); }); } catch(e) {}
+      if (cont0.current) cont0.current.innerHTML = '';
+      if (cont1.current) cont1.current.innerHTML = '';
     };
   }, [started]);
 
+  // Timer
   React.useEffect(() => {
     if (!started || ended) return;
     const id = setInterval(() => {
@@ -40803,7 +40903,7 @@ function PowerHourGame({ players, onAdvance }) {
       }
       if (newElapsed >= TOTAL_SECS && !advancedRef.current) {
         advancedRef.current = true; setEnded(true);
-        try { window.spotifyPause(); } catch(e) {}
+        try { ctrls.current.forEach(c => { if (c) c.pause(); }); } catch(e) {}
         onAdvance && onAdvance({});
         return;
       }
@@ -40812,8 +40912,7 @@ function PowerHourGame({ players, onAdvance }) {
       if (newClipSec >= CLIP_SECS) {
         clipSecRef.current = 0;
         setClipSec(0);
-        // Immediately play next — next song already known (clipIdxRef+1)
-        tryPlayRef.current && tryPlayRef.current(clipIdxRef.current + 1, 0);
+        advanceClipRef.current && advanceClipRef.current();
       } else {
         clipSecRef.current = newClipSec;
         setClipSec(newClipSec);
@@ -40823,7 +40922,7 @@ function PowerHourGame({ players, onAdvance }) {
   }, [started, ended]);
 
   const stateIcon = spState === 'loading' ? '⏳' : spState === 'skip' ? '⏭' : spState === 'error' ? '❌' : '🎵';
-  const stateLabel = spState === 'loading' ? 'Betöltés...' : spState === 'skip' ? 'Ugrás...' : spState === 'error' ? 'Hiba' : spState === 'noauth' ? 'Bejelentkezés szükséges' : spState === 'playing' ? '▶ Szól' : '';
+  const stateLabel = spState === 'loading' ? 'Betöltés...' : spState === 'skip' ? 'Ugrás...' : spState === 'error' ? 'Hiba' : spState === 'playing' ? '▶ Szól' : '';
 
   if (!started) return (
     <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:20,width:'100%',paddingTop:4}}>
@@ -40832,8 +40931,7 @@ function PowerHourGame({ players, onAdvance }) {
       <div style={{fontFamily:T.font,fontSize:14,color:T.inkSoft,textAlign:'center',lineHeight:1.65,maxWidth:290}}>
         Zenék <b style={{color:T.ink}}>20 másodpercenként</b> váltanak.<br/>
         Percenként egyedi hangjelzés = <b style={{color:T.coral}}>igyál egyet!</b><br/>
-        <b style={{color:T.ink}}>60 percig</b> tart.<br/>
-        <span style={{fontSize:12,opacity:0.6}}>Spotify Premium szükséges.</span>
+        <b style={{color:T.ink}}>60 percig</b> tart.
       </div>
       <div style={{display:'flex',gap:10,justifyContent:'center'}}>
         {[{v:'60 perc',i:'⏱️'},{v:'60 korty',i:'🍺'},{v:'~180 dal',i:'🎵'}].map(x=>(
@@ -40843,11 +40941,6 @@ function PowerHourGame({ players, onAdvance }) {
           </div>
         ))}
       </div>
-      {!window.getSpotifyToken() && (
-        <button onClick={() => window.spotifyLogin()} style={{width:'100%',maxWidth:320,padding:'13px',borderRadius:14,border:'none',background:'#1DB954',color:'#fff',fontFamily:T.font,fontWeight:700,fontSize:15,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-          <span>🎵</span><span>Spotify bejelentkezés</span>
-        </button>
-      )}
       <button onClick={() => setStarted(true)} style={{width:'100%',maxWidth:320,padding:'17px',borderRadius:18,border:'none',background:'linear-gradient(135deg,#F59E0B,#EF4444)',color:'#fff',fontFamily:T.font,fontWeight:900,fontSize:18,cursor:'pointer',boxShadow:'0 6px 24px rgba(239,68,68,0.38)',letterSpacing:'0.01em'}}>
         ⚡ INDÍTÁS
       </button>
@@ -40873,19 +40966,16 @@ function PowerHourGame({ players, onAdvance }) {
     </div>
   );
 
-  if (spState === 'noauth') return (
-    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16,width:'100%',padding:'20px 0'}}>
-      <div style={{fontSize:48}}>🔐</div>
-      <div style={{fontFamily:T.font,fontWeight:700,fontSize:18,color:T.ink,textAlign:'center'}}>Spotify bejelentkezés szükséges</div>
-      <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,textAlign:'center',maxWidth:280}}>A Power Hour Spotify Premium fiókot igényel a zenék lejátszásához.</div>
-      <button onClick={() => window.spotifyLogin()} style={{padding:'14px 28px',borderRadius:14,border:'none',background:'#1DB954',color:'#fff',fontFamily:T.font,fontWeight:700,fontSize:15,cursor:'pointer'}}>
-        🎵 Bejelentkezés
-      </button>
-    </div>
-  );
-
   return (
     <div style={{display:'flex',flexDirection:'column',gap:12,width:'100%',position:'relative'}}>
+
+      {/* Hidden IFrame API containers */}
+      <div style={{height:0,overflow:'hidden',position:'absolute',pointerEvents:'none'}}>
+        <div ref={cont0} style={{width:300,height:80}} />
+      </div>
+      <div style={{height:0,overflow:'hidden',position:'absolute',pointerEvents:'none'}}>
+        <div ref={cont1} style={{width:300,height:80}} />
+      </div>
 
       {/* Drink flash */}
       {showDrink && (
