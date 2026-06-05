@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.45';
+const APP_VERSION = 'v7.46';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34042,7 +34042,7 @@ function InstallModal({ onClose }) {
   );
 }
 
-function HomeScreen({ go, mode, setMode, onStartGame, setTheme, currentTheme }) {
+function HomeScreen({ go, mode, setMode, onStartGame, setTheme, currentTheme, resumeRoomData, onResume }) {
   const [showInstall, setShowInstall] = React.useState(false);
   const isStandalone = typeof window !== 'undefined' && (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches);
 
@@ -34069,6 +34069,13 @@ function HomeScreen({ go, mode, setMode, onStartGame, setTheme, currentTheme }) 
           </div>
         </div>
         {/* Theme toggle button */}
+        {resumeRoomData && onResume && (
+          <div style={{ position:'absolute', top:14, left:18, zIndex:10 }}>
+            <button onClick={() => onResume(resumeRoomData)} style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 14px', borderRadius:999, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer', boxShadow:T.shadowLift, animation:'pulse 2s infinite' }}>
+              <span style={{ fontSize:16 }}>🏓</span> Folytatás
+            </button>
+          </div>
+        )}
         <div style={{ position:'absolute', top:14, right:18, zIndex:10 }}>
           <button onClick={() => setTheme && setTheme(currentTheme === 'warm' ? 'sky' : currentTheme === 'sky' ? 'dark' : 'warm')}
             style={{ width:42, height:42, borderRadius:'50%', border:'none', background:T.surface, boxShadow:T.shadow, cursor:'pointer', display:'grid', placeItems:'center', fontSize:20 }}>
@@ -35889,7 +35896,7 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult }) {
   );
 }
 
-function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCode, mode }) {
+function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCode, mode, initialBpState }) {
   const bpCfg = gameMeta?.beerpongConfig || {};
   const DRINKS_PER_LOSS = bpCfg.drinksPerLoss ?? 5;
   const MAX_CUPS = bpCfg.maxCups ?? 10;
@@ -36004,28 +36011,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const [timerRunning, setTimerRunning] = React.useState(false);
   const timerRef = React.useRef(null);
 
-  // Resume from Firestore state
-  const [resumePrompt, setResumePrompt] = React.useState('checking'); // 'checking' | 'show' | 'done'
-  const [savedBpState, setSavedBpState] = React.useState(null);
-
-  React.useEffect(() => {
-    if (!roomCode || mode !== 'Online' || typeof checkRoom !== 'function') {
-      setResumePrompt('done'); return;
-    }
-    checkRoom(roomCode).then(room => {
-      const bp = room?.bpState;
-      if (!bp || bp.tournament !== TOURNAMENT) { setResumePrompt('done'); return; }
-      const seArr = bp.seRounds ? (Array.isArray(bp.seRounds) ? bp.seRounds : Object.values(bp.seRounds)) : [];
-      const rrArr = bp.rrMatches ? (Array.isArray(bp.rrMatches) ? bp.rrMatches : Object.values(bp.rrMatches)) : [];
-      const grpArr = bp.tsGroups ? (Array.isArray(bp.tsGroups) ? bp.tsGroups : Object.values(bp.tsGroups)) : [];
-      const hasData = seArr.length > 0 || rrArr.length > 0 || grpArr.length > 0;
-      if (!hasData) { setResumePrompt('done'); return; }
-      setSavedBpState(bp);
-      setResumePrompt('show');
-    }).catch(() => setResumePrompt('done'));
-  }, []);
-
-  const resumeFromState = (bp) => {
+  const resumeFromBpState = (bp) => {
+    if (!bp) return;
     const norm = (v) => v ? (Array.isArray(v) ? v : Object.values(v)) : [];
     setSeRounds(norm(bp.seRounds));
     setSeCurRound(bp.seCurRound ?? 0);
@@ -36033,12 +36020,11 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     setRrMatches(norm(bp.rrMatches));
     setRrIdx(bp.rrIdx ?? 0);
     setRrDone(bp.rrDone ?? false);
-    const groups = norm(bp.tsGroups).map(g => ({
+    setTsGroups(norm(bp.tsGroups).map(g => ({
       ...g,
       matches: norm(g.matches),
       seRounds: g.seRounds ? norm(g.seRounds) : null,
-    }));
-    setTsGroups(groups);
+    })));
     setTsPhase(bp.phase || 'groups');
     setDrinkMap(bp.drinkMap || {});
     setChampion(bp.champion || null);
@@ -36046,8 +36032,9 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     setCups1(MAX_CUPS); setCups2(MAX_CUPS);
     doneRef.current = !!bp.champion;
     if (MODE === 'csapat') setTeamsReady(true);
-    setResumePrompt('done');
   };
+
+  React.useEffect(() => { if (initialBpState) resumeFromBpState(initialBpState); }, []);
 
   React.useEffect(() => {
     if (timerRunning) {
@@ -36727,45 +36714,6 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const effectivePlayers = (MODE === 'csapat' && teamsReady && teamPlayersRef.current) ? teamPlayersRef.current : players;
 
   const rrParts = TOURNAMENT === 'rr' ? effectivePlayers : (rrMatches.flatMap(m => [m.p1, m.p2]).filter((p, i, a) => p && a.findIndex(x => x && x.id === p.id) === i));
-
-  if (resumePrompt === 'checking') {
-    return (
-      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, padding:32 }}>
-        <div style={{ display:'flex', gap:6 }}>{[0,1,2].map(i => <span key={i} style={{ width:10, height:10, borderRadius:'50%', background:T.mint, animation:`dotBounce 1.2s ${i*0.15}s infinite ease-in-out` }}/>)}</div>
-      </div>
-    );
-  }
-
-  if (resumePrompt === 'show' && savedBpState) {
-    const bp = savedBpState;
-    const norm = (v) => v ? (Array.isArray(v) ? v : Object.values(v)) : [];
-    const seArr = norm(bp.seRounds);
-    const rrArr = norm(bp.rrMatches);
-    const grpArr = norm(bp.tsGroups);
-    const totalMatches = seArr.flatMap(r => r).filter(m => m.score).length
-      + rrArr.filter(m => m.score).length
-      + grpArr.flatMap(g => norm(g.matches)).filter(m => m.score).length;
-    const phaseText = bp.phase === 'finals' ? 'Főszakasz' : bp.tournament?.startsWith('grp_') ? 'Csoportkör' : null;
-    return (
-      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:20, padding:28 }}>
-        <div style={{ fontSize:52 }}>🏓</div>
-        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink, textAlign:'center' }}>Folytatod az előző bajnokságot?</div>
-        <div style={{ background:T.surface, borderRadius:16, padding:'14px 18px', boxShadow:T.shadow, display:'flex', flexDirection:'column', gap:6, width:'100%', maxWidth:320 }}>
-          <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft }}>
-            {totalMatches > 0 ? `${totalMatches} meccs már lejátszva` : 'Sorsolás kész, játék nem kezdődött'}
-          </div>
-          {phaseText && <div style={{ fontFamily:T.font, fontSize:13, color:T.mint, fontWeight:700 }}>{phaseText}</div>}
-          {bp.champion && <div style={{ fontFamily:T.font, fontSize:13, color:T.yellow, fontWeight:700 }}>🏆 Bajnok: {bp.champion.name}</div>}
-        </div>
-        <button onClick={() => resumeFromState(savedBpState)} style={{ width:'100%', maxWidth:320, padding:'15px 0', borderRadius:16, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:16, cursor:'pointer', boxShadow:T.shadowLift }}>
-          ▶ Folytatás
-        </button>
-        <button onClick={() => setResumePrompt('done')} style={{ width:'100%', maxWidth:320, padding:'13px 0', borderRadius:16, background:T.surfaceMuted, border:'none', color:T.inkSoft, fontFamily:T.font, fontWeight:700, fontSize:15, cursor:'pointer' }}>
-          Új bajnokság indítása
-        </button>
-      </div>
-    );
-  }
 
   if (MODE === 'csapat' && !teamsReady) {
     const teamColors = [T.mint, T.coral, T.blue, '#FACC15', '#A855F7', '#F97316', '#14B8A6', '#EC4899'];
@@ -40874,7 +40822,7 @@ function KezCsereGame({ gameIdx, players, onAdvance }) {
 
 function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, roomCode, mode, gameMeta, challenger, opponent }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx + '_' + (gameMeta?.beerpongConfig?.tournamentType||'se')} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} mode={mode} />;
+  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx + '_' + (gameMeta?.beerpongConfig?.tournamentType||'se')} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} mode={mode} initialBpState={gameMeta?._resumeBpState || null} />;
   if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
@@ -43214,6 +43162,41 @@ function BottleApp() {
     if (meta) meta.content = T.bg;
   }, [appTheme]);
 
+  const [resumeRoomData, setResumeRoomData] = React.useState(null);
+
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem('boh_bp_resume');
+      if (!saved || typeof checkRoom !== 'function') return;
+      const data = JSON.parse(saved);
+      if (!data?.code) return;
+      checkRoom(data.code).then(room => {
+        if (!room?.bpState) return;
+        const bp = room.bpState;
+        const norm = (v) => v ? (Array.isArray(v) ? v : Object.values(v)) : [];
+        const hasData = norm(bp.seRounds).length > 0 || norm(bp.rrMatches).length > 0 || norm(bp.tsGroups).length > 0;
+        if (!hasData) return;
+        setResumeRoomData({ ...data, bpState: bp });
+      }).catch(() => {});
+    } catch(e) {}
+  }, []);
+
+  const goResume = (data) => {
+    setPlayers(data.players);
+    setSelectedGames(data.selectedGames);
+    setGameMeta({ ...data.gameMeta, _resumeBpState: data.bpState });
+    setRoomCode(data.code);
+    if (typeof subscribeRoom === 'function') {
+      if (roomUnsubRef.current) roomUnsubRef.current();
+      roomUnsubRef.current = subscribeRoom(data.code, roomData => {
+        if (roomData) setPlayers(roomData.players || data.players);
+      });
+    }
+    setResumeRoomData(null);
+    localStorage.removeItem('boh_bp_resume');
+    setScreen('play');
+  };
+
   const [roomCode, setRoomCode] = React.useState(null);
   const [creatingRoom, setCreatingRoom] = React.useState(false);
   const roomUnsubRef = React.useRef(null);
@@ -43222,6 +43205,9 @@ function BottleApp() {
     if (next === 'play' && mode === 'Online') {
       const code = generateRoomCode();
       setCreatingRoom(true);
+      if ((selectedGames || []).includes('beerpong')) {
+        try { localStorage.setItem('boh_bp_resume', JSON.stringify({ code, players: players.map(p=>({...p})), selectedGames, gameMeta: {...gameMeta, _resumeBpState: null} })); } catch(e) {}
+      }
       createRoom(code, players.map(p=>({...p})), selectedGames, gameMeta)
         .then(() => {
           setRoomCode(code);
@@ -43250,7 +43236,7 @@ function BottleApp() {
   return (
     <div style={{ minHeight:'100dvh', width:'100%', position:'relative', fontFamily:T.font, color:T.ink, WebkitFontSmoothing:'antialiased', overflow:'hidden', background:T.bg }} data-theme={appTheme}>
       <div key={screen} style={{ height:'100dvh', width:'100%', display:'flex', flexDirection:'column', animation:`slide${dir>0?'In':'Back'} .35s cubic-bezier(.2,.85,.3,1.05)` }}>
-        {screen==='home'     && <HomeScreen     go={go} mode={mode} setMode={setMode} onStartGame={onStartGame} setTheme={handleSetTheme} currentTheme={appTheme} />}
+        {screen==='home'     && <HomeScreen     go={go} mode={mode} setMode={setMode} onStartGame={onStartGame} setTheme={handleSetTheme} currentTheme={appTheme} resumeRoomData={resumeRoomData} onResume={goResume} />}
         {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
         {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} mode={mode} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
