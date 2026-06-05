@@ -33592,7 +33592,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.06';
+const APP_VERSION = 'v8.07';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -33832,6 +33832,7 @@ const GAMES = [
   { id:'csakegyszó', name:'Csak Egy Szó',         difficulty:'könnyű',  category:'Páros',  emoji:'💬', symbol:IMGS['csakegyszo_symbol.png'], img:IMGS['csakegyszo_icon.png'], banner:null, color:'#10B981', desc:'Egy szót kell egyetlen szóval elmagyaráznod a párodnak 15 mp alatt. Ha kitalálja, mindketten pontot kapnak — ha nem, mindketten isznak.' },
   { id:'igazhamis', name:'Igaz Hamis',            difficulty:'könnyű',  category:'Egyéni', emoji:'🤔', symbol:IMGS['igazhamis_symbol.png'], img:IMGS['igazhamis_icon.png'], banner:IMGS['igazhamis_banner.png'], color:'#06B6D4', desc:'A játékban egy állítás fog megjelenni és el kell dönteni, hogy az igaz, vagy hamis. Ha úgy ítéled meg hogy az állítás igaz, akkor az idő lejárta előtt ezt közölnöd kell a többi játékossal akik ez alapján tudjuk eldönteni, hogy jól válaszoltál-e. Ha nem jó a válaszod akkor sajnos innod kell.' },
   { id:'szolánc',   name:'Szólánc',              difficulty:'közepes', category:'Csapat', emoji:'🔗', symbol:IMGS['szolanc_symbol.png'], img:IMGS['szolanc_icon.png'], banner:null, color:'#F59E0B', comingSoon:true, desc:'Ismételd el a sort, majd told hozzá egy új szót a kategóriából. Aki elront, iszik.' },
+  { id:'powerhour', name:'Power Hour',            difficulty:'nehéz',   category:'Csapat', emoji:'⚡', symbol:null, img:null, banner:null, color:'#F59E0B', dnr:true, desc:'Spotify zenék 20 másodpercenként váltanak — 60 percen át. Percenként Super Mario hangjelzés: mindenki iszik egyet. Aki túléli az igazi hős!' },
 ];
 
 const DIFFICULTY_META = {
@@ -35038,6 +35039,7 @@ const SCENARIOS = {
   sohanem:   { prompt:'Én még soha — igaz rád?', cta:['Igaz rám — iszom','Nem igaz rám'] },
   mindenki:  { prompt:'', cta:[] },
   beerpong:  { prompt:'', cta:[] },
+  powerhour: { prompt:'', cta:[] },
   igazhamis: { prompt:'Igaz vagy hamis az állítás?', cta:[] },
   kivagyok:  { prompt:'Ki van a képen? Tippelj rá az életkorára vagy foglalkozására!', cta:[] },
   // Páros
@@ -40677,6 +40679,181 @@ function KoPapirGame({ gameIdx, players, onAdvance }) {
   );
 }
 
+function PowerHourGame({ players, onAdvance }) {
+  const TOTAL_SECS = 60 * 60;
+  const CLIP_SECS = 20;
+  const DRINK_EVERY = 60;
+
+  const songsRef = React.useRef(null);
+  if (!songsRef.current) {
+    const arr = [...ZENE_SONGS];
+    for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
+    const needed = Math.ceil(TOTAL_SECS / CLIP_SECS);
+    const full = []; while (full.length < needed) full.push(...arr);
+    songsRef.current = full.slice(0, needed);
+  }
+  const songs = songsRef.current;
+
+  const [started, setStarted] = React.useState(false);
+  const [elapsed, setElapsed] = React.useState(0);
+  const [showDrink, setShowDrink] = React.useState(false);
+  const [ended, setEnded] = React.useState(false);
+  const advancedRef = React.useRef(false);
+
+  const songIdx = Math.min(Math.floor(elapsed / CLIP_SECS), songs.length - 1);
+  const clipRemain = CLIP_SECS - (elapsed % CLIP_SECS);
+  const minutesDone = Math.floor(elapsed / DRINK_EVERY);
+  const nextDrinkIn = DRINK_EVERY - (elapsed % DRINK_EVERY);
+  const remaining = TOTAL_SECS - elapsed;
+
+  const playMario = () => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      // Mario 1-UP melody: G5 B5 D6 B5 D6 G6
+      [[784,0],[988,.09],[1175,.18],[988,.27],[1175,.36],[1568,.45]].forEach(([f,t]) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'square'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.22, ctx.currentTime+t);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+t+0.09);
+        o.start(ctx.currentTime+t); o.stop(ctx.currentTime+t+0.1);
+      });
+    } catch(e) {}
+  };
+
+  React.useEffect(() => {
+    if (!started || ended) return;
+    const id = setInterval(() => {
+      setElapsed(prev => {
+        const next = prev + 1;
+        if (next % DRINK_EVERY === 0 && next > 0) {
+          setShowDrink(true); playMario();
+          setTimeout(() => setShowDrink(false), 2800);
+        }
+        if (next >= TOTAL_SECS && !advancedRef.current) {
+          advancedRef.current = true; setEnded(true);
+          onAdvance && onAdvance({});
+        }
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [started, ended]);
+
+  const fmt = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+  const song = songs[songIdx];
+  const pct = (elapsed / TOTAL_SECS) * 100;
+
+  if (!started) return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:20,width:'100%',paddingTop:4}}>
+      <div style={{fontSize:60,lineHeight:1}}>⚡</div>
+      <div style={{fontFamily:T.font,fontWeight:900,fontSize:26,color:T.ink,textTransform:'uppercase',letterSpacing:'-0.02em',textAlign:'center'}}>Power Hour</div>
+      <div style={{fontFamily:T.font,fontSize:14,color:T.inkSoft,textAlign:'center',lineHeight:1.65,maxWidth:290}}>
+        Zenék <b style={{color:T.ink}}>20 másodpercenként</b> váltanak.<br/>
+        Percenként 🎮 Mario hang = <b style={{color:T.coral}}>mindenki iszik!</b><br/>
+        <b style={{color:T.ink}}>60 percig</b> tart.
+      </div>
+      <div style={{display:'flex',gap:10,justifyContent:'center'}}>
+        {[{v:'60 perc',i:'⏱️'},{v:'60 korty',i:'🍺'},{v:'~180 dal',i:'🎵'}].map(x=>(
+          <div key={x.v} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:5,padding:'12px 14px',background:T.surface,borderRadius:14,boxShadow:T.shadow,minWidth:76}}>
+            <span style={{fontSize:22}}>{x.i}</span>
+            <span style={{fontFamily:T.font,fontWeight:700,fontSize:11,color:T.inkSoft}}>{x.v}</span>
+          </div>
+        ))}
+      </div>
+      <button onClick={() => setStarted(true)} style={{width:'100%',maxWidth:320,padding:'17px',borderRadius:18,border:'none',background:'linear-gradient(135deg,#F59E0B,#EF4444)',color:'#fff',fontFamily:T.font,fontWeight:900,fontSize:18,cursor:'pointer',boxShadow:'0 6px 24px rgba(239,68,68,0.38)',letterSpacing:'0.01em'}}>
+        ⚡ INDÍTÁS
+      </button>
+    </div>
+  );
+
+  if (ended) return (
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:14,width:'100%',textAlign:'center',paddingTop:8}}>
+      <BeerPongConfetti />
+      <div style={{fontSize:64,lineHeight:1}}>🏆</div>
+      <div style={{fontFamily:T.font,fontWeight:900,fontSize:28,color:T.ink,textTransform:'uppercase',letterSpacing:'-0.02em'}}>Túlélted!</div>
+      <div style={{fontFamily:T.font,fontSize:15,color:T.inkSoft}}>Power Hour teljesítve — igazi hősök!</div>
+      <div style={{display:'flex',gap:12,marginTop:4}}>
+        <div style={{padding:'14px 20px',background:T.surface,borderRadius:14,boxShadow:T.shadow}}>
+          <div style={{fontFamily:T.font,fontWeight:900,fontSize:32,color:T.coral}}>60</div>
+          <div style={{fontFamily:T.font,fontSize:10,fontWeight:700,color:T.inkSoft,textTransform:'uppercase',marginTop:2}}>korty</div>
+        </div>
+        <div style={{padding:'14px 20px',background:T.surface,borderRadius:14,boxShadow:T.shadow}}>
+          <div style={{fontFamily:T.font,fontWeight:900,fontSize:32,color:T.mint}}>{songIdx+1}</div>
+          <div style={{fontFamily:T.font,fontSize:10,fontWeight:700,color:T.inkSoft,textTransform:'uppercase',marginTop:2}}>dal</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:12,width:'100%',position:'relative'}}>
+
+      {/* Drink flash */}
+      {showDrink && (
+        <div style={{position:'fixed',inset:0,background:'rgba(239,68,68,0.18)',zIndex:60,pointerEvents:'none',display:'flex',alignItems:'center',justifyContent:'center',animation:'fadeIn .12s'}}>
+          <div style={{background:'#EF4444',borderRadius:24,padding:'22px 44px',animation:'popIn .28s cubic-bezier(.2,.9,.3,1.3)',boxShadow:'0 8px 48px rgba(239,68,68,0.55)',textAlign:'center'}}>
+            <div style={{fontFamily:T.font,fontWeight:900,fontSize:34,color:'#fff',letterSpacing:'-0.02em'}}>🍺 ISZIK!</div>
+            <div style={{fontFamily:T.font,fontSize:13,color:'rgba(255,255,255,0.85)',marginTop:4}}>{minutesDone}. perc teljesítve</div>
+          </div>
+        </div>
+      )}
+
+      {/* Timers */}
+      <div style={{display:'flex',gap:10}}>
+        <div style={{flex:1,background:T.surface,borderRadius:14,padding:'10px 14px',boxShadow:T.shadow,display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
+          <div style={{fontFamily:T.font,fontSize:8,fontWeight:700,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.1em'}}>ELTELT</div>
+          <div style={{fontFamily:'monospace',fontWeight:900,fontSize:24,color:T.ink,letterSpacing:'0.05em',lineHeight:1.15}}>{fmt(elapsed)}</div>
+        </div>
+        <div style={{flex:1,background:T.surface,borderRadius:14,padding:'10px 14px',boxShadow:T.shadow,display:'flex',flexDirection:'column',alignItems:'center',gap:1}}>
+          <div style={{fontFamily:T.font,fontSize:8,fontWeight:700,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.1em'}}>HÁTRA</div>
+          <div style={{fontFamily:'monospace',fontWeight:900,fontSize:24,color:remaining<300?T.coral:T.ink,letterSpacing:'0.05em',lineHeight:1.15}}>{fmt(remaining)}</div>
+        </div>
+        <div style={{background:T.surface,borderRadius:14,padding:'10px 14px',boxShadow:T.shadow,display:'flex',flexDirection:'column',alignItems:'center',gap:1,minWidth:60}}>
+          <div style={{fontFamily:T.font,fontSize:8,fontWeight:700,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.1em'}}>PERC</div>
+          <div style={{fontFamily:'monospace',fontWeight:900,fontSize:24,color:T.mint,letterSpacing:'0.05em',lineHeight:1.15}}>{minutesDone}/60</div>
+        </div>
+      </div>
+
+      {/* Global progress */}
+      <div style={{background:T.surfaceMuted,borderRadius:999,height:6,overflow:'hidden'}}>
+        <div style={{background:'linear-gradient(90deg,#F59E0B,#EF4444)',height:'100%',width:`${pct}%`,transition:'width 1s linear',borderRadius:999}}/>
+      </div>
+
+      {/* Next drink countdown */}
+      <div style={{display:'flex',alignItems:'center',gap:10,background:`${T.coral}12`,border:`1.5px solid ${T.coral}30`,borderRadius:12,padding:'8px 12px'}}>
+        <span style={{fontSize:20}}>🍺</span>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontFamily:T.font,fontWeight:700,fontSize:12,color:T.coral}}>Következő ivás: <b>{nextDrinkIn}s</b></div>
+          <div style={{background:T.surfaceMuted,borderRadius:999,height:4,marginTop:4,overflow:'hidden'}}>
+            <div style={{background:T.coral,height:'100%',width:`${((DRINK_EVERY-nextDrinkIn)/DRINK_EVERY)*100}%`,transition:'width 1s linear',borderRadius:999}}/>
+          </div>
+        </div>
+      </div>
+
+      {/* Spotify embed */}
+      <div style={{borderRadius:14,overflow:'hidden',boxShadow:T.shadow,background:'#000'}}>
+        <iframe
+          key={songIdx}
+          src={`https://open.spotify.com/embed/track/${song.spotifyId}?utm_source=generator&autoplay=1`}
+          width="100%" height="80" frameBorder="0"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          style={{display:'block'}}
+        />
+      </div>
+
+      {/* Song clip countdown */}
+      <div style={{display:'flex',alignItems:'center',gap:8,padding:'0 2px'}}>
+        <span style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,flexShrink:0}}>🎵 Váltás: {clipRemain}s</span>
+        <div style={{flex:1,background:T.surfaceMuted,borderRadius:999,height:3,overflow:'hidden'}}>
+          <div style={{background:T.mint,height:'100%',width:`${((CLIP_SECS-clipRemain)/CLIP_SECS)*100}%`,transition:'width 1s linear',borderRadius:999}}/>
+        </div>
+        <span style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,flexShrink:0}}>#{songIdx+1}</span>
+      </div>
+    </div>
+  );
+}
+
 function CollectBoomGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   const cfg = gameMeta?.collectConfig || {};
   const COLS = cfg.gridSize ?? 4;
@@ -41494,6 +41671,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'ringfire') return <RingFireGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
   if (gameId === 'kopapir') return <KoPapirGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'collect') return <CollectBoomGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
+  if (gameId === 'powerhour') return <PowerHourGame key={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'kategoria') return <KategoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'memoria') return <MemoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kezcsere') return <KezCsereGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
@@ -41825,7 +42003,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
           <button onClick={() => advancePaired(true)} disabled={transitioning} style={{ flex:1, minHeight:60, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>Nyertem! 🎉</button>
         </div>
       )}
-      {currentGame.category === 'Csapat' && currentGameId !== 'loverseny' && currentGameId !== 'imposztor' && currentGameId !== 'busz' && currentGameId !== 'kisebb' && currentGameId !== 'ticktak' && currentGameId !== 'szerencse' && currentGameId !== 'kategoria' && currentGameId !== 'collect' && currentGameId !== 'kopapir' && currentGameId !== 'memoria' && currentGameId !== 'kezcsere' && currentGameId !== 'mindenki' && currentGameId !== 'beerpong' && currentGameId !== 'uveg' && (
+      {currentGame.category === 'Csapat' && currentGameId !== 'loverseny' && currentGameId !== 'imposztor' && currentGameId !== 'busz' && currentGameId !== 'kisebb' && currentGameId !== 'ticktak' && currentGameId !== 'szerencse' && currentGameId !== 'kategoria' && currentGameId !== 'collect' && currentGameId !== 'kopapir' && currentGameId !== 'memoria' && currentGameId !== 'kezcsere' && currentGameId !== 'mindenki' && currentGameId !== 'beerpong' && currentGameId !== 'uveg' && currentGameId !== 'powerhour' && (
         <div style={{ padding:'0 18px 14px', display:'flex', flexDirection:'column', gap:10 }}>
           <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', textAlign:'center' }}>{currentGameId === 'sohanem' ? 'Kire igaz?' : 'Ki rontott?'}</div>
           <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:4, WebkitOverflowScrolling:'touch' }}>
