@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.49';
+const APP_VERSION = 'v7.50';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -41598,7 +41598,9 @@ function BuszPlayerView({ room, roomCode }) {
     const done = !!(buszState.busRiderDone?.[playerId]);
     const drawnCards = buszState.busRiderDrawnCards?.[playerId] || [];
     const correct = done || newPos > step;
-    setBusGuessResult({ correct, done, card: correct ? drawnCards[drawnCards.length-1] : null, step, drinks: correct ? 0 : step+1 });
+    const posCard = buszState.busPositionDrawnCards?.[step] || null;
+    const resultCard = correct ? (drawnCards[drawnCards.length-1] || posCard) : posCard;
+    setBusGuessResult({ correct, done, card: resultCard, step, drinks: correct ? 0 : step+1 });
     if (busResultTimerRef.current) clearTimeout(busResultTimerRef.current);
     busResultTimerRef.current = setTimeout(() => setBusGuessResult(null), correct ? 1800 : 2200);
   }, [buszState]);
@@ -41620,7 +41622,7 @@ function BuszPlayerView({ room, roomCode }) {
       </div>
       <div style={{ display:'flex', flexDirection:'column', gap:8, overflowY:'auto', WebkitOverflowScrolling:'touch', paddingBottom:32, maxHeight:'calc(100dvh - 260px)' }}>
         {players.map(p => {
-          const taken = (room.buszTakenIds||[]).includes(p.id);
+          const taken = (room.buszTakenIds||[]).includes(p.id) || !!(buszState && buszState.hands && p.id in buszState.hands);
           return (
             <button key={p.id} disabled={taken} onClick={!taken ? () => {
               setPlayerId(p.id);
@@ -41890,8 +41892,8 @@ function BuszPlayerView({ room, roomCode }) {
             <div style={{ textAlign:'center', padding:'12px 16px', borderRadius:14, background:busGuessResult.correct?`${T.mint}22`:`${T.coral}22`, border:`2px solid ${busGuessResult.correct?T.mint:T.coral}`, animation:'popIn .3s' }}>
               <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:16, color:busGuessResult.correct?T.mint:T.coral }}>
                 {busGuessResult.precise
-                  ? (busGuessResult.correct ? `🎯🎉 Big Pick! ${busGuessResult.card?.value}${busGuessResult.card?.suit} — Leszálltál!` : `🎯✗ Nem ${selectedPreciseValue||'?'} volt — 1 korty, vissza az ${preciseTippStep}. állomásra`)
-                  : busGuessResult.correct ? (busGuessResult.done ? `🎉 Teljesítve! Leszálltál! (${busGuessResult.card?.value}${busGuessResult.card?.suit})` : `✓ Helyes! (${busGuessResult.card?.value}${busGuessResult.card?.suit}) Előre!`) : `✗ ${busGuessResult.card?.value}${busGuessResult.card?.suit} — Rossz tipp! ${busGuessResult.drinks} korty!`}
+                  ? (busGuessResult.correct ? `🎯🎉 Big Pick! ${busGuessResult.card?.value||''}${busGuessResult.card?.suit||''} — Leszálltál!` : `🎯✗ Nem ${selectedPreciseValue||'?'} volt — 1 korty, vissza az ${preciseTippStep}. állomásra`)
+                  : busGuessResult.correct ? (busGuessResult.done ? `🎉 Teljesítve! Leszálltál!${busGuessResult.card ? ` (${busGuessResult.card.value}${busGuessResult.card.suit})` : ''}` : `✓ Helyes!${busGuessResult.card ? ` (${busGuessResult.card.value}${busGuessResult.card.suit})` : ''} Előre!`) : `✗ ${busGuessResult.card ? `${busGuessResult.card.value}${busGuessResult.card.suit} — ` : ''}Rossz tipp! ${busGuessResult.drinks||1} korty!`}
               </div>
             </div>
           )}
