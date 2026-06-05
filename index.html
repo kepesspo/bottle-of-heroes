@@ -33591,7 +33591,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.75';
+const APP_VERSION = 'v7.76';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -41354,6 +41354,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
   const [bonusOverlay, setBonusOverlay] = useState(null); // { type, player, drinks } | null
   const bonusPendingRef = React.useRef(null);
   const undoRef = React.useRef(null); // stores previous state for undo
+  const playersRef = React.useRef(players);
+  React.useEffect(() => { playersRef.current = players; }, [players]);
   const [pendingCommit, setPendingCommit] = useState(null);
   const [hostBurst, setHostBurst] = useState(null);
   const [selectedOpponent, setSelectedOpponent] = useState(null);
@@ -41554,16 +41556,19 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
 
   const onLiveDrinkUpdate = (deltaMap) => {
     if (!trackScores) return;
-    setPlayers(prev => prev.map(p => ({ ...p, drinks: p.drinks + (deltaMap[p.id] || 0) })));
+    const updated = playersRef.current.map(p => ({ ...p, drinks: p.drinks + (deltaMap[p.id] || 0) }));
+    playersRef.current = updated;
+    setPlayers(updated);
   };
 
   const advanceLoverseny = (drinkMap, pointsMap) => {
     if (transitioning) return;
     const dm = drinkMap || {};
     const pm = pointsMap || {};
+    const latestPlayers = playersRef.current;
     const newPlayers = trackScores
-      ? players.map(p => ({ ...p, drinks: p.drinks + (dm[p.id] || 0), points: p.points + (pm[p.id] || 0) }))
-      : players;
+      ? latestPlayers.map(p => ({ ...p, drinks: p.drinks + (dm[p.id] || 0), points: p.points + (pm[p.id] || 0) }))
+      : latestPlayers;
     const hasPoints = Object.values(pm).some(v => v > 0);
     const hasDrinks = Object.values(dm).some(v => v > 0);
     const fb = hasPoints ? 'win' : hasDrinks ? 'lose' : null;
