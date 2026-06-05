@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.66';
+const APP_VERSION = 'v7.67';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -41050,27 +41050,24 @@ function SzolancGame({ gameIdx, players, onAdvance, onResult }) {
 
 // ─── IDŐPÁRBAJ ───────────────────────────────────────────────────────────────
 function IdoparbajGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
-  const target = React.useRef(+(1 + Math.random() * 29).toFixed(1));
-  const [phase, setPhase] = React.useState('idle'); // 'idle'|'p1running'|'p1done'|'p2running'|'p2done'|'result'
+  const target = React.useRef(+(5 + Math.random() * 25).toFixed(1));
+  const [phase, setPhase] = React.useState('idle'); // 'idle'|'p1running'|'p1done'|'p2running'|'result'
   const [t1, setT1] = React.useState(null);
   const [t2, setT2] = React.useState(null);
-  const [liveMs, setLiveMs] = React.useState(0);
   const startRef = React.useRef(null);
-  const liveRef = React.useRef(null);
   const advRef = React.useRef(false);
 
-  React.useEffect(() => { target.current = +(1 + Math.random() * 29).toFixed(1); setPhase('idle'); setT1(null); setT2(null); setLiveMs(0); advRef.current = false; }, [gameIdx]);
-  React.useEffect(() => () => clearInterval(liveRef.current), []);
+  React.useEffect(() => { target.current = +(5 + Math.random() * 25).toFixed(1); setPhase('idle'); setT1(null); setT2(null); advRef.current = false; }, [gameIdx]);
 
-  const startTimer = () => { startRef.current = Date.now(); setLiveMs(0); liveRef.current = setInterval(() => setLiveMs(Date.now() - startRef.current), 50); };
-  const stopTimer = () => { clearInterval(liveRef.current); return (Date.now() - startRef.current) / 1000; };
+  const tgt = target.current;
 
-  const startP1 = () => { startTimer(); setPhase('p1running'); };
-  const stopP1 = () => { const elapsed = stopTimer(); setT1(+elapsed.toFixed(1)); setPhase('p1done'); };
-  const startP2 = () => { startTimer(); setPhase('p2running'); };
-  const stopP2 = () => {
-    const elapsed = stopTimer(); const tv = +elapsed.toFixed(1); setT2(tv); setPhase('result');
-    const tgt = target.current;
+  const startP1 = () => { startRef.current = Date.now(); setPhase('p1running'); };
+  const stopP1  = () => { setT1(+((Date.now() - startRef.current) / 1000).toFixed(1)); setPhase('p1done'); };
+  const startP2 = () => { startRef.current = Date.now(); setPhase('p2running'); };
+  const stopP2  = () => {
+    const tv = +((Date.now() - startRef.current) / 1000).toFixed(1);
+    setT2(tv);
+    setPhase('result');
     if (!advRef.current) {
       advRef.current = true;
       const d1 = Math.abs(t1 - tgt), d2 = Math.abs(tv - tgt);
@@ -41084,7 +41081,10 @@ function IdoparbajGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
     }
   };
 
-  const tgt = target.current;
+  const d1 = t1 !== null ? Math.abs(t1 - tgt) : null;
+  const d2 = t2 !== null ? Math.abs(t2 - tgt) : null;
+  const p1wins = phase === 'result' ? (d1 <= d2) : null;
+
   const BigBtn = ({ label, sub, onClick, color }) => (
     <button onClick={onClick} style={{ width:'100%', padding:'22px 0', background:color||T.mint, color:'#fff', border:'none', borderRadius:20, fontFamily:T.font, fontWeight:900, fontSize:22, cursor:'pointer', boxShadow:T.shadowLift, display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
       <span>{label}</span>
@@ -41092,50 +41092,55 @@ function IdoparbajGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
     </button>
   );
 
-  const PlayerChip = ({ p, time, active, winner }) => (
-    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:'14px 10px', borderRadius:16, background: winner===true ? `${T.mint}18` : winner===false ? `${T.coral}18` : active ? `${p?.color}18` : T.surface, border:`2px solid ${winner===true?T.mint:winner===false?T.coral:active?p?.color:'transparent'}`, boxShadow:T.shadow }}>
+  const PlayerCard = ({ p, time, diff, isWinner, isLoser }) => (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:'14px 10px', borderRadius:16, background: isWinner ? `${T.mint}18` : isLoser ? `${T.coral}18` : T.surface, border:`2px solid ${isWinner?T.mint:isLoser?T.coral:'transparent'}`, boxShadow:T.shadow }}>
       <div style={{ width:44, height:44, borderRadius:'50%', background:p?.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:18, color:'#fff' }}>{(p?.name||'?').charAt(0).toUpperCase()}</div>
       <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{p?.name}</div>
-      {time !== null && <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:26, color: winner===true?T.mint:winner===false?T.coral:T.ink }}>{time.toFixed(1)}<span style={{ fontFamily:T.font, fontSize:13, fontWeight:700 }}>mp</span></div>}
-      {time !== null && phase==='result' && <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>{time===tgt?'🎯 Pontos!': (time>tgt?`+${(time-tgt).toFixed(1)} mp eltérés`:`${(time-tgt).toFixed(1)} mp eltérés`)}</div>}
-      {winner===true && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.mint, background:`${T.mint}22`, borderRadius:999, padding:'2px 10px' }}>NYERT</div>}
-      {winner===false && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.coral, background:`${T.coral}22`, borderRadius:999, padding:'2px 10px' }}>ISZIK 🍺</div>}
+      {time !== null ? (
+        <>
+          <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:26, color:isWinner?T.mint:isLoser?T.coral:T.ink }}>{time.toFixed(1)}<span style={{ fontFamily:T.font, fontSize:13, fontWeight:700 }}>mp</span></div>
+          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>{diff===0?'🎯 Pontos!':`${diff>0?'+':''}${(time-tgt).toFixed(1)} mp`}</div>
+          {isWinner && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.mint, background:`${T.mint}22`, borderRadius:999, padding:'2px 10px' }}>NYERT</div>}
+          {isLoser  && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.coral, background:`${T.coral}22`, borderRadius:999, padding:'2px 10px' }}>ISZIK 🍺</div>}
+        </>
+      ) : (
+        <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>vár…</div>
+      )}
     </div>
   );
 
-  const d1 = t1 !== null ? Math.abs(t1 - tgt) : null;
-  const d2 = t2 !== null ? Math.abs(t2 - tgt) : null;
-  const p1wins = phase === 'result' ? (d1 <= d2) : null;
-
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16, alignItems:'center', width:'100%' }}>
-      {/* Target time — revealed only in result */}
+
+      {/* Target time — always visible */}
       <div style={{ background:'#1B2340', borderRadius:16, padding:'16px 24px', width:'100%', textAlign:'center', boxSizing:'border-box' }}>
-        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:6 }}>A TITKOS CÉL ENNYI VOLT</div>
-        {phase === 'result' ? (
-          <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:42, color:'#fff', lineHeight:1 }}>{tgt.toFixed(1)}<span style={{ fontFamily:T.font, fontSize:20, fontWeight:700, marginLeft:4 }}>mp</span></div>
-        ) : (
-          <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:42, color:'rgba(255,255,255,0.15)', lineHeight:1 }}>?</div>
-        )}
+        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:6 }}>CÉL IDŐ</div>
+        <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:52, color:'#fff', lineHeight:1 }}>{tgt.toFixed(1)}<span style={{ fontFamily:T.font, fontSize:22, fontWeight:700, marginLeft:4, color:'rgba(255,255,255,0.7)' }}>mp</span></div>
       </div>
 
-      {/* Player chips */}
-      <div style={{ display:'flex', gap:10, width:'100%' }}>
-        <PlayerChip p={challenger} time={t1} active={phase==='p1running'||phase==='p1done'} winner={phase==='result'?p1wins:null} />
-        <PlayerChip p={opponent}   time={t2} active={phase==='p2running'||phase==='p2done'} winner={phase==='result'?(p2wins=>p2wins)(d2<=d1):null} />
-      </div>
-
-      {/* Action area */}
-      {phase==='idle'    && <BigBtn label={`▶ ${challenger?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP1} color={challenger?.color} />}
-      {(phase==='p1running'||phase==='p2running') && (
-        <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
-          <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:64, color:T.ink, lineHeight:1, letterSpacing:'-0.02em' }}>
-            {(liveMs/1000).toFixed(1)}<span style={{ fontFamily:T.font, fontSize:22, fontWeight:700, color:T.inkSoft }}> mp</span>
-          </div>
-          <BigBtn label="⏹ Stop!" sub={`${phase==='p1running'?challenger?.name:opponent?.name} — nyomd meg a megállításhoz`} onClick={phase==='p1running'?stopP1:stopP2} color={T.coral} />
+      {/* Player result cards */}
+      {(t1 !== null || t2 !== null || phase === 'result') && (
+        <div style={{ display:'flex', gap:10, width:'100%' }}>
+          <PlayerCard p={challenger} time={t1} diff={d1} isWinner={phase==='result'&&p1wins===true} isLoser={phase==='result'&&p1wins===false} />
+          <PlayerCard p={opponent}   time={t2} diff={d2} isWinner={phase==='result'&&p1wins===false} isLoser={phase==='result'&&p1wins===true} />
         </div>
       )}
-      {phase==='p1done'  && <BigBtn label={`▶ ${opponent?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP2} color={opponent?.color} />}
+
+      {/* Action area */}
+      {phase==='idle'     && <BigBtn label={`▶ ${challenger?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP1} color={challenger?.color} />}
+      {phase==='p1running' && (
+        <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+          <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, fontWeight:600 }}>{challenger?.name} mér… állítsd meg időben!</div>
+          <BigBtn label="⏹ Stop!" onClick={stopP1} color={T.coral} />
+        </div>
+      )}
+      {phase==='p1done'   && <BigBtn label={`▶ ${opponent?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP2} color={opponent?.color} />}
+      {phase==='p2running' && (
+        <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+          <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, fontWeight:600 }}>{opponent?.name} mér… állítsd meg időben!</div>
+          <BigBtn label="⏹ Stop!" onClick={stopP2} color={T.coral} />
+        </div>
+      )}
     </div>
   );
 }
@@ -41180,7 +41185,7 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
     } else {
       onResult && onResult({ correct: false, playerName: null, drinks: 1, subtitle: `Nem sikerült — mindketten isznak 🍺` });
     }
-    onAdvance && onAdvance(success ? { [challenger?.id]:0,[opponent?.id]:0 } : { [challenger?.id]:1,[opponent?.id]:1 });
+    onAdvance && onAdvance(success ? {} : { [challenger?.id]:1,[opponent?.id]:1 }, success ? { [challenger?.id]:1,[opponent?.id]:1 } : {});
   };
 
   const pct = (timeLeft / 15) * 100;
