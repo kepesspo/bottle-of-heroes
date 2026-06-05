@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.47';
+const APP_VERSION = 'v7.48';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -42231,13 +42231,15 @@ function BuszPlayerView({ room, roomCode }) {
 }
 
 
-function ObserverScreen({ go, initialCode }) {
+function ObserverScreen({ go, initialCode, onJoinAsHost }) {
   const CODE_LEN = 6;
   const [code, setCode] = useState(() => (initialCode||'').slice(0,6));
   const [name, setName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [observerId] = useState(() => 'obs_' + Date.now());
   const [status, setStatus] = useState('enter');
+  const [joinMode, setJoinMode] = useState('observer'); // 'observer' | 'host'
+  const [hostLoading, setHostLoading] = useState(false);
 
   React.useEffect(() => {
     if (initialCode) window.history.replaceState({}, document.title, window.location.pathname);
@@ -42245,8 +42247,21 @@ function ObserverScreen({ go, initialCode }) {
 
   const push = d => { if (status!=='enter') return; setCode(c => (c+d).slice(0,CODE_LEN)); };
   const back = () => setCode(c => c.slice(0,-1));
+  const submitHost = () => {
+    if (code.length < CODE_LEN) return;
+    setHostLoading(true);
+    checkRoom(code)
+      .then(room => {
+        setHostLoading(false);
+        if (!room || !room.active) { setErrorMsg(`A ${code} kód nem érvényes, vagy a szoba bezárult.`); return; }
+        if (onJoinAsHost) onJoinAsHost(code, room);
+      })
+      .catch(() => { setHostLoading(false); setErrorMsg('Hálózati hiba – próbáld újra.'); });
+  };
+
   const submit = () => {
     if (code.length < CODE_LEN) return;
+    if (joinMode === 'host') { submitHost(); return; }
     setStatus('connecting');
     checkRoom(code)
       .then(room => {
@@ -42267,7 +42282,7 @@ function ObserverScreen({ go, initialCode }) {
   return (
     <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg }}>
       <AppBar title="Csatlakozás" onBack={status === 'enter' ? () => go('home') : undefined} />
-      {status==='enter' && <ObserverEnter code={code} codeLen={CODE_LEN} onDigit={push} onBack={back} onSubmit={submit} onPaste={v => setCode(v.replace(/\D/g,'').slice(0,CODE_LEN))} />}
+      {status==='enter' && <ObserverEnter code={code} codeLen={CODE_LEN} onDigit={push} onBack={back} onSubmit={submit} onPaste={v => setCode(v.replace(/\D/g,'').slice(0,CODE_LEN))} joinMode={joinMode} setJoinMode={setJoinMode} hostLoading={hostLoading} errorMsg={errorMsg} />}
       {status==='connecting' && <ObserverStatus icon="📡" title="Csatlakozás…" sub={`Szoba: ${code}`} spinning />}
       {status==='watching' && <ObserverWatching code={code} observerName={name} onLeave={reset} />}
       {status==='error' && <ObserverStatus icon="🚫" title="Hiba" sub={errorMsg} actionLabel="Próbáld újra" onAction={reset} />}
@@ -42275,7 +42290,7 @@ function ObserverScreen({ go, initialCode }) {
   );
 }
 
-function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste }) {
+function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste, joinMode, setJoinMode, hostLoading, errorMsg }) {
   const ready = code.length === codeLen;
   useEffect(() => {
     const onKey = e => {
@@ -42289,11 +42304,17 @@ function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste }) {
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', padding:'12px 22px 22px' }}>
       <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:16, paddingTop:8 }}>
-        <div style={{ fontSize:52, lineHeight:1, filter:'drop-shadow(0 4px 10px rgba(20,30,50,0.15))' }}>👀</div>
+        {/* Mode toggle */}
+        <div style={{ display:'flex', background:T.surfaceMuted, borderRadius:14, padding:3, gap:3, width:'100%', maxWidth:280 }}>
+          <button onClick={() => setJoinMode && setJoinMode('observer')} style={{ flex:1, padding:'9px 0', borderRadius:11, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:13, background: joinMode==='observer' ? T.surface : 'transparent', color: joinMode==='observer' ? T.ink : T.inkSoft, boxShadow: joinMode==='observer' ? T.shadow : 'none', transition:'all .18s' }}>👀 Megfigyelő</button>
+          <button onClick={() => setJoinMode && setJoinMode('host')} style={{ flex:1, padding:'9px 0', borderRadius:11, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:13, background: joinMode==='host' ? T.mint : 'transparent', color: joinMode==='host' ? '#fff' : T.inkSoft, boxShadow: joinMode==='host' ? T.shadowLift : 'none', transition:'all .18s' }}>🎮 Host</button>
+        </div>
+        <div style={{ fontSize:44, lineHeight:1, filter:'drop-shadow(0 4px 10px rgba(20,30,50,0.15))' }}>{joinMode==='host' ? '🎮' : '👀'}</div>
         <div style={{ textAlign:'center', maxWidth:280 }}>
           <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Szoba kód</div>
-          <div style={{ marginTop:4, fontFamily:T.font, fontSize:12, fontWeight:600, color:T.inkSoft, lineHeight:1.4 }}>Add meg a házigazda szobakódját.</div>
+          <div style={{ marginTop:4, fontFamily:T.font, fontSize:12, fontWeight:600, color:T.inkSoft, lineHeight:1.4 }}>{joinMode==='host' ? 'Irányítsd a játékot egy másik készülékről.' : 'Add meg a házigazda szobakódját.'}</div>
         </div>
+        {errorMsg && <div style={{ fontFamily:T.font, fontSize:12, color:T.coral, fontWeight:700, textAlign:'center', maxWidth:280 }}>{errorMsg}</div>}
         <div style={{ display:'flex', gap:8 }} onPaste={e => { onPaste(e.clipboardData.getData('text')); e.preventDefault(); }}>
           {Array.from({ length:codeLen }).map((_,i) => {
             const filled = i < code.length;
@@ -42318,7 +42339,7 @@ function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste }) {
         <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, fontWeight:600, opacity:0.7 }}>Tipp: a házigazda osztja meg a szoba kódját</div>
       </div>
       <NumberPad onDigit={onDigit} onBack={onBack} />
-      <PrimaryButton disabled={!ready} onClick={onSubmit} style={{ marginTop:14 }}>Csatlakozás</PrimaryButton>
+      <PrimaryButton disabled={!ready || hostLoading} onClick={onSubmit} style={{ marginTop:14 }}>{hostLoading ? 'Betöltés…' : joinMode==='host' ? '🎮 Belépés Hostként' : 'Csatlakozás'}</PrimaryButton>
     </div>
   );
 }
@@ -43199,6 +43220,21 @@ function BottleApp() {
     setScreen('play');
   };
 
+  const goJoinAsHost = (code, room) => {
+    const bp = room.bpState || null;
+    setPlayers(room.players || []);
+    setSelectedGames(room.selectedGames || []);
+    setGameMeta({ ...(room.gameMeta || {}), _resumeBpState: bp });
+    setRoomCode(code);
+    if (typeof subscribeRoom === 'function') {
+      if (roomUnsubRef.current) roomUnsubRef.current();
+      roomUnsubRef.current = subscribeRoom(code, roomData => {
+        if (roomData) setPlayers(roomData.players || room.players);
+      });
+    }
+    setScreen('play');
+  };
+
   const [roomCode, setRoomCode] = React.useState(null);
   const [creatingRoom, setCreatingRoom] = React.useState(false);
   const roomUnsubRef = React.useRef(null);
@@ -43243,7 +43279,7 @@ function BottleApp() {
         {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} mode={mode} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} />}
-        {screen==='observer' && <ObserverScreen go={go} initialCode={_initRoom} />}
+        {screen==='observer' && <ObserverScreen go={go} initialCode={_initRoom} onJoinAsHost={goJoinAsHost} />}
       </div>
       {creatingRoom && (
         <div style={{ position:'fixed', inset:0, background:T.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, zIndex:100 }}>
