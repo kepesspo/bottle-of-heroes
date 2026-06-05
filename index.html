@@ -33594,7 +33594,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.26';
+const APP_VERSION = 'v8.27';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -41289,75 +41289,81 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
   }
 
   if (phase === 'voting') {
-    const others=players.filter(p=>p.id!==myPid);
+    const others = players.filter(p => p.id !== myPid);
+    // Build dupMap: include own localAns as fallback for own answers not yet in allAnswers
+    const effectiveAnswers = {};
+    players.forEach(p => {
+      const base = allAnswers[p.id] || {};
+      if (p.id === myPid) {
+        // merge localAns into own answers so duplicate check works even before Firebase syncs
+        const merged = {};
+        OVFJ_CATS.forEach(cat => { merged[cat.key] = (base[cat.key] || localAns[cat.key] || ''); });
+        effectiveAnswers[p.id] = merged;
+      } else {
+        effectiveAnswers[p.id] = base;
+      }
+    });
+    const dupMap = {};
+    OVFJ_CATS.forEach(cat => {
+      const freq = {};
+      players.forEach(p => {
+        const v = (effectiveAnswers[p.id]?.[cat.key] || '').trim().toLowerCase();
+        if (v) freq[v] = (freq[v] || 0) + 1;
+      });
+      dupMap[cat.key] = new Set(Object.keys(freq).filter(v => freq[v] > 1));
+    });
+    const isDup = (catKey, val) => val && dupMap[catKey].has(val.trim().toLowerCase());
+
     return (
       <div style={pageOuter}><div style={pageInner}>
         <Hdr />
         <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:16,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay}}>„{letter}" — Szavazás</div>
-        {(() => {
-          const allAns = allAnswers;
-          const dupMapObs = {};
-          OVFJ_CATS.forEach(cat => {
-            const freq = {};
-            players.forEach(p => { const v=(allAns[p.id]?.[cat.key]||'').trim().toLowerCase(); if(v) freq[v]=(freq[v]||0)+1; });
-            dupMapObs[cat.key] = new Set(Object.keys(freq).filter(v=>freq[v]>1));
-          });
-          return (
         <div style={{background:T.mintSoft,borderRadius:16,padding:'12px 14px'}}>
           <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:11,color:T.mint,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.08em'}}>A te válaszaid</div>
-          {OVFJ_CATS.map(cat=>{
-            const val=(allAnswers[myPid]?.[cat.key]||localAns[cat.key]||'').trim();
-            const isDup = val && dupMapObs[cat.key].has(val.toLowerCase());
+          {OVFJ_CATS.map(cat => {
+            const val = (effectiveAnswers[myPid]?.[cat.key] || '').trim();
+            const dup = isDup(cat.key, val);
             return (
               <div key={cat.key} style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
                 <span style={{fontSize:13,width:20,textAlign:'center',flexShrink:0}}>{cat.emoji}</span>
-                <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:isDup?T.coral:T.mint,width:60,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
-                <span style={{fontFamily:T.font,fontSize:13,fontWeight:T.weightTitle,color:isDup?T.coral:val?T.ink:T.inkMute,textDecoration:isDup?'line-through':'none',opacity:isDup?0.7:1}}>{val||'—'}</span>
-                {isDup && <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.coral,marginLeft:4}}>× egyező</span>}
+                <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:dup?T.coral:T.mint,width:60,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
+                <span style={{fontFamily:T.font,fontSize:13,fontWeight:T.weightTitle,color:dup?T.coral:val?T.ink:T.inkMute,textDecoration:dup?'line-through':'none',opacity:dup?0.7:1}}>{val||'—'}</span>
+                {dup && <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.coral,marginLeft:4,flexShrink:0}}>× egyező</span>}
               </div>
             );
           })}
         </div>
-          );
-        })()}
-        {(()=>{
-          const dupMapObs2 = {};
-          OVFJ_CATS.forEach(cat => {
-            const freq = {};
-            players.forEach(pl2 => { const v=(allAnswers[pl2.id]?.[cat.key]||'').trim().toLowerCase(); if(v) freq[v]=(freq[v]||0)+1; });
-            dupMapObs2[cat.key] = new Set(Object.keys(freq).filter(v=>freq[v]>1));
-          });
-          return others.map(p=>{
-          const ans=allAnswers[p.id]||{};
+        {others.map(p => {
+          const ans = allAnswers[p.id] || {};
           return (
             <div key={p.id} style={{background:T.surface,borderRadius:18,padding:'12px 14px',boxShadow:T.shadow}}>
               <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
                 <div style={{width:26,height:26,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:11,color:'#fff',flexShrink:0}}>{p.name?.[0]||'?'}</div>
                 <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.ink,flex:1}}>{p.name}</span>
               </div>
-              {OVFJ_CATS.map(cat=>{
-                const val=(ans[cat.key]||'').trim(), vk=`${p.id}_${cat.key}`, mv=myVotes[vk];
-                const isDupO = val && dupMapObs2[cat.key].has(val.toLowerCase());
+              {OVFJ_CATS.map(cat => {
+                const val = (ans[cat.key] || '').trim();
+                const vk = `${p.id}_${cat.key}`, mv = myVotes[vk];
+                const dup = isDup(cat.key, val);
                 return (
                   <div key={cat.key} style={{display:'flex',alignItems:'center',gap:5,marginBottom:6,paddingBottom:5,borderBottom:`1px solid ${T.surfaceMuted}`}}>
                     <span style={{fontSize:13,flexShrink:0,width:20,textAlign:'center'}}>{cat.emoji}</span>
                     <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.inkSoft,width:60,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
-                    <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:12,flex:1,color:isDupO?T.coral:val?T.ink:T.inkMute,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:isDupO?'line-through':'none',opacity:isDupO?0.7:1}}>{val||'—'}</span>
-                    {val && !isDupO && (
+                    <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:12,flex:1,color:dup?T.coral:val?T.ink:T.inkMute,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:dup?'line-through':'none',opacity:dup?0.7:1}}>{val||'—'}</span>
+                    {val && !dup && (
                       <div style={{display:'flex',gap:4,flexShrink:0,alignItems:'center'}}>
                         <a href={`https://www.google.com/search?q=${encodeURIComponent(val)}`} target="_blank" rel="noreferrer" style={{fontSize:14,textDecoration:'none',opacity:0.5,lineHeight:1}}>🔍</a>
                         <button onClick={()=>submitVote(p.id,cat.key,true)} style={{width:32,height:30,borderRadius:9,border:`1.5px solid ${mv===true?T.mint:T.surfaceMuted}`,background:mv===true?T.mintSoft:'transparent',cursor:'pointer',fontSize:14,display:'grid',placeItems:'center'}}>👍</button>
                         <button onClick={()=>submitVote(p.id,cat.key,false)} style={{width:32,height:30,borderRadius:9,border:`1.5px solid ${mv===false?T.coral:T.surfaceMuted}`,background:mv===false?T.coralSoft:'transparent',cursor:'pointer',fontSize:14,display:'grid',placeItems:'center'}}>👎</button>
                       </div>
                     )}
-                    {isDupO && <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.coral,flexShrink:0}}>×</span>}
+                    {val && dup && <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.coral,flexShrink:0}}>× egyező</span>}
                   </div>
                 );
               })}
             </div>
           );
-        });
-        })()}
+        })}
       </div></div>
     );
   }
