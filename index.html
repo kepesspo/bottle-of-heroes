@@ -33591,7 +33591,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.77';
+const APP_VERSION = 'v7.78';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -39421,27 +39421,40 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
     }, 1800);
   };
 
-  if(gameOver) return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
-      <div style={{ fontSize:48 }}>🏆</div>
+  if(gameOver) {
+    // Legjobb: legkevesebb hibázás (legkevesebb drink)
+    const sorted = [...players].sort((a,b) => (drinkMap[a.id]||0) - (drinkMap[b.id]||0));
+    const best = sorted[0];
+    // Legrosszabb: legtöbb drink
+    const worst = sorted[sorted.length - 1];
+    const samePlayer = best.id === worst.id;
+    return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12, width:'100%' }}>
       <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.mint }}>Játék vége!</div>
-      <div style={{ display:'flex', flexDirection:'column', gap:6, width:'100%' }}>
-        {players.map(p=>{
-          const d=drinkMap[p.id]||0, won=activePids.includes(p.id);
-          return (
-            <div key={p.id} style={{ borderRadius:14, padding:'10px 14px', display:'flex', alignItems:'center', gap:12, background: won ? `${T.mint}15` : `${T.coral}15`, border:`2px solid ${won ? T.mint : T.coral}` }}>
-              <div style={{ width:36, height:36, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:15, color:'#fff', flexShrink:0 }}>{p.name.charAt(0).toUpperCase()}</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color: won ? T.mint : T.coral }}>{won ? '🏆 Győztes!' : 'Inni kell!'}</div>
-                {d > 0 && <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:1 }}>{p.name} — {d} korty összesen</div>}
-              </div>
-              {d > 0 && <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.coral }}>{d}🍺</div>}
+      <div style={{ display:'flex', flexDirection:'column', gap:10, width:'100%' }}>
+        {/* Legjobb játékos */}
+        <div style={{ borderRadius:16, padding:'14px 16px', display:'flex', alignItems:'center', gap:12, background:`${T.mint}18`, border:`2px solid ${T.mint}` }}>
+          <div style={{ width:42, height:42, borderRadius:'50%', background:best.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:17, color:'#fff', flexShrink:0 }}>{best.name.charAt(0).toUpperCase()}</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.mint }}>🏆 Legjobb</div>
+            <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft }}>{best.name} — legkevesebb hiba</div>
+          </div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.mint }}>{drinkMap[best.id]||0}🍺</div>
+        </div>
+        {/* Legtöbbet ivó — csak ha más mint a legjobb */}
+        {!samePlayer && (
+          <div style={{ borderRadius:16, padding:'14px 16px', display:'flex', alignItems:'center', gap:12, background:`${T.coral}18`, border:`2px solid ${T.coral}` }}>
+            <div style={{ width:42, height:42, borderRadius:'50%', background:worst.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:17, color:'#fff', flexShrink:0 }}>{worst.name.charAt(0).toUpperCase()}</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.coral }}>🍺 Legtöbbet ivott</div>
+              <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft }}>{worst.name}</div>
             </div>
-          );
-        })}
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.coral }}>{drinkMap[worst.id]||0}🍺</div>
+          </div>
+        )}
       </div>
     </div>
-  );
+  );}
 
   const LargeCard = ({ card, faceDown }) => {
     if (faceDown || !card) return (
