@@ -33594,7 +33594,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.17';
+const APP_VERSION = 'v8.18';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -41108,15 +41108,33 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
 
   const doSync = data => { if (typeof syncRoom === 'function') syncRoom(code, data); };
 
+  // Track taken player slots via Firebase
+  const takenPids = React.useMemo(() => {
+    const taken = new Set();
+    Object.entries(room).forEach(([key, val]) => {
+      if (key.startsWith('ovfjPick') && val) taken.add(val);
+    });
+    return taken;
+  }, [room]);
+
+  const selectPlayer = pid => {
+    setMyPid(pid);
+    doSync({ ['ovfjPick' + String(pid).replace(/[^a-zA-Z0-9]/g,'x')]: pid });
+  };
+
   if (!myPid) return (
     <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
       <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:20,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay,textTransform:'uppercase',marginBottom:4}}>🌍 Ki vagy?</div>
-      {players.map(p=>(
-        <button key={p.id} onClick={()=>setMyPid(p.id)} style={{display:'flex',alignItems:'center',gap:14,padding:'14px 16px',borderRadius:18,border:'none',background:T.surface,cursor:'pointer',width:'100%',boxShadow:T.shadow,textAlign:'left'}}>
-          <div style={{width:40,height:40,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:16,color:'#fff',flexShrink:0}}>{p.name?.[0]||'?'}</div>
-          <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:17,color:T.ink}}>{p.name}</span>
-        </button>
-      ))}
+      {players.map(p=>{
+        const taken = takenPids.has(p.id);
+        return (
+          <button key={p.id} onClick={()=>!taken&&selectPlayer(p.id)} disabled={taken} style={{display:'flex',alignItems:'center',gap:14,padding:'14px 16px',borderRadius:18,border:'none',background:taken?T.surfaceMuted:T.surface,cursor:taken?'default':'pointer',width:'100%',boxShadow:taken?'none':T.shadow,textAlign:'left',opacity:taken?0.5:1}}>
+            <div style={{width:40,height:40,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:16,color:'#fff',flexShrink:0}}>{p.name?.[0]||'?'}</div>
+            <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:17,color:taken?T.inkSoft:T.ink,flex:1}}>{p.name}</span>
+            {taken && <span style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.inkSoft}}>Foglalt</span>}
+          </button>
+        );
+      })}
     </div>
   );
 
