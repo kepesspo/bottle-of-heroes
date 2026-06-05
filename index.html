@@ -33594,7 +33594,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.22';
+const APP_VERSION = 'v8.23';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -41219,7 +41219,10 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
   );
 
   if (phase === 'writing') {
-    const locked=submitted, cd=ovfj.countdown;
+    const timedOut = ovfj.maxTimer !== null && ovfj.maxTimer !== undefined && ovfj.maxTimer <= 0;
+    const locked = submitted || timedOut;
+    const cd=ovfj.countdown;
+    const mt=ovfj.maxTimer;
     return (
       <div style={pageOuter}><div style={pageInner}>
         <Hdr />
@@ -41227,11 +41230,16 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
           <div style={{width:72,height:72,borderRadius:18,background:`linear-gradient(135deg,${T.mint},${T.mintDeep||'#3DA888'})`,display:'grid',placeItems:'center',boxShadow:T.shadowLift,flexShrink:0}}>
             <span style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:44,color:'#fff',lineHeight:1}}>{letter}</span>
           </div>
-          {cd!=null ? (
-            <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:28,color:cd<=5?T.coral:T.ink}}>{cd}s</div>
-          ) : ovfj.maxTimer!=null ? (
-            <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:22,color:ovfj.maxTimer<=30?T.coral:T.inkSoft}}>{Math.floor(ovfj.maxTimer/60)}:{String(ovfj.maxTimer%60).padStart(2,'0')}</div>
-          ) : null}
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+            {timedOut ? (
+              <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:20,color:T.coral}}>⏰ Lejárt!</div>
+            ) : cd!=null ? (
+              <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:28,color:cd<=5?T.coral:T.ink}}>{cd}s</div>
+            ) : mt!=null ? (
+              <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:26,color:mt<=30?T.coral:mt<=60?T.yellow||'#F4C95A':T.ink}}>{Math.floor(mt/60)}:{String(mt%60).padStart(2,'0')}</div>
+            ) : null}
+            {mt!=null && !timedOut && <div style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.06em'}}>hátralévő</div>}
+          </div>
         </div>
         {OVFJ_CATS.map((cat,idx)=>(
           <div key={cat.key} style={{display:'flex',alignItems:'center',gap:10,background:T.surface,borderRadius:14,padding:'10px 14px',boxShadow:locked?'none':T.shadow,opacity:locked?0.6:1}}>
@@ -41246,7 +41254,9 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
           </div>
         ))}
         <div ref={submitAreaRef}>
-          {!submitted ? (
+          {timedOut && !submitted ? (
+            <div style={{textAlign:'center',fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.coral,padding:'16px',background:T.coralSoft,borderRadius:16,marginTop:4}}>⏰ Az idő lejárt — nem lehet több választ beadni</div>
+          ) : !submitted ? (
             <PrimaryButton onClick={submitAnswers} style={{marginTop:4}}>✓ KÉSZ — Leadom!</PrimaryButton>
           ) : (
             <div style={{textAlign:'center',fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.mint,padding:'16px',background:T.mintSoft,borderRadius:16,marginTop:4}}>✅ Beadva! Várd a többieket...</div>
