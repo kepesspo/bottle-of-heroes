@@ -33591,7 +33591,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.03';
+const APP_VERSION = 'v8.04';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34573,18 +34573,70 @@ function KisebbConfigSheet({ config, setConfig, onClose }) {
   );
 }
 
+function CollectBoomConfigSheet({ config, setConfig, onClose }) {
+  const gridSize = config.gridSize ?? 4;
+  const bombCount = config.bombCount ?? 2;
+  const MAX_POT_MAP = { 4: 10, 5: 15, 6: 20 };
+  const Stepper = ({ value, min, max, onChange }) => (
+    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+      <button onClick={() => onChange(Math.max(min, value-1))} style={{ width:33, height:33, borderRadius:10, background:T.surfaceMuted, border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:'#D85F5C' }}>−</button>
+      <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:18, color:T.ink, minWidth:30, textAlign:'center' }}>{value}</span>
+      <button onClick={() => onChange(Math.min(max, value+1))} style={{ width:33, height:33, borderRadius:10, background:T.surfaceMuted, border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:T.mintDeep }}>+</button>
+    </div>
+  );
+  const Row = ({ label, sub, right }) => (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'1px solid rgba(26,42,74,0.10)' }}>
+      <div>
+        <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{label}</div>
+        {sub && <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>{sub}</div>}
+      </div>
+      {right}
+    </div>
+  );
+  return (
+    <SheetOverlay onClose={onClose}>
+      <div style={{ padding:'0 18px 18px', display:'flex', flexDirection:'column' }}>
+        <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:'-0.01em', padding:'12px 0 6px' }}>Collect & Boom beállítások</div>
+
+        <Row label="Négyzetszám" sub={`${gridSize}×${gridSize} = ${gridSize*gridSize} mező`}
+          right={
+            <div style={{ display:'flex', background:T.surfaceMuted, padding:4, borderRadius:12, gap:3, flexShrink:0 }}>
+              {[4, 5, 6].map(s => (
+                <button key={s} onClick={() => setConfig(c => ({...c, gridSize:s}))} style={{ width:40, padding:'8px 4px', borderRadius:9, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background:gridSize===s?T.mint:'transparent', color:gridSize===s?'#fff':T.inkSoft, transition:'all .15s' }}>
+                  {s}×{s}
+                </button>
+              ))}
+            </div>
+          } />
+
+        <Row label="Bombák száma" sub="Hány bomba rejtőzik a mezőkön"
+          right={<Stepper value={bombCount} min={1} max={5} onChange={v => setConfig(c => ({...c, bombCount:v}))} />} />
+
+        <Row label="Max korty"
+          sub={`${gridSize}×${gridSize} rácshoz: ${MAX_POT_MAP[gridSize]} korty`}
+          right={<span style={{ fontFamily:'monospace', fontWeight:900, fontSize:18, color:T.mint }}>{MAX_POT_MAP[gridSize]}</span>} />
+
+        <button onClick={onClose} style={{ width:'100%', padding:'15px', borderRadius:16, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)', marginTop:16 }}>Kész</button>
+      </div>
+    </SheetOverlay>
+  );
+}
+
 function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, go }) {
   const [info, setInfo] = useState(null);
   const [sheet, setSheet] = useState(false);
   const [buszSheet, setBuszSheet] = useState(false);
   const [beerpongSheet, setBeerpongSheet] = useState(false);
   const [kisebbSheet, setKisebbSheet] = useState(false);
+  const [collectSheet, setCollectSheet] = useState(false);
   const [filterSheet, setFilterSheet] = useState(false);
   const [activeFilters, setActiveFilters] = useState([]); // [] = show all
   const buszConfig = gameMeta?.buszConfig || {};
   const setBuszConfig = cfg => setGameMeta(m => ({...m, buszConfig: typeof cfg === 'function' ? cfg(m?.buszConfig||{}) : cfg}));
   const kisebbConfig = gameMeta?.kisebbConfig || {};
   const setKisebbConfig = cfg => setGameMeta(m => ({...m, kisebbConfig: typeof cfg === 'function' ? cfg(m?.kisebbConfig||{}) : cfg}));
+  const collectConfig = gameMeta?.collectConfig || {};
+  const setCollectConfig = cfg => setGameMeta(m => ({...m, collectConfig: typeof cfg === 'function' ? cfg(m?.collectConfig||{}) : cfg}));
   const beerpongConfig = gameMeta?.beerpongConfig || {};
   const setBeerpongConfig = cfg => setGameMeta(m => ({...m, beerpongConfig: typeof cfg === 'function' ? cfg(m?.beerpongConfig||{}) : cfg}));
 
@@ -34674,7 +34726,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
             return (
               <GameTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked || !!g.comingSoon}
                 onClick={() => { if (!g.comingSoon) toggle(g.id); }} onInfo={() => setInfo(g.id)}
-                onLongPress={g.id==='busz' ? ()=>{ if(!selectedGames.includes('busz')) toggle('busz'); setBuszSheet(true); } : g.id==='beerpong' ? ()=>{ if(!selectedGames.includes('beerpong')) toggle('beerpong'); setBeerpongSheet(true); } : g.id==='kisebb' ? ()=>{ if(!selectedGames.includes('kisebb')) toggle('kisebb'); setKisebbSheet(true); } : undefined} />
+                onLongPress={g.id==='busz' ? ()=>{ if(!selectedGames.includes('busz')) toggle('busz'); setBuszSheet(true); } : g.id==='beerpong' ? ()=>{ if(!selectedGames.includes('beerpong')) toggle('beerpong'); setBeerpongSheet(true); } : g.id==='kisebb' ? ()=>{ if(!selectedGames.includes('kisebb')) toggle('kisebb'); setKisebbSheet(true); } : g.id==='collect' ? ()=>{ if(!selectedGames.includes('collect')) toggle('collect'); setCollectSheet(true); } : undefined} />
             );
           })}
         </div>
@@ -34699,6 +34751,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
       {info && <GameInfoModal game={GAMES.find(g=>g.id===info)} onClose={() => setInfo(null)} />}
       {buszSheet && <BuszConfigSheet config={buszConfig} setConfig={setBuszConfig} onClose={() => setBuszSheet(false)} />}
       {kisebbSheet && <KisebbConfigSheet config={kisebbConfig} setConfig={setKisebbConfig} onClose={() => setKisebbSheet(false)} />}
+      {collectSheet && <CollectBoomConfigSheet config={collectConfig} setConfig={setCollectConfig} onClose={() => setCollectSheet(false)} />}
       {beerpongSheet && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setBeerpongSheet(false)} playerCount={99} />}
       {filterSheet && (
         <SheetOverlay onClose={() => setFilterSheet(false)}>
@@ -40561,16 +40614,24 @@ function KoPapirGame({ gameIdx, players, onAdvance }) {
   );
 }
 
-function CollectBoomGame({ gameIdx, players, onAdvance, onResult }) {
-  const COLS = 4, TOTAL = 16, MAX_POT = 10;
+function CollectBoomGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
+  const cfg = gameMeta?.collectConfig || {};
+  const COLS = cfg.gridSize ?? 4;
+  const BOMB_COUNT = Math.min(cfg.bombCount ?? 2, Math.floor(COLS*COLS / 2));
+  const TOTAL = COLS * COLS;
+  const MAX_POT_MAP = { 4: 10, 5: 15, 6: 20 };
+  const MAX_POT = MAX_POT_MAP[COLS] ?? 10;
 
   const grid = React.useMemo(() => {
+    const safeCount = TOTAL - BOMB_COUNT;
+    const drinkCount = Math.floor(safeCount * 0.5);
+    const trueySafeCount = safeCount - drinkCount;
     const cells = [
-      {type:'bomb'}, {type:'bomb'},
-      {type:'drink',v:1},{type:'drink',v:1},{type:'drink',v:1},
-      {type:'drink',v:2},{type:'drink',v:2},
-      {type:'drink',v:3},
-      ...Array(8).fill({type:'safe'}),
+      ...Array(BOMB_COUNT).fill({type:'bomb'}),
+      ...Array(Math.floor(drinkCount/3)).fill({type:'drink',v:3}),
+      ...Array(Math.floor(drinkCount/3)).fill({type:'drink',v:2}),
+      ...Array(drinkCount - Math.floor(drinkCount/3) - Math.floor(drinkCount/3)).fill({type:'drink',v:1}),
+      ...Array(trueySafeCount).fill({type:'safe'}),
     ];
     let s = (gameIdx * 1234567891 + 99) >>> 0;
     const rng = () => { s^=s<<13; s^=s>>17; s^=s<<5; return s>>>0; };
@@ -40578,7 +40639,7 @@ function CollectBoomGame({ gameIdx, players, onAdvance, onResult }) {
       const j = rng()%(i+1); [cells[i],cells[j]]=[cells[j],cells[i]];
     }
     return cells;
-  }, [gameIdx]);
+  }, [gameIdx, COLS, BOMB_COUNT]);
 
   const initTurn = gameIdx % Math.max(players.length,1);
   const [revealed, setRevealed] = React.useState(() => new Array(TOTAL).fill(false));
@@ -40662,8 +40723,8 @@ function CollectBoomGame({ gameIdx, players, onAdvance, onResult }) {
         </div>
       )}
 
-      {/* 4×4 Grid */}
-      <div style={{display:'grid',gridTemplateColumns:`repeat(${COLS},1fr)`,gap:8,width:'100%',maxWidth:520,margin:'0 auto'}}>
+      {/* Grid */}
+      <div style={{display:'grid',gridTemplateColumns:`repeat(${COLS},1fr)`,gap:8,width:'100%',maxWidth:COLS===6?640:COLS===5?580:520,margin:'0 auto'}}>
         {grid.map((cell,i) => {
           const isRev = revealed[i];
           const isBombCell = isRev && cell.type==='bomb';
@@ -41369,7 +41430,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'anagramma') return <AnagrammaGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'ringfire') return <RingFireGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
   if (gameId === 'kopapir') return <KoPapirGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
-  if (gameId === 'collect') return <CollectBoomGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'collect') return <CollectBoomGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
   if (gameId === 'kategoria') return <KategoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'memoria') return <MemoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kezcsere') return <KezCsereGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
@@ -41390,10 +41451,13 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
   const [showInfo, setShowInfo] = useState(false);
   const [showBpConfig, setShowBpConfig] = useState(false);
   const [showKisebbConfig, setShowKisebbConfig] = useState(false);
+  const [showCollectConfig, setShowCollectConfig] = useState(false);
   const beerpongConfig = gameMeta?.beerpongConfig || {};
   const setBeerpongConfig = cfg => setGameMeta && setGameMeta(m => ({...m, beerpongConfig: typeof cfg === 'function' ? cfg(m?.beerpongConfig||{}) : cfg}));
   const kisebbConfigPS = gameMeta?.kisebbConfig || {};
   const setKisebbConfigPS = cfg => setGameMeta && setGameMeta(m => ({...m, kisebbConfig: typeof cfg === 'function' ? cfg(m?.kisebbConfig||{}) : cfg}));
+  const collectConfigPS = gameMeta?.collectConfig || {};
+  const setCollectConfigPS = cfg => setGameMeta && setGameMeta(m => ({...m, collectConfig: typeof cfg === 'function' ? cfg(m?.collectConfig||{}) : cfg}));
   const [showMenu, setShowMenu] = useState(false);
   const gameOrderMode = gameMeta?.gameOrder || 'sorban';
   const [randomOrder, setRandomOrder] = useState(() => []);
@@ -41883,6 +41947,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
       )}
       {showBpConfig && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setShowBpConfig(false)} playerCount={players ? players.length : 0} />}
       {showKisebbConfig && <KisebbConfigSheet config={kisebbConfigPS} setConfig={setKisebbConfigPS} onClose={() => setShowKisebbConfig(false)} />}
+      {showCollectConfig && <CollectBoomConfigSheet config={collectConfigPS} setConfig={setCollectConfigPS} onClose={() => setShowCollectConfig(false)} />}
       {hostBurst && <HostDrinkAlert items={hostBurst} players={players} onDismiss={() => setHostBurst(null)} />}
       {showMenu && (() => {
         const mSorted = [...players].sort((a,b)=>(b.points-a.points)||(a.drinks-b.drinks));
