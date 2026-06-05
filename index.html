@@ -33594,7 +33594,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.30';
+const APP_VERSION = 'v8.31';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -41174,6 +41174,36 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
   const inputRefs = React.useRef([]);
   const submitAreaRef = React.useRef(null);
 
+  const [localTimer, setLocalTimer] = React.useState(null);
+  const localTimerRef = React.useRef(null);
+  const prevMaxTimerRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const mt = ovfj.maxTimer;
+    const ph = ovfj.phase;
+    if (ph !== 'writing' || mt == null) {
+      clearInterval(localTimerRef.current);
+      setLocalTimer(null);
+      prevMaxTimerRef.current = null;
+      return;
+    }
+    if (prevMaxTimerRef.current === null || Math.abs(prevMaxTimerRef.current - mt) > 3) {
+      clearInterval(localTimerRef.current);
+      setLocalTimer(mt);
+      prevMaxTimerRef.current = mt;
+      localTimerRef.current = setInterval(() => {
+        setLocalTimer(t => {
+          const next = t > 0 ? t - 1 : 0;
+          prevMaxTimerRef.current = next;
+          if (next <= 0) clearInterval(localTimerRef.current);
+          return next;
+        });
+      }, 1000);
+    }
+  }, [ovfj.maxTimer, ovfj.phase]);
+
+  React.useEffect(() => () => clearInterval(localTimerRef.current), []);
+
   const localAnsRef = React.useRef({});
   React.useEffect(() => { localAnsRef.current = localAns; }, [localAns]);
 
@@ -41270,10 +41300,9 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
   );
 
   if (phase === 'writing') {
-    const timedOut = ovfj.maxTimer !== null && ovfj.maxTimer !== undefined && ovfj.maxTimer <= 0;
+    const timedOut = localTimer === 0 || (ovfj.maxTimer !== null && ovfj.maxTimer !== undefined && ovfj.maxTimer <= 0);
     const locked = submitted || timedOut;
     const cd=ovfj.countdown;
-    const mt=ovfj.maxTimer;
     return (
       <div style={pageOuter}><div style={pageInner}>
         <Hdr />
@@ -41286,10 +41315,10 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
               <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:20,color:T.coral}}>⏰ Lejárt!</div>
             ) : cd!=null ? (
               <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:28,color:cd<=5?T.coral:T.ink}}>{cd}s</div>
-            ) : mt!=null ? (
-              <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:26,color:mt<=30?T.coral:mt<=60?T.yellow||'#F4C95A':T.ink}}>{Math.floor(mt/60)}:{String(mt%60).padStart(2,'0')}</div>
+            ) : localTimer!=null ? (
+              <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:26,color:localTimer<=30?T.coral:localTimer<=60?T.yellow||'#F4C95A':T.ink}}>{Math.floor(localTimer/60)}:{String(localTimer%60).padStart(2,'0')}</div>
             ) : null}
-            {mt!=null && !timedOut && <div style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.06em'}}>hátralévő</div>}
+            {localTimer!=null && !timedOut && <div style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.06em'}}>hátralévő</div>}
           </div>
         </div>
         {OVFJ_CATS.map((cat,idx)=>(
