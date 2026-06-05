@@ -54,6 +54,7 @@
     @keyframes fadeIn    { from{opacity:0} to{opacity:1} }
     @keyframes spin      { to { transform: rotate(360deg); } }
     @keyframes popIn     { from{transform:scale(.7);opacity:0} to{transform:scale(1);opacity:1} }
+    @keyframes cardFlip  { 0%{transform:rotateY(90deg) scale(.85);opacity:0} 60%{transform:rotateY(-8deg) scale(1.05)} 100%{transform:rotateY(0) scale(1);opacity:1} }
     @keyframes slideUp   { from{transform:translateY(60px);opacity:.6} to{transform:translateY(0);opacity:1} }
     @keyframes slideIn   { from{transform:translateX(40px);opacity:0} to{transform:translateX(0);opacity:1} }
     @keyframes slideBack { from{transform:translateX(-40px);opacity:0} to{transform:translateX(0);opacity:1} }
@@ -33591,7 +33592,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.05';
+const APP_VERSION = 'v8.06';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34504,6 +34505,21 @@ function BuszConfigSheet({ config, setConfig, onClose }) {
             </button>
           </div>
         ); })()}
+        {(() => { const aceHigh = config.aceMode !== 'low'; return (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'1px solid rgba(26,42,74,0.10)' }}>
+            <div>
+              <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>Ász értéke</span>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>{aceHigh ? 'Magas — K felett (11-es)' : 'Alacsony — 2 alatt (1-es)'}</div>
+            </div>
+            <div style={{ display:'flex', background:T.surfaceMuted, padding:4, borderRadius:12, gap:3, flexShrink:0 }}>
+              {[{k:'high',l:'11-es'},{k:'low',l:'1-es'}].map(o => (
+                <button key={o.k} onClick={() => setConfig(c => ({...c, aceMode:o.k}))} style={{ padding:'7px 10px', borderRadius:9, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:12, background:(aceHigh?'high':'low')===o.k?T.mint:'transparent', color:(aceHigh?'high':'low')===o.k?'#fff':T.inkSoft, transition:'all .15s' }}>
+                  {o.l}
+                </button>
+              ))}
+            </div>
+          </div>
+        ); })()}
         <button onClick={onClose} style={{ width:'100%', padding:'15px', borderRadius:16, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)', marginTop:16 }}>Kész</button>
       </div>
     </SheetOverlay>
@@ -34571,6 +34587,39 @@ function KisebbConfigSheet({ config, setConfig, onClose }) {
       </div>
     </SheetOverlay>
   );
+}
+
+function BeerPongConfetti() {
+  const canvasRef = React.useRef(null);
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width = canvas.offsetWidth;
+    const H = canvas.height = canvas.offsetHeight;
+    const colors = ['#4FC2A0','#F87171','#F0C840','#60A5FA','#C084FC','#FB923C'];
+    const particles = Array.from({length:80}, () => ({
+      x: Math.random()*W, y: Math.random()*H*0.3 - H*0.1,
+      vx: (Math.random()-0.5)*3, vy: Math.random()*2+1,
+      r: Math.random()*5+3, color: colors[Math.floor(Math.random()*colors.length)],
+      rot: Math.random()*360, rotV: (Math.random()-0.5)*6, alive: true
+    }));
+    let raf;
+    const draw = () => {
+      ctx.clearRect(0,0,W,H);
+      particles.forEach(p => {
+        p.x+=p.vx; p.y+=p.vy; p.rot+=p.rotV; p.vy+=0.05;
+        if (p.y>H+20) p.alive=false;
+        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot*Math.PI/180);
+        ctx.fillStyle=p.color; ctx.fillRect(-p.r,-p.r/2,p.r*2,p.r);
+        ctx.restore();
+      });
+      if (particles.some(p=>p.alive)) raf=requestAnimationFrame(draw);
+    };
+    draw();
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return <canvas ref={canvasRef} style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',zIndex:1}} />;
 }
 
 function CollectBoomConfigSheet({ config, setConfig, onClose }) {
@@ -36490,7 +36539,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const renderMatchCard = () => {
     if (champion) {
       return (
-        <div style={{ width:'100%', background:T.surface, borderRadius:22, padding:'28px 20px', textAlign:'center', boxShadow:T.shadow, display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+        <div style={{ width:'100%', background:T.surface, borderRadius:22, padding:'28px 20px', textAlign:'center', boxShadow:T.shadow, display:'flex', flexDirection:'column', alignItems:'center', gap:12, position:'relative', overflow:'hidden' }}>
+          <BeerPongConfetti />
           <div style={{ fontFamily:T.font, fontSize:32 }}>🏆</div>
           <div style={{ width:88, height:88, borderRadius:'50%', background:champion.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:38, color:'#fff', boxShadow:'0 6px 24px ' + champion.color + '55' }}>
             {champion.name.charAt(0).toUpperCase()}
@@ -38782,6 +38832,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
   const [zsulliAnim, setZsulliAnim] = useState(null);
   const [ready, setReady] = useState(false);
   const [guessResult, setGuessResult] = useState(null);
+  const [lastCardFail, setLastCardFail] = useState(false);
   const [takenIds, setTakenIds] = useState([]);
   const [showQR, setShowQR] = useState(false);
   const [hostPlayerId, setHostPlayerId] = useState(null);
@@ -38876,21 +38927,21 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
     const busRiderDrawnCards = {};
     riders.forEach(rid => { busRiderPositions[rid] = 0; busRiderDone[rid] = false; busRiderBonusUsed[rid] = false; busRiderDrawnCards[rid] = []; });
     const busRevealedPositions = [1, 3].filter(i => i < st.settings.busSteps);
-    await persist({...st, phase:'bus', busRiders:riders, busRouteCards, busDrawDeck, busRiderPositions, busRiderDone, busRiderBonusUsed, busRiderDrawnCards, busRiderPendingGuesses:{}, busRevealedPositions, currentTurnRiderId:riders[0], busRiderDrinks:{}, settings:{...st.settings, bonusGuess:!!(gameMeta?.buszConfig?.bonusGuess!==false)}});
+    await persist({...st, phase:'bus', busRiders:riders, busRouteCards, busDrawDeck, busRiderPositions, busRiderDone, busRiderBonusUsed, busRiderDrawnCards, busRiderPendingGuesses:{}, busRevealedPositions, currentTurnRiderId:riders[0], busRiderDrinks:{}, settings:{...st.settings, bonusGuess:!!(gameMeta?.buszConfig?.bonusGuess!==false), aceMode: gameMeta?.buszConfig?.aceMode ?? 'high'}});
   };
 
-  const evalBusGuess = (guess, routeCard, drawnCard) => {
-    if (drawnCard.value === 'A') return true;
-    if (routeCard.value === 'A') return true;
-    if (routeCard.value === drawnCard.value) return false;
-    const rr = CARD_VALUES.indexOf(routeCard.value);
-    const dr = CARD_VALUES.indexOf(drawnCard.value);
+  const evalBusGuess = (guess, routeCard, drawnCard, aceHigh=true) => {
+    const getIdx = v => v === 'A' ? (aceHigh ? 13 : -1) : CARD_VALUES.indexOf(v);
+    const rr = getIdx(routeCard.value);
+    const dr = getIdx(drawnCard.value);
+    if (rr === dr) return false;
     return (guess === 'K' && dr < rr) || (guess === 'N' && dr > rr);
   };
 
   const resolvePosition = (st, posIdx, pendingGuesses, drawnCard, newDrawDeck) => {
     const { busRouteCards, busRiders, busRiderPositions, busRiderDone, busRiderBonusUsed, busRiderDrawnCards, settings } = st;
     const busStepsCount = settings?.busSteps || 6;
+    const aceHigh = settings?.aceMode !== 'low';
     const routeCard = busRouteCards[posIdx];
     const newPositions = {...busRiderPositions};
     const newDone = {...busRiderDone};
@@ -38903,7 +38954,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
       const g = pendingGuesses[rid];
       const isBonus = g && g.startsWith && g.startsWith('BONUS_');
       const actualGuess = isBonus ? g.slice(6) : g;
-      const correct = evalBusGuess(actualGuess, routeCard, drawnCard);
+      const correct = evalBusGuess(actualGuess, routeCard, drawnCard, aceHigh);
       if (isBonus) newBonus[rid] = true;
       if (correct) {
         if (isBonus) { newPositions[rid] = busStepsCount; newDone[rid] = true; newDrawn[rid] = [drawnCard]; }
@@ -38950,7 +39001,8 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
     const r = resolvePosition(st, myStep, pending, drawnCard, newDrawDeck);
     const myRes = r.results[riderId];
     setGuessResult({correct:myRes.correct, done:myRes.done, bonus:isBonus, card:drawnCard, step:myStep, drinks:myRes.drinks});
-    setTimeout(() => setGuessResult(null), myRes.correct ? 1800 : 2200);
+    if (!myRes.correct && myStep === busStepsCount - 1) setTimeout(() => { setGuessResult(null); setLastCardFail(true); }, 1000);
+    else setTimeout(() => setGuessResult(null), myRes.correct ? 1800 : 2200);
     if (roomCode && mode==='Online') {
       try {
         const snap = await firebase.firestore().collection('rooms').doc(roomCode).get();
@@ -39217,7 +39269,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
               const isResult = guessResult?.step === i && !positionDrawnCards[i];
               const glow = isResult && !guessResult?.correct;
               return dc
-                ? <PlayingCard key={i} card={dc} size='lg' glow={glow} />
+                ? <div key={`card-${i}-${dc.value}-${dc.suit}`} style={{animation:'cardFlip .4s cubic-bezier(.2,.9,.3,1.2)'}}><PlayingCard card={dc} size='lg' glow={glow} /></div>
                 : <div key={i} style={{width:_lgW,height:_lgH,borderRadius:7,border:`1.5px dashed ${i<myStep?T.coral+'60':T.inkMute+'30'}`,background:i<myStep?`${T.coral}08`:'transparent',flexShrink:0}} />;
             })}
           </div>
@@ -39272,6 +39324,16 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
           </div>
         )}
       {hostViewToggle}
+      {lastCardFail && (
+        <div style={{position:'fixed',inset:0,background:'rgba(14,14,24,0.78)',zIndex:80,display:'flex',alignItems:'center',justifyContent:'center',padding:28,animation:'fadeIn .2s'}}>
+          <div style={{background:T.surface,borderRadius:28,padding:'32px 24px 24px',width:'100%',maxWidth:320,display:'flex',flexDirection:'column',alignItems:'center',gap:12,boxShadow:'0 24px 64px rgba(0,0,0,0.35)',animation:'popIn .35s cubic-bezier(.2,.9,.3,1.3)'}}>
+            <div style={{fontSize:56,lineHeight:1}}>😖</div>
+            <div style={{fontFamily:T.font,fontWeight:900,fontSize:24,color:T.coral,letterSpacing:'-0.02em'}}>Szerencsétlen!</div>
+            <div style={{fontFamily:T.font,fontSize:15,color:T.inkSoft,textAlign:'center',lineHeight:1.5}}>Az utolsó lapnál hibáztál.<br/>Kezd előlről!</div>
+            <button onClick={() => setLastCardFail(false)} style={{marginTop:8,width:'100%',padding:'15px',borderRadius:16,border:'none',background:T.coral,color:'#fff',fontFamily:T.font,fontWeight:900,fontSize:17,cursor:'pointer',boxShadow:'0 5px 16px -5px rgba(240,100,80,0.5)'}}>OK, kezdem előlről</button>
+          </div>
+        </div>
+      )}
       </div>
     );
   }
@@ -42316,7 +42378,7 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
         const drawnCard = deck[0];
         const newDrawDeck = deck.length>1 ? deck.slice(1) : shuffleDeck(generateDeck(settings?.deckCount||1));
         // evalBusGuess defined inline
-        const evalG = (g, rc, dc) => { const rr=CARD_VALUES.indexOf(rc.value),dr=CARD_VALUES.indexOf(dc.value); if(rc.value===dc.value)return false; if(rc.value==='A')return true; return (g==='K'&&dr<rr)||(g==='N'&&dr>rr); };
+        const _aceHigh = settings?.aceMode !== 'low'; const evalG = (g, rc, dc) => { const getI=v=>v==='A'?(_aceHigh?13:-1):CARD_VALUES.indexOf(v); const rr=getI(rc.value),dr=getI(dc.value); if(rr===dr)return false; return (g==='K'&&dr<rr)||(g==='N'&&dr>rr); };
         const busRouteCards=st.busRouteCards, busRiderBonusUsed=st.busRiderBonusUsed||{}, busRiderDrawnCards=st.busRiderDrawnCards||{}, busRiderDrinks=st.busRiderDrinks||{};
         const routeCard = busRouteCards[myStep];
         const newPositions={...busRiderPositions}, newDone={...busRiderDone}, newBonus={...busRiderBonusUsed}, newDrawn={...busRiderDrawnCards}, newDrinks={...busRiderDrinks};
@@ -43431,6 +43493,15 @@ function ObserverWatching({ code, observerName, onLeave }) {
   const [burst, setBurst] = useState(null);
   const [groupUsed, setGroupUsed] = useState(false);
   const [kortyUsed, setKortyUsed] = useState(false);
+
+  const prevGameIdxRef = React.useRef(null);
+  React.useEffect(() => {
+    const idx = room?.gameIdx ?? null;
+    if (prevGameIdxRef.current !== null && prevGameIdxRef.current !== idx) {
+      setGroupUsed(false); setKortyUsed(false);
+    }
+    prevGameIdxRef.current = idx;
+  }, [room?.gameIdx]);
 
   useEffect(() => {
     let unsub = null;
