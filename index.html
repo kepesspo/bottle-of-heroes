@@ -33594,7 +33594,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.23';
+const APP_VERSION = 'v8.24';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -41015,7 +41015,14 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
     </div>
   );
 
-  if (phase === 'voting') return (
+  if (phase === 'voting') {
+    const dupMap = {};
+    OVFJ_CATS.forEach(cat => {
+      const freq = {};
+      pl.forEach(p => { const v=(answers[p.id]?.[cat.key]||'').trim().toLowerCase(); if(v) freq[v]=(freq[v]||0)+1; });
+      dupMap[cat.key] = new Set(Object.keys(freq).filter(v=>freq[v]>1));
+    });
+    return (
     <div style={{display:'flex',flexDirection:'column',gap:10,width:'100%'}}>
       <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:18,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay}}>„{letter}" — Szavazás</div>
       <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,textAlign:'center',marginTop:-6}}>Telefonon szavaznak a játékosok</div>
@@ -41031,12 +41038,14 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
             {OVFJ_CATS.map(cat=>{
               const val=(ans[cat.key]||'').trim(), vk=`${p.id}_${cat.key}`, vm=votes[vk]||{};
               const yes=Object.values(vm).filter(Boolean).length, no=Object.values(vm).filter(x=>!x).length;
+              const isDup = val && dupMap[cat.key].has(val.toLowerCase());
               return (
                 <div key={cat.key} style={{display:'flex',alignItems:'center',gap:6,marginBottom:5,paddingBottom:4,borderBottom:`1px solid ${T.surfaceMuted}`}}>
                   <span style={{fontSize:13,flexShrink:0,width:20,textAlign:'center'}}>{cat.emoji}</span>
                   <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.inkSoft,width:66,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
-                  <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:13,flex:1,color:val?T.ink:T.inkMute,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{val||'—'}</span>
-                  {val && <span style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,flexShrink:0}}>👍{yes} 👎{no}</span>}
+                  <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:13,flex:1,color:isDup?T.coral:val?T.ink:T.inkMute,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:isDup?'line-through':'none',opacity:isDup?0.7:1}}>{val||'—'}</span>
+                  {val && !isDup && <span style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,flexShrink:0}}>👍{yes} 👎{no}</span>}
+                  {isDup && <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.coral,flexShrink:0}}>×</span>}
                   {val && <a href={`https://www.google.com/search?q=${encodeURIComponent(val)}`} target="_blank" rel="noreferrer" style={{fontSize:13,flexShrink:0,textDecoration:'none',opacity:0.55,lineHeight:1}}>🔍</a>}
                 </div>
               );
@@ -41046,7 +41055,7 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
       })}
       <PrimaryButton onClick={calcScores} style={{marginTop:4}}>✓ Pontok kiszámítása</PrimaryButton>
     </div>
-  );
+  );}
 
   if (phase === 'writing') {
     const doneCount=Object.values(answers).filter(a=>a.done).length;
@@ -41272,20 +41281,40 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
       <div style={pageOuter}><div style={pageInner}>
         <Hdr />
         <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:16,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay}}>„{letter}" — Szavazás</div>
+        {(() => {
+          const allAns = allAnswers;
+          const dupMapObs = {};
+          OVFJ_CATS.forEach(cat => {
+            const freq = {};
+            players.forEach(p => { const v=(allAns[p.id]?.[cat.key]||'').trim().toLowerCase(); if(v) freq[v]=(freq[v]||0)+1; });
+            dupMapObs[cat.key] = new Set(Object.keys(freq).filter(v=>freq[v]>1));
+          });
+          return (
         <div style={{background:T.mintSoft,borderRadius:16,padding:'12px 14px'}}>
           <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:11,color:T.mint,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.08em'}}>A te válaszaid</div>
           {OVFJ_CATS.map(cat=>{
             const val=(allAnswers[myPid]?.[cat.key]||localAns[cat.key]||'').trim();
+            const isDup = val && dupMapObs[cat.key].has(val.toLowerCase());
             return (
               <div key={cat.key} style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
                 <span style={{fontSize:13,width:20,textAlign:'center',flexShrink:0}}>{cat.emoji}</span>
-                <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.mint,width:60,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
-                <span style={{fontFamily:T.font,fontSize:13,fontWeight:T.weightTitle,color:val?T.ink:T.inkMute}}>{val||'—'}</span>
+                <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:isDup?T.coral:T.mint,width:60,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
+                <span style={{fontFamily:T.font,fontSize:13,fontWeight:T.weightTitle,color:isDup?T.coral:val?T.ink:T.inkMute,textDecoration:isDup?'line-through':'none',opacity:isDup?0.7:1}}>{val||'—'}</span>
+                {isDup && <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.coral,marginLeft:4}}>× egyező</span>}
               </div>
             );
           })}
         </div>
-        {others.map(p=>{
+          );
+        })()}
+        {(()=>{
+          const dupMapObs2 = {};
+          OVFJ_CATS.forEach(cat => {
+            const freq = {};
+            players.forEach(pl2 => { const v=(allAnswers[pl2.id]?.[cat.key]||'').trim().toLowerCase(); if(v) freq[v]=(freq[v]||0)+1; });
+            dupMapObs2[cat.key] = new Set(Object.keys(freq).filter(v=>freq[v]>1));
+          });
+          return others.map(p=>{
           const ans=allAnswers[p.id]||{};
           return (
             <div key={p.id} style={{background:T.surface,borderRadius:18,padding:'12px 14px',boxShadow:T.shadow}}>
@@ -41295,24 +41324,27 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
               </div>
               {OVFJ_CATS.map(cat=>{
                 const val=(ans[cat.key]||'').trim(), vk=`${p.id}_${cat.key}`, mv=myVotes[vk];
+                const isDupO = val && dupMapObs2[cat.key].has(val.toLowerCase());
                 return (
                   <div key={cat.key} style={{display:'flex',alignItems:'center',gap:5,marginBottom:6,paddingBottom:5,borderBottom:`1px solid ${T.surfaceMuted}`}}>
                     <span style={{fontSize:13,flexShrink:0,width:20,textAlign:'center'}}>{cat.emoji}</span>
                     <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.inkSoft,width:60,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
-                    <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:12,flex:1,color:val?T.ink:T.inkMute,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{val||'—'}</span>
-                    {val && (
+                    <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:12,flex:1,color:isDupO?T.coral:val?T.ink:T.inkMute,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:isDupO?'line-through':'none',opacity:isDupO?0.7:1}}>{val||'—'}</span>
+                    {val && !isDupO && (
                       <div style={{display:'flex',gap:4,flexShrink:0,alignItems:'center'}}>
                         <a href={`https://www.google.com/search?q=${encodeURIComponent(val)}`} target="_blank" rel="noreferrer" style={{fontSize:14,textDecoration:'none',opacity:0.5,lineHeight:1}}>🔍</a>
                         <button onClick={()=>submitVote(p.id,cat.key,true)} style={{width:32,height:30,borderRadius:9,border:`1.5px solid ${mv===true?T.mint:T.surfaceMuted}`,background:mv===true?T.mintSoft:'transparent',cursor:'pointer',fontSize:14,display:'grid',placeItems:'center'}}>👍</button>
                         <button onClick={()=>submitVote(p.id,cat.key,false)} style={{width:32,height:30,borderRadius:9,border:`1.5px solid ${mv===false?T.coral:T.surfaceMuted}`,background:mv===false?T.coralSoft:'transparent',cursor:'pointer',fontSize:14,display:'grid',placeItems:'center'}}>👎</button>
                       </div>
                     )}
+                    {isDupO && <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.coral,flexShrink:0}}>×</span>}
                   </div>
                 );
               })}
             </div>
           );
-        })}
+        });
+        })()}
       </div></div>
     );
   }
