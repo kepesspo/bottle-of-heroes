@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.61';
+const APP_VERSION = 'v7.62';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -39359,6 +39359,17 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
     pendRef.current = true;
     setGuessRes({ correct:ok, same, pid:currentPid, card:nextCard, pot });
 
+    // Immediate onResult feedback
+    if (same) {
+      const sm = cfg2.stackMode??'plus1';
+      const np = sm==='times2' ? (pot||1)*2 : (pot||1)+1;
+      onResult && onResult({ correct: true, playerName: null, drinks: 0, subtitle: `🔄 Ugyanaz! Tét: ${sm==='times2'?'×2':'+1'} → ${np} korty` });
+    } else if (!ok) {
+      onResult && onResult({ correct: false, playerName: currentPlayer?.name, drinks: pot||1, subtitle: `${currentPlayer?.name||'Játékos'} iszik ${pot||1} kortyt` });
+    } else {
+      onResult && onResult(null);
+    }
+
     setTimeout(()=>{
       const st = gsRef.current;
       const pid = st.activePids[st.turnPos % Math.max(st.activePids.length,1)];
@@ -39370,7 +39381,6 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
       } else if (!ok) {
         const newLives = { ...st.playerLives, [pid]:(st.playerLives[pid]||1)-1 };
         const dm = { ...st.drinkMap, [pid]:(st.drinkMap[pid]||0)+(st.pot||1) };
-        const loserPlayer = players.find(p=>p.id===pid);
         nst = { ...nst, drinkMap:dm, playerLives:newLives, pot:1,
                 turnPos:(st.turnPos+1)%st.activePids.length };
         if (!noElim && (newLives[pid]||0)<=0) {
@@ -39380,7 +39390,6 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
         }
       } else {
         nst = { ...nst, turnPos:(st.turnPos+1)%st.activePids.length };
-        onResult && onResult(null);
       }
 
       // No-elim mode: end game when deck runs out
@@ -39474,30 +39483,17 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
         {shownCard ? <LargeCard card={shownCard} faceDown={false} /> : <LargeCard card={null} faceDown={true} />}
       </div>
 
-      {/* Result feedback */}
-      {guessRes && (() => {
-        const sm2 = gameMeta?.kisebbConfig?.stackMode ?? 'plus1';
-        const np = sm2==='times2' ? (guessRes.pot||1)*2 : (guessRes.pot||1)+1;
-        const bg = guessRes.same ? 'rgba(240,192,64,0.18)' : guessRes.correct ? `${T.mint}22` : `${T.coral}22`;
-        const border = guessRes.same ? '#E0A030' : guessRes.correct ? T.mint : T.coral;
-        const loser = !guessRes.same && !guessRes.correct ? players.find(p=>p.id===guessRes.pid) : null;
-        return (
-          <div style={{ borderRadius:16, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, animation:'popIn .3s cubic-bezier(.2,.9,.3,1.2)', background:bg, border:`2px solid ${border}`, width:'100%', boxSizing:'border-box' }}>
-            {loser && <div style={{ width:36, height:36, borderRadius:'50%', background:loser.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:15, color:'#fff', flexShrink:0 }}>{loser.name.charAt(0).toUpperCase()}</div>}
-            <div style={{ flex:1 }}>
-              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color: guessRes.same ? '#C08020' : guessRes.correct ? T.mint : T.coral }}>
-                {guessRes.same
-                  ? `🔄 Ugyanaz! Tét: ${sm2==='times2'?'×2':'+1'} → ${np} korty`
-                  : guessRes.correct
-                    ? '✓ Helyes! Következő játékos.'
-                    : `✗ Rontott! ${loser?.name} iszik`
-                }
-              </div>
-              {!guessRes.same && !guessRes.correct && <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.coral, lineHeight:1.1 }}>{guessRes.pot} korty</div>}
+      {/* Drink scoreboard */}
+      {players.length > 0 && Object.keys(drinkMap).length > 0 && (
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap', justifyContent:'center', width:'100%' }}>
+          {players.filter(p => (drinkMap[p.id]||0) > 0).map(p => (
+            <div key={p.id} style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 10px', borderRadius:999, background:`${p.color}22`, border:`1.5px solid ${p.color}55` }}>
+              <div style={{ width:18, height:18, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:9, color:'#fff', flexShrink:0 }}>{p.name.charAt(0).toUpperCase()}</div>
+              <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.coral }}>{drinkMap[p.id]}🍺</span>
             </div>
-          </div>
-        );
-      })()}
+          ))}
+        </div>
+      )}
 
       {/* Kisebb / Nagyobb buttons */}
       {!guessRes && (
