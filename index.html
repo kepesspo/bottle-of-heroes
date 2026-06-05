@@ -33594,7 +33594,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.16';
+const APP_VERSION = 'v8.17';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -40850,30 +40850,25 @@ function PowerHourGame({ players, onAdvance }) {
 }
 function OVFJConfigSheet({ config, setConfig, onClose }) {
   const rounds = config.rounds ?? 5;
-  const Stepper = ({ val, min, max, onChange }) => (
-    <div style={{display:'flex',alignItems:'center',gap:12}}>
-      <button onClick={()=>onChange(Math.max(min,val-1))} style={{width:36,height:36,borderRadius:10,border:`1.5px solid ${T.border}`,background:T.surface,fontSize:20,cursor:'pointer',display:'grid',placeItems:'center'}}>−</button>
-      <span style={{fontFamily:T.font,fontWeight:900,fontSize:20,color:T.ink,minWidth:28,textAlign:'center'}}>{val}</span>
-      <button onClick={()=>onChange(Math.min(max,val+1))} style={{width:36,height:36,borderRadius:10,border:`1.5px solid ${T.border}`,background:T.surface,fontSize:20,cursor:'pointer',display:'grid',placeItems:'center'}}>+</button>
-    </div>
-  );
   return (
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',zIndex:200,display:'flex',alignItems:'flex-end'}} onClick={onClose}>
-      <div style={{width:'100%',background:T.bg,borderRadius:'22px 22px 0 0',padding:'20px 20px 36px',boxSizing:'border-box'}} onClick={e=>e.stopPropagation()}>
-        <div style={{fontFamily:T.font,fontWeight:900,fontSize:18,color:T.ink,marginBottom:16}}>🌍 Ország-Város beállítások</div>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 0',borderTop:`1px solid ${T.border}`}}>
+    <SheetOverlay onClose={onClose}>
+      <div style={{padding:'4px 20px 32px'}}>
+        <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:18,color:T.ink,marginBottom:4,letterSpacing:T.letterDisplay}}>🌍 Ország-Város beállítások</div>
+        <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,marginBottom:18}}>Ország · Város · Fiú · Lány · Növény · Állat · Tárgy · Híresség</div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 0',borderTop:`1px solid ${T.surfaceMuted}`}}>
           <div>
-            <div style={{fontFamily:T.font,fontWeight:600,fontSize:15,color:T.ink}}>Körök száma</div>
+            <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.ink}}>Körök száma</div>
             <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:2}}>3–10 kör</div>
           </div>
-          <Stepper val={rounds} min={3} max={10} onChange={v=>setConfig(c=>({...c,rounds:v}))} />
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <button onClick={()=>setConfig(c=>({...c,rounds:Math.max(3,rounds-1)}))} style={{width:40,height:40,borderRadius:12,border:'none',background:T.surfaceMuted,fontSize:22,cursor:'pointer',display:'grid',placeItems:'center',color:T.ink,fontFamily:T.font,fontWeight:900}}>−</button>
+            <span style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:22,color:T.ink,minWidth:32,textAlign:'center'}}>{rounds}</span>
+            <button onClick={()=>setConfig(c=>({...c,rounds:Math.min(10,rounds+1)}))} style={{width:40,height:40,borderRadius:12,border:'none',background:T.surfaceMuted,fontSize:22,cursor:'pointer',display:'grid',placeItems:'center',color:T.ink,fontFamily:T.font,fontWeight:900}}>+</button>
+          </div>
         </div>
-        <div style={{padding:'10px 0',borderTop:`1px solid ${T.border}`,fontFamily:T.font,fontSize:12,color:T.inkSoft,lineHeight:1.65}}>
-          Ország · Város · Fiú neve · Lány neve · Növény · Állat · Tárgy · Híres ember
-        </div>
-        <button onClick={onClose} style={{marginTop:14,width:'100%',padding:'14px',borderRadius:14,border:'none',background:T.ink,color:T.bg,fontFamily:T.font,fontWeight:700,fontSize:16,cursor:'pointer'}}>Kész</button>
+        <PrimaryButton onClick={onClose} style={{marginTop:8}}>Kész</PrimaryButton>
       </div>
-    </div>
+    </SheetOverlay>
   );
 }
 
@@ -40882,25 +40877,23 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
   const STOP_EXTRA = 20;
   const drawLetter = () => OVFJ_LETTERS[Math.floor(Math.random() * OVFJ_LETTERS.length)];
 
-  const [phase, setPhase] = useState('letter');
-  const [round, setRound] = useState(1);
-  const [letter, setLetter] = useState(drawLetter);
-  const [answers, setAnswers] = useState({});
-  const [votes, setVotes] = useState({});
-  const [roundScores, setRoundScores] = useState({});
-  const [cumScores, setCumScores] = useState({});
-  const [countdown, setCountdown] = useState(null);
+  const [phase, setPhase] = React.useState('letter');
+  const [round, setRound] = React.useState(1);
+  const [letter, setLetter] = React.useState(drawLetter);
+  const [answers, setAnswers] = React.useState({});
+  const [votes, setVotes] = React.useState({});
+  const [roundScores, setRoundScores] = React.useState({});
+  const [cumScores, setCumScores] = React.useState({});
+  const [countdown, setCountdown] = React.useState(null);
   const cdStartedRef = React.useRef(false);
 
   const playerMap = React.useMemo(() => Object.fromEntries((players||[]).map(p=>[p.id,p])), [players]);
 
-  // Sync to Firebase
   React.useEffect(() => {
     if (!roomCode || typeof syncRoom !== 'function') return;
     syncRoom(roomCode, { ovfjState: { phase, round, totalRounds, letter, answers, votes, roundScores, cumScores, countdown } });
   }, [phase, round, letter, answers, votes, roundScores, cumScores, countdown]);
 
-  // Read player inputs from Firebase
   React.useEffect(() => {
     if (!roomCode || typeof subscribeRoom !== 'function') return;
     return subscribeRoom(roomCode, room => {
@@ -40920,7 +40913,6 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
     });
   }, [roomCode, round]);
 
-  // Start countdown when first player done
   React.useEffect(() => {
     if (phase !== 'writing' || cdStartedRef.current) return;
     if (Object.values(answers).some(a => a.done)) {
@@ -40929,7 +40921,6 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
     }
   }, [answers, phase]);
 
-  // Countdown tick
   React.useEffect(() => {
     if (countdown === null) return;
     if (countdown <= 0) { setPhase('voting'); setCountdown(null); return; }
@@ -40970,13 +40961,13 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
 
   if (phase === 'done') return (
     <div style={{display:'flex',flexDirection:'column',gap:10,width:'100%'}}>
-      <div style={{textAlign:'center',fontFamily:T.font,fontWeight:900,fontSize:22,color:T.ink}}>🏆 Végeredmény</div>
+      <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:20,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay,textTransform:'uppercase'}}>🏆 Végeredmény</div>
       {[...pl].sort((a,b)=>(cumScores[b.id]||0)-(cumScores[a.id]||0)).map((p,i)=>(
-        <div key={p.id} style={{display:'flex',alignItems:'center',gap:10,background:T.surface,borderRadius:14,padding:'12px 14px',boxShadow:T.shadow}}>
-          <span style={{fontSize:20,minWidth:24}}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':'  '}</span>
-          <div style={{width:30,height:30,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:13,color:'#fff',flexShrink:0}}>{p.name?.[0]||'?'}</div>
-          <div style={{flex:1,fontFamily:T.font,fontWeight:700,fontSize:15,color:T.ink}}>{p.name}</div>
-          <div style={{fontFamily:T.font,fontWeight:900,fontSize:20,color:T.coral}}>{cumScores[p.id]||0} pt</div>
+        <div key={p.id} style={{display:'flex',alignItems:'center',gap:12,background:T.surface,borderRadius:18,padding:'14px 16px',boxShadow:T.shadow}}>
+          <span style={{fontSize:22,minWidth:28,textAlign:'center'}}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':'  '}</span>
+          <div style={{width:36,height:36,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:14,color:'#fff',flexShrink:0}}>{p.name?.[0]||'?'}</div>
+          <div style={{flex:1,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:16,color:T.ink}}>{p.name}</div>
+          <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:22,color:T.mint}}>{cumScores[p.id]||0} pt</div>
         </div>
       ))}
     </div>
@@ -40984,53 +40975,51 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
 
   if (phase === 'roundEnd') return (
     <div style={{display:'flex',flexDirection:'column',gap:10,width:'100%'}}>
-      <div style={{textAlign:'center',fontFamily:T.font,fontWeight:900,fontSize:18,color:T.ink}}>{round}. kör — „{letter}"</div>
+      <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:18,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay}}>{round}. kör vége — „{letter}"</div>
       {[...pl].sort((a,b)=>(roundScores[b.id]||0)-(roundScores[a.id]||0)).map(p=>(
-        <div key={p.id} style={{display:'flex',alignItems:'center',gap:10,background:T.surface,borderRadius:14,padding:'10px 14px',boxShadow:T.shadow}}>
-          <div style={{width:26,height:26,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:11,color:'#fff',flexShrink:0}}>{p.name?.[0]||'?'}</div>
-          <div style={{flex:1,fontFamily:T.font,fontWeight:700,fontSize:14,color:T.ink}}>{p.name}</div>
-          <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft}}>+{roundScores[p.id]||0} pt</div>
-          <div style={{fontFamily:T.font,fontWeight:900,fontSize:17,color:T.coral,minWidth:52,textAlign:'right'}}>{cumScores[p.id]||0} pt</div>
+        <div key={p.id} style={{display:'flex',alignItems:'center',gap:12,background:T.surface,borderRadius:16,padding:'12px 16px',boxShadow:T.shadow}}>
+          <div style={{width:32,height:32,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:12,color:'#fff',flexShrink:0}}>{p.name?.[0]||'?'}</div>
+          <div style={{flex:1,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.ink}}>{p.name}</div>
+          <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft}}>+{roundScores[p.id]||0} pt</div>
+          <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:18,color:T.coral,minWidth:54,textAlign:'right'}}>{cumScores[p.id]||0} pt</div>
         </div>
       ))}
-      <button onClick={nextRound} style={{marginTop:4,width:'100%',padding:'14px',borderRadius:14,border:'none',background:T.ink,color:T.bg,fontFamily:T.font,fontWeight:700,fontSize:16,cursor:'pointer'}}>
+      <PrimaryButton onClick={nextRound} style={{marginTop:4}}>
         {round>=totalRounds?'🏁 Befejezés':`➡ ${round+1}. kör`}
-      </button>
+      </PrimaryButton>
     </div>
   );
 
   if (phase === 'voting') return (
     <div style={{display:'flex',flexDirection:'column',gap:10,width:'100%'}}>
-      <div style={{fontFamily:T.font,fontWeight:900,fontSize:16,color:T.ink,textAlign:'center'}}>„{letter}" — Szavazás</div>
-      <div style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,textAlign:'center',marginTop:-6}}>Játékosok szavaznak a telefonjaikon</div>
+      <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:18,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay}}>„{letter}" — Szavazás</div>
+      <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,textAlign:'center',marginTop:-6}}>Telefonon szavaznak a játékosok</div>
       {pl.map(p=>{
         const ans=answers[p.id]||{};
         return (
-          <div key={p.id} style={{background:T.surface,borderRadius:14,padding:'10px 12px',boxShadow:T.shadow}}>
-            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-              <div style={{width:24,height:24,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:11,color:'#fff'}}>{p.name?.[0]||'?'}</div>
-              <span style={{fontFamily:T.font,fontWeight:700,fontSize:14,color:T.ink,flex:1}}>{p.name}</span>
-              {ans.done && <span style={{fontSize:10,background:T.mint+'22',color:T.mint,padding:'2px 7px',borderRadius:99,fontFamily:T.font,fontWeight:700}}>KÉSZ</span>}
+          <div key={p.id} style={{background:T.surface,borderRadius:18,padding:'12px 14px',boxShadow:T.shadow}}>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+              <div style={{width:28,height:28,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:12,color:'#fff',flexShrink:0}}>{p.name?.[0]||'?'}</div>
+              <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.ink,flex:1}}>{p.name}</span>
+              {ans.done && <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,background:T.mintSoft,color:T.mint,padding:'3px 9px',borderRadius:999,letterSpacing:'0.04em',textTransform:'uppercase'}}>KÉSZ</span>}
             </div>
             {OVFJ_CATS.map(cat=>{
               const val=(ans[cat.key]||'').trim(), vk=`${p.id}_${cat.key}`, vm=votes[vk]||{};
               const yes=Object.values(vm).filter(Boolean).length, no=Object.values(vm).filter(x=>!x).length;
               return (
-                <div key={cat.key} style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
-                  <span style={{fontSize:13,flexShrink:0}}>{cat.emoji}</span>
-                  <span style={{fontFamily:T.font,fontSize:10,color:T.inkSoft,width:64,flexShrink:0}}>{cat.label}</span>
-                  <span style={{fontFamily:T.font,fontWeight:700,fontSize:12,flex:1,color:val?T.ink:T.inkSoft,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{val||'—'}</span>
-                  {val && <span style={{fontFamily:T.font,fontSize:11,flexShrink:0}}>👍{yes} 👎{no}</span>}
-                  {val && <a href={`https://www.google.com/search?q=${encodeURIComponent(val)}`} target="_blank" rel="noreferrer" style={{fontSize:13,flexShrink:0,textDecoration:'none',opacity:0.7}}>🔍</a>}
+                <div key={cat.key} style={{display:'flex',alignItems:'center',gap:6,marginBottom:5,paddingBottom:4,borderBottom:`1px solid ${T.surfaceMuted}`}}>
+                  <span style={{fontSize:13,flexShrink:0,width:20,textAlign:'center'}}>{cat.emoji}</span>
+                  <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.inkSoft,width:66,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
+                  <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:13,flex:1,color:val?T.ink:T.inkMute,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{val||'—'}</span>
+                  {val && <span style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,flexShrink:0}}>👍{yes} 👎{no}</span>}
+                  {val && <a href={`https://www.google.com/search?q=${encodeURIComponent(val)}`} target="_blank" rel="noreferrer" style={{fontSize:13,flexShrink:0,textDecoration:'none',opacity:0.55,lineHeight:1}}>🔍</a>}
                 </div>
               );
             })}
           </div>
         );
       })}
-      <button onClick={calcScores} style={{width:'100%',padding:'14px',borderRadius:14,border:'none',background:'#22C55E',color:'#fff',fontFamily:T.font,fontWeight:700,fontSize:16,cursor:'pointer'}}>
-        ✓ Pontok kiszámítása
-      </button>
+      <PrimaryButton onClick={calcScores} style={{marginTop:4}}>✓ Pontok kiszámítása</PrimaryButton>
     </div>
   );
 
@@ -41039,41 +41028,44 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
     return (
       <div style={{display:'flex',flexDirection:'column',gap:10,width:'100%'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <div style={{fontFamily:T.font,fontWeight:900,fontSize:24,color:'#22C55E'}}>{letter}</div>
-          <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft}}>{doneCount}/{pl.length} kész</div>
-        </div>
-        {countdown!==null && (
-          <div style={{background:T.coral+'18',border:`1.5px solid ${T.coral}40`,borderRadius:12,padding:'9px 14px',display:'flex',alignItems:'center',gap:8}}>
-            <span style={{fontSize:18}}>⏱</span>
-            <span style={{fontFamily:T.font,fontWeight:700,fontSize:14,color:T.coral}}>{countdown}s — zárás hamarosan!</span>
+          <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:32,color:T.mint,letterSpacing:T.letterDisplay}}>{letter}</div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            {countdown!==null && (
+              <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:20,color:countdown<=5?T.coral:T.ink}}>⏱ {countdown}s</div>
+            )}
+            <span style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,background:T.surfaceMuted,padding:'4px 10px',borderRadius:999,fontWeight:T.weightTitle}}>{doneCount}/{pl.length} kész</span>
           </div>
-        )}
+        </div>
         {pl.map(p=>{
           const ans=answers[p.id]||{};
           return (
-            <div key={p.id} style={{display:'flex',alignItems:'center',gap:8,background:T.surface,borderRadius:12,padding:'9px 12px',boxShadow:T.shadow}}>
-              <div style={{width:24,height:24,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:11,color:'#fff',flexShrink:0}}>{p.name?.[0]||'?'}</div>
-              <span style={{fontFamily:T.font,fontSize:13,color:T.ink,flex:1}}>{p.name}</span>
-              <span style={{fontSize:16}}>{ans.done?'✅':'✏️'}</span>
+            <div key={p.id} style={{display:'flex',alignItems:'center',gap:10,background:T.surface,borderRadius:14,padding:'10px 14px',boxShadow:T.shadow}}>
+              <div style={{width:30,height:30,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:12,color:'#fff',flexShrink:0}}>{p.name?.[0]||'?'}</div>
+              <span style={{fontFamily:T.font,fontSize:14,fontWeight:T.weightTitle,color:T.ink,flex:1}}>{p.name}</span>
+              <span style={{fontSize:18}}>{ans.done?'✅':'✏️'}</span>
             </div>
           );
         })}
-        <button onClick={forceStop} style={{width:'100%',padding:'11px',borderRadius:12,border:`1.5px solid ${T.coral}`,background:'transparent',color:T.coral,fontFamily:T.font,fontWeight:700,fontSize:13,cursor:'pointer'}}>
+        <button onClick={forceStop} style={{width:'100%',padding:'12px',borderRadius:14,border:`1.5px solid ${T.coral}`,background:'transparent',color:T.coral,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:14,cursor:'pointer'}}>
           ⏹ Azonnali leállítás
         </button>
       </div>
     );
   }
 
-  // letter phase
+  // letter phase — dice button starts writing immediately
   return (
-    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:18,width:'100%'}}>
-      <div style={{fontFamily:T.font,fontWeight:700,fontSize:14,color:T.inkSoft}}>{round}. kör / {totalRounds}</div>
-      <button onClick={startWriting} style={{width:120,height:120,borderRadius:24,background:'linear-gradient(135deg,#64748B,#334155)',display:'grid',placeItems:'center',boxShadow:'0 8px 32px rgba(0,0,0,0.3)',border:'none',cursor:'pointer'}}>
-        <span style={{fontSize:48}}>🎲</span>
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:20,width:'100%'}}>
+      <div style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.12em'}}>{round}. kör / {totalRounds}</div>
+      <button onClick={startWriting} style={{width:140,height:140,borderRadius:28,background:`linear-gradient(135deg,${T.mint},${T.mintDeep||'#3DA888'})`,display:'grid',placeItems:'center',boxShadow:T.shadowLift,border:'none',cursor:'pointer',transition:'transform .08s',flexShrink:0}} onMouseDown={e=>e.currentTarget.style.transform='scale(0.95)'} onMouseUp={e=>e.currentTarget.style.transform='scale(1)'} onTouchStart={e=>e.currentTarget.style.transform='scale(0.95)'} onTouchEnd={e=>e.currentTarget.style.transform='scale(1)'}>
+        <span style={{fontSize:60}}>🎲</span>
       </button>
-      <div style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,textAlign:'center',lineHeight:1.8,maxWidth:300}}>
-        {OVFJ_CATS.map(c=>c.emoji+' '+c.label).join(' · ')}
+      <div style={{display:'flex',flexWrap:'wrap',gap:6,justifyContent:'center',maxWidth:320}}>
+        {OVFJ_CATS.map(c=>(
+          <span key={c.key} style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.inkSoft,background:T.surfaceMuted,padding:'4px 10px',borderRadius:999}}>
+            {c.emoji} {c.label}
+          </span>
+        ))}
       </div>
       <div style={{fontFamily:T.font,fontSize:14,color:T.inkSoft,textAlign:'center'}}>Nyomd meg a kockát az írás kezdéséhez!</div>
     </div>
@@ -41100,7 +41092,6 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
     }
   }, [ovfj.round]);
 
-  // Auto-save partial answers when phase switches to voting and player hasn't submitted
   const submittedRef = React.useRef(false);
   React.useEffect(() => { submittedRef.current = submitted; }, [submitted]);
   React.useEffect(() => {
@@ -41118,12 +41109,12 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
   const doSync = data => { if (typeof syncRoom === 'function') syncRoom(code, data); };
 
   if (!myPid) return (
-    <div style={{display:'flex',flexDirection:'column',gap:12,padding:'12px 0'}}>
-      <div style={{fontFamily:T.font,fontWeight:900,fontSize:20,color:T.ink,textAlign:'center'}}>🌍 Ki vagy?</div>
+    <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
+      <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:20,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay,textTransform:'uppercase',marginBottom:4}}>🌍 Ki vagy?</div>
       {players.map(p=>(
-        <button key={p.id} onClick={()=>setMyPid(p.id)} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',borderRadius:16,border:`1.5px solid ${T.border}`,background:T.surface,cursor:'pointer',width:'100%',boxShadow:T.shadow}}>
-          <div style={{width:36,height:36,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:15,color:'#fff',flexShrink:0}}>{p.name?.[0]||'?'}</div>
-          <span style={{fontFamily:T.font,fontWeight:700,fontSize:16,color:T.ink}}>{p.name}</span>
+        <button key={p.id} onClick={()=>setMyPid(p.id)} style={{display:'flex',alignItems:'center',gap:14,padding:'14px 16px',borderRadius:18,border:'none',background:T.surface,cursor:'pointer',width:'100%',boxShadow:T.shadow,textAlign:'left'}}>
+          <div style={{width:40,height:40,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:16,color:'#fff',flexShrink:0}}>{p.name?.[0]||'?'}</div>
+          <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:17,color:T.ink}}>{p.name}</span>
         </button>
       ))}
     </div>
@@ -41145,47 +41136,53 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
   };
 
   const Hdr = () => (
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:2,padding:'6px 0',borderBottom:`1px solid ${T.border}`}}>
-      <div style={{width:28,height:28,borderRadius:'50%',background:myPlayer?.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:12,color:'#fff',flexShrink:0}}>{myPlayer?.name?.[0]||'?'}</div>
-      <span style={{fontFamily:T.font,fontWeight:700,fontSize:14,color:T.ink,flex:1}}>{myPlayer?.name}</span>
-      <span style={{fontFamily:T.font,fontSize:11,color:T.inkSoft}}>{ovfj.round}/{ovfj.totalRounds} kör</span>
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:4,padding:'8px 0',borderBottom:`1px solid ${T.surfaceMuted}`}}>
+      <div style={{width:30,height:30,borderRadius:'50%',background:myPlayer?.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:13,color:'#fff',flexShrink:0}}>{myPlayer?.name?.[0]||'?'}</div>
+      <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.ink,flex:1}}>{myPlayer?.name}</span>
+      <span style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.inkSoft,background:T.surfaceMuted,padding:'3px 9px',borderRadius:999}}>{ovfj.round}/{ovfj.totalRounds} kör</span>
     </div>
   );
 
   if (phase === 'letter') return (
     <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:20,padding:'16px 0'}}>
       <Hdr />
-      <div style={{width:110,height:110,borderRadius:22,background:'linear-gradient(135deg,#64748B,#334155)',display:'grid',placeItems:'center',boxShadow:'0 8px 32px rgba(0,0,0,0.25)'}}>
-        <span style={{fontSize:52}}>🎲</span>
+      <div style={{width:120,height:120,borderRadius:28,background:T.surfaceMuted,display:'grid',placeItems:'center',boxShadow:T.shadow}}>
+        <span style={{fontSize:56}}>🎲</span>
       </div>
-      <div style={{fontFamily:T.font,fontSize:14,color:T.inkSoft,textAlign:'center'}}>A host felfedi a betűt...</div>
+      <div style={{fontFamily:T.font,fontSize:14,fontWeight:T.weightTitle,color:T.inkSoft,textAlign:'center'}}>A host felfedi a betűt...</div>
     </div>
   );
 
   if (phase === 'writing') {
     const locked=submitted, cd=ovfj.countdown;
     return (
-      <div style={{display:'flex',flexDirection:'column',gap:8,padding:'4px 0'}}>
+      <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
         <Hdr />
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
-          <div style={{fontFamily:T.font,fontWeight:900,fontSize:30,color:'#22C55E'}}>{letter}</div>
-          {cd!==null && cd!==undefined && <div style={{fontFamily:T.font,fontWeight:700,fontSize:16,color:T.coral}}>⏱ {cd}s</div>}
+        {/* Letter card — big, centered */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:16,marginBottom:4}}>
+          <div style={{width:72,height:72,borderRadius:18,background:`linear-gradient(135deg,${T.mint},${T.mintDeep||'#3DA888'})`,display:'grid',placeItems:'center',boxShadow:T.shadowLift,flexShrink:0}}>
+            <span style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:44,color:'#fff',lineHeight:1}}>{letter}</span>
+          </div>
+          {cd!=null && (
+            <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:28,color:cd<=5?T.coral:T.ink}}>{cd}s</div>
+          )}
         </div>
         {OVFJ_CATS.map((cat,idx)=>(
-          <div key={cat.key}>
-            <label style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,display:'block',marginBottom:3}}>{cat.emoji} {cat.label}</label>
-            <input ref={el=>inputRefs.current[idx]=el} type="text" value={localAns[cat.key]||''} onChange={e=>!locked&&setLocalAns(p=>({...p,[cat.key]:e.target.value}))}
-              onKeyDown={e=>{if(e.key==='Enter'&&idx<OVFJ_CATS.length-1)inputRefs.current[idx+1]?.focus();}}
-              disabled={locked} placeholder={`${letter}...`}
-              style={{width:'100%',boxSizing:'border-box',padding:'10px 12px',borderRadius:10,border:`1.5px solid ${locked?T.surfaceMuted:T.border}`,fontFamily:T.font,fontSize:15,background:locked?T.surfaceMuted:T.bg,color:T.ink,outline:'none'}} />
+          <div key={cat.key} style={{display:'flex',alignItems:'center',gap:10,background:T.surface,borderRadius:14,padding:'8px 12px',boxShadow:locked?'none':T.shadow,opacity:locked?0.6:1}}>
+            <span style={{fontSize:18,flexShrink:0,width:24,textAlign:'center'}}>{cat.emoji}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <label style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.inkSoft,display:'block',marginBottom:2,textTransform:'uppercase',letterSpacing:'0.06em'}}>{cat.label}</label>
+              <input ref={el=>inputRefs.current[idx]=el} type="text" value={localAns[cat.key]||''} onChange={e=>!locked&&setLocalAns(p=>({...p,[cat.key]:e.target.value}))}
+                onKeyDown={e=>{if(e.key==='Enter'&&idx<OVFJ_CATS.length-1)inputRefs.current[idx+1]?.focus();}}
+                disabled={locked} placeholder={`${letter}...`}
+                style={{width:'100%',boxSizing:'border-box',padding:'4px 0',border:'none',borderBottom:`1.5px solid ${locked?T.surfaceMuted:T.mint}`,fontFamily:T.font,fontSize:15,fontWeight:T.weightTitle,background:'transparent',color:T.ink,outline:'none'}} />
+            </div>
           </div>
         ))}
         {!submitted ? (
-          <button onClick={submitAnswers} style={{marginTop:6,width:'100%',padding:'14px',borderRadius:14,border:'none',background:'#22C55E',color:'#fff',fontFamily:T.font,fontWeight:900,fontSize:16,cursor:'pointer',boxShadow:'0 4px 18px rgba(34,197,94,0.4)'}}>
-            ✓ KÉSZ — Leadom!
-          </button>
+          <PrimaryButton onClick={submitAnswers} style={{marginTop:4}}>✓ KÉSZ — Leadom!</PrimaryButton>
         ) : (
-          <div style={{textAlign:'center',fontFamily:T.font,fontWeight:700,fontSize:15,color:T.mint,padding:'14px',background:T.mint+'14',borderRadius:14,marginTop:6}}>✅ Beadva! Várd a többieket...</div>
+          <div style={{textAlign:'center',fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.mint,padding:'16px',background:T.mintSoft,borderRadius:16,marginTop:4}}>✅ Beadva! Várd a többieket...</div>
         )}
       </div>
     );
@@ -41196,16 +41193,16 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
     return (
       <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
         <Hdr />
-        <div style={{fontFamily:T.font,fontWeight:900,fontSize:15,color:T.ink,textAlign:'center'}}>„{letter}" — Szavazás</div>
-        <div style={{background:T.mint+'14',borderRadius:14,padding:'10px 12px'}}>
-          <div style={{fontFamily:T.font,fontWeight:700,fontSize:12,color:T.mint,marginBottom:6}}>A te válaszaid</div>
+        <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:16,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay}}>„{letter}" — Szavazás</div>
+        <div style={{background:T.mintSoft,borderRadius:16,padding:'12px 14px'}}>
+          <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:11,color:T.mint,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.08em'}}>A te válaszaid</div>
           {OVFJ_CATS.map(cat=>{
-            const val=(allAnswers[myPid]?.[cat.key]||'').trim();
+            const val=(allAnswers[myPid]?.[cat.key]||localAns[cat.key]||'').trim();
             return (
               <div key={cat.key} style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
-                <span style={{fontSize:13}}>{cat.emoji}</span>
-                <span style={{fontFamily:T.font,fontSize:10,color:T.inkSoft,width:64,flexShrink:0}}>{cat.label}</span>
-                <span style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:val?T.ink:T.inkSoft}}>{val||'—'}</span>
+                <span style={{fontSize:13,width:20,textAlign:'center',flexShrink:0}}>{cat.emoji}</span>
+                <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.mint,width:60,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
+                <span style={{fontFamily:T.font,fontSize:13,fontWeight:T.weightTitle,color:val?T.ink:T.inkMute}}>{val||'—'}</span>
               </div>
             );
           })}
@@ -41213,23 +41210,23 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
         {others.map(p=>{
           const ans=allAnswers[p.id]||{};
           return (
-            <div key={p.id} style={{background:T.surface,borderRadius:14,padding:'10px 12px',boxShadow:T.shadow}}>
-              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-                <div style={{width:22,height:22,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:10,color:'#fff'}}>{p.name?.[0]||'?'}</div>
-                <span style={{fontFamily:T.font,fontWeight:700,fontSize:14,color:T.ink}}>{p.name}</span>
+            <div key={p.id} style={{background:T.surface,borderRadius:18,padding:'12px 14px',boxShadow:T.shadow}}>
+              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+                <div style={{width:26,height:26,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:11,color:'#fff',flexShrink:0}}>{p.name?.[0]||'?'}</div>
+                <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.ink,flex:1}}>{p.name}</span>
               </div>
               {OVFJ_CATS.map(cat=>{
                 const val=(ans[cat.key]||'').trim(), vk=`${p.id}_${cat.key}`, mv=myVotes[vk];
                 return (
-                  <div key={cat.key} style={{display:'flex',alignItems:'center',gap:5,marginBottom:5}}>
-                    <span style={{fontSize:13,flexShrink:0}}>{cat.emoji}</span>
-                    <span style={{fontFamily:T.font,fontSize:10,color:T.inkSoft,width:64,flexShrink:0}}>{cat.label}</span>
-                    <span style={{fontFamily:T.font,fontWeight:700,fontSize:12,flex:1,color:val?T.ink:T.inkSoft,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{val||'—'}</span>
+                  <div key={cat.key} style={{display:'flex',alignItems:'center',gap:5,marginBottom:6,paddingBottom:5,borderBottom:`1px solid ${T.surfaceMuted}`}}>
+                    <span style={{fontSize:13,flexShrink:0,width:20,textAlign:'center'}}>{cat.emoji}</span>
+                    <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.inkSoft,width:60,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
+                    <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:12,flex:1,color:val?T.ink:T.inkMute,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{val||'—'}</span>
                     {val && (
-                      <div style={{display:'flex',gap:3,flexShrink:0,alignItems:'center'}}>
-                        <a href={`https://www.google.com/search?q=${encodeURIComponent(val)}`} target="_blank" rel="noreferrer" style={{fontSize:13,textDecoration:'none',opacity:0.7,lineHeight:1}}>🔍</a>
-                        <button onClick={()=>submitVote(p.id,cat.key,true)} style={{width:30,height:28,borderRadius:8,border:`1.5px solid ${mv===true?'#22C55E':T.border}`,background:mv===true?'#22C55E22':'transparent',cursor:'pointer',fontSize:13,display:'grid',placeItems:'center'}}>👍</button>
-                        <button onClick={()=>submitVote(p.id,cat.key,false)} style={{width:30,height:28,borderRadius:8,border:`1.5px solid ${mv===false?T.coral:T.border}`,background:mv===false?T.coral+'22':'transparent',cursor:'pointer',fontSize:13,display:'grid',placeItems:'center'}}>👎</button>
+                      <div style={{display:'flex',gap:4,flexShrink:0,alignItems:'center'}}>
+                        <a href={`https://www.google.com/search?q=${encodeURIComponent(val)}`} target="_blank" rel="noreferrer" style={{fontSize:14,textDecoration:'none',opacity:0.5,lineHeight:1}}>🔍</a>
+                        <button onClick={()=>submitVote(p.id,cat.key,true)} style={{width:32,height:30,borderRadius:9,border:`1.5px solid ${mv===true?T.mint:T.surfaceMuted}`,background:mv===true?T.mintSoft:'transparent',cursor:'pointer',fontSize:14,display:'grid',placeItems:'center'}}>👍</button>
+                        <button onClick={()=>submitVote(p.id,cat.key,false)} style={{width:32,height:30,borderRadius:9,border:`1.5px solid ${mv===false?T.coral:T.surfaceMuted}`,background:mv===false?T.coralSoft:'transparent',cursor:'pointer',fontSize:14,display:'grid',placeItems:'center'}}>👎</button>
                       </div>
                     )}
                   </div>
@@ -41247,13 +41244,13 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
   return (
     <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
       <Hdr />
-      <div style={{fontFamily:T.font,fontWeight:900,fontSize:18,color:T.ink,textAlign:'center'}}>{isEnd?'🏆 Végeredmény':`${ovfj.round}. kör vége`}</div>
+      <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:18,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay}}>{isEnd?'🏆 Végeredmény':`${ovfj.round}. kör vége`}</div>
       {srtd.map((p,i)=>(
-        <div key={p.id} style={{display:'flex',alignItems:'center',gap:10,background:p.id===myPid?T.mint+'18':T.surface,borderRadius:14,padding:'10px 14px',boxShadow:T.shadow,border:p.id===myPid?`1.5px solid ${T.mint}`:'none'}}>
-          <span style={{fontSize:18,minWidth:22}}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':'  '}</span>
-          <div style={{flex:1,fontFamily:T.font,fontWeight:700,fontSize:14,color:T.ink}}>{p.name}</div>
+        <div key={p.id} style={{display:'flex',alignItems:'center',gap:12,background:p.id===myPid?T.mintSoft:T.surface,borderRadius:16,padding:'12px 16px',boxShadow:T.shadow,border:p.id===myPid?`2px solid ${T.mint}`:'none'}}>
+          <span style={{fontSize:20,minWidth:24,textAlign:'center'}}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':'  '}</span>
+          <div style={{flex:1,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.ink}}>{p.name}</div>
           {!isEnd&&<div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft}}>+{ovfj.roundScores?.[p.id]||0}</div>}
-          <div style={{fontFamily:T.font,fontWeight:900,fontSize:18,color:p.id===myPid?T.mint:T.coral}}>{sc?.[p.id]||0} pt</div>
+          <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:20,color:p.id===myPid?T.mint:T.coral}}>{sc?.[p.id]||0} pt</div>
         </div>
       ))}
     </div>
