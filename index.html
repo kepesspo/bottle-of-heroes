@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.48';
+const APP_VERSION = 'v7.49';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -42240,6 +42240,7 @@ function ObserverScreen({ go, initialCode, onJoinAsHost }) {
   const [status, setStatus] = useState('enter');
   const [joinMode, setJoinMode] = useState('observer'); // 'observer' | 'host'
   const [hostLoading, setHostLoading] = useState(false);
+  const [hostPin, setHostPin] = useState('');
 
   React.useEffect(() => {
     if (initialCode) window.history.replaceState({}, document.title, window.location.pathname);
@@ -42249,6 +42250,7 @@ function ObserverScreen({ go, initialCode, onJoinAsHost }) {
   const back = () => setCode(c => c.slice(0,-1));
   const submitHost = () => {
     if (code.length < CODE_LEN) return;
+    if (hostPin !== '2026') { setErrorMsg('Helytelen PIN kód.'); return; }
     setHostLoading(true);
     checkRoom(code)
       .then(room => {
@@ -42282,7 +42284,7 @@ function ObserverScreen({ go, initialCode, onJoinAsHost }) {
   return (
     <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg }}>
       <AppBar title="Csatlakozás" onBack={status === 'enter' ? () => go('home') : undefined} />
-      {status==='enter' && <ObserverEnter code={code} codeLen={CODE_LEN} onDigit={push} onBack={back} onSubmit={submit} onPaste={v => setCode(v.replace(/\D/g,'').slice(0,CODE_LEN))} joinMode={joinMode} setJoinMode={setJoinMode} hostLoading={hostLoading} errorMsg={errorMsg} />}
+      {status==='enter' && <ObserverEnter code={code} codeLen={CODE_LEN} onDigit={push} onBack={back} onSubmit={submit} onPaste={v => setCode(v.replace(/\D/g,'').slice(0,CODE_LEN))} joinMode={joinMode} setJoinMode={setJoinMode} hostLoading={hostLoading} errorMsg={errorMsg} hostPin={hostPin} setHostPin={setHostPin} />}
       {status==='connecting' && <ObserverStatus icon="📡" title="Csatlakozás…" sub={`Szoba: ${code}`} spinning />}
       {status==='watching' && <ObserverWatching code={code} observerName={name} onLeave={reset} />}
       {status==='error' && <ObserverStatus icon="🚫" title="Hiba" sub={errorMsg} actionLabel="Próbáld újra" onAction={reset} />}
@@ -42290,8 +42292,10 @@ function ObserverScreen({ go, initialCode, onJoinAsHost }) {
   );
 }
 
-function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste, joinMode, setJoinMode, hostLoading, errorMsg }) {
+function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste, joinMode, setJoinMode, hostLoading, errorMsg, hostPin, setHostPin }) {
+  const PIN_LEN = 4;
   const ready = code.length === codeLen;
+  const pinReady = hostPin.length === PIN_LEN;
   useEffect(() => {
     const onKey = e => {
       if (/^[0-9]$/.test(e.key)) onDigit(e.key);
@@ -42337,9 +42341,44 @@ function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste, join
           })}
         </div>
         <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, fontWeight:600, opacity:0.7 }}>Tipp: a házigazda osztja meg a szoba kódját</div>
+        {joinMode==='host' && (
+          <div style={{ width:'100%', maxWidth:280 }}>
+            <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, marginBottom:6, textAlign:'center' }}>🔐 Host PIN</div>
+            <div style={{ display:'flex', gap:8, justifyContent:'center' }}>
+              {Array.from({ length:PIN_LEN }).map((_,i) => {
+                const filled = i < hostPin.length;
+                const active = i === hostPin.length;
+                return (
+                  <div key={i} style={{
+                    width:38, height:52,
+                    background: filled ? T.surface : 'rgba(255,255,255,0.5)',
+                    borderRadius:12,
+                    border: active ? `2px solid ${T.mint}` : `2px solid ${filled ? 'transparent' : 'rgba(20,30,50,0.08)'}`,
+                    boxShadow: filled ? T.shadow : 'none',
+                    display:'grid', placeItems:'center',
+                    fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:24,
+                    color:T.ink, fontVariantNumeric:'tabular-nums',
+                    transition:'all .15s',
+                  }}>
+                    {filled ? '•' : (active ? <span style={{ width:2, height:22, background:T.mint, opacity:0.7, animation:'caretBlink 1s infinite' }}/> : '')}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
-      <NumberPad onDigit={onDigit} onBack={onBack} />
-      <PrimaryButton disabled={!ready || hostLoading} onClick={onSubmit} style={{ marginTop:14 }}>{hostLoading ? 'Betöltés…' : joinMode==='host' ? '🎮 Belépés Hostként' : 'Csatlakozás'}</PrimaryButton>
+      <NumberPad
+        onDigit={d => {
+          if (joinMode === 'host' && ready && hostPin.length < PIN_LEN) { setHostPin && setHostPin(hostPin + d); }
+          else if (!ready) { onDigit(d); }
+        }}
+        onBack={() => {
+          if (joinMode === 'host' && hostPin.length > 0) { setHostPin && setHostPin(hostPin.slice(0,-1)); }
+          else { onBack(); }
+        }}
+      />
+      <PrimaryButton disabled={joinMode==='host' ? (!ready || !pinReady || hostLoading) : !ready} onClick={onSubmit} style={{ marginTop:14 }}>{hostLoading ? 'Betöltés…' : joinMode==='host' ? '🎮 Belépés Hostként' : 'Csatlakozás'}</PrimaryButton>
     </div>
   );
 }
