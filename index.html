@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.51';
+const APP_VERSION = 'v7.52';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34480,6 +34480,17 @@ function BuszConfigSheet({ config, setConfig, onClose }) {
             </div>
             <button onClick={() => setConfig(c => ({...c, bonusGuess: !bonusOn}))} style={{ width:50, height:30, borderRadius:15, background:bonusOn?T.mint:'rgba(26,42,74,0.12)', border:'none', cursor:'pointer', position:'relative', transition:'background .2s', flexShrink:0 }}>
               <div style={{ position:'absolute', top:3, left:bonusOn?23:3, width:24, height:24, borderRadius:'50%', background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.22)', transition:'left .2s' }}/>
+            </button>
+          </div>
+        ); })()}
+        {(() => { const hostPlaysOn = config.hostPlays === true; return (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'1px solid rgba(26,42,74,0.10)' }}>
+            <div>
+              <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>🎮 Host is játszik</span>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>A host a saját telefonján kártyázik is</div>
+            </div>
+            <button onClick={() => setConfig(c => ({...c, hostPlays: !hostPlaysOn}))} style={{ width:50, height:30, borderRadius:15, background:hostPlaysOn?T.mint:'rgba(26,42,74,0.12)', border:'none', cursor:'pointer', position:'relative', transition:'background .2s', flexShrink:0 }}>
+              <div style={{ position:'absolute', top:3, left:hostPlaysOn?23:3, width:24, height:24, borderRadius:'50%', background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.22)', transition:'left .2s' }}/>
             </button>
           </div>
         ); })()}
@@ -38687,6 +38698,9 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
   const [guessResult, setGuessResult] = useState(null);
   const [takenIds, setTakenIds] = useState([]);
   const [showQR, setShowQR] = useState(false);
+  const [hostPlayerId, setHostPlayerId] = useState(null);
+  const [hostViewMode, setHostViewMode] = useState('host'); // 'host' | 'player'
+  const hostPlaysEnabled = !!(gameMeta?.buszConfig?.hostPlays);
   const stRef = useRef(null);
   const autoStartRef = useRef(false);
 
@@ -38917,6 +38931,48 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
     </div>
   );
 
+  // ── Host identity picker (if hostPlays ON and not yet selected) ─────────────
+  if (hostPlaysEnabled && !hostPlayerId) {
+    return (
+      <div style={{ flex:1, display:'flex', flexDirection:'column', padding:'20px 18px', gap:16, minHeight:0 }}>
+        <div style={{ textAlign:'center', flexShrink:0 }}>
+          <div style={{ fontSize:52 }}>🎮</div>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginTop:8 }}>Te ki vagy?</div>
+          <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:6 }}>Válaszd ki a neved — te is játszol</div>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:8, overflowY:'auto', WebkitOverflowScrolling:'touch', flex:1, minHeight:0 }}>
+          {players.map(p => (
+            <button key={p.id} onClick={() => setHostPlayerId(p.id)} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:T.surface, border:'2px solid transparent', borderRadius:16, cursor:'pointer', boxShadow:T.shadow, textAlign:'left', width:'100%' }}>
+              <div style={{ width:42, height:42, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:18, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+              <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>{p.name}</div>
+              <div style={{ width:10, height:10, borderRadius:'50%', background:p.color, opacity:0.5, flexShrink:0 }}/>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Host view mode toggle button (shown in both views) ────────────────────
+  const hostViewToggle = hostPlaysEnabled && hostPlayerId ? (
+    <button
+      onClick={() => setHostViewMode(m => m === 'host' ? 'player' : 'host')}
+      style={{ position:'fixed', bottom:90, right:14, zIndex:50, display:'flex', alignItems:'center', gap:6, padding:'9px 14px', borderRadius:999, border:'none', background: hostViewMode === 'player' ? T.coral : T.mint, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer', boxShadow:T.shadowLift }}
+    >
+      {hostViewMode === 'host' ? '👤 Játékos nézet' : '🎮 Host nézet'}
+    </button>
+  ) : null;
+
+  // ── Player view mode: render BuszPlayerView ───────────────────────────────
+  if (hostPlaysEnabled && hostPlayerId && hostViewMode === 'player' && buszState && isOnline) {
+    return (
+      <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0, position:'relative' }}>
+        <BuszPlayerView room={{ buszState, players, buszTakenIds: [hostPlayerId] }} roomCode={roomCode} forcedPlayerId={hostPlayerId} />
+        {hostViewToggle}
+      </div>
+    );
+  }
+
   // ── Pyramid phase ────────────────────────────────────────────────────────
   if (buszState.phase === 'pyramid') {
     const { pyramid, nextFlipIdx, hands } = buszState;
@@ -38987,6 +39043,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
           <PrimaryButton onClick={flipCard} style={{ position:'sticky', bottom:12, zIndex:5 }}>Következő lap →</PrimaryButton>
         )}
       </div>
+      {hostViewToggle}
     );
   }
 
@@ -39111,6 +39168,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
             </div>
           </div>
         )}
+      {hostViewToggle}
       </div>
     );
   }
@@ -41572,11 +41630,11 @@ function LeaderRow({ p, rank, maxScore, showScores=true }) {
 }
 
 // ─── OBSERVER SCREEN ──────────────────────────────────────────
-function BuszPlayerView({ room, roomCode }) {
+function BuszPlayerView({ room, roomCode, forcedPlayerId }) {
   const buszState = room.buszState;
   const players = room.players || [];
 
-  const [playerId, setPlayerId] = useState(null);
+  const [playerId, setPlayerId] = useState(forcedPlayerId || null);
   const [giftTarget, setGiftTarget] = useState(null); // { pool, assigned:{} }
   const [busGuessResult, setBusGuessResult] = useState(null);
   const [selectedCardIds, setSelectedCardIds] = useState([]);
@@ -41784,7 +41842,6 @@ function BuszPlayerView({ room, roomCode }) {
 
     const { busRouteCards, busRiders, busRiderPositions, busRiderDone, busRiderDrawnCards, currentTurnRiderId } = buszState;
     const busStepsCount = buszState.settings?.busSteps || 6;
-    const isMyTurn = currentTurnRiderId === playerId;
     const myStep = busRiderPositions?.[playerId] || 0;
     const myDone = !!(busRiderDone?.[playerId]);
     const myPendingGuess = !!(buszState.busRiderPendingGuesses||{})[playerId];
