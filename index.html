@@ -33591,7 +33591,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.01';
+const APP_VERSION = 'v8.02';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -39744,10 +39744,27 @@ function TicktakGame({ gameIdx, players, onAdvance, onResult }) {
     return () => clearTimeout(timerRef.current);
   }, [gameIdx]);
 
+  const playBuzz = () => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.15, 0.3].forEach(offset => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0, ctx.currentTime + offset);
+        gain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + offset + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + offset + 0.25);
+        osc.start(ctx.currentTime + offset);
+        osc.stop(ctx.currentTime + offset + 0.3);
+      });
+    } catch(e) {}
+  };
+
   const start = () => {
     setPhase('running');
     const delay = 15000 + Math.floor(Math.random() * 30000);
-    timerRef.current = setTimeout(() => setPhase('buzz'), delay);
+    timerRef.current = setTimeout(() => { setPhase('buzz'); playBuzz(); }, delay);
   };
 
   const selectLoser = (pid) => {
@@ -40823,8 +40840,10 @@ function MemoriaGame({ gameIdx, players, onAdvance, onResult }) {
           if (newMatched.size === cards.length && !advancedRef.current) {
             advancedRef.current = true;
             const maxPairs = Math.max(0, ...players.map(p => newScores[p.id]||0));
+            const minPairs = Math.min(...players.map(p => newScores[p.id]||0));
             const winners = players.filter(p => (newScores[p.id]||0) === maxPairs && maxPairs > 0);
-            const losers  = players.filter(p => (newScores[p.id]||0) === 0);
+            // aki a legkevesebb párt szerezte iszik (ha van különbség)
+            const losers  = minPairs < maxPairs ? players.filter(p => (newScores[p.id]||0) === minPairs) : [];
             const drinkMap = {};
             const pointMap = {};
             losers.forEach(p  => { drinkMap[p.id] = 1; });
