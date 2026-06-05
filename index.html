@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.64';
+const APP_VERSION = 'v7.65';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34939,6 +34939,9 @@ const SCENARIOS = {
   loverseny: { prompt:'Lóverseny — kinek nem jött be a tipp?', cta:[] },
   imposztor: { prompt:'Ki az Imposztor? Mindenki adjon egy tippet a szóra, majd szavazzatok!', cta:[] },
   collect:   { prompt:'Collect & Boom — ki találta a bombát?', cta:[] },
+  'idopárbaj': { prompt:'Indítsd el a stoppert és állítsd le a titkos célhoz a lehető legközelebb!', cta:[] },
+  'csakegyszó': { prompt:'Magyarázd el egyetlen szóval — megérti a párod?', cta:[] },
+  'szolánc':   { prompt:'Mondd el a sort, majd told hozzá az új szót a kategóriából!', cta:[] },
 };
 const SCENARIO_DEFAULTS = {
   'Egyéni': { prompt:'Siker vagy kudarc?', cta:['Nem sikerült','Sikerült!'] },
@@ -41051,16 +41054,22 @@ function IdoparbajGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
   const [phase, setPhase] = React.useState('idle'); // 'idle'|'p1running'|'p1done'|'p2running'|'p2done'|'result'
   const [t1, setT1] = React.useState(null);
   const [t2, setT2] = React.useState(null);
+  const [liveMs, setLiveMs] = React.useState(0);
   const startRef = React.useRef(null);
+  const liveRef = React.useRef(null);
   const advRef = React.useRef(false);
 
-  React.useEffect(() => { target.current = +(1 + Math.random() * 29).toFixed(1); setPhase('idle'); setT1(null); setT2(null); advRef.current = false; }, [gameIdx]);
+  React.useEffect(() => { target.current = +(1 + Math.random() * 29).toFixed(1); setPhase('idle'); setT1(null); setT2(null); setLiveMs(0); advRef.current = false; }, [gameIdx]);
+  React.useEffect(() => () => clearInterval(liveRef.current), []);
 
-  const startP1 = () => { startRef.current = Date.now(); setPhase('p1running'); };
-  const stopP1 = () => { const elapsed = (Date.now() - startRef.current) / 1000; setT1(+elapsed.toFixed(1)); setPhase('p1done'); };
-  const startP2 = () => { startRef.current = Date.now(); setPhase('p2running'); };
+  const startTimer = () => { startRef.current = Date.now(); setLiveMs(0); liveRef.current = setInterval(() => setLiveMs(Date.now() - startRef.current), 50); };
+  const stopTimer = () => { clearInterval(liveRef.current); return (Date.now() - startRef.current) / 1000; };
+
+  const startP1 = () => { startTimer(); setPhase('p1running'); };
+  const stopP1 = () => { const elapsed = stopTimer(); setT1(+elapsed.toFixed(1)); setPhase('p1done'); };
+  const startP2 = () => { startTimer(); setPhase('p2running'); };
   const stopP2 = () => {
-    const elapsed = (Date.now() - startRef.current) / 1000; const tv = +elapsed.toFixed(1); setT2(tv); setPhase('result');
+    const elapsed = stopTimer(); const tv = +elapsed.toFixed(1); setT2(tv); setPhase('result');
     const tgt = target.current;
     if (!advRef.current) {
       advRef.current = true;
@@ -41118,9 +41127,15 @@ function IdoparbajGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
 
       {/* Action area */}
       {phase==='idle'    && <BigBtn label={`▶ ${challenger?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP1} color={challenger?.color} />}
-      {phase==='p1running' && <BigBtn label="⏹ Stop!" sub={`${challenger?.name} — nyomd meg a megállításhoz`} onClick={stopP1} color={T.coral} />}
+      {(phase==='p1running'||phase==='p2running') && (
+        <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+          <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:64, color:T.ink, lineHeight:1, letterSpacing:'-0.02em' }}>
+            {(liveMs/1000).toFixed(1)}<span style={{ fontFamily:T.font, fontSize:22, fontWeight:700, color:T.inkSoft }}> mp</span>
+          </div>
+          <BigBtn label="⏹ Stop!" sub={`${phase==='p1running'?challenger?.name:opponent?.name} — nyomd meg a megállításhoz`} onClick={phase==='p1running'?stopP1:stopP2} color={T.coral} />
+        </div>
+      )}
       {phase==='p1done'  && <BigBtn label={`▶ ${opponent?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP2} color={opponent?.color} />}
-      {phase==='p2running' && <BigBtn label="⏹ Stop!" sub={`${opponent?.name} — nyomd meg a megállításhoz`} onClick={stopP2} color={T.coral} />}
     </div>
   );
 }
