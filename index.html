@@ -33594,7 +33594,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.18';
+const APP_VERSION = 'v8.19';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -40850,6 +40850,7 @@ function PowerHourGame({ players, onAdvance }) {
 }
 function OVFJConfigSheet({ config, setConfig, onClose }) {
   const rounds = config.rounds ?? 5;
+  const timeLimit = config.timeLimit ?? 2;
   return (
     <SheetOverlay onClose={onClose}>
       <div style={{padding:'4px 20px 32px'}}>
@@ -40866,6 +40867,19 @@ function OVFJConfigSheet({ config, setConfig, onClose }) {
             <button onClick={()=>setConfig(c=>({...c,rounds:Math.min(10,rounds+1)}))} style={{width:40,height:40,borderRadius:12,border:'none',background:T.surfaceMuted,fontSize:22,cursor:'pointer',display:'grid',placeItems:'center',color:T.ink,fontFamily:T.font,fontWeight:900}}>+</button>
           </div>
         </div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 0',borderTop:`1px solid ${T.surfaceMuted}`}}>
+          <div>
+            <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.ink}}>Időlimit / kör</div>
+            <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:2}}>Max írási idő</div>
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            {[1,2,3].map(m=>(
+              <button key={m} onClick={()=>setConfig(c=>({...c,timeLimit:m}))} style={{width:52,height:40,borderRadius:12,border:'none',background:timeLimit===m?T.mint:T.surfaceMuted,color:timeLimit===m?'#fff':T.ink,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,cursor:'pointer'}}>
+                {m}p
+              </button>
+            ))}
+          </div>
+        </div>
         <PrimaryButton onClick={onClose} style={{marginTop:8}}>Kész</PrimaryButton>
       </div>
     </SheetOverlay>
@@ -40875,6 +40889,7 @@ function OVFJConfigSheet({ config, setConfig, onClose }) {
 function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
   const totalRounds = gameMeta?.ovfjConfig?.rounds ?? 5;
   const STOP_EXTRA = 20;
+  const TIME_LIMIT = (gameMeta?.ovfjConfig?.timeLimit ?? 2) * 60;
   const drawLetter = () => OVFJ_LETTERS[Math.floor(Math.random() * OVFJ_LETTERS.length)];
 
   const [phase, setPhase] = React.useState('letter');
@@ -40885,13 +40900,14 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
   const [roundScores, setRoundScores] = React.useState({});
   const [cumScores, setCumScores] = React.useState({});
   const [countdown, setCountdown] = React.useState(null);
+  const [maxTimer, setMaxTimer] = React.useState(null);
   const cdStartedRef = React.useRef(false);
 
   const playerMap = React.useMemo(() => Object.fromEntries((players||[]).map(p=>[p.id,p])), [players]);
 
   React.useEffect(() => {
     if (!roomCode || typeof syncRoom !== 'function') return;
-    syncRoom(roomCode, { ovfjState: { phase, round, totalRounds, letter, answers, votes, roundScores, cumScores, countdown } });
+    syncRoom(roomCode, { ovfjState: { phase, round, totalRounds, letter, answers, votes, roundScores, cumScores, countdown, maxTimer } });
   }, [phase, round, letter, answers, votes, roundScores, cumScores, countdown]);
 
   React.useEffect(() => {
@@ -40928,9 +40944,17 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
     return () => clearTimeout(id);
   }, [countdown]);
 
-  const resetRound = () => { cdStartedRef.current = false; setAnswers({}); setVotes({}); setRoundScores({}); setCountdown(null); };
-  const startWriting = () => setPhase('writing');
+  const resetRound = () => { cdStartedRef.current = false; setAnswers({}); setVotes({}); setRoundScores({}); setCountdown(null); setMaxTimer(null); };
+  const startWriting = () => { setPhase('writing'); setMaxTimer(TIME_LIMIT); };
   const forceStop = () => { if (!cdStartedRef.current) cdStartedRef.current = true; setCountdown(0); };
+
+  // Max timer — hard limit per round
+  React.useEffect(() => {
+    if (maxTimer === null || phase !== 'writing') return;
+    if (maxTimer <= 0) { setPhase('voting'); setCountdown(null); setMaxTimer(null); return; }
+    const id = setTimeout(() => setMaxTimer(t => t > 0 ? t-1 : 0), 1000);
+    return () => clearTimeout(id);
+  }, [maxTimer, phase]);
 
   const calcScores = () => {
     const rs = {};
@@ -41030,9 +41054,11 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
           <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:32,color:T.mint,letterSpacing:T.letterDisplay}}>{letter}</div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            {countdown!==null && (
+            {countdown!==null ? (
               <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:20,color:countdown<=5?T.coral:T.ink}}>⏱ {countdown}s</div>
-            )}
+            ) : maxTimer!==null ? (
+              <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:16,color:maxTimer<=30?T.coral:T.inkSoft}}>⏱ {Math.floor(maxTimer/60)}:{String(maxTimer%60).padStart(2,'0')}</div>
+            ) : null}
             <span style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,background:T.surfaceMuted,padding:'4px 10px',borderRadius:999,fontWeight:T.weightTitle}}>{doneCount}/{pl.length} kész</span>
           </div>
         </div>
@@ -41108,7 +41134,6 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
 
   const doSync = data => { if (typeof syncRoom === 'function') syncRoom(code, data); };
 
-  // Track taken player slots via Firebase
   const takenPids = React.useMemo(() => {
     const taken = new Set();
     Object.entries(room).forEach(([key, val]) => {
@@ -41122,8 +41147,16 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
     doSync({ ['ovfjPick' + String(pid).replace(/[^a-zA-Z0-9]/g,'x')]: pid });
   };
 
+  const Page = ({children}) => (
+    <div style={{position:'fixed',inset:0,background:T.bg,overflowY:'auto',WebkitOverflowScrolling:'touch',zIndex:50}}>
+      <div style={{padding:'12px 20px 40px',minHeight:'100%',boxSizing:'border-box',display:'flex',flexDirection:'column',gap:10}}>
+        {children}
+      </div>
+    </div>
+  );
+
   if (!myPid) return (
-    <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
+    <Page>
       <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:20,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay,textTransform:'uppercase',marginBottom:4}}>🌍 Ki vagy?</div>
       {players.map(p=>{
         const taken = takenPids.has(p.id);
@@ -41135,7 +41168,7 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
           </button>
         );
       })}
-    </div>
+    </Page>
   );
 
   const myPlayer = players.find(p=>p.id===myPid);
@@ -41154,7 +41187,7 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
   };
 
   const Hdr = () => (
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:4,padding:'8px 0',borderBottom:`1px solid ${T.surfaceMuted}`}}>
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:4,padding:'8px 0',borderBottom:`1px solid ${T.surfaceMuted}`,flexShrink:0}}>
       <div style={{width:30,height:30,borderRadius:'50%',background:myPlayer?.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:13,color:'#fff',flexShrink:0}}>{myPlayer?.name?.[0]||'?'}</div>
       <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.ink,flex:1}}>{myPlayer?.name}</span>
       <span style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.inkSoft,background:T.surfaceMuted,padding:'3px 9px',borderRadius:999}}>{ovfj.round}/{ovfj.totalRounds} kör</span>
@@ -41162,31 +41195,34 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
   );
 
   if (phase === 'letter') return (
-    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:20,padding:'16px 0'}}>
+    <Page>
       <Hdr />
-      <div style={{width:120,height:120,borderRadius:28,background:T.surfaceMuted,display:'grid',placeItems:'center',boxShadow:T.shadow}}>
-        <span style={{fontSize:56}}>🎲</span>
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:20,padding:'24px 0'}}>
+        <div style={{width:120,height:120,borderRadius:28,background:T.surfaceMuted,display:'grid',placeItems:'center',boxShadow:T.shadow}}>
+          <span style={{fontSize:56}}>🎲</span>
+        </div>
+        <div style={{fontFamily:T.font,fontSize:14,fontWeight:T.weightTitle,color:T.inkSoft,textAlign:'center'}}>A host felfedi a betűt...</div>
       </div>
-      <div style={{fontFamily:T.font,fontSize:14,fontWeight:T.weightTitle,color:T.inkSoft,textAlign:'center'}}>A host felfedi a betűt...</div>
-    </div>
+    </Page>
   );
 
   if (phase === 'writing') {
     const locked=submitted, cd=ovfj.countdown;
     return (
-      <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
+      <Page>
         <Hdr />
-        {/* Letter card — big, centered */}
         <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:16,marginBottom:4}}>
           <div style={{width:72,height:72,borderRadius:18,background:`linear-gradient(135deg,${T.mint},${T.mintDeep||'#3DA888'})`,display:'grid',placeItems:'center',boxShadow:T.shadowLift,flexShrink:0}}>
             <span style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:44,color:'#fff',lineHeight:1}}>{letter}</span>
           </div>
-          {cd!=null && (
+          {cd!=null ? (
             <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:28,color:cd<=5?T.coral:T.ink}}>{cd}s</div>
-          )}
+          ) : ovfj.maxTimer!=null ? (
+            <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:22,color:ovfj.maxTimer<=30?T.coral:T.inkSoft}}>{Math.floor(ovfj.maxTimer/60)}:{String(ovfj.maxTimer%60).padStart(2,'0')}</div>
+          ) : null}
         </div>
         {OVFJ_CATS.map((cat,idx)=>(
-          <div key={cat.key} style={{display:'flex',alignItems:'center',gap:10,background:T.surface,borderRadius:14,padding:'8px 12px',boxShadow:locked?'none':T.shadow,opacity:locked?0.6:1}}>
+          <div key={cat.key} style={{display:'flex',alignItems:'center',gap:10,background:T.surface,borderRadius:14,padding:'10px 14px',boxShadow:locked?'none':T.shadow,opacity:locked?0.6:1}}>
             <span style={{fontSize:18,flexShrink:0,width:24,textAlign:'center'}}>{cat.emoji}</span>
             <div style={{flex:1,minWidth:0}}>
               <label style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.inkSoft,display:'block',marginBottom:2,textTransform:'uppercase',letterSpacing:'0.06em'}}>{cat.label}</label>
@@ -41202,14 +41238,14 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
         ) : (
           <div style={{textAlign:'center',fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.mint,padding:'16px',background:T.mintSoft,borderRadius:16,marginTop:4}}>✅ Beadva! Várd a többieket...</div>
         )}
-      </div>
+      </Page>
     );
   }
 
   if (phase === 'voting') {
     const others=players.filter(p=>p.id!==myPid);
     return (
-      <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
+      <Page>
         <Hdr />
         <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:16,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay}}>„{letter}" — Szavazás</div>
         <div style={{background:T.mintSoft,borderRadius:16,padding:'12px 14px'}}>
@@ -41253,14 +41289,14 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
             </div>
           );
         })}
-      </div>
+      </Page>
     );
   }
 
   const isEnd=phase==='done', sc=isEnd?ovfj.cumScores:ovfj.roundScores;
   const srtd=[...players].sort((a,b)=>(sc?.[b.id]||0)-(sc?.[a.id]||0));
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
+    <Page>
       <Hdr />
       <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:18,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay}}>{isEnd?'🏆 Végeredmény':`${ovfj.round}. kör vége`}</div>
       {srtd.map((p,i)=>(
@@ -41271,10 +41307,9 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
           <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:20,color:p.id===myPid?T.mint:T.coral}}>{sc?.[p.id]||0} pt</div>
         </div>
       ))}
-    </div>
+    </Page>
   );
 }
-
 
 function CollectBoomGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   const cfg = gameMeta?.collectConfig || {};
