@@ -33594,7 +33594,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.15';
+const APP_VERSION = 'v8.16';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -40879,7 +40879,7 @@ function OVFJConfigSheet({ config, setConfig, onClose }) {
 
 function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
   const totalRounds = gameMeta?.ovfjConfig?.rounds ?? 5;
-  const STOP_EXTRA = 10;
+  const STOP_EXTRA = 20;
   const drawLetter = () => OVFJ_LETTERS[Math.floor(Math.random() * OVFJ_LETTERS.length)];
 
   const [phase, setPhase] = useState('letter');
@@ -40937,8 +40937,7 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
     return () => clearTimeout(id);
   }, [countdown]);
 
-  const [letterRevealed, setLetterRevealed] = React.useState(false);
-  const resetRound = () => { cdStartedRef.current = false; setAnswers({}); setVotes({}); setRoundScores({}); setCountdown(null); setLetterRevealed(false); };
+  const resetRound = () => { cdStartedRef.current = false; setAnswers({}); setVotes({}); setRoundScores({}); setCountdown(null); };
   const startWriting = () => setPhase('writing');
   const forceStop = () => { if (!cdStartedRef.current) cdStartedRef.current = true; setCountdown(0); };
 
@@ -40954,7 +40953,7 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
         const vk=`${pid}_${cat.key}`, vm=votes[vk]||{}, vl=Object.values(vm);
         const yes=vl.filter(Boolean).length, no=vl.filter(x=>!x).length;
         if(vl.length>0 && no>yes) return;
-        rs[pid]=(rs[pid]||0)+(vals[v]>1?5:10);
+        rs[pid]=(rs[pid]||0)+(vals[v]>1?0:10);
       });
     });
     setRoundScores(rs);
@@ -41022,6 +41021,7 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
                   <span style={{fontFamily:T.font,fontSize:10,color:T.inkSoft,width:64,flexShrink:0}}>{cat.label}</span>
                   <span style={{fontFamily:T.font,fontWeight:700,fontSize:12,flex:1,color:val?T.ink:T.inkSoft,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{val||'—'}</span>
                   {val && <span style={{fontFamily:T.font,fontSize:11,flexShrink:0}}>👍{yes} 👎{no}</span>}
+                  {val && <a href={`https://www.google.com/search?q=${encodeURIComponent(val)}`} target="_blank" rel="noreferrer" style={{fontSize:13,flexShrink:0,textDecoration:'none',opacity:0.7}}>🔍</a>}
                 </div>
               );
             })}
@@ -41069,25 +41069,13 @@ function OVFJGame({ players, gameIdx, onAdvance, roomCode, gameMeta }) {
   return (
     <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:18,width:'100%'}}>
       <div style={{fontFamily:T.font,fontWeight:700,fontSize:14,color:T.inkSoft}}>{round}. kör / {totalRounds}</div>
-      {!letterRevealed ? (
-        <button onClick={()=>setLetterRevealed(true)} style={{width:120,height:120,borderRadius:24,background:'linear-gradient(135deg,#64748B,#334155)',display:'grid',placeItems:'center',boxShadow:'0 8px 32px rgba(0,0,0,0.3)',border:'none',cursor:'pointer'}}>
-          <span style={{fontSize:48}}>🎲</span>
-        </button>
-      ) : (
-        <div style={{width:120,height:120,borderRadius:24,background:'linear-gradient(135deg,#22C55E,#16A34A)',display:'grid',placeItems:'center',boxShadow:'0 8px 32px rgba(34,197,94,0.4)'}}>
-          <span style={{fontFamily:T.font,fontWeight:900,fontSize:72,color:'#fff',lineHeight:1}}>{letter}</span>
-        </div>
-      )}
+      <button onClick={startWriting} style={{width:120,height:120,borderRadius:24,background:'linear-gradient(135deg,#64748B,#334155)',display:'grid',placeItems:'center',boxShadow:'0 8px 32px rgba(0,0,0,0.3)',border:'none',cursor:'pointer'}}>
+        <span style={{fontSize:48}}>🎲</span>
+      </button>
       <div style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,textAlign:'center',lineHeight:1.8,maxWidth:300}}>
         {OVFJ_CATS.map(c=>c.emoji+' '+c.label).join(' · ')}
       </div>
-      {!letterRevealed ? (
-        <div style={{fontFamily:T.font,fontSize:14,color:T.inkSoft,textAlign:'center'}}>Nyomd meg a kockát a betű felfedéséhez!</div>
-      ) : (
-        <button onClick={startWriting} style={{width:'100%',maxWidth:300,padding:'15px',borderRadius:16,border:'none',background:'#22C55E',color:'#fff',fontFamily:T.font,fontWeight:900,fontSize:17,cursor:'pointer',boxShadow:'0 4px 20px rgba(34,197,94,0.4)'}}>
-          ✏️ Írás kezdése!
-        </button>
-      )}
+      <div style={{fontFamily:T.font,fontSize:14,color:T.inkSoft,textAlign:'center'}}>Nyomd meg a kockát az írás kezdéséhez!</div>
     </div>
   );
 }
@@ -41238,7 +41226,8 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
                     <span style={{fontFamily:T.font,fontSize:10,color:T.inkSoft,width:64,flexShrink:0}}>{cat.label}</span>
                     <span style={{fontFamily:T.font,fontWeight:700,fontSize:12,flex:1,color:val?T.ink:T.inkSoft,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{val||'—'}</span>
                     {val && (
-                      <div style={{display:'flex',gap:3,flexShrink:0}}>
+                      <div style={{display:'flex',gap:3,flexShrink:0,alignItems:'center'}}>
+                        <a href={`https://www.google.com/search?q=${encodeURIComponent(val)}`} target="_blank" rel="noreferrer" style={{fontSize:13,textDecoration:'none',opacity:0.7,lineHeight:1}}>🔍</a>
                         <button onClick={()=>submitVote(p.id,cat.key,true)} style={{width:30,height:28,borderRadius:8,border:`1.5px solid ${mv===true?'#22C55E':T.border}`,background:mv===true?'#22C55E22':'transparent',cursor:'pointer',fontSize:13,display:'grid',placeItems:'center'}}>👍</button>
                         <button onClick={()=>submitVote(p.id,cat.key,false)} style={{width:30,height:28,borderRadius:8,border:`1.5px solid ${mv===false?T.coral:T.border}`,background:mv===false?T.coral+'22':'transparent',cursor:'pointer',fontSize:13,display:'grid',placeItems:'center'}}>👎</button>
                       </div>
