@@ -33590,7 +33590,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v7.65';
+const APP_VERSION = 'v7.66';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -41153,6 +41153,7 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
   const word = WORDS[(gameIdx * 7 + wordIdx) % WORDS.length];
   const [phase, setPhase] = React.useState('reveal'); // 'reveal'|'guessing'|'done'
   const [timeLeft, setTimeLeft] = React.useState(15);
+  const [holding, setHolding] = React.useState(false);
   const timerRef = React.useRef(null);
   const advRef = React.useRef(false);
 
@@ -41206,12 +41207,39 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
         </div>
       </div>
 
-      {/* Word card */}
-      <div style={{ background:'#1B2340', borderRadius:18, padding:'24px 20px', width:'100%', textAlign:'center', boxSizing:'border-box' }}>
-        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:10 }}>👁 CSAK {(challenger?.name||'?').toUpperCase()} LÁTJA</div>
-        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:36, color:'#fff', textTransform:'uppercase', letterSpacing:'-0.01em', lineHeight:1.1 }}>{word}</div>
-        <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.5)', marginTop:8 }}>Ezt magyarázd el — egyetlen szóval</div>
-      </div>
+      {/* Word card — hold to reveal (reveal phase only) */}
+      {phase === 'reveal' ? (
+        <div style={{ width:'100%', background:'#1B2340', borderRadius:20, padding:'20px 18px 16px', display:'flex', flexDirection:'column', alignItems:'center', gap:14 }}>
+          <div style={{ width:'100%', minHeight:120, borderRadius:18, border:'2px dashed rgba(255,255,255,0.28)', background:'rgba(255,255,255,0.05)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, padding:20 }}>
+            {holding ? (
+              <div style={{ textAlign:'center', animation:'burstPop .25s' }}>
+                <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:8 }}>👁 CSAK {(challenger?.name||'?').toUpperCase()} LÁTJA</div>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:36, color:'#fff', textTransform:'uppercase', letterSpacing:'-0.01em', lineHeight:1.1 }}>{word}</div>
+                <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.5)', marginTop:8 }}>Ezt magyarázd el — egyetlen szóval</div>
+              </div>
+            ) : (
+              <svg width="52" height="52" viewBox="0 0 34 34" fill="none">
+                <ellipse cx="17" cy="17" rx="14" ry="9" stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+                <circle cx="17" cy="17" r="5" stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+              </svg>
+            )}
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.38)', textAlign:'center' }}>Tartsd lenyomva a felfedéshez</div>
+          <button
+            onPointerDown={e=>{e.preventDefault();setHolding(true);}}
+            onPointerUp={()=>setHolding(false)}
+            onPointerLeave={()=>setHolding(false)}
+            onPointerCancel={()=>setHolding(false)}
+            style={{ width:'100%', padding:'14px 0', background: holding ? '#8C7AE6' : '#6C5CE7', border:'none', borderRadius:14, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, cursor:'pointer', userSelect:'none', WebkitUserSelect:'none', display:'flex', alignItems:'center', justifyContent:'center', gap:8, transition:'background .1s' }}>
+            <span style={{ fontSize:14 }}>⬇</span><span>Nyomd &amp; tartsd</span>
+          </button>
+        </div>
+      ) : (
+        <div style={{ background:'#1B2340', borderRadius:18, padding:'18px 20px', width:'100%', textAlign:'center', boxSizing:'border-box' }}>
+          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:8 }}>A szó</div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:32, color:'#fff', textTransform:'uppercase' }}>{word}</div>
+        </div>
+      )}
 
       {/* Timer circle */}
       {phase === 'guessing' && (
