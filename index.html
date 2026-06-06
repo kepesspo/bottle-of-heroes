@@ -33594,7 +33594,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.46';
+const APP_VERSION = 'v8.47';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34453,6 +34453,20 @@ function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
             </div>
           </div>
           </>
+        )}
+
+        {/* Visszavágó toggle — only for SE or grp→SE finals */}
+        {(!tournament.startsWith('grp_') ? tournament === 'se' : tournament.endsWith('_se')) && (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'1px solid rgba(26,42,74,0.10)' }}>
+            <div>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>Visszavágó</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>Egyenes kiesésnél a vesztes kérhet visszavágót (1x/meccs)</div>
+            </div>
+            <div onClick={() => setConfig(c => ({...c, visszavago: !(c.visszavago ?? false)}))}
+              style={{ width:48, height:28, borderRadius:14, background:(config.visszavago??false)?T.mint:T.surfaceMuted, cursor:'pointer', position:'relative', transition:'background .2s', flexShrink:0 }}>
+              <div style={{ position:'absolute', top:3, left:(config.visszavago??false)?22:3, width:22, height:22, borderRadius:'50%', background:'#fff', boxShadow:'0 1px 4px rgba(0,0,0,0.2)', transition:'left .2s' }} />
+            </div>
+          </div>
         )}
 
         <button onClick={onClose} style={{ width:'100%', padding:'15px', borderRadius:16, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)', marginTop:16 }}>Kész</button>
@@ -36070,6 +36084,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const bpCfg = gameMeta?.beerpongConfig || {};
   const DRINKS_PER_LOSS = bpCfg.drinksPerLoss ?? 5;
   const MAX_CUPS = bpCfg.maxCups ?? 10;
+  const VISSZAVAGO   = !!(bpCfg.visszavago);
   const TOURNAMENT = bpCfg.tournamentType || 'se';
   const GROUP_ADVANCE = bpCfg.groupAdvance ?? 1;
   const NUM_GROUPS = bpCfg.numGroups ?? 2;
@@ -36162,6 +36177,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const [cups2, setCups2] = React.useState(MAX_CUPS);
   const [drinkMap, setDrinkMap] = React.useState({});
   const [champion, setChampion] = React.useState(null);
+  const [visszavagoOffer, setVissszavagoOffer] = React.useState(null);
+  const visszavagoUsedRef = React.useRef(new Set());
   const [expandedRounds, setExpandedRounds] = React.useState({});
   const lpTimer = React.useRef(null);
   const [standingsExp, setStandingsExp] = React.useState(true);
@@ -36403,6 +36420,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     });
   };
 
+  React.useEffect(() => { setVissszavagoOffer(null); }, [seCurRound, seCurMatch]);
+
   const handleReshuffle = () => {
     const ep = (MODE === 'csapat' && teamsReady && teamPlayersRef.current) ? teamPlayersRef.current : players;
     doneRef.current = false;
@@ -36548,6 +36567,10 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     }
   }
 
+  const isSEFinals = VISSZAVAGO && (
+    TOURNAMENT === 'se' ||
+    (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'se')
+  );
   const totalSERounds = seRounds.length > 1
     ? 1 + Math.ceil(Math.log2(Math.max(seRounds[1].length * 2, 2)))
     : seRounds.length > 0
@@ -36650,13 +36673,44 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           </div>
         </div>
 
+        {/* Visszavágó offer overlay */}
+        {visszavagoOffer && (
+          <div style={{ marginTop:16, background:'rgba(14,14,24,0.05)', borderRadius:16, padding:'16px', display:'flex', flexDirection:'column', gap:10 }}>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, textAlign:'center' }}>⚔️ Visszavágó?</div>
+            <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center' }}><b>{visszavagoOffer.loser?.name}</b> kérhet visszavágót!</div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={() => {
+                visszavagoUsedRef.current.add(visszavagoOffer.matchKey);
+                setVissszavagoOffer(null);
+                setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer();
+              }} style={{ flex:1, padding:'13px', borderRadius:14, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background:T.coral, color:'#fff', boxShadow:'0 4px 12px rgba(240,100,80,0.35)' }}>
+                🔄 Visszavágó!
+              </button>
+              <button onClick={() => { setVissszavagoOffer(null); confirmHandler && confirmHandler(); }} style={{ flex:1, padding:'13px', borderRadius:14, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background:T.mint, color:'#fff', boxShadow:'0 4px 12px rgba(79,194,160,0.35)' }}>
+                Nem, tovább →
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Confirm button */}
-        <button onClick={confirmHandler} disabled={!canConfirm} style={{ width:'100%', marginTop:16, minHeight:52, border:'none', borderRadius:16, cursor: canConfirm ? 'pointer' : 'default', fontFamily:T.font, fontWeight:800, fontSize:16, color:'#fff', background: !canConfirm ? 'rgba(0,0,0,0.07)' : winnerP ? T.mint : T.inkSoft, boxShadow: canConfirm && winnerP ? '0 4px 0 ' + T.mintDeep : 'none', transition:'background .2s', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-          {!canConfirm ? <span style={{ color:T.inkMute }}>Állítsd be az eredményt</span>
-            : cups1 === cups2 ? '🤝 Döntetlen megerősítése'
-            : <><span>🏆</span><span>{winnerP?.name} nyert — tovább</span></>
-          }
-        </button>
+        {!visszavagoOffer && (
+          <button onClick={() => {
+            if (!canConfirm) return;
+            const matchKey = seCurRound + '_' + seCurMatch;
+            const loserP = cups1 < cups2 ? currentMatch?.p2 : currentMatch?.p1;
+            if (isSEFinals && loserP && !visszavagoUsedRef.current.has(matchKey)) {
+              setVissszavagoOffer({ loser: loserP, winner: winnerP, matchKey });
+              return;
+            }
+            confirmHandler && confirmHandler();
+          }} disabled={!canConfirm} style={{ width:'100%', marginTop:16, minHeight:52, border:'none', borderRadius:16, cursor: canConfirm ? 'pointer' : 'default', fontFamily:T.font, fontWeight:800, fontSize:16, color:'#fff', background: !canConfirm ? 'rgba(0,0,0,0.07)' : winnerP ? T.mint : T.inkSoft, boxShadow: canConfirm && winnerP ? '0 4px 0 ' + T.mintDeep : 'none', transition:'background .2s', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+            {!canConfirm ? <span style={{ color:T.inkMute }}>Állítsd be az eredményt</span>
+              : cups1 === cups2 ? '🤝 Döntetlen megerősítése'
+              : <><span>🏆</span><span>{winnerP?.name} nyert — tovább</span></>
+            }
+          </button>
+        )}
 
         {/* Drink reminder */}
         <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, textAlign:'center', marginTop:8, color:'#D85F5C' }}>
