@@ -33594,7 +33594,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.41';
+const APP_VERSION = 'v8.42';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34513,21 +34513,7 @@ function BuszConfigSheet({ config, setConfig, onClose }) {
             </button>
           </div>
         ); })()}
-        {(() => { const aceHigh = config.aceMode !== 'low'; return (
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'1px solid rgba(26,42,74,0.10)' }}>
-            <div>
-              <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>Ász értéke</span>
-              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>{aceHigh ? 'Magas — K felett (11-es)' : 'Alacsony — 2 alatt (1-es)'}</div>
-            </div>
-            <div style={{ display:'flex', background:T.surfaceMuted, padding:4, borderRadius:12, gap:3, flexShrink:0 }}>
-              {[{k:'high',l:'11-es'},{k:'low',l:'1-es'}].map(o => (
-                <button key={o.k} onClick={() => setConfig(c => ({...c, aceMode:o.k}))} style={{ padding:'7px 10px', borderRadius:9, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:12, background:(aceHigh?'high':'low')===o.k?T.mint:'transparent', color:(aceHigh?'high':'low')===o.k?'#fff':T.inkSoft, transition:'all .15s' }}>
-                  {o.l}
-                </button>
-              ))}
-            </div>
-          </div>
-        ); })()}
+
         <button onClick={onClose} style={{ width:'100%', padding:'15px', borderRadius:16, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)', marginTop:16 }}>Kész</button>
       </div>
     </SheetOverlay>
@@ -39005,8 +38991,10 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
     await persist({...st, phase:'bus', busRiders:riders, busRouteCards, busDrawDeck, busRiderPositions, busRiderDone, busRiderBonusUsed, busRiderDrawnCards, busRiderPendingGuesses:{}, busRevealedPositions, currentTurnRiderId:riders[0], busRiderDrinks:{}, settings:{...st.settings, bonusGuess:!!(gameMeta?.buszConfig?.bonusGuess!==false), aceMode: gameMeta?.buszConfig?.aceMode ?? 'high'}});
   };
 
-  const evalBusGuess = (guess, routeCard, drawnCard, aceHigh=true) => {
-    const getIdx = v => v === 'A' ? (aceHigh ? 13 : -1) : CARD_VALUES.indexOf(v);
+  const evalBusGuess = (guess, routeCard, drawnCard) => {
+    // Ace is wild — always correct when drawn
+    if (drawnCard.value === 'A') return true;
+    const getIdx = v => CARD_VALUES.indexOf(v);
     const rr = getIdx(routeCard.value);
     const dr = getIdx(drawnCard.value);
     if (rr === dr) return false;
@@ -39029,7 +39017,7 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
       const g = pendingGuesses[rid];
       const isBonus = g && g.startsWith && g.startsWith('BONUS_');
       const actualGuess = isBonus ? g.slice(6) : g;
-      const correct = evalBusGuess(actualGuess, routeCard, drawnCard, aceHigh);
+      const correct = evalBusGuess(actualGuess, routeCard, drawnCard);
       if (isBonus) newBonus[rid] = true;
       if (correct) {
         if (isBonus) { newPositions[rid] = busStepsCount; newDone[rid] = true; newDrawn[rid] = [drawnCard]; }
@@ -43272,7 +43260,7 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
         const drawnCard = deck[0];
         const newDrawDeck = deck.length>1 ? deck.slice(1) : shuffleDeck(generateDeck(settings?.deckCount||1));
         // evalBusGuess defined inline
-        const _aceHigh = settings?.aceMode !== 'low'; const evalG = (g, rc, dc) => { const getI=v=>v==='A'?(_aceHigh?13:-1):CARD_VALUES.indexOf(v); const rr=getI(rc.value),dr=getI(dc.value); if(rr===dr)return false; return (g==='K'&&dr<rr)||(g==='N'&&dr>rr); };
+        const evalG = (g, rc, dc) => { if(dc.value==='A')return true; const getI=v=>CARD_VALUES.indexOf(v); const rr=getI(rc.value),dr=getI(dc.value); if(rr===dr)return false; return (g==='K'&&dr<rr)||(g==='N'&&dr>rr); };
         const busRouteCards=st.busRouteCards, busRiderBonusUsed=st.busRiderBonusUsed||{}, busRiderDrawnCards=st.busRiderDrawnCards||{}, busRiderDrinks=st.busRiderDrinks||{};
         const routeCard = busRouteCards[myStep];
         const newPositions={...busRiderPositions}, newDone={...busRiderDone}, newBonus={...busRiderBonusUsed}, newDrawn={...busRiderDrawnCards}, newDrinks={...busRiderDrinks};
