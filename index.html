@@ -33492,6 +33492,31 @@ window.triggerHaptic = function() {
       return batch.commit().then(function() { return items; });
     }).catch(function(e){ console.warn('popPendingDrinks', e); return []; });
   };
+  window.getProfiles = function() {
+    return db.collection('profiles').orderBy('name').get().then(function(snap) {
+      return snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    }).catch(function() { return []; });
+  };
+  window.saveProfile = function(profile) {
+    var ref = profile.id ? db.collection('profiles').doc(profile.id) : db.collection('profiles').doc();
+    var data = { name: profile.name, color: profile.color };
+    return ref.set(data, { merge: true }).then(function() { return ref.id; });
+  };
+  window.getStats = function(profileId) {
+    return db.collection('stats').doc(profileId).get().then(function(d) {
+      return d.exists ? d.data() : {};
+    }).catch(function() { return {}; });
+  };
+  window.getAllStats = function() {
+    return db.collection('stats').get().then(function(snap) {
+      var result = {};
+      snap.docs.forEach(function(d) { result[d.id] = d.data(); });
+      return result;
+    }).catch(function() { return {}; });
+  };
+  window.updateStats = function(profileId, updates) {
+    return db.collection('stats').doc(profileId).set(updates, { merge: true }).catch(function(e) { console.warn('updateStats', e); });
+  };
 })();
 </script>
 
@@ -33594,7 +33619,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.49';
+const APP_VERSION = 'v8.50';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34061,6 +34086,115 @@ function InstallModal({ onClose }) {
   );
 }
 
+function StatsScreen({ go }) {
+  const [profiles, setProfiles] = React.useState([]);
+  const [stats, setStats] = React.useState({});
+  const [loading, setLoading] = React.useState(true);
+  const [tab, setTab] = React.useState('bp'); // 'bp' | 'busz'
+
+  React.useEffect(() => {
+    Promise.all([
+      typeof window.getProfiles === 'function' ? window.getProfiles() : Promise.resolve([]),
+      typeof window.getAllStats === 'function' ? window.getAllStats() : Promise.resolve({}),
+    ]).then(([profs, st]) => {
+      setProfiles(profs);
+      setStats(st);
+      setLoading(false);
+    });
+  }, []);
+
+  const bpRows = [...profiles].sort((a, b) => {
+    const aw = stats[a.id]?.bp_wins || 0, bw = stats[b.id]?.bp_wins || 0;
+    return bw - aw;
+  });
+  const buszRows = [...profiles].sort((a, b) => {
+    const ap = stats[a.id]?.busz_played || 0, bp2 = stats[b.id]?.busz_played || 0;
+    return bp2 - ap;
+  });
+
+  const winRate = (id) => {
+    const s = stats[id] || {};
+    const played = (s.bp_wins || 0) + (s.bp_losses || 0);
+    return played > 0 ? Math.round((s.bp_wins || 0) / played * 100) : null;
+  };
+
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
+      <AppBar title="Statisztika" onBack={() => go('home')} />
+      {/* Tab bar */}
+      <div style={{ padding:'8px 16px 0' }}>
+        <div style={{ display:'flex', background:T.surfaceMuted, padding:4, borderRadius:14, gap:4 }}>
+          {[{k:'bp',l:'🍺 Beer Pong'},{k:'busz',l:'🚌 Busz'}].map(t => (
+            <button key={t.k} onClick={() => setTab(t.k)} style={{ flex:1, padding:'10px 6px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background: tab===t.k ? T.mint : 'transparent', color: tab===t.k ? '#fff' : T.inkSoft, transition:'all .15s' }}>{t.l}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ flex:1, overflowY:'auto', padding:'12px 16px 40px' }}>
+        {loading && <div style={{ textAlign:'center', padding:40, fontFamily:T.font, color:T.inkSoft }}>Betöltés…</div>}
+
+        {!loading && tab === 'bp' && (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {bpRows.map((p, i) => {
+              const s = stats[p.id] || {};
+              const wr = winRate(p.id);
+              const played = (s.bp_wins || 0) + (s.bp_losses || 0);
+              return (
+                <div key={p.id} style={{ background:T.surface, borderRadius:18, padding:'14px 16px', display:'flex', alignItems:'center', gap:12, boxShadow:T.shadow }}>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color: i===0?'#F59E0B':i===1?T.inkSoft:T.inkMute, minWidth:24, textAlign:'center' }}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</div>
+                  <div style={{ width:44, height:44, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:18, color:'#fff', flexShrink:0 }}>{p.name.charAt(0).toUpperCase()}</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>{p.name}</div>
+                    <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:2 }}>
+                      {played} meccs · {s.bp_wins||0} győzelem · {s.bp_losses||0} vereség
+                    </div>
+                  </div>
+                  <div style={{ textAlign:'right', flexShrink:0 }}>
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color: wr>=50 ? T.mint : T.coral }}>{wr !== null ? wr+'%' : '–'}</div>
+                    <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute }}>win rate</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {!loading && tab === 'busz' && (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {buszRows.map((p, i) => {
+              const s = stats[p.id] || {};
+              return (
+                <div key={p.id} style={{ background:T.surface, borderRadius:18, padding:'14px 16px', display:'flex', alignItems:'center', gap:12, boxShadow:T.shadow }}>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color: i===0?'#F59E0B':i===1?T.inkSoft:T.inkMute, minWidth:24, textAlign:'center' }}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</div>
+                  <div style={{ width:44, height:44, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:18, color:'#fff', flexShrink:0 }}>{p.name.charAt(0).toUpperCase()}</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>{p.name}</div>
+                    <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:2 }}>
+                      {s.busz_played||0} játék · {s.busz_completions||0} teljesítve
+                    </div>
+                  </div>
+                  <div style={{ textAlign:'right', flexShrink:0 }}>
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.coral }}>{s.busz_total_drinks||0}</div>
+                    <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute }}>korty ivott</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {!loading && profiles.length === 0 && (
+          <div style={{ textAlign:'center', padding:40, fontFamily:T.font, color:T.inkSoft }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>📊</div>
+            <div style={{ fontWeight:800, fontSize:16, color:T.ink }}>Még nincs adat</div>
+            <div style={{ fontSize:13, marginTop:6 }}>Adj hozzá névjegyeket a Játékosok képernyőn!</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function HomeScreen({ go, mode, setMode, onStartGame, setTheme, currentTheme, resumeRoomData, onResume }) {
   const [showInstall, setShowInstall] = React.useState(false);
   const isStandalone = typeof window !== 'undefined' && (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches);
@@ -34088,13 +34222,14 @@ function HomeScreen({ go, mode, setMode, onStartGame, setTheme, currentTheme, re
           </div>
         </div>
         {/* Theme toggle button */}
-        {resumeRoomData && onResume && (
-          <div style={{ position:'absolute', top:14, left:18, zIndex:10 }}>
+        <div style={{ position:'absolute', top:14, left:18, zIndex:10, display:'flex', gap:8 }}>
+          {resumeRoomData && onResume && (
             <button onClick={() => onResume(resumeRoomData)} style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 14px', borderRadius:999, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer', boxShadow:T.shadowLift, animation:'pulse 2s infinite' }}>
               <span style={{ fontSize:16 }}>🏓</span> Folytatás
             </button>
-          </div>
-        )}
+          )}
+          <button onClick={() => go('stats')} style={{ width:42, height:42, borderRadius:'50%', border:'none', background:T.surface, boxShadow:T.shadow, cursor:'pointer', display:'grid', placeItems:'center', fontSize:20 }}>🕐</button>
+        </div>
         <div style={{ position:'absolute', top:14, right:18, zIndex:10 }}>
           <button onClick={() => setTheme && setTheme(currentTheme === 'warm' ? 'sky' : currentTheme === 'sky' ? 'dark' : 'warm')}
             style={{ width:42, height:42, borderRadius:'50%', border:'none', background:T.surface, boxShadow:T.shadow, cursor:'pointer', display:'grid', placeItems:'center', fontSize:20 }}>
@@ -34139,11 +34274,34 @@ function PlayersScreen({ players, setPlayers, go }) {
   const [editing, setEditing] = useState(null);
   const [secretTaps, setSecretTaps] = useState(0);
   const secretTimerRef = React.useRef(null);
+  const [profileMode, setProfileMode] = React.useState(false);
+  const [profileList, setProfileList] = React.useState([]);
+  const [loadingProfiles, setLoadingProfiles] = React.useState(false);
 
   const PRESET_PLAYERS = [
     { name:'Sere' }, { name:'Kecsi' }, { name:'Luca' }, { name:'Tóth' },
     { name:'Márk' }, { name:'Dani' }, { name:'KKK' }, { name:'Vivi' }, { name:'Balázs' }
   ];
+
+  React.useEffect(() => {
+    if (!profileMode) return;
+    setLoadingProfiles(true);
+    if (typeof window.getProfiles === 'function') {
+      window.getProfiles().then(profs => { setProfileList(profs); setLoadingProfiles(false); });
+    } else { setLoadingProfiles(false); }
+  }, [profileMode]);
+
+  // Seed Firestore profiles from PRESET_PLAYERS if empty
+  React.useEffect(() => {
+    if (typeof window.getProfiles !== 'function' || typeof window.saveProfile !== 'function') return;
+    window.getProfiles().then(existing => {
+      if (existing.length > 0) return; // already seeded
+      const PRESET_COLORS = ['#4FC3A1','#F87171','#60A5FA','#FBBF24','#A78BFA','#34D399','#F472B6','#FB923C','#818CF8'];
+      PRESET_PLAYERS.forEach((p, i) => {
+        window.saveProfile({ name: p.name, color: PRESET_COLORS[i % PRESET_COLORS.length] });
+      });
+    });
+  }, []);
 
   const handleSecretTap = () => {
     const next = secretTaps + 1;
@@ -34184,8 +34342,56 @@ function PlayersScreen({ players, setPlayers, go }) {
         }
       />
 
+      {/* Névjegyek toggle */}
+      <div style={{ padding:'8px 16px 0' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow }}>
+          <div>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>Névjegyek</div>
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>Rögzített profilokból választás</div>
+          </div>
+          <div onClick={() => setProfileMode(m => !m)}
+            style={{ width:48, height:28, borderRadius:14, background:profileMode?T.mint:T.surfaceMuted, cursor:'pointer', position:'relative', transition:'background .2s', flexShrink:0 }}>
+            <div style={{ position:'absolute', top:3, left:profileMode?22:3, width:22, height:22, borderRadius:'50%', background:'#fff', boxShadow:'0 1px 4px rgba(0,0,0,0.2)', transition:'left .2s' }} />
+          </div>
+        </div>
+      </div>
+
       <div style={{ flex:1, overflowY:'auto', minHeight:0, WebkitOverflowScrolling:'touch' }}>
         <div className="screen-wide screen-pad" style={{ paddingTop:20, paddingBottom:20 }}>
+
+        {/* Profile mode: show profile cards */}
+        {profileMode && (
+          <div style={{ marginBottom:16 }}>
+            {loadingProfiles && <div style={{ textAlign:'center', padding:20, fontFamily:T.font, color:T.inkSoft }}>Betöltés…</div>}
+            {!loadingProfiles && (
+              <div className="grid-players">
+                {profileList.map(prof => {
+                  const alreadyIn = players.some(p => p.profileId === prof.id);
+                  return (
+                    <div key={prof.id} onClick={() => {
+                      if (alreadyIn) { setPlayers(players.filter(p => p.profileId !== prof.id)); return; }
+                      const np = { id:'p'+Date.now(), name:prof.name, color:prof.color, drinks:0, points:0, profileId:prof.id };
+                      setPlayers([...players, np]);
+                    }} style={{
+                      position:'relative', background: alreadyIn ? T.mintSoft : T.surface,
+                      borderRadius:18, padding:'10px 8px 10px',
+                      boxShadow: alreadyIn ? `0 4px 16px ${T.mint}33` : T.shadow,
+                      border: alreadyIn ? `2px solid ${T.mint}` : '2px solid transparent',
+                      cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:6,
+                      transition:'all .15s', aspectRatio:'1/1.18', minHeight:120,
+                    }}>
+                      <div style={{ width:56, height:56, borderRadius:'50%', background:prof.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:24, color:'#fff' }}>{prof.name.charAt(0).toUpperCase()}</div>
+                      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color: alreadyIn ? T.mintDeep : T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', padding:'0 4px' }}>{prof.name}</div>
+                      {alreadyIn && <div style={{ position:'absolute', top:6, right:6, width:20, height:20, borderRadius:'50%', background:T.mint, display:'grid', placeItems:'center' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg></div>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Normal mode: current players + add button */}
         <div className="grid-players">
           {players.map(p =>
             <PlayerCard key={p.id} p={p} onEdit={() => setEditing(p.id)} onRemove={() => removePlayer(p.id)} />
@@ -36471,6 +36677,18 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     const finalDm = {};
     Object.entries(dm).forEach(([id, cnt]) => { finalDm[id] = cnt; });
     onAdvance && onAdvance(finalDm);
+    // Save BP stats for profile players
+    if (typeof window.updateStats === 'function') {
+      players.forEach(p => {
+        if (!p.profileId) return;
+        const isWinner = champ && champ.id === p.id;
+        window.updateStats(p.profileId, {
+          bp_wins: firebase.firestore.FieldValue.increment(isWinner ? 1 : 0),
+          bp_losses: firebase.firestore.FieldValue.increment(isWinner ? 0 : 1),
+          bp_played: firebase.firestore.FieldValue.increment(1),
+        });
+      });
+    }
   };
 
   // ── RR confirm ────────────────────────────────────────────────────────────
@@ -36545,6 +36763,17 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     const finalDm = {};
     Object.entries(dm).forEach(([id, cnt]) => { finalDm[id] = cnt; });
     onAdvance && onAdvance(finalDm);
+    if (typeof window.updateStats === 'function') {
+      players.forEach(p => {
+        if (!p.profileId) return;
+        const isWinner = champ && champ.id === p.id;
+        window.updateStats(p.profileId, {
+          bp_wins: firebase.firestore.FieldValue.increment(isWinner ? 1 : 0),
+          bp_losses: firebase.firestore.FieldValue.increment(isWinner ? 0 : 1),
+          bp_played: firebase.firestore.FieldValue.increment(1),
+        });
+      });
+    }
   };
 
   // ── Two-stage group confirm ───────────────────────────────────────────────
@@ -39044,6 +39273,18 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
 
   useEffect(() => {
     if (buszState?.phase === 'done') {
+      // Save busz completion stats for profile players
+      if (typeof window.updateStats === 'function' && buszState?.busRiderDrinks) {
+        players.forEach(p => {
+          if (!p.profileId) return;
+          const drinks = buszState.busRiderDrinks[p.id] || 0;
+          window.updateStats(p.profileId, {
+            busz_played: firebase.firestore.FieldValue.increment(1),
+            busz_completions: firebase.firestore.FieldValue.increment(1),
+            busz_total_drinks: firebase.firestore.FieldValue.increment(drinks),
+          });
+        });
+      }
       onAdvance && onAdvance({});
     }
   }, [buszState?.phase]);
@@ -39181,7 +39422,19 @@ function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
     const r = resolvePosition(st, myStep, pending, drawnCard, newDrawDeck);
     const myRes = r.results[riderId];
     setGuessResult({correct:myRes.correct, done:myRes.done, bonus:isBonus, card:drawnCard, step:myStep, drinks:myRes.drinks});
-    if (!myRes.correct && myStep === busStepsCount - 1) setTimeout(() => { setGuessResult(null); setLastCardFail(true); setTimeout(() => setLastCardFail(false), 3000); }, 1000);
+    if (!myRes.correct && myStep === busStepsCount - 1) {
+      setTimeout(() => {
+        setGuessResult(null); setLastCardFail(true); setTimeout(() => setLastCardFail(false), 3000);
+        // Save busz fail stat
+        if (typeof window.updateStats === 'function' && players[turn]?.profileId) {
+          window.updateStats(players[turn].profileId, {
+            busz_played: firebase.firestore.FieldValue.increment(1),
+            busz_fails: firebase.firestore.FieldValue.increment(1),
+            busz_total_drinks: firebase.firestore.FieldValue.increment(1),
+          });
+        }
+      }, 1000);
+    }
     else setTimeout(() => setGuessResult(null), myRes.correct ? 1800 : 2200);
     if (roomCode && mode==='Online') {
       try {
@@ -44995,13 +45248,14 @@ function BottleApp() {
   };
   const resetGame = () => { setPlayers(players.map(p => ({...p,drinks:0,points:0}))); setScreen('play'); };
 
-  const order = ['home','players','games','play','end','observer'];
+  const order = ['home','stats','players','games','play','end','observer'];
   const dir = order.indexOf(screen) >= order.indexOf(prev||'home') ? 1 : -1;
 
   return (
     <div style={{ minHeight:'100dvh', width:'100%', position:'relative', fontFamily:T.font, color:T.ink, WebkitFontSmoothing:'antialiased', overflow:'hidden', background:T.bg }} data-theme={appTheme}>
       <div key={screen} style={{ height:'100dvh', width:'100%', display:'flex', flexDirection:'column', animation:`slide${dir>0?'In':'Back'} .35s cubic-bezier(.2,.85,.3,1.05)` }}>
         {screen==='home'     && <HomeScreen     go={go} mode={mode} setMode={setMode} onStartGame={onStartGame} setTheme={handleSetTheme} currentTheme={appTheme} resumeRoomData={resumeRoomData} onResume={goResume} />}
+        {screen==='stats'    && <StatsScreen    go={go} />}
         {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
         {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} mode={mode} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
