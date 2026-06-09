@@ -33594,7 +33594,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.47';
+const APP_VERSION = 'v8.48';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -36268,7 +36268,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     if (TOURNAMENT === 'se') {
       const br = buildSEBracket(tp);
       setSeRounds(br); setSeCurRound(0);
-      const firstPending = br[0].findIndex(m => m.winner === null);
+      const firstPending = br.length > 0 ? br[0].findIndex(m => m.winner === null) : -1;
       setSeCurMatch(firstPending >= 0 ? firstPending : 0);
     } else if (TOURNAMENT === 'rr') {
       const ms = buildRRMatches([...tp].sort(() => Math.random() - 0.5));
@@ -36328,6 +36328,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
   // ── SE confirm ────────────────────────────────────────────────────────────
   const handleSEConfirm = (rounds, curRound, curMatch, setCB) => {
+    if (!rounds[curRound]?.[curMatch]) return;
     const match = rounds[curRound][curMatch];
     const winner = cups1 < cups2 ? match.p1 : match.p2;
     const loser  = cups1 < cups2 ? match.p2 : match.p1;
@@ -36431,7 +36432,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     if (TOURNAMENT === 'se') {
       const br = buildSEBracket(ep);
       setSeRounds(br); setSeCurRound(0);
-      const fp = br[0].findIndex(m => m.winner === null);
+      const fp = br.length > 0 ? br[0].findIndex(m => m.winner === null) : -1;
       setSeCurMatch(fp >= 0 ? fp : 0);
     } else if (TOURNAMENT === 'rr') {
       const ms = buildRRMatches([...ep].sort(() => Math.random() - 0.5));
@@ -36472,8 +36473,10 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   // ── Two-stage group confirm ───────────────────────────────────────────────
   const handleGroupConfirm = () => {
     const grp = tsGroups[viewGroup];
+    if (!grp || grp.done) return;
     const isRR = TOURNAMENT.startsWith('grp_rr');
     const m = grp.matches[grp.curIdx];
+    if (!m) return;
     const isDraw = cups1 === cups2;
     const winner = isDraw ? null : (cups1 < cups2 ? m.p1 : m.p2);
     const loser  = isDraw ? null : (cups1 < cups2 ? m.p2 : m.p1);
@@ -36515,7 +36518,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           if (finalsType === 'se') {
             const br = buildSEBracket(allAdvanced);
             setSeRounds(br); setSeCurRound(0);
-            setSeCurMatch(br[0].findIndex(mm => mm.winner === null));
+            const fp = br.length > 0 ? br[0].findIndex(mm => mm.winner === null) : -1;
+            setSeCurMatch(fp >= 0 ? fp : 0);
           } else {
             const ms = buildRRMatches(allAdvanced);
             setRrMatches(ms); setRrIdx(0); setRrDone(false);
