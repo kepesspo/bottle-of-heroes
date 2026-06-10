@@ -33630,7 +33630,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.73';
+const APP_VERSION = 'v8.74';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -36783,6 +36783,10 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       nr[curRound][curMatch].winner = winner;
       nr[curRound][curMatch].loser  = loser;
       nr[curRound][curMatch].score  = score;
+      if (nr[curRound][curMatch].score1) {
+        nr[curRound][curMatch].scores = [nr[curRound][curMatch].score1, score];
+        delete nr[curRound][curMatch].score1;
+      }
 
       // Fill TBD slot in pre-built round1 when a prelim match finishes
       if (nr[curRound + 1]?.[curMatch]?.tbd) {
@@ -37133,10 +37137,6 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', textAlign:'center' }}>{fullLabel}</div>
           {canReshuffle && (
             <div style={{ position:'absolute', right:0, display:'flex', gap:4 }}>
-              <button onClick={() => {
-                  const ep = (MODE === 'csapat' && teamsReady && teamPlayersRef.current) ? teamPlayersRef.current : players;
-                  setManualEdit(ep);
-                }} title="Manuális sorsolás" style={{ width:28, height:28, borderRadius:8, border:'none', cursor:'pointer', background:'rgba(20,30,50,0.07)', display:'grid', placeItems:'center', fontSize:14 }}>✏️</button>
               <button onClick={handleReshuffle} title="Újra sorsol" style={{ width:28, height:28, borderRadius:8, border:'none', cursor:'pointer', background:'rgba(20,30,50,0.07)', display:'grid', placeItems:'center', fontSize:14 }}>🔀</button>
             </div>
           )}
@@ -37214,8 +37214,13 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
             const matchKey = seCurRound + '_' + seCurMatch;
             const loserP = cups1 > cups2 ? currentMatch?.p2 : currentMatch?.p1;
             if (isSEFinals && loserP && !visszavagoUsedRef.current.has(matchKey)) {
-              // automatikus visszavágó — nincs kérdés, azonnal indul
+              // automatikus visszavágó — mentsük el az 1. eredményt, azonnal indul
               visszavagoUsedRef.current.add(matchKey);
+              setSeRounds(prev => {
+                const nr = prev.map(r => r.map(mm => ({...mm})));
+                nr[seCurRound][seCurMatch].score1 = { p1: cups1, p2: cups2 };
+                return nr;
+              });
               setCups1(0); setCups2(0); resetTimer();
               return;
             }
@@ -37358,7 +37363,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
                     // swap helpers
                     const mkSwapHandlers = (side) => {
                       const player = m[side];
-                      if (!canReshuffle || !player || isDone) return {};
+                      if (!player) return {};
                       const isSel = swapSel && swapSel.rIdx === rIdx && swapSel.mIdx === mIdx && swapSel.side === side;
                       const isSwapTarget = swapSel && !isSel;
                       return {
@@ -37405,10 +37410,16 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
                           {...{onMouseDown:p1h.onMouseDown, onMouseUp:p1h.onMouseUp, onTouchStart:p1h.onTouchStart, onTouchEnd:p1h.onTouchEnd, onClick:p1h.onClick, onContextMenu: p1h.onMouseDown ? (e)=>e.preventDefault() : undefined}}
                           style={{ flex:1, fontFamily:T.font, fontWeight: p1win?800:600, fontSize:13, color: p1h._isSel?T.mint:p1win?T.ink:isDone?T.inkSoft:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textDecoration: isDone&&!p1win?'line-through':'none', background: p1h._isSel?T.mintSoft:p1h._isSwapTarget?'rgba(79,194,160,0.10)':'transparent', borderRadius:6, padding:'2px 4px', transition:'all .15s', userSelect:'none', WebkitUserSelect:'none' }}>{m.p1?m.p1.name:'BYE'}</div>
                         {/* Score */}
-                        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, flexShrink:0, minWidth:40, textAlign:'center', color: isDone ? T.inkMute : T.inkMute }}>
-                          {isDone && m.score ? (
-                            <><span style={{ color: p1win ? T.mint : T.inkSoft }}>{m.score.p1}</span><span> — </span><span style={{ color: p2win ? T.mint : T.inkSoft }}>{m.score.p2}</span></>
-                          ) : '– vs –'}
+                        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, flexShrink:0, textAlign:'center', color: isDone ? T.inkMute : T.inkMute, display:'flex', flexDirection:'column', alignItems:'center', gap:1 }}>
+                          {isDone && m.scores ? (
+                            m.scores.map((s, si) => {
+                              const s1win = s.p1 > s.p2;
+                              const s2win = s.p2 > s.p1;
+                              return <div key={si}><span style={{ color: s1win ? T.mint : T.inkSoft }}>{s.p1}</span><span style={{ color:T.inkMute }}>–</span><span style={{ color: s2win ? T.mint : T.inkSoft }}>{s.p2}</span></div>;
+                            })
+                          ) : isDone && m.score ? (
+                            <><span style={{ color: p1win ? T.mint : T.inkSoft }}>{m.score.p1}</span><span style={{ color:T.inkMute }}>–</span><span style={{ color: p2win ? T.mint : T.inkSoft }}>{m.score.p2}</span></>
+                          ) : <span style={{ fontSize:12, color:T.inkMute }}>vs</span>}
                         </div>
                         {/* P2 name */}
                         <div
