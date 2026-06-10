@@ -33630,7 +33630,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.84';
+const APP_VERSION = 'v8.85';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -36542,21 +36542,30 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     const sh = [...parts].sort(() => Math.random() - 0.5);
     const n = sh.length;
     if (n < 2) return [];
-    const base = Math.pow(2, Math.floor(Math.log2(n)));
-    const extra = n - base;
-    if (extra === 0) return [buildSERound(sh)];
-    // Prelim round: only the extra*2 lowest-seeded players play
-    const direct = sh.slice(0, base - extra);  // skip prelim
-    const prelim = sh.slice(base - extra);      // play in prelim
-    const round0 = buildSERound(prelim);        // extra real matches
-    // Round 1: direct players + TBD slots for prelim winners
-    const round1 = [];
-    for (let i = 0; i < extra; i++) {
-      round1.push({ p1: direct[i], p2: null, winner: null, loser: null, score: null, tbd: true });
+    // Use UPPER power of 2 so after prelim we get exactly nextPow2/2 players
+    let nextPow2 = 1;
+    while (nextPow2 < n) nextPow2 *= 2;
+    const byes = nextPow2 - n;           // players who skip prelim (free pass)
+    const prelimCount = n - nextPow2 / 2; // number of prelim matches
+    if (prelimCount === 0) return [buildSERound(sh)];
+    const byePlayers = sh.slice(0, byes);
+    const prelimPlayers = sh.slice(byes); // 2*prelimCount players play prelim
+    // Build round0 with r1slot/r1side so fill-logic knows where each winner goes
+    const round0 = [];
+    for (let i = 0; i < prelimCount; i++) {
+      const p1 = prelimPlayers[2*i], p2 = prelimPlayers[2*i+1];
+      let r1slot, r1side;
+      if (i < byes) { r1slot = i; r1side = 'p2'; }          // fills bye-player's open slot
+      else { const off = i - byes; r1slot = byes + Math.floor(off/2); r1side = off%2===0?'p1':'p2'; }
+      round0.push({ p1, p2, winner: null, loser: null, score: null, r1slot, r1side });
     }
-    for (let i = extra; i < direct.length; i += 2) {
-      const p1 = direct[i], p2 = direct[i+1] || null;
-      round1.push({ p1, p2, winner: p2 ? null : p1, loser: null, score: null });
+    // Build round1: byes players each vs TBD, then remaining prelim winners pair up
+    const round1 = [];
+    for (let i = 0; i < byes; i++) {
+      round1.push({ p1: byePlayers[i], p2: null, winner: null, loser: null, score: null, tbd: true });
+    }
+    for (let i = 0; i < prelimCount - byes; i += 2) {
+      round1.push({ p1: null, p2: null, winner: null, loser: null, score: null, tbd: true });
     }
     return [round0, round1];
   };
@@ -36817,7 +36826,14 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       }
 
       // Fill TBD slot in pre-built round1 when a prelim match finishes
-      if (nr[curRound + 1]?.[curMatch]?.tbd) {
+      const pm = nr[curRound][curMatch];
+      if (pm.r1slot !== undefined && nr[curRound + 1]?.[pm.r1slot] !== undefined) {
+        const r1m = { ...nr[curRound + 1][pm.r1slot] };
+        r1m[pm.r1side || 'p2'] = winner;
+        if (r1m.p1 && r1m.p2) r1m.tbd = false; // both slots filled → match is ready
+        nr[curRound + 1][pm.r1slot] = r1m;
+      } else if (nr[curRound + 1]?.[curMatch]?.tbd) {
+        // Fallback for old-format bracket data
         nr[curRound + 1][curMatch] = { ...nr[curRound + 1][curMatch], p2: winner, tbd: false };
       }
 
@@ -36911,19 +36927,27 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const buildSEBracketOrdered = (parts) => {
     const n = parts.length;
     if (n < 2) return [];
-    const base = Math.pow(2, Math.floor(Math.log2(n)));
-    const extra = n - base;
-    if (extra === 0) return [buildSERound(parts)];
-    const direct = parts.slice(0, base - extra);
-    const prelim = parts.slice(base - extra);
-    const round0 = buildSERound(prelim);
-    const round1 = [];
-    for (let i = 0; i < extra; i++) {
-      round1.push({ p1: direct[i], p2: null, winner: null, loser: null, score: null, tbd: true });
+    let nextPow2 = 1;
+    while (nextPow2 < n) nextPow2 *= 2;
+    const byes = nextPow2 - n;
+    const prelimCount = n - nextPow2 / 2;
+    if (prelimCount === 0) return [buildSERound(parts)];
+    const byePlayers = parts.slice(0, byes);
+    const prelimPlayers = parts.slice(byes);
+    const round0 = [];
+    for (let i = 0; i < prelimCount; i++) {
+      const p1 = prelimPlayers[2*i], p2 = prelimPlayers[2*i+1];
+      let r1slot, r1side;
+      if (i < byes) { r1slot = i; r1side = 'p2'; }
+      else { const off = i - byes; r1slot = byes + Math.floor(off/2); r1side = off%2===0?'p1':'p2'; }
+      round0.push({ p1, p2, winner: null, loser: null, score: null, r1slot, r1side });
     }
-    for (let i = extra; i < direct.length; i += 2) {
-      const p1 = direct[i], p2 = direct[i+1] || null;
-      round1.push({ p1, p2, winner: p2 ? null : p1, loser: null, score: null });
+    const round1 = [];
+    for (let i = 0; i < byes; i++) {
+      round1.push({ p1: byePlayers[i], p2: null, winner: null, loser: null, score: null, tbd: true });
+    }
+    for (let i = 0; i < prelimCount - byes; i += 2) {
+      round1.push({ p1: null, p2: null, winner: null, loser: null, score: null, tbd: true });
     }
     return [round0, round1];
   };
@@ -37436,10 +37460,10 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
                     return (
                       <div key={mIdx}
                         onClick={!swapSel && isSelectable ? () => { setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(0); setCups2(0); } : (swapSel ? () => setSwapSel(null) : undefined)}
-                        onMouseDown={!swapSel && isDone ? () => { lpTimer.current = setTimeout(() => { setSeRounds(prev => { const nr = prev.map(r => r.map(mm => ({...mm}))); const wasW = nr[rIdx][mIdx].winner; const m = nr[rIdx][mIdx]; delete m.score1; delete m.scores; nr[rIdx][mIdx] = {...m, winner:null, loser:null, score:null}; if (wasW && nr[rIdx+1]?.[mIdx] && !nr[rIdx+1][mIdx].tbd && nr[rIdx+1][mIdx].p2?.id === wasW.id) { nr[rIdx+1][mIdx] = {...nr[rIdx+1][mIdx], p2:null, tbd:true}; } return nr; }); visszavagoUsedRef.current.delete(rIdx + '_' + mIdx); setChampion(null); doneRef.current=false; setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(0); setCups2(0); resetTimer(); }, 600); } : undefined}
+                        onMouseDown={!swapSel && isDone ? () => { lpTimer.current = setTimeout(() => { setSeRounds(prev => { const nr = prev.map(r => r.map(mm => ({...mm}))); const wasW = nr[rIdx][mIdx].winner; const m = nr[rIdx][mIdx]; delete m.score1; delete m.scores; const r1s = m.r1slot; const r1side = m.r1side||'p2'; nr[rIdx][mIdx] = {...m, winner:null, loser:null, score:null}; if (r1s !== undefined && nr[rIdx+1]?.[r1s]) { const r1m={...nr[rIdx+1][r1s]}; r1m[r1side]=null; r1m.tbd=true; nr[rIdx+1][r1s]=r1m; } else if (wasW && nr[rIdx+1]?.[mIdx] && !nr[rIdx+1][mIdx].tbd && nr[rIdx+1][mIdx].p2?.id === wasW.id) { nr[rIdx+1][mIdx] = {...nr[rIdx+1][mIdx], p2:null, tbd:true}; } return nr; }); visszavagoUsedRef.current.delete(rIdx + '_' + mIdx); setChampion(null); doneRef.current=false; setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(0); setCups2(0); resetTimer(); }, 600); } : undefined}
                         onMouseUp={() => clearTimeout(lpTimer.current)}
                         onMouseLeave={() => clearTimeout(lpTimer.current)}
-                        onTouchStart={!swapSel && isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setSeRounds(prev => { const nr = prev.map(r => r.map(mm => ({...mm}))); const wasW = nr[rIdx][mIdx].winner; const m = nr[rIdx][mIdx]; delete m.score1; delete m.scores; nr[rIdx][mIdx] = {...m, winner:null, loser:null, score:null}; if (wasW && nr[rIdx+1]?.[mIdx] && !nr[rIdx+1][mIdx].tbd && nr[rIdx+1][mIdx].p2?.id === wasW.id) { nr[rIdx+1][mIdx] = {...nr[rIdx+1][mIdx], p2:null, tbd:true}; } return nr; }); visszavagoUsedRef.current.delete(rIdx + '_' + mIdx); setChampion(null); doneRef.current=false; setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(0); setCups2(0); resetTimer(); }, 600); } : undefined}
+                        onTouchStart={!swapSel && isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setSeRounds(prev => { const nr = prev.map(r => r.map(mm => ({...mm}))); const wasW = nr[rIdx][mIdx].winner; const m = nr[rIdx][mIdx]; delete m.score1; delete m.scores; const r1s = m.r1slot; const r1side = m.r1side||'p2'; nr[rIdx][mIdx] = {...m, winner:null, loser:null, score:null}; if (r1s !== undefined && nr[rIdx+1]?.[r1s]) { const r1m={...nr[rIdx+1][r1s]}; r1m[r1side]=null; r1m.tbd=true; nr[rIdx+1][r1s]=r1m; } else if (wasW && nr[rIdx+1]?.[mIdx] && !nr[rIdx+1][mIdx].tbd && nr[rIdx+1][mIdx].p2?.id === wasW.id) { nr[rIdx+1][mIdx] = {...nr[rIdx+1][mIdx], p2:null, tbd:true}; } return nr; }); visszavagoUsedRef.current.delete(rIdx + '_' + mIdx); setChampion(null); doneRef.current=false; setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(0); setCups2(0); resetTimer(); }, 600); } : undefined}
                         onTouchEnd={() => clearTimeout(lpTimer.current)}
                         style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px', borderRadius:14, cursor: isSelectable ? 'pointer' : isDone ? 'context-menu' : 'default', background: isSelected ? T.mintSoft : isDone ? 'rgba(20,30,50,0.03)' : 'rgba(20,30,50,0.03)', border: isSelected ? `1.5px solid ${T.mint}44` : '1.5px solid transparent', transition:'background .15s' }}>
                         {/* P1 dot */}
