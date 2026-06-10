@@ -33638,7 +33638,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.05';
+const APP_VERSION = 'v9.06';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -44881,12 +44881,23 @@ function ObserverScreen({ go, initialCode, onJoinAsHost }) {
   }, []);
 
   const didMountRef = React.useRef(false);
+  const autoSubmitOkRef = React.useRef(false);
   React.useEffect(() => {
     if (!didMountRef.current) { didMountRef.current = true; return; }
-    if (code.length === CODE_LEN && status === 'enter') submit();
+    if (code.length === CODE_LEN && status === 'enter' && autoSubmitOkRef.current) {
+      autoSubmitOkRef.current = false;
+      submit();
+    }
   }, [code]);
 
-  const push = d => { if (status!=='enter') return; setCode(c => (c+d).slice(0,CODE_LEN)); };
+  const push = d => {
+    if (status !== 'enter') return;
+    setCode(c => {
+      const nc = (c + d).slice(0, CODE_LEN);
+      if (nc.length === CODE_LEN) autoSubmitOkRef.current = true;
+      return nc;
+    });
+  };
   const back = () => setCode(c => c.slice(0,-1));
   const submitHost = () => {
     if (code.length < CODE_LEN) return;
@@ -44946,8 +44957,8 @@ function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste, join
     return () => window.removeEventListener('keydown', onKey);
   });
   return (
-    <div style={{ flex:1, display:'flex', flexDirection:'column', padding:'12px 22px 22px' }}>
-      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:16, paddingTop:8 }}>
+    <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+      <div style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column', alignItems:'center', gap:16, padding:'12px 22px 8px', paddingTop:8 }}>
         {/* Mode toggle + history */}
         <div style={{ display:'flex', alignItems:'center', gap:6, width:'100%', maxWidth:320 }}>
           <div style={{ flex:1, display:'flex', background:T.surfaceMuted, borderRadius:14, padding:3, gap:3 }}>
@@ -45040,17 +45051,19 @@ function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste, join
           </div>
         )}
       </div>
-      <NumberPad
-        onDigit={d => {
-          if (joinMode === 'host' && ready && hostPin.length < PIN_LEN) { setHostPin && setHostPin(hostPin + d); }
-          else if (!ready) { onDigit(d); }
-        }}
-        onBack={() => {
-          if (joinMode === 'host' && hostPin.length > 0) { setHostPin && setHostPin(hostPin.slice(0,-1)); }
-          else { onBack(); }
-        }}
-      />
-      <PrimaryButton disabled={joinMode==='host' ? (!ready || !pinReady || hostLoading) : !ready} onClick={onSubmit} style={{ marginTop:14 }}>{hostLoading ? 'Betöltés…' : joinMode==='host' ? '🎮 Belépés Hostként' : 'Csatlakozás'}</PrimaryButton>
+      <div style={{ padding:'0 22px 22px', background:T.bg, borderTop:`1px solid rgba(20,30,50,0.06)`, paddingTop:8 }}>
+        <NumberPad
+          onDigit={d => {
+            if (joinMode === 'host' && ready && hostPin.length < PIN_LEN) { setHostPin && setHostPin(hostPin + d); }
+            else if (!ready) { onDigit(d); }
+          }}
+          onBack={() => {
+            if (joinMode === 'host' && hostPin.length > 0) { setHostPin && setHostPin(hostPin.slice(0,-1)); }
+            else { onBack(); }
+          }}
+        />
+        <PrimaryButton disabled={joinMode==='host' ? (!ready || !pinReady || hostLoading) : !ready} onClick={onSubmit} style={{ marginTop:14 }}>{hostLoading ? 'Betöltés…' : joinMode==='host' ? '🎮 Belépés Hostként' : 'Csatlakozás'}</PrimaryButton>
+      </div>
     </div>
   );
 }
