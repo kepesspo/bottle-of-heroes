@@ -33630,7 +33630,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.75';
+const APP_VERSION = 'v8.76';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -44479,7 +44479,7 @@ function ObserverScreen({ go, initialCode, onJoinAsHost }) {
   return (
     <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg }}>
       <AppBar title="Csatlakozás" onBack={status === 'enter' ? () => go('home') : undefined} />
-      {status==='enter' && <ObserverEnter code={code} codeLen={CODE_LEN} onDigit={push} onBack={back} onSubmit={submit} onPaste={v => setCode(v.replace(/\D/g,'').slice(0,CODE_LEN))} joinMode={joinMode} setJoinMode={setJoinMode} hostLoading={hostLoading} errorMsg={errorMsg} hostPin={hostPin} setHostPin={setHostPin} />}
+      {status==='enter' && <ObserverEnter code={code} codeLen={CODE_LEN} onDigit={push} onBack={back} onSubmit={submit} onPaste={v => setCode(v.replace(/\D/g,'').slice(0,CODE_LEN))} joinMode={joinMode} setJoinMode={setJoinMode} hostLoading={hostLoading} errorMsg={errorMsg} hostPin={hostPin} setHostPin={setHostPin} onSelectHistRoom={c => setCode(c)} />}
       {status==='connecting' && <ObserverStatus icon="📡" title="Csatlakozás…" sub={`Szoba: ${code}`} spinning />}
       {status==='watching' && <ObserverWatching code={code} observerName={name} onLeave={reset} />}
       {status==='error' && <ObserverStatus icon="🚫" title="Hiba" sub={errorMsg} actionLabel="Próbáld újra" onAction={reset} />}
@@ -44487,10 +44487,12 @@ function ObserverScreen({ go, initialCode, onJoinAsHost }) {
   );
 }
 
-function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste, joinMode, setJoinMode, hostLoading, errorMsg, hostPin, setHostPin }) {
+function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste, joinMode, setJoinMode, hostLoading, errorMsg, hostPin, setHostPin, onSelectHistRoom }) {
   const PIN_LEN = 4;
   const ready = code.length === codeLen;
   const pinReady = hostPin.length === PIN_LEN;
+  const [showHist, setShowHist] = React.useState(false);
+  const [roomHist] = React.useState(() => { try { return JSON.parse(localStorage.getItem('boh_room_hist') || '[]'); } catch(e) { return []; } });
   useEffect(() => {
     const onKey = e => {
       if (/^[0-9]$/.test(e.key)) onDigit(e.key);
@@ -44560,6 +44562,34 @@ function ObserverEnter({ code, codeLen, onDigit, onBack, onSubmit, onPaste, join
                 );
               })}
             </div>
+          </div>
+        )}
+        {joinMode === 'host' && roomHist.length > 0 && (
+          <div style={{ width:'100%', maxWidth:320 }}>
+            <button onClick={() => setShowHist(v => !v)} style={{ width:'100%', padding:'10px 14px', borderRadius:14, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:13, background:T.surfaceMuted, color:T.inkSoft, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <span>🕓 Korábbi szobák</span>
+              <span style={{ fontSize:11 }}>{showHist ? '▲' : '▼'}</span>
+            </button>
+            {showHist && (
+              <div style={{ marginTop:6, display:'flex', flexDirection:'column', gap:6 }}>
+                {roomHist.map((r, i) => {
+                  const gameNames = (r.games || []).map(id => { const g = (typeof GAMES !== 'undefined' ? GAMES : []).find(x => x.id === id); return g ? (g.name || id) : id; }).join(', ') || '—';
+                  const d = new Date(r.ts);
+                  const dateStr = d.toLocaleDateString('hu-HU', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+                  return (
+                    <div key={i} onClick={() => { onSelectHistRoom && onSelectHistRoom(r.code); setShowHist(false); }}
+                      style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:14, background:T.surface, boxShadow:T.shadow, cursor:'pointer' }}>
+                      <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:16, color:T.mint, letterSpacing:'0.1em', flexShrink:0 }}>{r.code}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{gameNames}</div>
+                        <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{dateStr}</div>
+                      </div>
+                      <div style={{ fontFamily:T.font, fontSize:12, color:T.mintDeep }}>→</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -45498,6 +45528,11 @@ function BottleApp() {
       if ((selectedGames || []).includes('beerpong')) {
         try { localStorage.setItem('boh_bp_resume', JSON.stringify({ code, players: players.map(p=>({...p})), selectedGames, gameMeta: {...gameMeta, _resumeBpState: null} })); } catch(e) {}
       }
+      try {
+        const hist = JSON.parse(localStorage.getItem('boh_room_hist') || '[]');
+        hist.unshift({ code, games: selectedGames || [], ts: Date.now() });
+        localStorage.setItem('boh_room_hist', JSON.stringify(hist.slice(0, 15)));
+      } catch(e) {}
       createRoom(code, players.map(p=>({...p})), selectedGames, gameMeta)
         .then(() => {
           setRoomCode(code);
