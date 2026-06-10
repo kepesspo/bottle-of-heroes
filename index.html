@@ -33630,7 +33630,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.87';
+const APP_VERSION = 'v8.88';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34246,7 +34246,7 @@ function StatsScreen({ go }) {
   );
 }
 
-function HomeScreen({ go, mode, setMode, onStartGame, setTheme, currentTheme, setLang, currentLang, resumeRoomData, onResume }) {
+function HomeScreen({ go, onStartGame, setTheme, currentTheme, setLang, currentLang, resumeRoomData, onResume }) {
   const [showInstall, setShowInstall] = React.useState(false);
   const [showSettings, setShowSettings] = React.useState(false);
   const isStandalone = typeof window !== 'undefined' && (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches);
@@ -34315,20 +34315,6 @@ function HomeScreen({ go, mode, setMode, onStartGame, setTheme, currentTheme, se
           </SheetOverlay>
         )}
         <div className="home-actions">
-          <div style={{ display:'flex', padding:6, background:T.surface, borderRadius:999, boxShadow:T.shadow }}>
-            {['Online','Offline'].map(m => {
-              const active = mode === m;
-              return (
-                <button key={m} onClick={() => setMode(m)} style={{
-                  flex:1, minHeight:46, border:'none', cursor:'pointer',
-                  background: active ? T.mint : 'transparent',
-                  color: active ? '#fff' : T.mint,
-                  fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16,
-                  borderRadius:999, transition:'all .2s',
-                }}>{m}</button>
-              );
-            })}
-          </div>
           <PrimaryButton onClick={onStartGame || (() => go('players'))} tone="mint">{t('play')}</PrimaryButton>
           <PrimaryButton onClick={() => go('observer')} tone="coral">{t('join')}</PrimaryButton>
           {!isStandalone && (
@@ -36571,7 +36557,7 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult }) {
   );
 }
 
-function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCode, mode, initialBpState }) {
+function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCode, initialBpState }) {
   const bpCfg = gameMeta?.beerpongConfig || {};
   const DRINKS_PER_LOSS = bpCfg.drinksPerLoss ?? 5;
   const MAX_CUPS = bpCfg.maxCups ?? 10;
@@ -36806,7 +36792,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
   // ── Sync BP state to room for observer ──────────────────────────────────
   React.useEffect(() => {
-    if (!roomCode || mode !== 'Online' || typeof syncRoom !== 'function') return;
+    if (!roomCode || typeof syncRoom !== 'function') return;
     // Firestore nem támogat nested array-t — seRounds és tsGroups-t objektummá alakítjuk
     const seRoundsObj = Object.fromEntries(seRounds.map((r, i) => [String(i), r]));
     const tsGroupsFlat = tsGroups.map(g => ({...g, matches: Object.fromEntries(g.matches.map((m, i) => [String(i), m])), seRounds: g.seRounds ? Object.fromEntries(g.seRounds.map((r, i) => [String(i), r])) : null }));
@@ -39705,8 +39691,8 @@ function PlayingCard({ card, size='md', faceDown=false, glow=false }) {
   );
 }
 
-function BuszGame({ players, roomCode, mode, gameIdx, gameMeta, onAdvance }) {
-  const isOnline = mode === 'Online' && !!roomCode;
+function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance }) {
+  const isOnline = !!roomCode;
   const [buszState, setBuszState] = useState(null);
   const [zsulliAnim, setZsulliAnim] = useState(null);
   const [ready, setReady] = useState(false);
@@ -43192,16 +43178,16 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
   );
 }
 
-function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, roomCode, mode, gameMeta, challenger, opponent }) {
+function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, roomCode, gameMeta, challenger, opponent }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx + '_' + (gameMeta?.beerpongConfig?.tournamentType||'se')} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} mode={mode} initialBpState={gameMeta?._resumeBpState || null} />;
+  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx + '_' + (gameMeta?.beerpongConfig?.tournamentType||'se')} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} initialBpState={gameMeta?._resumeBpState || null} />;
   if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onUnready={onUnready} onResult={onResult} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} mode={mode} gameMeta={gameMeta} onAdvance={onAdvance} />;
+  if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} gameMeta={gameMeta} onAdvance={onAdvance} />;
   if (gameId === 'ovfj') return <OVFJGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={typeof roomCode!=='undefined'?roomCode:undefined} gameMeta={gameMeta} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} gameMeta={gameMeta} />;
@@ -43225,7 +43211,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   return null;
 }
 
-function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, gameMeta, setGameMeta }) {
+function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta, setGameMeta }) {
   const trackScores = gameMeta?.modes?.includes('points') ?? true;
   const [round, setRound] = useState(1);
   const [turn, setTurn] = useState(0);
@@ -43274,7 +43260,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
 
   // Polling fallback: pull latest player state from Firestore every 2s
   useEffect(() => {
-    if (!roomCode || mode !== 'Online') return;
+    if (!roomCode) return;
     const id = setInterval(() => {
       if (typeof checkRoom === 'function') {
         checkRoom(roomCode).then(data => {
@@ -43460,7 +43446,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
     const updated = playersRef.current.map(p => ({ ...p, drinks: p.drinks + (deltaMap[p.id] || 0) }));
     playersRef.current = updated;
     setPlayers(updated);
-    if (roomCode && mode === 'Online' && typeof syncRoom === 'function') syncRoom(roomCode, { players: updated });
+    if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { players: updated });
   };
 
   const advanceLoverseny = (drinkMap, pointsMap) => {
@@ -43530,7 +43516,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
         )}
 
         <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
-          <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} roomCode={roomCode} mode={mode} gameMeta={gameMeta} challenger={currentPlayer} opponent={selectedOpponent} />
+          <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={selectedOpponent} />
         </div>
       </div>
         </div>
@@ -45654,7 +45640,6 @@ function BottleApp() {
   const _initRoom = React.useMemo(() => { try { return new URLSearchParams(window.location.search).get('room') || ''; } catch(e) { return ''; } }, []);
   const [screen, setScreen] = useState(() => _initRoom ? 'observer' : 'home');
   const [prev, setPrev] = useState(null);
-  const [mode, setMode] = useState('Online');
   const [players, setPlayers] = useState(INITIAL_PLAYERS);
   const [selectedGames, setSelectedGames] = useState(['busz','memoria','erem']);
   const [gameMeta, setGameMeta] = useState({ modes:['points'], difficulty:'easy', observerAllowed:false });
@@ -45734,7 +45719,7 @@ function BottleApp() {
   const roomUnsubRef = React.useRef(null);
 
   const go = (next) => {
-    if (next === 'play' && mode === 'Online') {
+    if (next === 'play') {
       const code = generateRoomCode();
       setCreatingRoom(true);
       if ((selectedGames || []).includes('beerpong')) {
@@ -45762,7 +45747,7 @@ function BottleApp() {
     setPrev(screen); setScreen(next);
   };
   const onStartGame = () => {
-    if (mode === 'Online') { setPlayers([]); setSelectedGames([]); setRoomCode(null); }
+    setPlayers([]); setSelectedGames([]); setRoomCode(null);
     setPrev(screen); setScreen('players');
   };
   const resetGame = () => { setPlayers(players.map(p => ({...p,drinks:0,points:0}))); setScreen('play'); };
@@ -45773,11 +45758,11 @@ function BottleApp() {
   return (
     <div style={{ minHeight:'100dvh', width:'100%', position:'relative', fontFamily:T.font, color:T.ink, WebkitFontSmoothing:'antialiased', overflow:'hidden', background:T.bg }} data-theme={appTheme}>
       <div key={screen} style={{ height:'100dvh', width:'100%', display:'flex', flexDirection:'column', animation:`slide${dir>0?'In':'Back'} .35s cubic-bezier(.2,.85,.3,1.05)` }}>
-        {screen==='home'     && <HomeScreen     go={go} mode={mode} setMode={setMode} onStartGame={onStartGame} setTheme={handleSetTheme} currentTheme={appTheme} setLang={handleSetLang} currentLang={appLang} resumeRoomData={resumeRoomData} onResume={goResume} />}
+        {screen==='home'     && <HomeScreen     go={go} onStartGame={onStartGame} setTheme={handleSetTheme} currentTheme={appTheme} setLang={handleSetLang} currentLang={appLang} resumeRoomData={resumeRoomData} onResume={goResume} />}
         {screen==='stats'    && <StatsScreen    go={go} />}
         {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
         {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
-        {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} mode={mode} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
+        {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} />}
         {screen==='observer' && <ObserverScreen go={go} initialCode={_initRoom} onJoinAsHost={goJoinAsHost} />}
       </div>
