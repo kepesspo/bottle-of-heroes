@@ -33630,7 +33630,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.76';
+const APP_VERSION = 'v8.77';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -36765,13 +36765,31 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const handleSEConfirm = (rounds, curRound, curMatch, setCB) => {
     if (!rounds[curRound]?.[curMatch]) return;
     const match = rounds[curRound][curMatch];
-    const winner = cups1 > cups2 ? match.p1 : match.p2;
-    const loser  = cups1 > cups2 ? match.p2 : match.p1;
     const score  = { p1: cups1, p2: cups2 };
     resetTimer();
 
-    const loserScore = cups1 > cups2 ? cups2 : cups1;
-    const winnerScore = cups1 > cups2 ? cups1 : cups2;
+    // Ha visszavágó volt (score1 létezik), összesített pohárszám dönt 1-1 esetén
+    let winner, loser;
+    if (match.score1) {
+      const s1 = match.score1;
+      const m1p1win = s1.p1 > s1.p2, m2p1win = cups1 > cups2;
+      if (m1p1win === m2p1win) {
+        // Ugyanaz nyerte mindkét meccset
+        winner = m2p1win ? match.p1 : match.p2;
+        loser  = m2p1win ? match.p2 : match.p1;
+      } else {
+        // 1-1 döntetlen → összesített pohárszám
+        const totP1 = s1.p1 + cups1, totP2 = s1.p2 + cups2;
+        winner = totP1 > totP2 ? match.p1 : match.p2;
+        loser  = totP1 > totP2 ? match.p2 : match.p1;
+      }
+    } else {
+      winner = cups1 > cups2 ? match.p1 : match.p2;
+      loser  = cups1 > cups2 ? match.p2 : match.p1;
+    }
+
+    const loserScore = winner?.id === match.p1?.id ? cups2 : cups1;
+    const winnerScore = winner?.id === match.p1?.id ? cups1 : cups2;
     const cupDiff = Math.max(1, Math.abs(winnerScore - loserScore));
     const newDrink = { ...drinkMap };
     if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + cupDiff;
