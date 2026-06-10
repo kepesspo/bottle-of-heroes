@@ -33638,7 +33638,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.96';
+const APP_VERSION = 'v8.97';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34135,7 +34135,7 @@ function InstallModal({ onClose }) {
   );
 }
 
-function StatsScreen({ go }) {
+function StatsScreen({ go, onOpenObserver }) {
   const [profiles, setProfiles] = React.useState([]);
   const [stats, setStats] = React.useState({});
   const [loading, setLoading] = React.useState(true);
@@ -34244,12 +34244,20 @@ function StatsScreen({ go }) {
               const dateStr = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
               const typeLabel = t.game === 'busz' ? '🚌 Busz' : t.type === 'rr' ? '🍺 Körmérkőzés' : '🍺 Egyenes kiesés';
               const profilePlayers = (t.players||[]).filter(p => p.profileId);
+              const canOpen = !!t.roomCode && !!onOpenObserver;
               return (
-                <div key={t.id} style={{ background:T.surface, borderRadius:16, padding:'14px 16px', boxShadow:T.shadow }}>
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+                <div key={t.id} onClick={canOpen ? () => onOpenObserver(t.roomCode) : undefined}
+                  style={{ background:T.surface, borderRadius:16, padding:'14px 16px', boxShadow:T.shadow, cursor: canOpen ? 'pointer' : 'default', border: canOpen ? `1.5px solid ${T.mint}40` : '1.5px solid transparent' }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: t.tournamentName ? 4 : 8 }}>
                     <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em' }}>{typeLabel}</div>
-                    <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute }}>{dateStr} · {profilePlayers.length} profil</div>
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      {canOpen && <span style={{ fontFamily:T.font, fontSize:10, color:T.mint, fontWeight:700 }}>👁 Megnyit</span>}
+                      <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute }}>{dateStr} · {profilePlayers.length} profil</div>
+                    </div>
                   </div>
+                  {t.tournamentName && (
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, marginBottom:8 }}>{t.tournamentName}</div>
+                  )}
                   {t.champion && (
                     <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
                       <span style={{ fontSize:20 }}>🏆</span>
@@ -37017,6 +37025,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         ts: Date.now(),
         game: 'beerpong',
         type: 'se',
+        roomCode: roomCode || null,
+        tournamentName: gameMeta?.beerpongConfig?.name || null,
         champion: champ ? { id: champ.id, name: champ.name, color: champ.color } : null,
         players: players.map(p => ({ id: p.id, name: p.name, color: p.color, profileId: p.profileId || null })),
       });
@@ -37166,6 +37176,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         ts: Date.now(),
         game: 'beerpong',
         type: 'rr',
+        roomCode: roomCode || null,
+        tournamentName: gameMeta?.beerpongConfig?.name || null,
         champion: champ ? { id: champ.id, name: champ.name, color: champ.color } : null,
         podium,
         players: players.map(p => ({ id: p.id, name: p.name, color: p.color, profileId: p.profileId || null })),
@@ -39883,6 +39895,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance }) {
           ts: Date.now(),
           game: 'busz',
           type: 'busz',
+          roomCode: roomCode || null,
           champion: sorted[0] ? { id: sorted[0].id, name: sorted[0].name, color: sorted[0].color } : null,
           players: players.map(p => ({ id: p.id, name: p.name, color: p.color, profileId: p.profileId || null, drinks: riderDrinks[p.id]||0 })),
         });
@@ -44769,9 +44782,18 @@ function ObserverScreen({ go, initialCode, onJoinAsHost }) {
   const [hostLoading, setHostLoading] = useState(false);
   const [hostPin, setHostPin] = useState('');
 
+  const autoSubmitRef = React.useRef(initialCode?.length === CODE_LEN);
+
   React.useEffect(() => {
     if (initialCode) window.history.replaceState({}, document.title, window.location.pathname);
   }, []);
+
+  React.useEffect(() => {
+    if (autoSubmitRef.current && code.length === CODE_LEN && status === 'enter') {
+      autoSubmitRef.current = false;
+      submit();
+    }
+  }, [code, status]);
 
   const push = d => { if (status!=='enter') return; setCode(c => (c+d).slice(0,CODE_LEN)); };
   const back = () => setCode(c => c.slice(0,-1));
@@ -45896,6 +45918,9 @@ function BottleApp() {
   };
   const resetGame = () => { setPlayers(players.map(p => ({...p,drinks:0,points:0}))); setScreen('play'); };
 
+  const [observerInitCode, setObserverInitCode] = React.useState('');
+  const openObserver = (code) => { setObserverInitCode(code); setPrev(screen); setScreen('observer'); };
+
   const order = ['home','stats','players','games','play','end','observer'];
   const dir = order.indexOf(screen) >= order.indexOf(prev||'home') ? 1 : -1;
 
@@ -45903,12 +45928,12 @@ function BottleApp() {
     <div style={{ minHeight:'100dvh', width:'100%', position:'relative', fontFamily:T.font, color:T.ink, WebkitFontSmoothing:'antialiased', overflow:'hidden', background:T.bg }} data-theme={appTheme}>
       <div key={screen} style={{ height:'100dvh', width:'100%', display:'flex', flexDirection:'column', animation:`slide${dir>0?'In':'Back'} .35s cubic-bezier(.2,.85,.3,1.05)` }}>
         {screen==='home'     && <HomeScreen     go={go} onStartGame={onStartGame} setTheme={handleSetTheme} currentTheme={appTheme} setLang={handleSetLang} currentLang={appLang} resumeRoomData={resumeRoomData} onResume={goResume} />}
-        {screen==='stats'    && <StatsScreen    go={go} />}
+        {screen==='stats'    && <StatsScreen    go={go} onOpenObserver={openObserver} />}
         {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
         {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} />}
-        {screen==='observer' && <ObserverScreen go={go} initialCode={_initRoom} onJoinAsHost={goJoinAsHost} />}
+        {screen==='observer' && <ObserverScreen go={go} initialCode={observerInitCode || _initRoom} onJoinAsHost={goJoinAsHost} />}
       </div>
       {creatingRoom && (
         <div style={{ position:'fixed', inset:0, background:T.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, zIndex:100 }}>
