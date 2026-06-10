@@ -33630,7 +33630,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.72';
+const APP_VERSION = 'v8.73';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -36608,8 +36608,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   };
 
   // ── State ─────────────────────────────────────────────────────────────────
-  const [cups1, setCups1] = React.useState(MAX_CUPS);
-  const [cups2, setCups2] = React.useState(MAX_CUPS);
+  const [cups1, setCups1] = React.useState(0);
+  const [cups2, setCups2] = React.useState(0);
   const [drinkMap, setDrinkMap] = React.useState({});
   const [champion, setChampion] = React.useState(null);
   const [visszavagoOffer, setVissszavagoOffer] = React.useState(null);
@@ -36651,7 +36651,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     setDrinkMap(bp.drinkMap || {});
     setChampion(bp.champion || null);
     setViewGroup(0);
-    setCups1(MAX_CUPS); setCups2(MAX_CUPS);
+    setCups1(0); setCups2(0);
     doneRef.current = !!bp.champion;
     if (MODE === 'csapat') setTeamsReady(true);
   };
@@ -36698,7 +36698,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   // ── Init ──────────────────────────────────────────────────────────────────
   const initTournament = (tp) => {
     doneRef.current = false;
-    setCups1(MAX_CUPS); setCups2(MAX_CUPS);
+    setCups1(0); setCups2(0);
     setDrinkMap({}); setChampion(null); setExpandedRounds({}); setViewGroup(0); setExpandedGroups_g({});
     if (TOURNAMENT === 'se') {
       const br = buildSEBracket(tp);
@@ -36765,18 +36765,18 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const handleSEConfirm = (rounds, curRound, curMatch, setCB) => {
     if (!rounds[curRound]?.[curMatch]) return;
     const match = rounds[curRound][curMatch];
-    const winner = cups1 < cups2 ? match.p1 : match.p2;
-    const loser  = cups1 < cups2 ? match.p2 : match.p1;
+    const winner = cups1 > cups2 ? match.p1 : match.p2;
+    const loser  = cups1 > cups2 ? match.p2 : match.p1;
     const score  = { p1: cups1, p2: cups2 };
     resetTimer();
 
-    const loserScore = cups1 < cups2 ? cups1 : cups2;
-    const winnerScore = cups1 < cups2 ? cups2 : cups1;
+    const loserScore = cups1 > cups2 ? cups2 : cups1;
+    const winnerScore = cups1 > cups2 ? cups1 : cups2;
     const cupDiff = Math.max(1, Math.abs(winnerScore - loserScore));
     const newDrink = { ...drinkMap };
     if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + cupDiff;
     setDrinkMap(newDrink);
-    setCups1(MAX_CUPS); setCups2(MAX_CUPS);
+    setCups1(0); setCups2(0);
 
     setCB(prevRounds => {
       const nr = prevRounds.map(r => r.map(m => ({ ...m })));
@@ -36848,17 +36848,17 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const handleRRConfirm = (matches, idx, setMatchesCB, onFinish) => {
     const m = matches[idx];
     const isDraw = cups1 === cups2;
-    const winner = isDraw ? null : (cups1 < cups2 ? m.p1 : m.p2);
-    const loser  = isDraw ? null : (cups1 < cups2 ? m.p2 : m.p1);
+    const winner = isDraw ? null : (cups1 > cups2 ? m.p1 : m.p2);
+    const loser  = isDraw ? null : (cups1 > cups2 ? m.p2 : m.p1);
     const score  = { p1: cups1, p2: cups2 };
 
-    const loserScore2 = cups1 < cups2 ? cups1 : cups2;
-    const winnerScore2 = cups1 < cups2 ? cups2 : cups1;
+    const loserScore2 = cups1 > cups2 ? cups2 : cups1;
+    const winnerScore2 = cups1 > cups2 ? cups1 : cups2;
     const cupDiff2 = Math.max(1, Math.abs(winnerScore2 - loserScore2));
     const newDrink = { ...drinkMap };
     if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + cupDiff2;
     setDrinkMap(newDrink);
-    setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer();
+    setCups1(0); setCups2(0); resetTimer();
 
     setMatchesCB(prev => {
       const nm = prev.map((mm, i) => i === idx ? { ...mm, winner, loser, score, draw: isDraw } : mm);
@@ -36899,7 +36899,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const handleReshuffle = () => {
     const ep = (MODE === 'csapat' && teamsReady && teamPlayersRef.current) ? teamPlayersRef.current : players;
     doneRef.current = false;
-    setCups1(MAX_CUPS); setCups2(MAX_CUPS);
+    setCups1(0); setCups2(0);
     setDrinkMap({}); setChampion(null); setExpandedRounds({});
     resetTimer();
     if (TOURNAMENT === 'se') {
@@ -36963,17 +36963,17 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     const m = grp.matches[grp.curIdx];
     if (!m) return;
     const isDraw = cups1 === cups2;
-    const winner = isDraw ? null : (cups1 < cups2 ? m.p1 : m.p2);
-    const loser  = isDraw ? null : (cups1 < cups2 ? m.p2 : m.p1);
+    const winner = isDraw ? null : (cups1 > cups2 ? m.p1 : m.p2);
+    const loser  = isDraw ? null : (cups1 > cups2 ? m.p2 : m.p1);
     const score  = { p1: cups1, p2: cups2 };
 
-    const loserScore3 = cups1 < cups2 ? cups1 : cups2;
-    const winnerScore3 = cups1 < cups2 ? cups2 : cups1;
+    const loserScore3 = cups1 > cups2 ? cups2 : cups1;
+    const winnerScore3 = cups1 > cups2 ? cups1 : cups2;
     const cupDiff3 = Math.max(1, Math.abs(winnerScore3 - loserScore3));
     const newDrink = { ...drinkMap };
     if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + cupDiff3;
     setDrinkMap(newDrink);
-    setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer();
+    setCups1(0); setCups2(0); resetTimer();
 
     setTsGroups(prev => {
       const ng = prev.map((g, gi) => {
@@ -37078,7 +37078,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     setManualOrder(orderedPlayers);
     setManualEdit(false);
     doneRef.current = false;
-    setCups1(MAX_CUPS); setCups2(MAX_CUPS);
+    setCups1(0); setCups2(0);
     setDrinkMap({}); setChampion(null); setExpandedRounds({});
     resetTimer();
     if (TOURNAMENT === 'se') {
@@ -37123,7 +37123,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         : 'Meccs ' + (tsGroups[viewGroup]?.curIdx + 1 || 1) + ' / ' + (tsGroups[viewGroup]?.matches.length || 1);
 
     const fullLabel = (phaseLabel ? phaseLabel.toUpperCase() + ' · ' : '') + matchLabel.toUpperCase();
-    const winnerP = cups1 !== cups2 ? (cups1 < cups2 ? currentMatch.p1 : currentMatch.p2) : null;
+    const winnerP = cups1 !== cups2 ? (cups1 > cups2 ? currentMatch.p1 : currentMatch.p2) : null;
 
     return (
       <div style={{ width:'100%', background:T.surface, borderRadius:22, padding:'16px 18px 18px', boxShadow:T.shadow }}>
@@ -37167,11 +37167,11 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
           {/* Player 1 */}
           <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
-            <div style={{ width:80, height:80, borderRadius:'50%', background:currentMatch.p1.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:34, color:'#fff', border: cups1 < cups2 ? `4px solid ${currentMatch.p1.color}` : `4px solid ${currentMatch.p1.color}44`, boxShadow: cups1 < cups2 ? `0 0 0 3px #fff, 0 0 0 6px ${currentMatch.p1.color}66` : '0 2px 10px rgba(0,0,0,0.10)', transition:'box-shadow .2s, border .2s' }}>
+            <div style={{ width:80, height:80, borderRadius:'50%', background:currentMatch.p1.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:34, color:'#fff', border: cups1 > cups2 ? `4px solid ${currentMatch.p1.color}` : `4px solid ${currentMatch.p1.color}44`, boxShadow: cups1 > cups2 ? `0 0 0 3px #fff, 0 0 0 6px ${currentMatch.p1.color}66` : '0 2px 10px rgba(0,0,0,0.10)', transition:'box-shadow .2s, border .2s' }}>
               {currentMatch.p1.name.charAt(0).toUpperCase()}
             </div>
             <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p1.name}</div>
-            <CupCounter value={cups1} onChange={setCups1} color={currentMatch.p1.color} max={MAX_CUPS} winning={cups1 < cups2} />
+            <CupCounter value={cups1} onChange={setCups1} color={currentMatch.p1.color} max={MAX_CUPS} winning={cups1 > cups2} />
           </div>
 
           {/* VS */}
@@ -37179,11 +37179,11 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
           {/* Player 2 */}
           <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
-            <div style={{ width:80, height:80, borderRadius:'50%', background:currentMatch.p2.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:34, color:'#fff', border: cups2 < cups1 ? `4px solid ${currentMatch.p2.color}` : `4px solid ${currentMatch.p2.color}44`, boxShadow: cups2 < cups1 ? `0 0 0 3px #fff, 0 0 0 6px ${currentMatch.p2.color}66` : '0 2px 10px rgba(0,0,0,0.10)', transition:'box-shadow .2s, border .2s' }}>
+            <div style={{ width:80, height:80, borderRadius:'50%', background:currentMatch.p2.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:34, color:'#fff', border: cups2 > cups1 ? `4px solid ${currentMatch.p2.color}` : `4px solid ${currentMatch.p2.color}44`, boxShadow: cups2 > cups1 ? `0 0 0 3px #fff, 0 0 0 6px ${currentMatch.p2.color}66` : '0 2px 10px rgba(0,0,0,0.10)', transition:'box-shadow .2s, border .2s' }}>
               {currentMatch.p2.name.charAt(0).toUpperCase()}
             </div>
             <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p2.name}</div>
-            <CupCounter value={cups2} onChange={setCups2} color={currentMatch.p2.color} max={MAX_CUPS} winning={cups2 < cups1} />
+            <CupCounter value={cups2} onChange={setCups2} color={currentMatch.p2.color} max={MAX_CUPS} winning={cups2 > cups1} />
           </div>
         </div>
 
@@ -37196,7 +37196,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
               <button onClick={() => {
                 visszavagoUsedRef.current.add(visszavagoOffer.matchKey);
                 setVissszavagoOffer(null);
-                setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer();
+                setCups1(0); setCups2(0); resetTimer();
               }} style={{ flex:1, padding:'13px', borderRadius:14, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background:T.coral, color:'#fff', boxShadow:'0 4px 12px rgba(240,100,80,0.35)' }}>
                 🔄 Visszavágó!
               </button>
@@ -37212,9 +37212,11 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           <button onClick={() => {
             if (!canConfirm) return;
             const matchKey = seCurRound + '_' + seCurMatch;
-            const loserP = cups1 < cups2 ? currentMatch?.p2 : currentMatch?.p1;
+            const loserP = cups1 > cups2 ? currentMatch?.p2 : currentMatch?.p1;
             if (isSEFinals && loserP && !visszavagoUsedRef.current.has(matchKey)) {
-              setVissszavagoOffer({ loser: loserP, winner: winnerP, matchKey });
+              // automatikus visszavágó — nincs kérdés, azonnal indul
+              visszavagoUsedRef.current.add(matchKey);
+              setCups1(0); setCups2(0); resetTimer();
               return;
             }
             confirmHandler && confirmHandler();
@@ -37228,7 +37230,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
         {/* Drink reminder */}
         <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, textAlign:'center', marginTop:8, color:'#D85F5C' }}>
-          A vesztes annyi kortyt iszik, amennyivel több pohara maradt a győztesnek 🍺
+          A vesztes annyi kortyt iszik, amennyivel kevesebb poharat döntött le 🍺
         </div>
       </div>
     );
@@ -37250,11 +37252,11 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           const isPending = !isDone;
           return (
             <div key={i}
-              onClick={isPending ? () => { setIdx(i); setCups1(MAX_CUPS); setCups2(MAX_CUPS); } : undefined}
-              onMouseDown={isDone ? () => { lpTimer.current = setTimeout(() => { if(onReset) onReset(i); setIdx(i); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
+              onClick={isPending ? () => { setIdx(i); setCups1(0); setCups2(0); } : undefined}
+              onMouseDown={isDone ? () => { lpTimer.current = setTimeout(() => { if(onReset) onReset(i); setIdx(i); setCups1(0); setCups2(0); resetTimer(); }, 600); } : undefined}
               onMouseUp={() => clearTimeout(lpTimer.current)}
               onMouseLeave={() => clearTimeout(lpTimer.current)}
-              onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { if(onReset) onReset(i); setIdx(i); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
+              onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { if(onReset) onReset(i); setIdx(i); setCups1(0); setCups2(0); resetTimer(); }, 600); } : undefined}
               onTouchEnd={() => clearTimeout(lpTimer.current)}
               style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderRadius:10, cursor: isPending ? 'pointer' : isDone ? 'context-menu' : 'default', background: isSel ? T.blue+'18' : 'transparent', border: isSel ? '1.5px solid ' + T.blue + '44' : '1.5px solid transparent', transition:'background .15s' }}>
               <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, color: isDone&&m.winner?.id===m.p1?.id?T.mint:isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name}</div>
@@ -37389,11 +37391,11 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
                     return (
                       <div key={mIdx}
-                        onClick={!swapSel && isSelectable ? () => { setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(MAX_CUPS); setCups2(MAX_CUPS); } : (swapSel ? () => setSwapSel(null) : undefined)}
-                        onMouseDown={!swapSel && isDone ? () => { lpTimer.current = setTimeout(() => { setSeRounds(prev => prev.slice(0,rIdx+1).map((r,ri) => ri!==rIdx?r:r.map((mm,mi) => mi!==mIdx?mm:{...mm,winner:null,loser:null,score:null}))); setChampion(null); doneRef.current=false; setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
+                        onClick={!swapSel && isSelectable ? () => { setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(0); setCups2(0); } : (swapSel ? () => setSwapSel(null) : undefined)}
+                        onMouseDown={!swapSel && isDone ? () => { lpTimer.current = setTimeout(() => { setSeRounds(prev => prev.slice(0,rIdx+1).map((r,ri) => ri!==rIdx?r:r.map((mm,mi) => mi!==mIdx?mm:{...mm,winner:null,loser:null,score:null}))); setChampion(null); doneRef.current=false; setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(0); setCups2(0); resetTimer(); }, 600); } : undefined}
                         onMouseUp={() => clearTimeout(lpTimer.current)}
                         onMouseLeave={() => clearTimeout(lpTimer.current)}
-                        onTouchStart={!swapSel && isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setSeRounds(prev => prev.slice(0,rIdx+1).map((r,ri) => ri!==rIdx?r:r.map((mm,mi) => mi!==mIdx?mm:{...mm,winner:null,loser:null,score:null}))); setChampion(null); doneRef.current=false; setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
+                        onTouchStart={!swapSel && isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setSeRounds(prev => prev.slice(0,rIdx+1).map((r,ri) => ri!==rIdx?r:r.map((mm,mi) => mi!==mIdx?mm:{...mm,winner:null,loser:null,score:null}))); setChampion(null); doneRef.current=false; setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(0); setCups2(0); resetTimer(); }, 600); } : undefined}
                         onTouchEnd={() => clearTimeout(lpTimer.current)}
                         style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px', borderRadius:14, cursor: isSelectable ? 'pointer' : isDone ? 'context-menu' : 'default', background: isSelected ? T.mintSoft : isDone ? 'rgba(20,30,50,0.03)' : 'rgba(20,30,50,0.03)', border: isSelected ? `1.5px solid ${T.mint}44` : '1.5px solid transparent', transition:'background .15s' }}>
                         {/* P1 dot */}
@@ -37629,11 +37631,11 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
               const isSel = !g.done && i === g.curIdx && !isDone;
               return (
                 <div key={i}
-                  onClick={!isDone && !g.done ? () => { setTsGroups(prev => prev.map((gg, gi) => gi===viewGroup ? {...gg, curIdx:i} : gg)); setCups1(MAX_CUPS); setCups2(MAX_CUPS); } : undefined}
-                  onMouseDown={isDone ? () => { lpTimer.current = setTimeout(() => { setTsGroups(prev => prev.map((gg, gi) => gi!==viewGroup?gg:{...gg, curIdx:i, done:false, matches:gg.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})})); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
+                  onClick={!isDone && !g.done ? () => { setTsGroups(prev => prev.map((gg, gi) => gi===viewGroup ? {...gg, curIdx:i} : gg)); setCups1(0); setCups2(0); } : undefined}
+                  onMouseDown={isDone ? () => { lpTimer.current = setTimeout(() => { setTsGroups(prev => prev.map((gg, gi) => gi!==viewGroup?gg:{...gg, curIdx:i, done:false, matches:gg.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})})); setCups1(0); setCups2(0); resetTimer(); }, 600); } : undefined}
                   onMouseUp={() => clearTimeout(lpTimer.current)}
                   onMouseLeave={() => clearTimeout(lpTimer.current)}
-                  onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setTsGroups(prev => prev.map((gg, gi) => gi!==viewGroup?gg:{...gg, curIdx:i, done:false, matches:gg.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})})); setCups1(MAX_CUPS); setCups2(MAX_CUPS); resetTimer(); }, 600); } : undefined}
+                  onTouchStart={isDone ? (e) => { e.preventDefault(); lpTimer.current = setTimeout(() => { setTsGroups(prev => prev.map((gg, gi) => gi!==viewGroup?gg:{...gg, curIdx:i, done:false, matches:gg.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})})); setCups1(0); setCups2(0); resetTimer(); }, 600); } : undefined}
                   onTouchEnd={() => clearTimeout(lpTimer.current)}
                   style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderRadius:10, cursor: !isDone&&!g.done?'pointer':isDone?'context-menu':'default', background: isSel?T.blue+'18':'transparent', border: isSel?'1.5px solid '+T.blue+'44':'1.5px solid transparent', transition:'background .15s' }}>
                   <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.winner?.id===m.p1?.id?T.mint:isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name}</div>
