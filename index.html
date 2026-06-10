@@ -33466,7 +33466,16 @@ window.triggerHaptic = function() {
     });
   };
   window.syncRoom = function(code, data) {
-    return db.collection('rooms').doc(code).update(data).catch(function(e){ console.warn('syncRoom', e); });
+    // Firestore nem fogad el undefined értéket — rekurzívan null-ra cseréljük
+    function sanitize(obj) {
+      if (obj === undefined) return null;
+      if (obj === null || typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) return obj.map(sanitize);
+      var r = {};
+      Object.keys(obj).forEach(function(k) { r[k] = sanitize(obj[k]); });
+      return r;
+    }
+    return db.collection('rooms').doc(code).update(sanitize(data)).catch(function(e){ console.warn('syncRoom', e); });
   };
   window.checkRoom = function(code) {
     return db.collection('rooms').doc(code).get().then(function(d){ return d.exists ? d.data() : null; });
@@ -33621,7 +33630,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.63';
+const APP_VERSION = 'v8.64';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34333,7 +34342,7 @@ function PlayersScreen({ players, setPlayers, go }) {
       const newPlayers = PRESET_PLAYERS.map((p, i) => {
         const color = PLAYER_COLORS.find(c => !used.has(c)) || PLAYER_COLORS[i % PLAYER_COLORS.length];
         used.add(color);
-        return { id:'p'+Date.now()+i, name:p.nickname||p.name, color, drinks:0, points:0, profileId:p.id };
+        return { id:'p'+Date.now()+i, name:p.nickname||p.name, color, drinks:0, points:0, profileId:p.id, img:null };
       });
       setPlayers(newPlayers);
     } else {
@@ -34344,7 +34353,7 @@ function PlayersScreen({ players, setPlayers, go }) {
   const addPlayer = () => {
     const used = new Set(players.map(p => p.color));
     const color = PLAYER_COLORS.find(c => !used.has(c)) || PLAYER_COLORS[0];
-    const np = { id:'p'+Date.now(), name:'', color, drinks:0, points:0 };
+    const np = { id:'p'+Date.now(), name:'', color, drinks:0, points:0, img:null };
     setPlayers([...players, np]);
     setEditing(np.id);
   };
