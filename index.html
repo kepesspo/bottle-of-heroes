@@ -33630,7 +33630,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.82';
+const APP_VERSION = 'v8.84';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -36626,6 +36626,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     players.forEach((p, i) => { a[p.id] = i % numT; });
     return a;
   });
+  const [bracketViewMode, setBracketViewMode] = React.useState('list'); // 'list' | 'tree'
   const [matchListExp, setMatchListExp] = React.useState(true);
   const [groupMatchExp, setGroupMatchExp] = React.useState(true);
   const [viewGroup, setViewGroup] = React.useState(0);
@@ -36785,6 +36786,10 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         loser  = m2p1win ? match.p2 : match.p1;
       } else {
         const totP1 = s1.p1 + cups1, totP2 = s1.p2 + cups2;
+        if (totP1 === totP2) {
+          setPolipOverlay({ match, rounds, curRound, curMatch, setCB, score1: s1, score2: score });
+          return;
+        }
         winner = totP1 > totP2 ? match.p1 : match.p2;
         loser  = totP1 > totP2 ? match.p2 : match.p1;
       }
@@ -37044,10 +37049,10 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
   // ── CupCounter ────────────────────────────────────────────────────────────
   const CupCounter = ({ value, onChange, color, max, winning }) => (
-    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-      <button onClick={() => onChange(Math.max(0, value - 1))} style={{ width:34, height:34, borderRadius:11, border:'none', background:T.coralSoft, color:'#D85F5C', fontFamily:T.font, fontWeight:900, fontSize:18, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>−</button>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:24, color: winning ? T.mint : T.ink, minWidth:26, textAlign:'center', fontVariantNumeric:'tabular-nums', transition:'color .2s' }}>{value}</div>
-      <button onClick={() => onChange(Math.min(max, value + 1))} style={{ width:34, height:34, borderRadius:11, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:18, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>+</button>
+    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+      <button onClick={() => onChange(Math.max(0, value - 1))} style={{ width:42, height:42, borderRadius:14, border:'none', background:T.coralSoft, color:'#D85F5C', fontFamily:T.font, fontWeight:900, fontSize:22, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>−</button>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:30, color: winning ? T.mint : T.ink, minWidth:32, textAlign:'center', fontVariantNumeric:'tabular-nums', transition:'color .2s' }}>{value}</div>
+      <button onClick={() => onChange(Math.min(max, value + 1))} style={{ width:42, height:42, borderRadius:14, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:22, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>+</button>
     </div>
   );
 
@@ -37059,7 +37064,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
   if (TOURNAMENT === 'se' && seRounds.length && !champion) {
     currentMatch = seRounds[seCurRound]?.[seCurMatch];
-    canConfirm = currentMatch && currentMatch.p1 && currentMatch.p2 && cups1 !== cups2;
+    canConfirm = currentMatch && currentMatch.p1 && currentMatch.p2;
     confirmHandler = () => handleSEConfirm(seRounds, seCurRound, seCurMatch, setSeRounds);
   } else if (TOURNAMENT === 'rr' && !rrDone && rrMatches.length) {
     currentMatch = rrMatches[rrIdx];
@@ -37073,7 +37078,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   } else if (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals') {
     if (finalsType === 'se' && seRounds.length && !champion) {
       currentMatch = seRounds[seCurRound]?.[seCurMatch];
-      canConfirm = currentMatch && currentMatch.p1 && currentMatch.p2 && cups1 !== cups2;
+      canConfirm = currentMatch && currentMatch.p1 && currentMatch.p2;
       confirmHandler = () => handleSEConfirm(seRounds, seCurRound, seCurMatch, setSeRounds);
     } else if (finalsType === 'rr' && !rrDone && rrMatches.length) {
       currentMatch = rrMatches[rrIdx];
@@ -37143,75 +37148,80 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     if (TOURNAMENT.startsWith('grp_') && tsPhase === 'groups') phaseLabel = tsGroups[viewGroup]?.label || '';
     else if (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals') phaseLabel = 'Főszakasz';
 
-    const matchLabel = TOURNAMENT === 'se' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'se')
-      ? roundName(seCurRound, totalSERounds) + ' · Meccs ' + (seCurMatch + 1)
-      : TOURNAMENT === 'rr' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'rr')
-        ? 'Meccs ' + (rrIdx + 1) + ' / ' + rrMatches.length
-        : 'Meccs ' + (tsGroups[viewGroup]?.curIdx + 1 || 1) + ' / ' + (tsGroups[viewGroup]?.matches.length || 1);
+    // Build header parts for one-line row
+    let bracketPart = '';
+    let matchNumPart = '';
+    if (TOURNAMENT === 'se' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'se')) {
+      bracketPart = roundName(seCurRound, totalSERounds).toUpperCase();
+      matchNumPart = 'MECCS ' + (seCurMatch + 1);
+    } else if (TOURNAMENT === 'rr' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'rr')) {
+      bracketPart = 'KÖRMÉRKŐZŐ';
+      matchNumPart = (rrIdx + 1) + '/' + rrMatches.length;
+    } else {
+      bracketPart = (tsGroups[viewGroup]?.label || '').toUpperCase();
+      matchNumPart = 'MECCS ' + (tsGroups[viewGroup]?.curIdx + 1 || 1);
+    }
+    if (phaseLabel) bracketPart = phaseLabel.toUpperCase() + (bracketPart ? ' · ' + bracketPart : '');
 
-    const fullLabel = (phaseLabel ? phaseLabel.toUpperCase() + ' · ' : '') + matchLabel.toUpperCase();
     const winnerP = cups1 !== cups2 ? (cups1 > cups2 ? currentMatch.p1 : currentMatch.p2) : null;
     const matchKey = seCurRound + '_' + seCurMatch;
     const isVissza = VISSZAVAGO && visszavagoUsedRef.current.has(matchKey);
     const visszaLabel = isVissza ? '⚔️ VISSZAVÁGÓ' : (VISSZAVAGO ? '1. MECCS' : null);
 
     return (
-      <div style={{ width:'100%', background:T.surface, borderRadius:22, padding:'12px 14px 14px', boxShadow:T.shadow }}>
+      <div style={{ width:'100%', background:T.surface, borderRadius:22, padding:'16px 18px 18px', boxShadow:T.shadow }}>
 
-        {/* Match label + reshuffle */}
-        <div style={{ position:'relative', display:'flex', alignItems:'center', justifyContent:'center', marginBottom: visszaLabel ? 4 : 10 }}>
-          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', textAlign:'center' }}>{fullLabel}</div>
-          {canReshuffle && (
-            <div style={{ position:'absolute', right:0, display:'flex', gap:4 }}>
-              <button onClick={handleReshuffle} title="Újra sorsol" style={{ width:28, height:28, borderRadius:8, border:'none', cursor:'pointer', background:'rgba(20,30,50,0.07)', display:'grid', placeItems:'center', fontSize:14 }}>🔀</button>
-            </div>
-          )}
+        {/* Match label — single one-line row */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10, gap:6 }}>
+          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, letterSpacing:'0.08em', flexShrink:0 }}>{bracketPart}</div>
+          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.ink, letterSpacing:'0.08em', flexShrink:0 }}>{matchNumPart}</div>
+          <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0 }}>
+            {visszaLabel && <div style={{ fontFamily:T.font, fontWeight:800, fontSize:10, color: isVissza ? T.coral : T.inkMute, letterSpacing:'0.06em' }}>{visszaLabel}</div>}
+            {canReshuffle && <button onClick={handleReshuffle} title="Újra sorsol" style={{ width:24, height:24, borderRadius:7, border:'none', cursor:'pointer', background:'rgba(20,30,50,0.07)', display:'grid', placeItems:'center', fontSize:12 }}>🔀</button>}
+          </div>
         </div>
-        {visszaLabel && (
-          <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:800, fontSize:12, color: isVissza ? T.coral : T.inkMute, letterSpacing:'0.06em', marginBottom:10 }}>{visszaLabel}</div>
-        )}
 
         {/* Timer row */}
         {MATCH_MINUTES > 0 && (
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, marginBottom:10 }}>
-            <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:34, letterSpacing:2, color: timerSecs === 0 ? T.inkMute : timerSecs < 30 ? '#D85F5C' : T.ink, lineHeight:1, fontVariantNumeric:'tabular-nums' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:14, marginBottom:14 }}>
+            <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:44, letterSpacing:3, color: timerSecs === 0 ? T.inkMute : timerSecs < 30 ? '#D85F5C' : T.ink, lineHeight:1, fontVariantNumeric:'tabular-nums' }}>
               {Math.floor(timerSecs/60).toString().padStart(2,'0')}:{(timerSecs%60).toString().padStart(2,'0')}
             </div>
             {!timerRunning ? (
-              <button onClick={startTimer} style={{ padding:'9px 16px', borderRadius:12, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background:T.mint, color:'#fff', boxShadow:'0 4px 12px rgba(79,194,160,0.4)', whiteSpace:'nowrap' }}>
+              <button onClick={startTimer} style={{ padding:'12px 22px', borderRadius:12, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:15, background:T.mint, color:'#fff', boxShadow:'0 4px 12px rgba(79,194,160,0.4)', whiteSpace:'nowrap' }}>
                 ▶ {timerSecs === 0 ? 'Start' : 'Folytat'}
               </button>
             ) : (
-              <button onClick={stopTimer} style={{ padding:'9px 16px', borderRadius:12, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background:'#F4A0A0', color:'#fff', whiteSpace:'nowrap' }}>
+              <button onClick={stopTimer} style={{ padding:'12px 22px', borderRadius:12, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:15, background:'#F4A0A0', color:'#fff', whiteSpace:'nowrap' }}>
                 ⏸ Megáll
               </button>
             )}
             {timerSecs > 0 && !timerRunning && (
-              <button onClick={resetTimer} style={{ width:34, height:34, borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:14, background:'rgba(20,30,50,0.07)', color:T.inkSoft, display:'grid', placeItems:'center' }}>↺</button>
+              <button onClick={resetTimer} style={{ width:40, height:40, borderRadius:12, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:16, background:'rgba(20,30,50,0.07)', color:T.inkSoft, display:'grid', placeItems:'center' }}>↺</button>
             )}
           </div>
         )}
 
         {/* Players row */}
-        <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
           {/* Player 1 */}
-          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:7 }}>
-            <div style={{ width:60, height:60, borderRadius:'50%', background:currentMatch.p1.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:26, color:'#fff', border: cups1 > cups2 ? `4px solid ${currentMatch.p1.color}` : `4px solid ${currentMatch.p1.color}44`, boxShadow: cups1 > cups2 ? `0 0 0 3px #fff, 0 0 0 6px ${currentMatch.p1.color}66` : '0 2px 10px rgba(0,0,0,0.10)', transition:'box-shadow .2s, border .2s' }}>
+          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+            <div style={{ width:80, height:80, borderRadius:'50%', background:currentMatch.p1.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:34, color:'#fff', border: cups1 > cups2 ? `4px solid ${currentMatch.p1.color}` : `4px solid ${currentMatch.p1.color}44`, boxShadow: cups1 > cups2 ? `0 0 0 3px #fff, 0 0 0 6px ${currentMatch.p1.color}66` : '0 2px 10px rgba(0,0,0,0.10)', transition:'box-shadow .2s, border .2s' }}>
               {currentMatch.p1.name.charAt(0).toUpperCase()}
             </div>
-            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p1.name}</div>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p1.name}</div>
             <CupCounter value={cups1} onChange={setCups1} color={currentMatch.p1.color} max={MAX_CUPS} winning={cups1 > cups2} />
           </div>
 
           {/* VS */}
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', paddingTop:20, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft, flexShrink:0, letterSpacing:'0.06em' }}>VS</div>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', paddingTop:28, fontFamily:T.font, fontWeight:800, fontSize:16, color:T.inkSoft, flexShrink:0, letterSpacing:'0.06em' }}>VS</div>
 
           {/* Player 2 */}
-          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:7 }}>
-            <div style={{ width:60, height:60, borderRadius:'50%', background:currentMatch.p2.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:26, color:'#fff', border: cups2 > cups1 ? `4px solid ${currentMatch.p2.color}` : `4px solid ${currentMatch.p2.color}44`, boxShadow: cups2 > cups1 ? `0 0 0 3px #fff, 0 0 0 6px ${currentMatch.p2.color}66` : '0 2px 10px rgba(0,0,0,0.10)', transition:'box-shadow .2s, border .2s' }}>
+          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+            <div style={{ width:80, height:80, borderRadius:'50%', background:currentMatch.p2.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:34, color:'#fff', border: cups2 > cups1 ? `4px solid ${currentMatch.p2.color}` : `4px solid ${currentMatch.p2.color}44`, boxShadow: cups2 > cups1 ? `0 0 0 3px #fff, 0 0 0 6px ${currentMatch.p2.color}66` : '0 2px 10px rgba(0,0,0,0.10)', transition:'box-shadow .2s, border .2s' }}>
               {currentMatch.p2.name.charAt(0).toUpperCase()}
             </div>
-            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p2.name}</div>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p2.name}</div>
             <CupCounter value={cups2} onChange={setCups2} color={currentMatch.p2.color} max={MAX_CUPS} winning={cups2 > cups1} />
           </div>
         </div>
@@ -37254,7 +37264,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
               return;
             }
             confirmHandler && confirmHandler();
-          }} disabled={!canConfirm} style={{ width:'100%', marginTop:12, minHeight:44, border:'none', borderRadius:14, cursor: canConfirm ? 'pointer' : 'default', fontFamily:T.font, fontWeight:800, fontSize:14, color:'#fff', background: !canConfirm ? 'rgba(0,0,0,0.07)' : winnerP ? T.mint : T.inkSoft, boxShadow: canConfirm && winnerP ? '0 4px 0 ' + T.mintDeep : 'none', transition:'background .2s', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+          }} disabled={!canConfirm} style={{ width:'100%', marginTop:16, minHeight:52, border:'none', borderRadius:16, cursor: canConfirm ? 'pointer' : 'default', fontFamily:T.font, fontWeight:800, fontSize:16, color:'#fff', background: !canConfirm ? 'rgba(0,0,0,0.07)' : winnerP ? T.mint : T.inkSoft, boxShadow: canConfirm && winnerP ? '0 4px 0 ' + T.mintDeep : 'none', transition:'background .2s', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
             {!canConfirm ? <span style={{ color:T.inkMute }}>Állítsd be az eredményt</span>
               : cups1 === cups2 ? '🤝 Döntetlen megerősítése'
               : <><span>🏆</span><span>{winnerP?.name} nyert — tovább</span></>
@@ -37700,7 +37710,21 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       {renderMatchCard()}
 
       {/* Bracket / standings */}
-      {TOURNAMENT === 'se' && renderSEBracket(seRounds, seCurRound, seCurMatch)}
+      {TOURNAMENT === 'se' && seRounds.length > 0 && (
+        <div style={{ width:'100%' }}>
+          <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:6 }}>
+            <div style={{ display:'flex', background:'rgba(20,30,50,0.07)', borderRadius:10, padding:3, gap:2 }}>
+              <button onClick={() => setBracketViewMode('list')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='list' ? T.surface : 'transparent', color: bracketViewMode==='list' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='list' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>📋 Lista</button>
+              <button onClick={() => setBracketViewMode('tree')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='tree' ? T.surface : 'transparent', color: bracketViewMode==='tree' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='tree' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>🌿 Faág</button>
+            </div>
+          </div>
+          {bracketViewMode === 'list' ? renderSEBracket(seRounds, seCurRound, seCurMatch) : (
+            <div style={{ background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadow, overflowX:'auto' }}>
+              <BracketView seRoundsArr={seRounds} seCurRound={seCurRound} seCurMatch={seCurMatch} />
+            </div>
+          )}
+        </div>
+      )}
       {TOURNAMENT === 'rr' && renderRRStandings(effectivePlayers, rrMatches, 'Állás')}
       {TOURNAMENT === 'rr' && !rrDone && renderRRMatchList(effectivePlayers, rrMatches, rrIdx, setRrIdx, (i) => { setRrMatches(prev => prev.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})); setRrDone(false); doneRef.current=false; setChampion(null); })}
       {isTwoStage && tsPhase === 'groups' && renderGroupOverview()}
@@ -37757,7 +37781,21 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           )}
         </div>
       )}
-      {isTwoStage && tsPhase === 'finals' && finalsType === 'se' && renderSEBracket(seRounds, seCurRound, seCurMatch)}
+      {isTwoStage && tsPhase === 'finals' && finalsType === 'se' && seRounds.length > 0 && (
+        <div style={{ width:'100%' }}>
+          <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:6 }}>
+            <div style={{ display:'flex', background:'rgba(20,30,50,0.07)', borderRadius:10, padding:3, gap:2 }}>
+              <button onClick={() => setBracketViewMode('list')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='list' ? T.surface : 'transparent', color: bracketViewMode==='list' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='list' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>📋 Lista</button>
+              <button onClick={() => setBracketViewMode('tree')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='tree' ? T.surface : 'transparent', color: bracketViewMode==='tree' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='tree' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>🌿 Faág</button>
+            </div>
+          </div>
+          {bracketViewMode === 'list' ? renderSEBracket(seRounds, seCurRound, seCurMatch) : (
+            <div style={{ background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadow, overflowX:'auto' }}>
+              <BracketView seRoundsArr={seRounds} seCurRound={seCurRound} seCurMatch={seCurMatch} />
+            </div>
+          )}
+        </div>
+      )}
       {isTwoStage && tsPhase === 'finals' && finalsType === 'rr' && renderRRStandings(rrParts, rrMatches, 'Főszakasz állás')}
       {isTwoStage && tsPhase === 'finals' && finalsType === 'rr' && !rrDone && renderRRMatchList(rrParts, rrMatches, rrIdx, setRrIdx, (i) => { setRrMatches(prev => prev.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})); setRrDone(false); doneRef.current=false; setChampion(null); })}
     </div>
