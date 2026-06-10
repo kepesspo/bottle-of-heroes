@@ -33630,7 +33630,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.92';
+const APP_VERSION = 'v8.93';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34155,8 +34155,9 @@ function StatsScreen({ go }) {
 
   const winRate = (id) => {
     const s = stats[id] || {};
-    const played = (s.bp_wins || 0) + (s.bp_losses || 0);
-    return played > 0 ? Math.round((s.bp_wins || 0) / played * 100) : null;
+    const mw = s.bp_match_wins || 0, ml = s.bp_match_losses || 0;
+    const played = mw + ml;
+    return played > 0 ? Math.round(mw / played * 100) : null;
   };
 
   return (
@@ -34179,7 +34180,8 @@ function StatsScreen({ go }) {
             {bpRows.map((p, i) => {
               const s = stats[p.id] || {};
               const wr = winRate(p.id);
-              const played = (s.bp_wins || 0) + (s.bp_losses || 0);
+              const mw = s.bp_match_wins || 0, ml = s.bp_match_losses || 0;
+              const played = mw + ml;
               return (
                 <div key={p.id} style={{ background:T.surface, borderRadius:18, padding:'14px 16px', display:'flex', alignItems:'center', gap:12, boxShadow:T.shadow }}>
                   <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color: i===0?'#F59E0B':i===1?T.inkSoft:T.inkMute, minWidth:24, textAlign:'center' }}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</div>
@@ -34189,7 +34191,7 @@ function StatsScreen({ go }) {
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>{p.name}</div>
                     <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:2 }}>
-                      {played} meccs · {s.bp_wins||0} győzelem · {s.bp_losses||0} vereség
+                      {played} meccs · {mw} győzelem · {ml} vereség
                     </div>
                     {(s.bp_tournaments||0) > 0 && (
                       <div style={{ display:'inline-flex', alignItems:'center', gap:3, marginTop:3, background:'rgba(251,191,36,0.15)', borderRadius:999, padding:'2px 8px' }}>
@@ -36858,6 +36860,18 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     setDrinkMap(newDrink);
     setCups1(0); setCups2(0);
 
+    // Save per-match stats
+    if (typeof window.updateStats === 'function' && winner && loser) {
+      [winner, loser].forEach(p => {
+        if (!p.profileId) return;
+        const isW = p.id === winner.id;
+        window.updateStats(p.profileId, {
+          bp_match_wins:   firebase.firestore.FieldValue.increment(isW ? 1 : 0),
+          bp_match_losses: firebase.firestore.FieldValue.increment(isW ? 0 : 1),
+        });
+      });
+    }
+
     setCB(prevRounds => {
       const nr = prevRounds.map(r => r.map(m => ({ ...m })));
       nr[curRound][curMatch].winner = winner;
@@ -36950,6 +36964,18 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + cupDiff2;
     setDrinkMap(newDrink);
     setCups1(0); setCups2(0); resetTimer();
+
+    // Save per-match stats
+    if (typeof window.updateStats === 'function' && winner && loser) {
+      [winner, loser].forEach(p => {
+        if (!p.profileId) return;
+        const isW = p.id === winner.id;
+        window.updateStats(p.profileId, {
+          bp_match_wins:   firebase.firestore.FieldValue.increment(isW ? 1 : 0),
+          bp_match_losses: firebase.firestore.FieldValue.increment(isW ? 0 : 1),
+        });
+      });
+    }
 
     setMatchesCB(prev => {
       const nm = prev.map((mm, i) => i === idx ? { ...mm, winner, loser, score, draw: isDraw } : mm);
@@ -44839,9 +44865,9 @@ function BracketView({ seRoundsArr, seCurRound, seCurMatch }) {
   if (!seRoundsArr || seRoundsArr.length === 0) return null;
   const rounds = seRoundsArr.map(r => Array.isArray(r) ? r : Object.values(r));
   const totalRounds = rounds.length;
-  const MATCH_H = 70;
+  const MATCH_H = 48;
   const MATCH_W = 128;
-  const COL_GAP = 28;
+  const COL_GAP = 20;
   const firstCount = rounds[0].length;
   const totalH = firstCount * MATCH_H * 2;
 
