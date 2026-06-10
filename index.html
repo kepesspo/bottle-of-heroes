@@ -33638,7 +33638,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.95';
+const APP_VERSION = 'v8.96';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34185,8 +34185,8 @@ function StatsScreen({ go }) {
       {/* Tab bar */}
       <div style={{ padding:'8px 16px 0' }}>
         <div style={{ display:'flex', background:T.surfaceMuted, padding:4, borderRadius:14, gap:4 }}>
-          {[{k:'bp',l:'🍺 Beer Pong'},{k:'busz',l:'🚌 Busz'}].map(t => (
-            <button key={t.k} onClick={() => setTab(t.k)} style={{ flex:1, padding:'10px 6px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background: tab===t.k ? T.mint : 'transparent', color: tab===t.k ? '#fff' : T.inkSoft, transition:'all .15s' }}>{t.l}</button>
+          {[{k:'bp',l:'🍺 Beer Pong'},{k:'busz',l:'🚌 Busz'},{k:'history',l:'📜 Előzmények'}].map(t => (
+            <button key={t.k} onClick={() => { setTab(t.k); if (t.k==='history') loadTournaments(); }} style={{ flex:1, padding:'10px 4px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:11, background: tab===t.k ? T.mint : 'transparent', color: tab===t.k ? '#fff' : T.inkSoft, transition:'all .15s' }}>{t.l}</button>
           ))}
         </div>
       </div>
@@ -34229,64 +34229,49 @@ function StatsScreen({ go }) {
           </div>
         )}
 
-        {!loading && tab === 'bp' && (
-          <div>
-            <button onClick={loadTournaments} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 16px', background:T.surface, border:'none', borderRadius:16, cursor:'pointer', boxShadow:T.shadow, marginTop:4 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <span style={{ fontSize:20 }}>📜</span>
-                <span style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>Előzmények</span>
-              </div>
-              <span style={{ fontSize:14, color:T.inkMute }}>{showTour ? '▲' : '▼'}</span>
-            </button>
-            {showTour && (
-              <div style={{ marginTop:6, display:'flex', flexDirection:'column', gap:6 }}>
-                {tourLoading && <div style={{ textAlign:'center', padding:20, fontFamily:T.font, color:T.inkSoft, fontSize:13 }}>Betöltés…</div>}
-                {!tourLoading && tournaments.length === 0 && (
-                  <div style={{ textAlign:'center', padding:20, fontFamily:T.font, color:T.inkSoft, fontSize:13 }}>Még nincs mentett bajnokság</div>
-                )}
-                {!tourLoading && tournaments.map(t => {
-                  const d = new Date(t.ts);
-                  const dateStr = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-                  const typeLabel = t.type === 'rr' ? 'Körmérkőzés' : 'Egyenes kiesés';
-                  return (
-                    <div key={t.id} style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow }}>
-                      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-                        <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em' }}>{typeLabel} · {dateStr}</div>
-                        <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute }}>{(t.players||[]).length} játékos</div>
-                      </div>
-                      {t.champion && (
-                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                          <span style={{ fontSize:18 }}>🏆</span>
-                          <div style={{ width:28, height:28, borderRadius:'50%', background:t.champion.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:12, color:'#fff', flexShrink:0 }}>{t.champion.name.charAt(0).toUpperCase()}</div>
-                          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink }}>{t.champion.name}</span>
-                        </div>
-                      )}
-                      {t.podium && t.podium.length > 1 && (
-                        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                          {t.podium.slice(1).map((p, i) => (
-                            <div key={p.id} style={{ display:'flex', alignItems:'center', gap:4, padding:'3px 8px', background:T.surfaceMuted, borderRadius:999 }}>
-                              <span style={{ fontFamily:T.font, fontSize:10, color:T.inkMute }}>{i===0?'🥈':'🥉'}</span>
-                              <div style={{ width:14, height:14, borderRadius:'50%', background:p.color }}/>
-                              <span style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft }}>{p.name}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {!t.podium && t.players && t.players.length > 1 && (
-                        <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginTop:2 }}>
-                          {t.players.filter(p => !t.champion || p.id !== t.champion.id).map(p => (
-                            <div key={p.id} style={{ display:'flex', alignItems:'center', gap:4, padding:'3px 8px', background:T.surfaceMuted, borderRadius:999 }}>
-                              <div style={{ width:12, height:12, borderRadius:'50%', background:p.color }}/>
-                              <span style={{ fontFamily:T.font, fontSize:10, color:T.inkSoft }}>{p.name}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+        {!loading && tab === 'history' && (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {tourLoading && <div style={{ textAlign:'center', padding:32, fontFamily:T.font, color:T.inkSoft, fontSize:13 }}>Betöltés…</div>}
+            {!tourLoading && tournaments.length === 0 && (
+              <div style={{ textAlign:'center', padding:40, fontFamily:T.font, color:T.inkSoft }}>
+                <div style={{ fontSize:40, marginBottom:12 }}>📜</div>
+                <div style={{ fontWeight:800, fontSize:15, color:T.ink }}>Még nincs előzmény</div>
+                <div style={{ fontSize:12, marginTop:6 }}>A befejezett bajnokságok (min. 4 profilos játékos) itt fognak megjelenni</div>
               </div>
             )}
+            {!tourLoading && tournaments.map(t => {
+              const d = new Date(t.ts);
+              const dateStr = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+              const typeLabel = t.game === 'busz' ? '🚌 Busz' : t.type === 'rr' ? '🍺 Körmérkőzés' : '🍺 Egyenes kiesés';
+              const profilePlayers = (t.players||[]).filter(p => p.profileId);
+              return (
+                <div key={t.id} style={{ background:T.surface, borderRadius:16, padding:'14px 16px', boxShadow:T.shadow }}>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+                    <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em' }}>{typeLabel}</div>
+                    <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute }}>{dateStr} · {profilePlayers.length} profil</div>
+                  </div>
+                  {t.champion && (
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+                      <span style={{ fontSize:20 }}>🏆</span>
+                      <div style={{ width:32, height:32, borderRadius:'50%', background:t.champion.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', flexShrink:0 }}>{t.champion.name.charAt(0).toUpperCase()}</div>
+                      <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>{t.champion.name}</span>
+                    </div>
+                  )}
+                  <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                    {(t.podium ? t.podium.slice(1) : (t.players||[]).filter(p => !t.champion || p.id !== t.champion.id)).map((p, i) => {
+                      const medals = ['🥈','🥉'];
+                      return (
+                        <div key={p.id||i} style={{ display:'flex', alignItems:'center', gap:4, padding:'3px 8px', background:T.surfaceMuted, borderRadius:999 }}>
+                          {t.podium && medals[i] && <span style={{ fontSize:11 }}>{medals[i]}</span>}
+                          <div style={{ width:12, height:12, borderRadius:'50%', background:p.color, flexShrink:0 }}/>
+                          <span style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft }}>{p.name}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -37014,7 +36999,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     const finalDm = {};
     Object.entries(dm).forEach(([id, cnt]) => { finalDm[id] = cnt; });
     onAdvance && onAdvance(finalDm);
-    if (typeof window.updateStats === 'function') {
+    const profileCount = players.filter(p => p.profileId).length;
+    if (typeof window.updateStats === 'function' && profileCount >= 4) {
       players.forEach(p => {
         if (!p.profileId) return;
         const isWinner = champ && champ.id === p.id;
@@ -37026,9 +37012,10 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         });
       });
     }
-    if (typeof window.saveTournament === 'function') {
+    if (typeof window.saveTournament === 'function' && profileCount >= 4) {
       window.saveTournament({
         ts: Date.now(),
+        game: 'beerpong',
         type: 'se',
         champion: champ ? { id: champ.id, name: champ.name, color: champ.color } : null,
         players: players.map(p => ({ id: p.id, name: p.name, color: p.color, profileId: p.profileId || null })),
@@ -37160,7 +37147,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     const finalDm = {};
     Object.entries(dm).forEach(([id, cnt]) => { finalDm[id] = cnt; });
     onAdvance && onAdvance(finalDm);
-    if (typeof window.updateStats === 'function') {
+    const profileCount = players.filter(p => p.profileId).length;
+    if (typeof window.updateStats === 'function' && profileCount >= 4) {
       players.forEach(p => {
         if (!p.profileId) return;
         const isWinner = champ && champ.id === p.id;
@@ -37172,10 +37160,11 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         });
       });
     }
-    if (typeof window.saveTournament === 'function') {
+    if (typeof window.saveTournament === 'function' && profileCount >= 4) {
       const podium = standings.slice(0, 3).map((s, i) => ({ rank: i+1, id: s.player.id, name: s.player.name, color: s.player.color, pts: s.pts }));
       window.saveTournament({
         ts: Date.now(),
+        game: 'beerpong',
         type: 'rr',
         champion: champ ? { id: champ.id, name: champ.name, color: champ.color } : null,
         podium,
@@ -39876,16 +39865,26 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance }) {
 
   useEffect(() => {
     if (buszState?.phase === 'done') {
-      // Save busz completion stats for profile players
-      if (typeof window.updateStats === 'function' && buszState?.busRiderDrinks) {
-        players.forEach(p => {
-          if (!p.profileId) return;
+      const profilePlayers = players.filter(p => p.profileId);
+      if (typeof window.updateStats === 'function' && buszState?.busRiderDrinks && profilePlayers.length >= 4) {
+        profilePlayers.forEach(p => {
           const drinks = buszState.busRiderDrinks[p.id] || 0;
           window.updateStats(p.profileId, {
             busz_played: firebase.firestore.FieldValue.increment(1),
             busz_completions: firebase.firestore.FieldValue.increment(1),
             busz_total_drinks: firebase.firestore.FieldValue.increment(drinks),
           });
+        });
+      }
+      if (typeof window.saveTournament === 'function' && profilePlayers.length >= 4 && buszState?.busRiderDrinks) {
+        const riderDrinks = buszState.busRiderDrinks;
+        const sorted = [...players].sort((a, b) => (riderDrinks[a.id]||0) - (riderDrinks[b.id]||0));
+        window.saveTournament({
+          ts: Date.now(),
+          game: 'busz',
+          type: 'busz',
+          champion: sorted[0] ? { id: sorted[0].id, name: sorted[0].name, color: sorted[0].color } : null,
+          players: players.map(p => ({ id: p.id, name: p.name, color: p.color, profileId: p.profileId || null, drinks: riderDrinks[p.id]||0 })),
         });
       }
       onAdvance && onAdvance({});
