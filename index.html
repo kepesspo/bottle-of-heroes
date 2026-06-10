@@ -33528,6 +33528,14 @@ window.triggerHaptic = function() {
   window.updateStats = function(profileId, updates) {
     return db.collection('stats').doc(profileId).set(updates, { merge: true }).catch(function(e) { console.warn('updateStats', e); });
   };
+  window.saveTournament = function(data) {
+    return db.collection('bp_tournaments').add(data).catch(function(e) { console.warn('saveTournament', e); });
+  };
+  window.getTournaments = function() {
+    return db.collection('bp_tournaments').orderBy('ts', 'desc').limit(30).get().then(function(snap) {
+      return snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
+    }).catch(function() { return []; });
+  };
 })();
 </script>
 
@@ -33630,7 +33638,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.94';
+const APP_VERSION = 'v8.95';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34132,6 +34140,9 @@ function StatsScreen({ go }) {
   const [stats, setStats] = React.useState({});
   const [loading, setLoading] = React.useState(true);
   const [tab, setTab] = React.useState('bp'); // 'bp' | 'busz'
+  const [tournaments, setTournaments] = React.useState([]);
+  const [tourLoading, setTourLoading] = React.useState(false);
+  const [showTour, setShowTour] = React.useState(false);
 
   React.useEffect(() => {
     Promise.all([
@@ -34143,6 +34154,14 @@ function StatsScreen({ go }) {
       setLoading(false);
     });
   }, []);
+
+  const loadTournaments = () => {
+    if (tourLoading || tournaments.length > 0) { setShowTour(true); return; }
+    setTourLoading(true);
+    setShowTour(true);
+    (typeof window.getTournaments === 'function' ? window.getTournaments() : Promise.resolve([]))
+      .then(list => { setTournaments(list); setTourLoading(false); });
+  };
 
   const bpRows = [...profiles].sort((a, b) => {
     const wr = id => { const s = stats[id]||{}; const mw=s.bp_match_wins||0,ml=s.bp_match_losses||0,md=s.bp_match_draws||0; const p=mw+ml+md; return p>0?mw/p:-1; };
@@ -34207,6 +34226,67 @@ function StatsScreen({ go }) {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {!loading && tab === 'bp' && (
+          <div>
+            <button onClick={loadTournaments} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 16px', background:T.surface, border:'none', borderRadius:16, cursor:'pointer', boxShadow:T.shadow, marginTop:4 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <span style={{ fontSize:20 }}>📜</span>
+                <span style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>Előzmények</span>
+              </div>
+              <span style={{ fontSize:14, color:T.inkMute }}>{showTour ? '▲' : '▼'}</span>
+            </button>
+            {showTour && (
+              <div style={{ marginTop:6, display:'flex', flexDirection:'column', gap:6 }}>
+                {tourLoading && <div style={{ textAlign:'center', padding:20, fontFamily:T.font, color:T.inkSoft, fontSize:13 }}>Betöltés…</div>}
+                {!tourLoading && tournaments.length === 0 && (
+                  <div style={{ textAlign:'center', padding:20, fontFamily:T.font, color:T.inkSoft, fontSize:13 }}>Még nincs mentett bajnokság</div>
+                )}
+                {!tourLoading && tournaments.map(t => {
+                  const d = new Date(t.ts);
+                  const dateStr = `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                  const typeLabel = t.type === 'rr' ? 'Körmérkőzés' : 'Egyenes kiesés';
+                  return (
+                    <div key={t.id} style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow }}>
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+                        <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em' }}>{typeLabel} · {dateStr}</div>
+                        <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute }}>{(t.players||[]).length} játékos</div>
+                      </div>
+                      {t.champion && (
+                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                          <span style={{ fontSize:18 }}>🏆</span>
+                          <div style={{ width:28, height:28, borderRadius:'50%', background:t.champion.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:12, color:'#fff', flexShrink:0 }}>{t.champion.name.charAt(0).toUpperCase()}</div>
+                          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink }}>{t.champion.name}</span>
+                        </div>
+                      )}
+                      {t.podium && t.podium.length > 1 && (
+                        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                          {t.podium.slice(1).map((p, i) => (
+                            <div key={p.id} style={{ display:'flex', alignItems:'center', gap:4, padding:'3px 8px', background:T.surfaceMuted, borderRadius:999 }}>
+                              <span style={{ fontFamily:T.font, fontSize:10, color:T.inkMute }}>{i===0?'🥈':'🥉'}</span>
+                              <div style={{ width:14, height:14, borderRadius:'50%', background:p.color }}/>
+                              <span style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft }}>{p.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {!t.podium && t.players && t.players.length > 1 && (
+                        <div style={{ display:'flex', gap:4, flexWrap:'wrap', marginTop:2 }}>
+                          {t.players.filter(p => !t.champion || p.id !== t.champion.id).map(p => (
+                            <div key={p.id} style={{ display:'flex', alignItems:'center', gap:4, padding:'3px 8px', background:T.surfaceMuted, borderRadius:999 }}>
+                              <div style={{ width:12, height:12, borderRadius:'50%', background:p.color }}/>
+                              <span style={{ fontFamily:T.font, fontSize:10, color:T.inkSoft }}>{p.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -36934,7 +37014,6 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     const finalDm = {};
     Object.entries(dm).forEach(([id, cnt]) => { finalDm[id] = cnt; });
     onAdvance && onAdvance(finalDm);
-    // Save BP stats for profile players
     if (typeof window.updateStats === 'function') {
       players.forEach(p => {
         if (!p.profileId) return;
@@ -36945,6 +37024,14 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           bp_played: firebase.firestore.FieldValue.increment(1),
           bp_tournaments: firebase.firestore.FieldValue.increment(isWinner ? 1 : 0),
         });
+      });
+    }
+    if (typeof window.saveTournament === 'function') {
+      window.saveTournament({
+        ts: Date.now(),
+        type: 'se',
+        champion: champ ? { id: champ.id, name: champ.name, color: champ.color } : null,
+        players: players.map(p => ({ id: p.id, name: p.name, color: p.color, profileId: p.profileId || null })),
       });
     }
   };
@@ -37083,6 +37170,16 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           bp_played: firebase.firestore.FieldValue.increment(1),
           bp_tournaments: firebase.firestore.FieldValue.increment(isWinner ? 1 : 0),
         });
+      });
+    }
+    if (typeof window.saveTournament === 'function') {
+      const podium = standings.slice(0, 3).map((s, i) => ({ rank: i+1, id: s.player.id, name: s.player.name, color: s.player.color, pts: s.pts }));
+      window.saveTournament({
+        ts: Date.now(),
+        type: 'rr',
+        champion: champ ? { id: champ.id, name: champ.name, color: champ.color } : null,
+        podium,
+        players: players.map(p => ({ id: p.id, name: p.name, color: p.color, profileId: p.profileId || null })),
       });
     }
   };
