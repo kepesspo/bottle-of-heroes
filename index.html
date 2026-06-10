@@ -33630,7 +33630,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.68';
+const APP_VERSION = 'v8.69';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34872,13 +34872,26 @@ function KisebbConfigSheet({ config, setConfig, onClose }) {
 
 function ManualBracketEditor({ players, tournament, onApply, onClose }) {
   const [order, setOrder] = React.useState([...players]);
-  const move = (i, dir) => {
-    const j = i + dir;
-    if (j < 0 || j >= order.length) return;
-    const next = [...order];
-    [next[i], next[j]] = [next[j], next[i]];
-    setOrder(next);
+  const [selected, setSelected] = React.useState(null); // index of long-pressed player
+  const longPressTimer = React.useRef(null);
+
+  const handlePressStart = (i) => {
+    longPressTimer.current = setTimeout(() => {
+      setSelected(i);
+    }, 400);
   };
+  const handlePressEnd = () => {
+    clearTimeout(longPressTimer.current);
+  };
+  const handleTap = (i) => {
+    if (selected === null) return;
+    if (selected === i) { setSelected(null); return; }
+    const next = [...order];
+    [next[selected], next[i]] = [next[i], next[selected]];
+    setOrder(next);
+    setSelected(null);
+  };
+
   const isSE = tournament === 'se' || tournament.startsWith('grp_');
   return (
     <SheetOverlay onClose={onClose}>
@@ -34890,22 +34903,40 @@ function ManualBracketEditor({ players, tournament, onApply, onClose }) {
             <button onClick={() => onApply(order)} style={{ width:90, padding:'8px 0', borderRadius:12, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:13, cursor:'pointer' }}>✓ Kész</button>
           </div>
           <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, textAlign:'center', marginBottom:14 }}>
-            {isSE ? 'Az 1. játszik a 2.-kel, a 3. a 4.-kel, stb.' : 'A sorrend határozza meg a körmérkőzés párosítását.'}
+            {selected !== null
+              ? `"${order[selected].name}" kijelölve — tappolj egy másikra a cseréhez`
+              : 'Tartsd lenyomva a nevet a cseréhez'}
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            {order.map((p, i) => (
-              <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, background:T.surface, borderRadius:14, padding:'10px 12px', boxShadow:T.shadow }}>
-                <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:15, color:T.inkMute, minWidth:20, textAlign:'center' }}>{i+1}</div>
-                <div style={{ width:34, height:34, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', flexShrink:0 }}>
-                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff' }}>{p.name.charAt(0).toUpperCase()}</span>
+            {order.map((p, i) => {
+              const isSelected = selected === i;
+              const isTarget = selected !== null && selected !== i;
+              return (
+                <div
+                  key={p.id}
+                  onMouseDown={() => handlePressStart(i)}
+                  onMouseUp={() => { handlePressEnd(); }}
+                  onTouchStart={() => handlePressStart(i)}
+                  onTouchEnd={() => { handlePressEnd(); }}
+                  onClick={() => handleTap(i)}
+                  style={{
+                    display:'flex', alignItems:'center', gap:10,
+                    background: isSelected ? T.mint : isTarget ? T.mintSoft : T.surface,
+                    borderRadius:14, padding:'10px 12px',
+                    boxShadow: isSelected ? `0 4px 16px -4px rgba(79,194,160,0.5)` : T.shadow,
+                    border: isSelected ? `2px solid ${T.mint}` : isTarget ? `2px dashed ${T.mintDeep}` : '2px solid transparent',
+                    cursor:'pointer', userSelect:'none', transition:'all .15s',
+                  }}
+                >
+                  <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:15, color: isSelected ? '#fff' : T.inkMute, minWidth:20, textAlign:'center' }}>{i+1}</div>
+                  <div style={{ width:34, height:34, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', flexShrink:0 }}>
+                    <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff' }}>{p.name.charAt(0).toUpperCase()}</span>
+                  </div>
+                  <div style={{ flex:1, fontFamily:T.font, fontWeight:800, fontSize:14, color: isSelected ? '#fff' : T.ink }}>{p.name}</div>
+                  {isSelected && <div style={{ fontSize:16 }}>↕️</div>}
                 </div>
-                <div style={{ flex:1, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>{p.name}</div>
-                <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
-                  <button onClick={() => move(i, -1)} disabled={i===0} style={{ width:28, height:24, borderRadius:7, border:'none', cursor: i===0?'not-allowed':'pointer', background:T.surfaceMuted, fontSize:13, color:T.inkSoft, display:'grid', placeItems:'center', opacity:i===0?0.3:1 }}>▲</button>
-                  <button onClick={() => move(i, 1)} disabled={i===order.length-1} style={{ width:28, height:24, borderRadius:7, border:'none', cursor:i===order.length-1?'not-allowed':'pointer', background:T.surfaceMuted, fontSize:13, color:T.inkSoft, display:'grid', placeItems:'center', opacity:i===order.length-1?0.3:1 }}>▼</button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           {isSE && order.length >= 2 && (
             <div style={{ marginTop:12, padding:'10px 14px', background:T.mintSoft, borderRadius:12 }}>
@@ -34917,9 +34948,6 @@ function ManualBracketEditor({ players, tournament, onApply, onClose }) {
               ))}
             </div>
           )}
-        </div>
-        <div style={{ padding:'12px 18px 18px', borderTop:'1px solid rgba(26,42,74,0.08)', flexShrink:0 }}>
-          <button onClick={() => onApply(order)} style={{ width:'100%', padding:'14px', borderRadius:14, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:16, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)' }}>Alkalmaz</button>
         </div>
       </div>
     </SheetOverlay>
