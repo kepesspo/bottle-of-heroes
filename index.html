@@ -33630,7 +33630,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.81';
+const APP_VERSION = 'v8.82';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -36614,6 +36614,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const [champion, setChampion] = React.useState(null);
   const [visszavagoOffer, setVissszavagoOffer] = React.useState(null);
   const visszavagoUsedRef = React.useRef(new Set());
+  const [polipOverlay, setPolipOverlay] = React.useState(null); // { match, onPick } — döntetlen visszavágó tiebreaker
   const [expandedRounds, setExpandedRounds] = React.useState({});
   const lpTimer = React.useRef(null);
   const [standingsExp, setStandingsExp] = React.useState(true);
@@ -36772,13 +36773,17 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     let winner, loser;
     if (match.score1) {
       const s1 = match.score1;
+      const m1draw = s1.p1 === s1.p2, m2draw = cups1 === cups2;
+      // Mindkét meccs döntetlen → polip tiebreaker
+      if (m1draw && m2draw) {
+        setPolipOverlay({ match, rounds, curRound, curMatch, setCB, score1: s1, score2: score });
+        return;
+      }
       const m1p1win = s1.p1 > s1.p2, m2p1win = cups1 > cups2;
       if (m1p1win === m2p1win) {
-        // Ugyanaz nyerte mindkét meccset
         winner = m2p1win ? match.p1 : match.p2;
         loser  = m2p1win ? match.p2 : match.p1;
       } else {
-        // 1-1 döntetlen → összesített pohárszám
         const totP1 = s1.p1 + cups1, totP2 = s1.p2 + cups2;
         winner = totP1 > totP2 ? match.p1 : match.p2;
         loser  = totP1 > totP2 ? match.p2 : match.p1;
@@ -37236,8 +37241,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           <button onClick={() => {
             if (!canConfirm) return;
             const matchKey = seCurRound + '_' + seCurMatch;
-            const loserP = cups1 > cups2 ? currentMatch?.p2 : currentMatch?.p1;
-            if (isSEFinals && loserP && !visszavagoUsedRef.current.has(matchKey)) {
+            const loserP = cups1 > cups2 ? currentMatch?.p2 : cups2 > cups1 ? currentMatch?.p1 : currentMatch?.p2; // draw: any player, visszavágó still fires
+            if (isSEFinals && !visszavagoUsedRef.current.has(matchKey)) {
               // automatikus visszavágó — mentsük el az 1. eredményt, azonnal indul
               visszavagoUsedRef.current.add(matchKey);
               setSeRounds(prev => {
@@ -37630,6 +37635,64 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
               <img src={IMGS['bajnoksag-kieses']} style={{ width:15, height:15, objectFit:'contain', opacity: tsPhase==='finals' ? 0.8 : finalsReady ? 0.4 : 0.2 }} />
               Főszakasz {!finalsReady && <span style={{ fontSize:10 }}>🔒</span>}
             </button>
+          </div>
+        );
+      })()}
+
+      {polipOverlay && (() => {
+        const po = polipOverlay;
+        const doFinish = (pickedWinner) => {
+          const pickedLoser = pickedWinner.id === po.match.p1.id ? po.match.p2 : po.match.p1;
+          const newDrink = { ...drinkMap };
+          setDrinkMap(newDrink);
+          setCups1(0); setCups2(0);
+          po.setCB(prevRounds => {
+            const nr = prevRounds.map(r => r.map(m => ({ ...m })));
+            nr[po.curRound][po.curMatch].winner = pickedWinner;
+            nr[po.curRound][po.curMatch].loser  = pickedLoser;
+            nr[po.curRound][po.curMatch].score  = po.score2;
+            nr[po.curRound][po.curMatch].scores = [po.score1, po.score2];
+            delete nr[po.curRound][po.curMatch].score1;
+            if (nr[po.curRound + 1]?.[po.curMatch]?.tbd) {
+              nr[po.curRound + 1][po.curMatch] = { ...nr[po.curRound + 1][po.curMatch], p2: pickedWinner, tbd: false };
+            }
+            const nextInRound = nr[po.curRound].findIndex(m => m.winner === null && !m.tbd);
+            if (nextInRound !== -1) { setSeCurMatch(nextInRound); return nr; }
+            if (nr[po.curRound + 1]) {
+              const nextPre = nr[po.curRound + 1].findIndex(m => m.winner === null && !m.tbd);
+              if (nextPre !== -1) { setSeCurRound(po.curRound + 1); setSeCurMatch(nextPre); return nr; }
+              const preWinners = nr[po.curRound + 1].map(m => m.winner).filter(Boolean);
+              if (preWinners.length === 1) { finishSE(preWinners[0], newDrink); return nr; }
+            }
+            const winners = nr[po.curRound].map(m => m.winner).filter(Boolean);
+            if (winners.length === 1) { finishSE(winners[0], newDrink); return nr; }
+            const nextRound = buildSERound(winners);
+            const nextRoundIdx = nr[po.curRound + 1] ? po.curRound + 2 : po.curRound + 1;
+            const nextPending = nextRound.findIndex(m => m.winner === null);
+            if (nextPending !== -1) { setSeCurRound(nextRoundIdx); setSeCurMatch(nextPending); }
+            return [...nr, nextRound];
+          });
+          setPolipOverlay(null);
+        };
+        return (
+          <div style={{ position:'fixed', inset:0, zIndex:9999, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => {}}>
+            <div style={{ width:'100%', maxWidth:480, background:T.surface, borderRadius:'22px 22px 0 0', padding:'24px 20px 36px', display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
+              <div style={{ fontFamily:T.font, fontSize:44, lineHeight:1 }}>🐙</div>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink, textAlign:'center' }}>Mindkét meccs döntetlen!</div>
+              <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center' }}>A polip dönt — ki jut tovább?</div>
+              <div style={{ display:'flex', gap:12, width:'100%', marginTop:4 }}>
+                {[po.match.p1, po.match.p2].map(p => (
+                  <button key={p.id} onClick={() => doFinish(p)} style={{ flex:1, padding:'16px 8px', borderRadius:16, border:`3px solid ${p.color}`, background:p.color+'18', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+                    <div style={{ width:56, height:56, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:24, color:'#fff', boxShadow:'0 4px 12px ' + p.color + '55' }}>
+                      {p.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>{p.name}</div>
+                    <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>továbbjut →</div>
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:-4 }}>Nyomd meg a továbbjutó játékost</div>
+            </div>
           </div>
         );
       })()}
@@ -43073,6 +43136,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, mode, ga
   const undoRef = React.useRef(null); // stores previous state for undo
   const playersRef = React.useRef(players);
   React.useEffect(() => { playersRef.current = players; }, [players]);
+  // Clear stale resume state on mount so new sessions start fresh
+  React.useEffect(() => { if (setGameMeta) setGameMeta(m => ({...m, _resumeBpState: null})); }, []);
   const [pendingCommit, setPendingCommit] = useState(null);
   const [hostBurst, setHostBurst] = useState(null);
   const [selectedOpponent, setSelectedOpponent] = useState(null);
