@@ -33620,7 +33620,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v8.53';
+const APP_VERSION = 'v8.54';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34297,11 +34297,21 @@ function PlayersScreen({ players, setPlayers, go }) {
 
 
 
-  // Seed/sync Firestore profiles from PRESET_PLAYERS (fix ID-vel, mindig frissít)
+  // Seed/sync Firestore profiles — fix ID-vel frissít, régi auto-ID-sokat törli
   React.useEffect(() => {
-    if (typeof window.saveProfile !== 'function') return;
+    if (typeof window.saveProfile !== 'function' || typeof window.getProfiles !== 'function') return;
+    // Először mentsük a preset profilokat fix ID-kkel
     PRESET_PLAYERS.forEach(p => {
       window.saveProfile({ id: p.id, name: p.name, nickname: p.nickname, color: p.color });
+    });
+    // Majd töröljük a régi, nem preset_ ID-s profilokat
+    const presetIds = new Set(PRESET_PLAYERS.map(p => p.id));
+    window.getProfiles().then(existing => {
+      existing.forEach(prof => {
+        if (!presetIds.has(prof.id) && typeof firebase !== 'undefined') {
+          firebase.firestore().collection('profiles').doc(prof.id).delete().catch(() => {});
+        }
+      });
     });
   }, []);
 
