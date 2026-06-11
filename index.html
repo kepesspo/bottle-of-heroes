@@ -33638,7 +33638,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.14';
+const APP_VERSION = 'v9.15';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -37353,6 +37353,60 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   };
 
   // ── Render match card ─────────────────────────────────────────────────────
+  const renderKortyTab = () => {
+    // Aggregate per-player: thrown cups, received cups, sips
+    const stats = {};
+    const ensure = (p) => { if (p && p.id && !stats[p.id]) stats[p.id] = { player:p, thrown:0, received:0 }; };
+    const addMatch = (m) => {
+      if (!m || !m.p1 || !m.p2) return;
+      ensure(m.p1); ensure(m.p2);
+      const addSet = (s) => {
+        if (!s) return;
+        stats[m.p1.id].thrown   += (s.p1||0);
+        stats[m.p1.id].received += (s.p2||0);
+        stats[m.p2.id].thrown   += (s.p2||0);
+        stats[m.p2.id].received += (s.p1||0);
+      };
+      if (m.scores) { m.scores.forEach(addSet); if (m.score) addSet(m.score); }
+      else if (m.score1) { addSet(m.score1); if (m.score) addSet(m.score); }
+      else if (m.score) addSet(m.score);
+    };
+    seRounds.forEach(round => round.forEach(addMatch));
+    rrMatches.forEach(addMatch);
+    tsGroups.forEach(g => (g.matches||[]).forEach(addMatch));
+    const rows = Object.values(stats).sort((a,b) => (drinkMap[b.player.id]||0) - (drinkMap[a.player.id]||0));
+    if (!rows.length) return <div style={{ padding:'16px', fontFamily:T.font, fontSize:13, color:T.inkMute, textAlign:'center' }}>Még nincs lejátszott meccs.</div>;
+    return (
+      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+        {rows.map(({ player, thrown, received }) => {
+          const sips = drinkMap[player.id] || 0;
+          return (
+            <div key={player.id} style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ width:11, height:11, borderRadius:'50%', background:player.color||T.inkMute, flexShrink:0 }} />
+              <div style={{ flex:1, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{player.name}</div>
+              <div style={{ display:'flex', gap:10, flexShrink:0 }}>
+                <div style={{ textAlign:'center' }}>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.mint }}>{thrown}</div>
+                  <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute, fontWeight:700 }}>kidobott</div>
+                </div>
+                <div style={{ width:1, background:T.surfaceMuted, alignSelf:'stretch' }} />
+                <div style={{ textAlign:'center' }}>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.coral }}>{received}</div>
+                  <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute, fontWeight:700 }}>kapott</div>
+                </div>
+                <div style={{ width:1, background:T.surfaceMuted, alignSelf:'stretch' }} />
+                <div style={{ textAlign:'center' }}>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.blue }}>{sips}</div>
+                  <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute, fontWeight:700 }}>korty</div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderMatchCard = () => {
     if (champion) {
       return (
@@ -37954,17 +38008,27 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
             <div style={{ display:'flex', background:'rgba(20,30,50,0.07)', borderRadius:10, padding:3, gap:2 }}>
               <button onClick={() => setBracketViewMode('list')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='list' ? T.surface : 'transparent', color: bracketViewMode==='list' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='list' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>📋 Lista</button>
               <button onClick={() => setBracketViewMode('tree')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='tree' ? T.surface : 'transparent', color: bracketViewMode==='tree' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='tree' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>🌿 Faág</button>
+              <button onClick={() => setBracketViewMode('korty')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='korty' ? T.surface : 'transparent', color: bracketViewMode==='korty' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='korty' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>🍺 Pohár</button>
             </div>
           </div>
-          {bracketViewMode === 'list' ? renderSEBracket(seRounds, seCurRound, seCurMatch) : (
+          {bracketViewMode === 'korty' ? renderKortyTab() : bracketViewMode === 'list' ? renderSEBracket(seRounds, seCurRound, seCurMatch) : (
             <div style={{ background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadow, overflowX:'auto' }}>
               <BracketView seRoundsArr={seRounds} seCurRound={seCurRound} seCurMatch={seCurMatch} />
             </div>
           )}
         </div>
       )}
-      {TOURNAMENT === 'rr' && renderRRStandings(effectivePlayers, rrMatches, 'Állás')}
-      {TOURNAMENT === 'rr' && !rrDone && renderRRMatchList(effectivePlayers, rrMatches, rrIdx, setRrIdx, (i) => { setRrMatches(prev => prev.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})); setRrDone(false); doneRef.current=false; setChampion(null); })}
+      {TOURNAMENT === 'rr' && (
+        <div style={{ width:'100%' }}>
+          <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:6 }}>
+            <div style={{ display:'flex', background:'rgba(20,30,50,0.07)', borderRadius:10, padding:3, gap:2 }}>
+              <button onClick={() => setBracketViewMode('list')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='list' ? T.surface : 'transparent', color: bracketViewMode==='list' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='list' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>📋 Lista</button>
+              <button onClick={() => setBracketViewMode('korty')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='korty' ? T.surface : 'transparent', color: bracketViewMode==='korty' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='korty' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>🍺 Pohár</button>
+            </div>
+          </div>
+          {bracketViewMode === 'korty' ? renderKortyTab() : (<React.Fragment>{renderRRStandings(effectivePlayers, rrMatches, 'Állás')}{!rrDone && renderRRMatchList(effectivePlayers, rrMatches, rrIdx, setRrIdx, (i) => { setRrMatches(prev => prev.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})); setRrDone(false); doneRef.current=false; setChampion(null); })}</React.Fragment>)}
+        </div>
+      )}
       {isTwoStage && tsPhase === 'groups' && renderGroupOverview()}
       {isTwoStage && tsPhase === 'groups' && (
         <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 16px', boxShadow:T.shadow }}>
@@ -38023,9 +38087,10 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
             <div style={{ display:'flex', background:'rgba(20,30,50,0.07)', borderRadius:10, padding:3, gap:2 }}>
               <button onClick={() => setBracketViewMode('list')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='list' ? T.surface : 'transparent', color: bracketViewMode==='list' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='list' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>📋 Lista</button>
               <button onClick={() => setBracketViewMode('tree')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='tree' ? T.surface : 'transparent', color: bracketViewMode==='tree' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='tree' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>🌿 Faág</button>
+              <button onClick={() => setBracketViewMode('korty')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='korty' ? T.surface : 'transparent', color: bracketViewMode==='korty' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='korty' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>🍺 Pohár</button>
             </div>
           </div>
-          {bracketViewMode === 'list' ? renderSEBracket(seRounds, seCurRound, seCurMatch) : (
+          {bracketViewMode === 'korty' ? renderKortyTab() : bracketViewMode === 'list' ? renderSEBracket(seRounds, seCurRound, seCurMatch) : (
             <div style={{ background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadow, overflowX:'auto' }}>
               <BracketView seRoundsArr={seRounds} seCurRound={seCurRound} seCurMatch={seCurMatch} />
             </div>
@@ -45548,7 +45613,7 @@ function BeerPongObserverView({ room, code, onLeave }) {
         <div style={{ flex: isWide ? '0 0 200px' : undefined, width: isWide ? 200 : undefined, display:'flex', flexDirection:'column', gap:12 }}>
         {players.length > 0 && (
           <div style={{ background:T.surface, borderRadius:18, boxShadow:T.shadow, padding:'14px 14px' }}>
-            <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>🍺 Korty összesítő</div>
+            <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>🍺 Pohár összesítő</div>
             {[...players].map(p => ({ ...p, bpDrinks: (bp.drinkMap && bp.drinkMap[p.id]) || p.drinks || 0 })).sort((a,b) => b.bpDrinks - a.bpDrinks).map((p, i) => (
               <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 6px', borderRadius:10, background: i===0 && p.bpDrinks > 0 ? `${T.coral}12` : 'transparent' }}>
                 <div style={{ width:28, height:28, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:12, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
@@ -45876,7 +45941,7 @@ function ObserverWatching({ code, observerName, onLeave }) {
         </div>
         <div style={{ display:'flex', gap:10 }}>
           <button onClick={() => { if (!groupUsed) groupDrink(); }} style={{ flex:1, minHeight:56, border:`2px solid ${groupUsed ? T.inkMute+'60' : T.yellow}`, background:'transparent', color: groupUsed ? T.inkMute : T.yellow, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor: groupUsed ? 'default' : 'pointer', opacity: groupUsed ? 0.4 : 1, transition:'all .25s' }}>🍻 Csoport</button>
-          <button onClick={() => { if (!kortyUsed) setSheet('drink'); }} style={{ flex:1, minHeight:56, border:'none', background: kortyUsed ? T.surfaceMuted : T.coral, color: kortyUsed ? T.inkMute : '#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor: kortyUsed ? 'default' : 'pointer', opacity: kortyUsed ? 0.4 : 1, transition:'all .25s', boxShadow: kortyUsed ? 'none' : T.shadow }}>🍺 Korty</button>
+          <button onClick={() => { if (!kortyUsed) setSheet('drink'); }} style={{ flex:1, minHeight:56, border:'none', background: kortyUsed ? T.surfaceMuted : T.coral, color: kortyUsed ? T.inkMute : '#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, borderRadius:14, cursor: kortyUsed ? 'default' : 'pointer', opacity: kortyUsed ? 0.4 : 1, transition:'all .25s', boxShadow: kortyUsed ? 'none' : T.shadow }}>🍺 Pohár</button>
         </div>
         <div style={{ height:52 }} />
       </div>
