@@ -33638,7 +33638,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.39';
+const APP_VERSION = 'v9.40';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -44918,85 +44918,135 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
   const canPlay = effectiveSel.length > 0;
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:12, padding:'12px 16px 260px', width:'100%', boxSizing:'border-box' }}>
-      {/* Player header + Active card — side by side equal boxes */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-        {/* Player box */}
-        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, padding:'12px 10px', background:T.surface, borderRadius:14, boxShadow:T.shadow, textAlign:'center' }}>
+    <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+      {/* ── Scrollable content ── */}
+      <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'12px 14px 8px', display:'flex', flexDirection:'column', gap:10 }}>
+
+        {/* Identity bar */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, background:T.surface, borderRadius:16, padding:'10px 14px', boxShadow:T.shadow }}>
           <div style={{ width:38, height:38, borderRadius:'50%', background:player.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:16, color:'#fff', flexShrink:0 }}>{(player.name||'?').charAt(0).toUpperCase()}</div>
-          <div>
-            <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{player.name}</div>
-            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>{myHand.length} lap a kezedben</div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>Te vagy {player.name}</div>
+            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:1 }}>{myHand.length} lap a kezedben</div>
+          </div>
+          <div style={{ display:'inline-flex', alignItems:'center', gap:4, background:T.mint, borderRadius:999, padding:'4px 10px', flexShrink:0 }}>
+            <span style={{ fontSize:11 }}>👤</span>
+            <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:'#fff' }}>Játékos</span>
           </div>
         </div>
 
-        {/* Active card box */}
+        {/* Active lap card */}
         {lastFlipped ? (
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6, padding:'10px 8px', background:playableCards.length>0?`${T.mint}15`:T.surfaceMuted, borderRadius:14, border:`1.5px solid ${playableCards.length>0?T.mint+'55':'transparent'}`, textAlign:'center', transition:'all .3s' }}>
-            <div style={{ fontFamily:T.font, fontSize:9, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em' }}>Aktív lap</div>
-            <PlayingCard card={lastFlipped} size='lg' glow={playableCards.length>0} />
-            <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:T.mint }}>{lastFlipped.rowIdx+1} korty</div>
-            {playableCards.length>0 && <div style={{ fontFamily:T.font, fontSize:11, color:T.mint }}>✓ Lerakható!</div>}
+          <div style={{ background:T.surface, borderRadius:16, padding:'10px 14px', boxShadow:T.shadow }}>
+            <div style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:8 }}>Aktív lap</div>
+            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ flexShrink:0 }}><PlayingCard card={lastFlipped} size='lg' glow={playableCards.length>0} /></div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontFamily:'Georgia,serif', fontWeight:700, fontSize:28, color: lastFlipped.suit==='♥'||lastFlipped.suit==='♦'?T.coral:T.ink, lineHeight:1 }}>{lastFlipped.value} {lastFlipped.suit}</div>
+                <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:4, lineHeight:1.4 }}>
+                  {playableCards.length > 0 ? 'Lerakhatod és szétosztod a kortyokat' : 'Nincs lerakható lapod ebben a körben'}
+                </div>
+              </div>
+              <div style={{ flexShrink:0, background:T.coral, borderRadius:10, padding:'6px 10px', textAlign:'center' }}>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:'#fff', lineHeight:1 }}>{lastFlipped.rowIdx+1}</div>
+                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:9, color:'rgba(255,255,255,0.8)', textTransform:'uppercase', letterSpacing:'0.06em' }}>korty</div>
+              </div>
+            </div>
           </div>
         ) : (
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:'12px 10px', background:T.surfaceMuted, borderRadius:14 }}>
-            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, textAlign:'center', lineHeight:1.5 }}>Várakozás a következő lapra…</div>
+          <div style={{ background:T.surfaceMuted, borderRadius:16, padding:'16px 14px', textAlign:'center' }}>
+            <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft }}>Várakozás a következő lapra…</div>
           </div>
         )}
+
+        {/* Kiosztott kortyok */}
+        {(buszState.flipInitialDrinks || buszState.initialDrinks) && (() => {
+          const ref2 = buszState.flipInitialDrinks || buszState.initialDrinks;
+          const deltas = players.map(p => ({ ...p, delta: (p.drinks||0) - (ref2[p.id]||0) }));
+          const totalGiven = deltas.reduce((s,p) => s + Math.max(0, p.delta), 0);
+          const totalExpected = lastFlipped ? lastFlipped.rowIdx+1 : 0;
+          return (
+            <div style={{ background:T.surface, borderRadius:16, padding:'10px 14px', boxShadow:T.shadow }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+                <div style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Kiosztott kortyok</div>
+                {totalExpected > 0 && <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft }}>{totalGiven} / {totalExpected} korty</div>}
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
+                {deltas.map(p => {
+                  const isMe = p.id === playerId;
+                  return (
+                    <div key={p.id} style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 10px', background:T.surfaceMuted, borderRadius:10 }}>
+                      {isMe && <span style={{ fontSize:12, flexShrink:0 }}>✓</span>}
+                      <div style={{ width:22, height:22, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:9, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+                      <div style={{ flex:1, fontFamily:T.font, fontSize:12, fontWeight:isMe?700:600, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}{isMe ? ' Te' : ''}</div>
+                      <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:13, color:p.delta>0?T.coral:T.inkMute, flexShrink:0 }}>{p.delta>0?`+${p.delta}`:'—'}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
       </div>
 
-      {/* Ebben a körben kapott kortyok */}
-      {(buszState.flipInitialDrinks || buszState.initialDrinks) && (() => {
-        const ref = buszState.flipInitialDrinks || buszState.initialDrinks;
-        const myDelta = (players.find(p=>p.id===playerId)?.drinks||0) - (ref[playerId]||0);
-        return (
-          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-            <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>Ebben a körben kapott kortyok</div>
-            {/* Own row — full width, prominent */}
-            <div style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background: myDelta>0 ? '#FFF3E0' : T.surfaceMuted, borderRadius:14, borderLeft:`5px solid ${myDelta>0?'#F97316':T.inkMute}` }}>
-              <div style={{ fontSize:30, lineHeight:1, flexShrink:0 }}>{myDelta>0?'🍺':'✅'}</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{player.name}</div>
-                <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>Te</div>
-              </div>
-              <div style={{ fontFamily:'monospace', fontWeight:800, fontSize:32, color:myDelta>0?'#E65100':T.inkMute, minWidth:40, textAlign:'right' }}>{myDelta>0?`+${myDelta}`:'–'}</div>
-            </div>
-            {/* Others — chips */}
-            <div style={{ display:'flex', gap:7, flexWrap:'wrap' }}>
-              {players.filter(p=>p.id!==playerId).map(p => {
-                const delta = (p.drinks||0) - (ref[p.id]||0);
-                return (
-                  <div key={p.id} style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px', background:T.surfaceMuted, borderRadius:12 }}>
-                    <div style={{ width:24, height:24, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:10, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-                    <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft }}>{p.name}</div>
-                    <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:15, color:delta>0?T.coral:T.inkMute }}>{delta>0?`+${delta}`:'–'}</div>
-                  </div>
-                );
-              })}
+      {/* ── Bottom panel: hand + lerakom ── */}
+      <div style={{ flexShrink:0, background:T.bg, paddingBottom:'max(20px, calc(env(safe-area-inset-bottom) + 10px))' }}>
+        <div style={{ background:T.surface, borderRadius:'16px 16px 0 0', boxShadow:'0 -4px 16px rgba(20,30,50,0.08)', overflow:'hidden' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px 8px' }}>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, textTransform:'uppercase', letterSpacing:'0.08em' }}>A KEZED · {myHand.length} LAP</div>
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              {playableCards.length > 0 && lastFlipped && (
+                <><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 7L6 11L12 3" stroke={T.mint} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.mint }}>{lastFlipped.value}{lastFlipped.suit} lerakható</span></>
+              )}
+              <span style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft }}>🎮 Busz</span>
             </div>
           </div>
-        );
-      })()}
+          <div style={{ overflowX:'auto', padding:'4px 14px 12px', display:'flex', gap:8, alignItems:'flex-start', WebkitOverflowScrolling:'touch' }}>
+            {myHand.length === 0 ? (
+              <div style={{ padding:'10px', textAlign:'center', width:'100%' }}>
+                <div style={{ fontFamily:T.font, fontSize:13, color:T.mint, fontWeight:700 }}>🎉 Nincs több lapod!</div>
+              </div>
+            ) : myHand.map(card => {
+              const isPlayable = playableCards.some(c=>c.id===card.id);
+              const isSel = effectiveSel.includes(card.id);
+              return (
+                <div key={card.id}
+                  onClick={()=>isPlayable && setSelectedCardIds(ids=>isSel?ids.filter(x=>x!==card.id):[...ids,card.id])}
+                  style={{ position:'relative', flexShrink:0, cursor:isPlayable?'pointer':'default', transform:isSel?'translateY(-6px)':'none', transition:'transform .18s ease', userSelect:'none', paddingTop:isPlayable?16:0 }}>
+                  {isPlayable && (
+                    <div style={{ position:'absolute', top:2, left:4, zIndex:10, background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:8, textTransform:'uppercase', letterSpacing:'0.06em', padding:'2px 6px', borderRadius:5 }}>Lerakható</div>
+                  )}
+                  <div style={{ border:`2.5px solid ${isPlayable?(isSel?T.coral:T.mint):'transparent'}`, borderRadius:13, transition:'border-color .15s' }}>
+                    <PlayingCard card={card} size='xl' glow={isSel} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <button
+          onClick={()=>canPlay && playCards(effectiveSel)}
+          style={{ width:'100%', padding:'14px 16px', background:canPlay?T.mint:T.inkMute, color:'#fff', border:'none', fontFamily:T.font, fontWeight:700, fontSize:15, cursor:canPlay?'pointer':'default', display:'flex', alignItems:'center', justifyContent:'center', gap:10, transition:'background .2s', opacity:canPlay?1:0.45 }}>
+          <span style={{ fontSize:18 }}>+</span>
+          <span>Lerakom · {lastFlipped ? (lastFlipped.rowIdx+1)*Math.max(effectiveSel.length,1) : 0} korty kiosztása</span>
+        </button>
+      </div>
 
-      {/* ── Drink distribution center modal ── */}
+      {/* Drink distribution modal */}
       {giftTarget && (
         <div onClick={giftTarget.pool<=0 ? ()=>setGiftTarget(null) : undefined} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.55)', zIndex:60, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 20px', animation:'fadeIn .2s' }}>
           <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:380, background:T.surface, borderRadius:24, boxShadow:'0 8px 40px rgba(0,0,0,0.25)', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.4)', overflow:'hidden' }}>
-            {/* Header */}
             <div style={{ background:`linear-gradient(135deg, ${T.mint}22, ${T.mint}08)`, padding:'20px 20px 16px', borderBottom:`1px solid ${T.mint}25` }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                 <div>
-                  <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:T.mint, lineHeight:1 }}>
-                    {giftTarget.pool > 0 ? `${giftTarget.pool} korty` : '✓ Kész!'}
-                  </div>
-                  <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:4 }}>
-                    {giftTarget.pool > 0 ? 'Kioszthatod — koppints a névre' : 'Minden korty ki van osztva'}
-                  </div>
+                  <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:T.mint, lineHeight:1 }}>{giftTarget.pool > 0 ? `${giftTarget.pool} korty` : '✓ Kész!'}</div>
+                  <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:4 }}>{giftTarget.pool > 0 ? 'Kioszthatod — koppints a névre' : 'Minden korty ki van osztva'}</div>
                 </div>
                 <div style={{ fontSize:36, lineHeight:1 }}>🍺</div>
               </div>
             </div>
-            {/* Player list */}
             <div style={{ padding:'10px 14px', maxHeight:260, overflowY:'auto', WebkitOverflowScrolling:'touch', display:'flex', flexDirection:'column', gap:6 }}>
               {players.filter(p=>p.id!==playerId).map(p=>(
                 <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:giftTarget.assigned[p.id]>0?`${T.mint}15`:T.surfaceMuted, border:`1.5px solid ${giftTarget.assigned[p.id]>0?T.mint+'60':'transparent'}`, borderRadius:14, transition:'all .15s' }}>
@@ -45017,63 +45067,14 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
                 </div>
               ))}
             </div>
-            {/* Footer button */}
             <div style={{ padding:'10px 14px 18px' }}>
-              <button onClick={()=>{ if(giftTarget.pool>0) return; setGiftTarget(null); }} disabled={giftTarget.pool>0} style={{ width:'100%', padding:'14px', background:giftTarget.pool>0?T.surfaceMuted:T.mint, color:giftTarget.pool>0?T.inkSoft:'#fff', border:'none', borderRadius:14, fontFamily:T.font, fontWeight:700, fontSize:15, cursor:giftTarget.pool>0?'not-allowed':'pointer', boxShadow:giftTarget.pool>0?'none':T.shadow, transition:'all .2s', opacity:giftTarget.pool>0?0.6:1 }}>
+              <button onClick={()=>{ if(giftTarget.pool>0) return; setGiftTarget(null); }} disabled={giftTarget.pool>0} style={{ width:'100%', padding:'14px', background:giftTarget.pool>0?T.surfaceMuted:T.mint, color:giftTarget.pool>0?T.inkSoft:'#fff', border:'none', borderRadius:14, fontFamily:T.font, fontWeight:700, fontSize:15, cursor:giftTarget.pool>0?'not-allowed':'pointer', transition:'all .2s', opacity:giftTarget.pool>0?0.6:1 }}>
                 {giftTarget.pool > 0 ? `Kész (még ${giftTarget.pool} korty maradt)` : '✓ Bezárás'}
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* ── Bottom panel ── */}
-      <div style={{ flexShrink:0, display:'flex', flexDirection:'column', gap:10, padding:'12px 16px 28px', background:T.bg }}>
-
-        {/* White card: header + horizontal cards */}
-        <div style={{ background:T.surface, borderRadius:20, boxShadow:T.shadow, overflow:'hidden' }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 18px 10px' }}>
-            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, textTransform:'uppercase', letterSpacing:'0.08em' }}>A KEZED · {myHand.length} LAP</div>
-            {playableCards.length > 0 && lastFlipped && (
-              <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7L6 11L12 3" stroke={T.mint} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.mint }}>{lastFlipped.value}{lastFlipped.suit} lerakható</span>
-              </div>
-            )}
-          </div>
-          <div style={{ overflowX:'auto', overflowY:'visible', padding:'4px 16px 14px', display:'flex', gap:10, alignItems:'flex-start', WebkitOverflowScrolling:'touch' }}>
-            {myHand.length === 0 ? (
-              <div style={{ padding:'12px', textAlign:'center', width:'100%' }}>
-                <div style={{ fontFamily:T.font, fontSize:14, color:T.mint, fontWeight:700 }}>🎉 Nincs több lapod!</div>
-                <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:4 }}>Megúsztad, neked nem kell buszozni!</div>
-              </div>
-            ) : myHand.map(card => {
-              const isPlayable = playableCards.some(c=>c.id===card.id);
-              const isSel = effectiveSel.includes(card.id);
-              return (
-                <div key={card.id}
-                  onClick={()=>isPlayable && setSelectedCardIds(ids=>isSel?ids.filter(x=>x!==card.id):[...ids,card.id])}
-                  style={{ position:'relative', flexShrink:0, cursor:isPlayable?'pointer':'default', transform:isSel?'translateY(-6px)':'none', transition:'transform .18s ease', userSelect:'none', paddingTop:isPlayable?18:0 }}>
-                  {isPlayable && (
-                    <div style={{ position:'absolute', top:4, left:6, zIndex:10, background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:9, textTransform:'uppercase', letterSpacing:'0.06em', padding:'3px 8px', borderRadius:6 }}>Lerakható</div>
-                  )}
-                  <div style={{ border:`2.5px solid ${isPlayable?(isSel?T.coral:T.mint):'transparent'}`, borderRadius:13, transition:'border-color .15s' }}>
-                    <PlayingCard card={card} size='xl' glow={isSel} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Button — always visible */}
-        <button
-          onClick={()=>canPlay && playCards(effectiveSel)}
-          style={{ width:'100%', padding:'16px', background:canPlay?T.mint:T.inkMute, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:700, fontSize:16, cursor:canPlay?'pointer':'default', boxShadow:canPlay?`0 4px 18px ${T.mint}55`:'none', display:'flex', alignItems:'center', justifyContent:'center', gap:10, transition:'background .2s, box-shadow .2s', opacity:canPlay?1:0.45 }}>
-          <span style={{ fontSize:20, lineHeight:1 }}>+</span>
-          <span>Lerakom · {lastFlipped ? (lastFlipped.rowIdx+1)*Math.max(effectiveSel.length,1) : 0} korty kiosztása</span>
-        </button>
-      </div>
     </div>
   );
 }
