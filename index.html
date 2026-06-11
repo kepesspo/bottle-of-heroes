@@ -40133,7 +40133,7 @@ function PlayingCard({ card, size='md', faceDown=false, glow=false }) {
   );
 }
 
-function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance }) {
+function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFooter }) {
   const isOnline = !!roomCode;
   const [buszState, setBuszState] = useState(null);
   const [zsulliAnim, setZsulliAnim] = useState(null);
@@ -40446,6 +40446,11 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance }) {
       </div>
     );
   }
+
+  // Signal PlayScreen to hide footer when showing full-screen overlay
+  const shouldHideFooter = (hostPlaysEnabled && !hostPlayerId) || (hostPlaysEnabled && hostPlayerId && hostViewMode === 'player' && !!buszState && isOnline);
+  React.useEffect(() => { onSetHideFooter && onSetHideFooter(shouldHideFooter); }, [shouldHideFooter]);
+  React.useEffect(() => () => { onSetHideFooter && onSetHideFooter(false); }, []);
 
   // ── Host view mode toggle button (shown in host view, fixed top-right) ─────
   const hostViewToggle = hostPlaysEnabled && hostPlayerId ? (
@@ -43633,7 +43638,7 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
   );
 }
 
-function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, roomCode, gameMeta, challenger, opponent }) {
+function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, roomCode, gameMeta, challenger, opponent, onSetHideFooter }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'beerpong') return <BeerPongGame key={gameIdx + '_' + (gameMeta?.beerpongConfig?.tournamentType||'se')} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} initialBpState={gameMeta?._resumeBpState || null} />;
   if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} />;
@@ -43642,7 +43647,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onUnready={onUnready} onResult={onResult} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} gameMeta={gameMeta} onAdvance={onAdvance} />;
+  if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} />;
   if (gameId === 'ovfj') return <OVFJGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={typeof roomCode!=='undefined'?roomCode:undefined} gameMeta={gameMeta} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} gameMeta={gameMeta} />;
@@ -43686,6 +43691,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const collectConfigPS = gameMeta?.collectConfig || {};
   const setCollectConfigPS = cfg => setGameMeta && setGameMeta(m => ({...m, collectConfig: typeof cfg === 'function' ? cfg(m?.collectConfig||{}) : cfg}));
   const [showMenu, setShowMenu] = useState(false);
+  const [hideFooter, setHideFooter] = useState(false);
   const gameOrderMode = gameMeta?.gameOrder || 'sorban';
   const [randomOrder, setRandomOrder] = useState(() => []);
   const groupDrinkEnabled = (gameMeta?.modes || []).includes('group');
@@ -43971,7 +43977,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         )}
 
         <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
-          <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={selectedOpponent} />
+          <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={selectedOpponent} onSetHideFooter={setHideFooter} />
         </div>
       </div>
         </div>
@@ -44055,7 +44061,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       )}
 
       {/* footer — hidden while busz game is active; shown once pendingCommit set (after game ends) so user can press Kövi */}
-      {!(currentGameId === 'busz' && !pendingCommit) && <div style={{ background:T.surface, boxShadow:'0 -6px 24px rgba(20,30,50,0.08)', padding:'12px 18px 22px', borderTopLeftRadius:24, borderTopRightRadius:24 }}>
+      {!hideFooter && <div style={{ background:T.surface, boxShadow:'0 -6px 24px rgba(20,30,50,0.08)', padding:'12px 18px 22px', borderTopLeftRadius:24, borderTopRightRadius:24 }}>
       <div className="play-footer-inner">
         {/* Menu btn */}
         <button onClick={() => setShowMenu(true)} style={{ padding:'10px 14px', borderRadius:18, border:'none', background:`${T.inkMute}18`, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, flexShrink:0 }}>
