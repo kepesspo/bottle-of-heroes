@@ -33638,7 +33638,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.12';
+const APP_VERSION = 'v9.13';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -38069,7 +38069,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
       {/* SE Action Sheet */}
       {seActionSheet && (() => {
-        const { rIdx, mIdx } = seActionSheet;
+        const { rIdx, mIdx, swapSide } = seActionSheet;
         const m = seRounds[rIdx]?.[mIdx];
         if (!m) { setSeActionSheet(null); return null; }
         const isDoneM = m.winner !== null;
@@ -38096,6 +38096,52 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           setSeActionSheet(null);
         };
         const btnStyle = (tone) => ({ width:'100%', padding:'12px 14px', border:'none', borderRadius:12, cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background: tone === 'mint' ? T.mint : tone === 'coral' ? T.coral+'22' : tone === 'blue' ? T.blue+'18' : T.surfaceMuted, color: tone === 'mint' ? '#fff' : tone === 'coral' ? T.coral : tone === 'blue' ? T.blue : T.inkSoft, textAlign:'left', display:'flex', alignItems:'center', gap:10 });
+
+        // Swap target picker view
+        if (swapSide) {
+          const swapPlayer = m[swapSide];
+          const targets = [];
+          seRounds.forEach((round, ri) => round.forEach((mm, mi) => {
+            ['p1','p2'].forEach(s => {
+              if (mm[s] && !(ri===rIdx && mi===mIdx && s===swapSide)) {
+                targets.push({ player: mm[s], rIdx: ri, mIdx: mi, side: s });
+              }
+            });
+          }));
+          const doSwap = (t) => {
+            setSeRounds(prev => {
+              const next = prev.map(r => r.map(mm => ({...mm})));
+              const a = next[rIdx][mIdx];
+              const b = next[t.rIdx][t.mIdx];
+              const tmp = a[swapSide];
+              a[swapSide] = b[t.side];
+              b[t.side] = tmp;
+              return next;
+            });
+            setSeActionSheet(null);
+          };
+          return (
+            <div onClick={() => setSeActionSheet(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 24px' }}>
+              <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:300, background:T.surface, borderRadius:20, padding:'16px', boxShadow:'0 8px 32px rgba(0,0,0,0.25)', display:'flex', flexDirection:'column', gap:8 }}>
+                <div style={{ fontFamily:T.font, fontSize:13, color:T.inkMute, fontWeight:700, paddingBottom:8, borderBottom:`1px solid ${T.surfaceMuted}` }}>
+                  ⇄ <span style={{color:T.ink, fontWeight:800}}>{swapPlayer?.name}</span> cseréje — válassz célpontot:
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:260, overflowY:'auto' }}>
+                  {targets.map((t, ti) => (
+                    <button key={ti} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', border:'none', borderRadius:12, cursor:'pointer', background:T.surfaceMuted, fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink, textAlign:'left' }} onClick={() => doSwap(t)}>
+                      <div style={{ width:9, height:9, borderRadius:'50%', background:t.player.color||T.inkMute, flexShrink:0 }} />
+                      <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.player.name}</span>
+                    </button>
+                  ))}
+                </div>
+                <button style={btnStyle('cancel')} onClick={() => setSeActionSheet({ rIdx, mIdx })}>
+                  <span>←</span><span>Vissza</span>
+                </button>
+              </div>
+            </div>
+          );
+        }
+
         return (
           <div onClick={() => setSeActionSheet(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 24px' }}>
             <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:300, background:T.surface, borderRadius:20, padding:'16px', boxShadow:'0 8px 32px rgba(0,0,0,0.25)', display:'flex', flexDirection:'column', gap:8 }}>
@@ -38123,9 +38169,14 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
                   <span>↺</span><span>Eredmény visszavonása</span>
                 </button>
               )}
-              {m.p1 && m.p2 && !m.tbd && (
-                <button style={btnStyle('blue')} onClick={() => { setSeActionSheet(null); setSwapSel({ rIdx, mIdx, side:'p1', player:m.p1 }); }}>
-                  <span>⇄</span><span>Játékos csere</span>
+              {m.p1 && !m.tbd && (
+                <button style={btnStyle('blue')} onClick={() => setSeActionSheet({ rIdx, mIdx, swapSide:'p1' })}>
+                  <span>⇄</span><span>{m.p1.name} cseréje</span>
+                </button>
+              )}
+              {m.p2 && !m.tbd && (
+                <button style={btnStyle('blue')} onClick={() => setSeActionSheet({ rIdx, mIdx, swapSide:'p2' })}>
+                  <span>⇄</span><span>{m.p2.name} cseréje</span>
                 </button>
               )}
               <button style={btnStyle('cancel')} onClick={() => setSeActionSheet(null)}>
