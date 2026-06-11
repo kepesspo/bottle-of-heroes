@@ -33638,7 +33638,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.09';
+const APP_VERSION = 'v9.10';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -45943,6 +45943,7 @@ function EmojiFly({ char }) {
 function BottleApp() {
   const _initRoom = React.useMemo(() => { try { return new URLSearchParams(window.location.search).get('room') || ''; } catch(e) { return ''; } }, []);
   const [screen, setScreen] = useState(() => _initRoom ? 'observer' : 'home');
+  const _initRoomConsumedRef = React.useRef(false);
   const [prev, setPrev] = useState(null);
   const [players, setPlayers] = useState(INITIAL_PLAYERS);
   const [selectedGames, setSelectedGames] = useState(['busz','memoria','erem']);
@@ -46061,7 +46062,7 @@ function BottleApp() {
   const resetGame = () => { setPlayers(players.map(p => ({...p,drinks:0,points:0}))); setScreen('play'); };
 
   const [observerInitCode, setObserverInitCode] = React.useState('');
-  const openObserver = (code) => { setObserverInitCode(code); setPrev(screen); setScreen('observer'); };
+  const openObserver = (code) => { setObserverInitCode(code || ''); setPrev(screen); setScreen('observer'); };
 
   const order = ['home','stats','players','games','play','end','observer'];
   const dir = order.indexOf(screen) >= order.indexOf(prev||'home') ? 1 : -1;
@@ -46075,7 +46076,7 @@ function BottleApp() {
         {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} />}
-        {screen==='observer' && <ObserverScreen go={go} initialCode={observerInitCode || _initRoom} onJoinAsHost={goJoinAsHost} />}
+        {screen==='observer' && <ObserverScreen go={go} initialCode={observerInitCode || (!_initRoomConsumedRef.current && _initRoom ? (_initRoomConsumedRef.current = true, _initRoom) : '')} onJoinAsHost={goJoinAsHost} />}
       </div>
       {creatingRoom && (
         <div style={{ position:'fixed', inset:0, background:T.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, zIndex:100 }}>
