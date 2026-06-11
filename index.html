@@ -33638,7 +33638,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.08';
+const APP_VERSION = 'v9.09';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34536,6 +34536,7 @@ function PlayersScreen({ players, setPlayers, go }) {
           onClose={() => setEditing(null)}
           onChange={patch => updatePlayer(editing, patch)}
           usedColors={new Set(players.filter(p => p.id !== editing).map(p => p.color))}
+          usedProfileIds={new Set(players.filter(p => p.id !== editing && p.profileId).map(p => p.profileId))}
         />
       }
     </div>
@@ -34572,7 +34573,7 @@ function PlayerCard({ p, onEdit, onRemove }) {
   );
 }
 
-function PlayerEditSheet({ player, onClose, onChange, usedColors }) {
+function PlayerEditSheet({ player, onClose, onChange, usedColors, usedProfileIds = new Set() }) {
   const [kbH, setKbH] = useState(0);
   const [profiles, setProfiles] = React.useState([]);
   const [showDropdown, setShowDropdown] = React.useState(false);
@@ -34636,18 +34637,23 @@ function PlayerEditSheet({ player, onClose, onChange, usedColors }) {
             </div>
             {showDropdown && profiles.length > 0 && (
               <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, right:0, background:T.surface, borderRadius:14, boxShadow:'0 8px 32px rgba(0,0,0,0.18)', zIndex:10, overflow:'hidden', maxHeight:220, overflowY:'auto' }}>
-                {profiles.map(prof => (
-                  <div key={prof.id} onClick={() => selectProfile(prof)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', cursor:'pointer', borderBottom:`1px solid ${T.surfaceMuted}`, background: player.profileId===prof.id ? T.mintSoft : 'transparent' }}>
-                    <div style={{ width:30, height:30, borderRadius:'50%', background:prof.color, display:'grid', placeItems:'center', flexShrink:0 }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" fill="#fff"/><path d="M4 20c1.5-4 4-6 8-6s6.5 2 8 6" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/></svg>
+                {profiles.map(prof => {
+                  const isCurrent = player.profileId === prof.id;
+                  const isTaken = !isCurrent && usedProfileIds.has(prof.id);
+                  return (
+                    <div key={prof.id} onClick={() => !isTaken && selectProfile(prof)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', cursor: isTaken ? 'default' : 'pointer', borderBottom:`1px solid ${T.surfaceMuted}`, background: isCurrent ? T.mintSoft : 'transparent', opacity: isTaken ? 0.38 : 1 }}>
+                      <div style={{ width:30, height:30, borderRadius:'50%', background:prof.color, display:'grid', placeItems:'center', flexShrink:0 }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" fill="#fff"/><path d="M4 20c1.5-4 4-6 8-6s6.5 2 8 6" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/></svg>
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color: isCurrent ? T.mintDeep : T.ink }}>{prof.name}</div>
+                        {isTaken ? <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute }}>Már ki van választva</div>
+                          : prof.nickname ? <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{prof.nickname}</div> : null}
+                      </div>
+                      {isCurrent && <svg style={{ flexShrink:0 }} width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke={T.mint} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                     </div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color: player.profileId===prof.id ? T.mintDeep : T.ink }}>{prof.name}</div>
-                      {prof.nickname && <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{prof.nickname}</div>}
-                    </div>
-                    {player.profileId===prof.id && <svg style={{ flexShrink:0 }} width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke={T.mint} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
