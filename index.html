@@ -33638,7 +33638,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.27';
+const APP_VERSION = 'v9.28';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34208,39 +34208,52 @@ function StatsScreen({ go, onOpenObserver }) {
               const wr = winRate(p.id);
               const mw = s.bp_match_wins || 0, ml = s.bp_match_losses || 0, md = s.bp_match_draws || 0;
               const played = mw + ml + md;
+              const wrColor = wr !== null ? (wr >= 50 ? T.mint : T.coral) : T.inkSoft;
+              const barWin = played > 0 ? Math.round((mw / played) * 100) : 0;
+              const barLoss = played > 0 ? Math.round((ml / played) * 100) : 0;
               return (
-                <div key={p.id} style={{ background:T.surface, borderRadius:14, padding:'10px 12px', boxShadow:T.shadow }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
-                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color: i===0?'#F59E0B':i===1?T.inkSoft:T.inkMute, minWidth:20, textAlign:'center' }}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</div>
-                    <div style={{ width:36, height:36, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:15, color:'#fff', flexShrink:0, overflow:'hidden' }}>
-                      {p.img ? <img src={p.img} style={{ width:36, height:36, objectFit:'cover', borderRadius:'50%' }} /> : p.name.charAt(0).toUpperCase()}
+                <div key={p.id} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow }}>
+                  {/* Top row */}
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color: i===0?'#F59E0B':i===1?'#9CA3AF':i===2?'#CD7F32':T.inkMute, minWidth:18, textAlign:'center', flexShrink:0 }}>{i+1}</div>
+                    <div style={{ width:40, height:40, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:17, color:'#fff', flexShrink:0, overflow:'hidden' }}>
+                      {p.name.charAt(0).toUpperCase()}
                     </div>
-                    <div style={{ flex:1, minWidth:0, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink }}>{p.name}</div>
-                      {(s.bp_tournaments||0) > 0 && (
-                        <div style={{ display:'inline-flex', alignItems:'center', gap:2, background:'rgba(251,191,36,0.15)', borderRadius:999, padding:'1px 6px' }}>
-                          <span style={{ fontSize:10 }}>🏆</span>
-                          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:10, color:'#B45309' }}>{s.bp_tournaments}</span>
-                        </div>
-                      )}
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
+                      <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:2 }}>
+                        {(s.bp_tournaments||0) > 0 && (
+                          <div style={{ display:'inline-flex', alignItems:'center', gap:2, background:'rgba(251,191,36,0.15)', borderRadius:999, padding:'1px 6px' }}>
+                            <span style={{ fontSize:10 }}>🏆</span>
+                            <span style={{ fontFamily:T.font, fontWeight:800, fontSize:10, color:'#B45309' }}>{s.bp_tournaments}</span>
+                          </div>
+                        )}
+                        <span style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{played} meccs</span>
+                      </div>
+                    </div>
+                    <div style={{ textAlign:'right', flexShrink:0 }}>
+                      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:wrColor, lineHeight:1 }}>{wr !== null ? wr+'%' : '–'}</div>
+                      <div style={{ fontFamily:T.font, fontSize:9, color:T.inkMute, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>WIN RATE</div>
                     </div>
                   </div>
-                  <div style={{ display:'flex', alignItems:'center', background:T.surfaceMuted, borderRadius:10, padding:'6px 0' }}>
-                    {[
-                      { val:mw, label:'győzelem', color:T.mint },
-                      { val:ml, label:'vereség',  color:T.coral },
-                      { val:md, label:'döntetlen', color:T.inkSoft },
-                      { val:wr!==null?wr+'%':'–', label:'win rate', color:wr>=50?T.mint:T.coral },
-                    ].map((col, ci, arr) => (
-                      <React.Fragment key={ci}>
-                        <div style={{ flex:1, textAlign:'center' }}>
-                          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:col.color }}>{col.val}</div>
-                          <div style={{ fontFamily:T.font, fontSize:9, color:T.inkMute, fontWeight:700 }}>{col.label}</div>
-                        </div>
-                        {ci < arr.length-1 && <div style={{ width:1, height:26, background:T.inkMute+'30' }} />}
-                      </React.Fragment>
+                  {/* Stats dots row */}
+                  <div style={{ display:'flex', alignItems:'center', gap:12, marginTop:8, marginLeft:68 }}>
+                    {[{val:mw,label:'győ',color:T.mint},{val:md,label:'dön',color:'#F59E0B'},{val:ml,label:'ver',color:T.coral}].map((s2,ci) => (
+                      <div key={ci} style={{ display:'flex', alignItems:'center', gap:4 }}>
+                        <span style={{ width:7, height:7, borderRadius:'50%', background:s2.color, display:'inline-block', flexShrink:0 }} />
+                        <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.ink }}>{s2.val} {s2.label}</span>
+                      </div>
                     ))}
                   </div>
+                  {/* Progress bar */}
+                  {played > 0 && (
+                    <div style={{ marginTop:8, marginLeft:68, height:4, borderRadius:4, background:T.surfaceMuted, overflow:'hidden' }}>
+                      <div style={{ display:'flex', height:'100%' }}>
+                        <div style={{ width:barWin+'%', background:T.mint, transition:'width .3s' }} />
+                        <div style={{ width:barLoss+'%', background:T.coral, transition:'width .3s' }} />
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -34632,7 +34645,7 @@ function PlayerEditSheet({ player, onClose, onChange, usedColors, usedProfileIds
   };
 
   return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.45)', zIndex:40, animation:'fadeIn .2s', display:'flex', alignItems:'flex-end', justifyContent:'center', paddingLeft:20, paddingRight:20, paddingBottom: kbH > 0 ? kbH + 20 : '32vh', transition:'padding-bottom .2s ease-out' }}>
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.45)', zIndex:40, animation:'fadeIn .2s', display:'flex', alignItems:'flex-end', justifyContent:'center', paddingLeft:20, paddingRight:20, paddingBottom: showDropdown ? 16 : (kbH > 0 ? kbH + 20 : '32vh'), transition:'padding-bottom .2s ease-out' }}>
       <div onClick={e => e.stopPropagation()} style={{
         width:'100%', maxWidth:340,
         background:T.surface, borderRadius:24,
@@ -34938,7 +34951,7 @@ function BuszConfigSheet({ config, setConfig, onClose }) {
             <div style={{ position:'absolute', top:3, left:zsulliOn?23:3, width:24, height:24, borderRadius:'50%', background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.22)', transition:'left .2s' }}/>
           </button>
         </div>
-        {(() => { const bonusOn = config.bonusGuess !== false; return (
+        {(() => { const bonusOn = config.bonusGuess === true; return (
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'1px solid rgba(26,42,74,0.10)' }}>
             <div>
               <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>Zseniális tipp</span>
@@ -35311,7 +35324,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
         <div className="screen-wide screen-pad" style={{ paddingTop:14, paddingBottom:140 }}>
 
         {/* ── Kedvencek szekció ── */}
-        {(() => {
+        {!hasFilter && (() => {
           const FAVS = ['beerpong','busz','imposztor'];
           const favGames = FAVS.map(id => GAMES.find(g => g.id === id)).filter(Boolean);
           return (
@@ -40425,7 +40438,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance }) {
   const hostViewToggle = hostPlaysEnabled && hostPlayerId ? (
     <button
       onClick={() => setHostViewMode(m => m === 'host' ? 'player' : 'host')}
-      style={{ position:'fixed', bottom:90, right:14, zIndex:50, display:'flex', alignItems:'center', gap:6, padding:'9px 14px', borderRadius:999, border:'none', background: hostViewMode === 'player' ? T.coral : T.mint, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer', boxShadow:T.shadowLift }}
+      style={{ position:'fixed', top:14, right:14, zIndex:200, display:'flex', alignItems:'center', gap:6, padding:'9px 14px', borderRadius:999, border:'none', background: hostViewMode === 'player' ? T.coral : T.mint, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer', boxShadow:T.shadowLift }}
     >
       {hostViewMode === 'host' ? '👤 Játékos nézet' : '🎮 Host nézet'}
     </button>
@@ -40434,7 +40447,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance }) {
   // ── Player view mode: render BuszPlayerView ───────────────────────────────
   if (hostPlaysEnabled && hostPlayerId && hostViewMode === 'player' && buszState && isOnline) {
     return (
-      <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0, position:'relative' }}>
+      <div style={{ position:'fixed', inset:0, zIndex:100, display:'flex', flexDirection:'column', background:T.bg }}>
         <BuszPlayerView room={{ buszState, players, buszTakenIds: [hostPlayerId] }} roomCode={roomCode} forcedPlayerId={hostPlayerId} forcedBusIntroShown={playerBusIntroShown} onBusIntroShown={() => setPlayerBusIntroShown(true)} />
         {hostViewToggle}
       </div>
@@ -45111,7 +45124,7 @@ function ObserverScreen({ go, initialCode, onJoinAsHost }) {
 
   return (
     <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg }}>
-      <AppBar title="Csatlakozás" onBack={status === 'enter' ? () => go('home') : undefined} />
+      {status !== 'watching' && <AppBar title="Csatlakozás" onBack={status === 'enter' ? () => go('home') : undefined} />}
       {status==='enter' && <ObserverEnter code={code} codeLen={CODE_LEN} onDigit={push} onBack={back} onSubmit={submit} onPaste={v => setCode(v.replace(/\D/g,'').slice(0,CODE_LEN))} joinMode={joinMode} setJoinMode={setJoinMode} hostLoading={hostLoading} errorMsg={errorMsg} hostPin={hostPin} setHostPin={setHostPin} onSelectHistRoom={c => setCode(c)} />}
       {status==='connecting' && <ObserverStatus icon="📡" title="Csatlakozás…" sub={`Szoba: ${code}`} spinning />}
       {status==='watching' && <ObserverWatching code={code} observerName={name} onLeave={reset} />}
@@ -45733,8 +45746,8 @@ function ObserverWatching({ code, observerName, onLeave }) {
   if (_ovCurG === 'ovfj') return <OVFJObserverView room={room} code={code} myName={observerName} onLeave={onLeave} />;
     if (room.buszState || (room.selectedGames||[]).includes('busz')) {
     return (
-      <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg }}>
-        <div style={{ margin:'10px 16px 4px', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:T.surface, borderRadius:14, boxShadow:T.shadow }}>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, minHeight:0, overflow:'hidden' }}>
+        <div style={{ margin:'10px 16px 4px', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:T.surface, borderRadius:14, boxShadow:T.shadow, flexShrink:0 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
             <span style={{ width:8, height:8, borderRadius:'50%', background:'#E03A3A', animation:'pulse 1.4s infinite' }}/>
             <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink, letterSpacing:'0.08em', textTransform:'uppercase' }}>🚌 Busz · Szoba {code}</span>
