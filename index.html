@@ -33638,7 +33638,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.47';
+const APP_VERSION = 'v9.48';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -40133,7 +40133,7 @@ function PlayingCard({ card, size='md', faceDown=false, glow=false }) {
   );
 }
 
-function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFooter }) {
+function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFooter, onSetBuszSwitch }) {
   const isOnline = !!roomCode;
   const [buszState, setBuszState] = useState(null);
   const [zsulliAnim, setZsulliAnim] = useState(null);
@@ -40451,6 +40451,10 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
   const shouldHideFooter = (hostPlaysEnabled && !hostPlayerId) || (hostPlaysEnabled && hostPlayerId && hostViewMode === 'player' && !!buszState && isOnline);
   React.useEffect(() => { onSetHideFooter && onSetHideFooter(shouldHideFooter); }, [shouldHideFooter]);
   React.useEffect(() => () => { onSetHideFooter && onSetHideFooter(false); }, []);
+  // Signal PlayScreen to show 🎮 switch button in top bar
+  const canShowSwitch = !!(hostPlaysEnabled && hostPlayerId);
+  React.useEffect(() => { onSetBuszSwitch && onSetBuszSwitch(canShowSwitch ? () => setHostViewMode('player') : null); }, [canShowSwitch]);
+  React.useEffect(() => () => { onSetBuszSwitch && onSetBuszSwitch(null); }, []);
 
   // hostViewToggle removed — switch is now in PlayScreen top bar (KÖR position) and BuszPlayerView top bar
 
@@ -43630,7 +43634,7 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
   );
 }
 
-function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, roomCode, gameMeta, challenger, opponent, onSetHideFooter }) {
+function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, roomCode, gameMeta, challenger, opponent, onSetHideFooter, onSetBuszSwitch }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'beerpong') return <BeerPongGame key={gameIdx + '_' + (gameMeta?.beerpongConfig?.tournamentType||'se')} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} initialBpState={gameMeta?._resumeBpState || null} />;
   if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} />;
@@ -43639,7 +43643,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onUnready={onUnready} onResult={onResult} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} />;
+  if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onSetBuszSwitch={onSetBuszSwitch} />;
   if (gameId === 'ovfj') return <OVFJGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={typeof roomCode!=='undefined'?roomCode:undefined} gameMeta={gameMeta} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} gameMeta={gameMeta} />;
@@ -43684,6 +43688,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const setCollectConfigPS = cfg => setGameMeta && setGameMeta(m => ({...m, collectConfig: typeof cfg === 'function' ? cfg(m?.collectConfig||{}) : cfg}));
   const [showMenu, setShowMenu] = useState(false);
   const [hideFooter, setHideFooter] = useState(false);
+  const [buszSwitchFn, setBuszSwitchFn] = useState(null); // fn to switch to player view
   const gameOrderMode = gameMeta?.gameOrder || 'sorban';
   const [randomOrder, setRandomOrder] = useState(() => []);
   const groupDrinkEnabled = (gameMeta?.modes || []).includes('group');
@@ -43939,11 +43944,10 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           )}
         </div>
         {(() => {
-          const showSwitchBtn = currentGameId === 'busz' && hostPlaysEnabled && hostPlayerId;
-          if (showSwitchBtn) {
+          if (buszSwitchFn) {
             return (
               <div style={{ width:54, height:54, flexShrink:0, display:'grid', placeItems:'center' }}>
-                <button onClick={() => setHostViewMode('player')} style={{ width:44, height:44, borderRadius:'50%', background:T.surface, border:'none', boxShadow:'0 2px 10px rgba(0,0,0,0.12)', cursor:'pointer', display:'grid', placeItems:'center', padding:0, fontSize:20 }}>🎮</button>
+                <button onClick={buszSwitchFn} style={{ width:44, height:44, borderRadius:'50%', background:T.surface, border:'none', boxShadow:'0 2px 10px rgba(0,0,0,0.12)', cursor:'pointer', display:'grid', placeItems:'center', padding:0, fontSize:20 }}>🎮</button>
               </div>
             );
           }
@@ -43977,7 +43981,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         )}
 
         <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
-          <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={selectedOpponent} onSetHideFooter={setHideFooter} />
+          <GameContent key={currentGameId + gameIdx} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={selectedOpponent} onSetHideFooter={setHideFooter} onSetBuszSwitch={setBuszSwitchFn} />
         </div>
       </div>
         </div>
