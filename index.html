@@ -33643,7 +33643,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.74';
+const APP_VERSION = 'v9.75';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -40160,6 +40160,32 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
   const [hostViewMode, setHostViewMode] = useState('host'); // 'host' | 'player'
   const [playerBusIntroShown, setPlayerBusIntroShown] = useState(false);
   const [hostPendingId, setHostPendingId] = useState(null);
+  const [hostUnlockPressId, setHostUnlockPressId] = useState(null);
+  const [hostUnlockProgress, setHostUnlockProgress] = useState(0);
+  const hostUnlockTimerRef = React.useRef(null);
+  const hostUnlockRafRef = React.useRef(null);
+  const hostUnlockStartRef = React.useRef(null);
+  const startHostUnlockPress = (pid) => {
+    setHostUnlockPressId(pid); setHostUnlockProgress(0);
+    hostUnlockStartRef.current = Date.now();
+    const tick = () => {
+      const elapsed = Date.now() - hostUnlockStartRef.current;
+      const pct = Math.min(100, (elapsed / 2000) * 100);
+      setHostUnlockProgress(pct);
+      if (pct < 100) { hostUnlockRafRef.current = requestAnimationFrame(tick); }
+    };
+    hostUnlockRafRef.current = requestAnimationFrame(tick);
+    hostUnlockTimerRef.current = setTimeout(() => {
+      setHostUnlockPressId(null); setHostUnlockProgress(0);
+      if (!roomCode) return;
+      try { firebase.firestore().collection('rooms').doc(roomCode).update({ buszTakenIds: firebase.firestore.FieldValue.arrayRemove(pid) }); } catch(e) {}
+    }, 2000);
+  };
+  const cancelHostUnlockPress = () => {
+    clearTimeout(hostUnlockTimerRef.current);
+    cancelAnimationFrame(hostUnlockRafRef.current);
+    setHostUnlockPressId(null); setHostUnlockProgress(0);
+  };
   const hostPlaysEnabled = !!(gameMeta?.buszConfig?.hostPlays);
   const stRef = useRef(null);
   const autoStartRef = useRef(false);
@@ -40463,15 +40489,27 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
               {players.map(p => {
                 const taken = takenIds.includes(p.id);
                 const selected = hostPendingId === p.id;
+                const pressing = hostUnlockPressId === p.id;
                 return (
-                  <button key={p.id} disabled={taken} onClick={!taken ? () => setHostPendingId(p.id) : undefined} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background: selected ? `${p.color}18` : T.surface, border:`2px solid ${selected ? p.color : taken ? T.coral+'30' : 'transparent'}`, borderRadius:16, cursor:taken?'default':'pointer', boxShadow: selected ? `0 0 0 1px ${p.color}40, ${T.shadow}` : T.shadow, textAlign:'left', width:'100%', opacity:taken?0.45:1, transition:'background .15s, border-color .15s' }}>
-                    <div style={{ width:42, height:42, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:18, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>{p.name}</div>
-                      <div style={{ fontFamily:T.font, fontSize:12, color:taken?T.coral:T.inkSoft, marginTop:2 }}>{taken ? '🔒 Foglalt' : 'Elérhető'}</div>
-                    </div>
-                    {selected && <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill={p.color}/><path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                  </button>
+                  <div key={p.id} style={{ position:'relative', borderRadius:16, overflow:'hidden' }}>
+                    <button
+                      onClick={!taken ? () => setHostPendingId(p.id) : undefined}
+                      onMouseDown={taken ? () => startHostUnlockPress(p.id) : undefined}
+                      onMouseUp={taken ? cancelHostUnlockPress : undefined}
+                      onMouseLeave={taken ? cancelHostUnlockPress : undefined}
+                      onTouchStart={taken ? (e) => { e.preventDefault(); startHostUnlockPress(p.id); } : undefined}
+                      onTouchEnd={taken ? cancelHostUnlockPress : undefined}
+                      onTouchCancel={taken ? cancelHostUnlockPress : undefined}
+                      style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background: pressing ? `${T.coral}10` : selected ? `${p.color}18` : T.surface, border:`2px solid ${pressing ? T.coral : selected ? p.color : taken ? T.coral+'30' : 'transparent'}`, borderRadius:16, cursor:taken?'default':'pointer', boxShadow: selected ? `0 0 0 1px ${p.color}40, ${T.shadow}` : T.shadow, textAlign:'left', width:'100%', opacity:taken&&!pressing?0.5:1, transition:'background .15s, border-color .15s', WebkitUserSelect:'none' }}>
+                      <div style={{ width:42, height:42, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:18, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>{p.name}</div>
+                        <div style={{ fontFamily:T.font, fontSize:12, color:taken?T.coral:T.inkSoft, marginTop:2 }}>{pressing ? '🔓 Tartsd nyomva…' : taken ? '🔒 Foglalt' : 'Elérhető'}</div>
+                      </div>
+                      {selected && <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill={p.color}/><path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                    </button>
+                    {pressing && <div style={{ position:'absolute', bottom:0, left:0, height:3, background:T.coral, borderRadius:999, width:`${hostUnlockProgress}%`, transition:'none' }} />}
+                  </div>
                 );
               })}
             </div>
@@ -44480,6 +44518,32 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
   const [showBigDickModal, setShowBigDickModal] = useState(false);
   const noBusIdxRef = React.useRef(null);
   const [busIntroShown, setBusIntroShown] = useState(forcedBusIntroShown || false);
+  const [unlockPressId, setUnlockPressId] = useState(null);
+  const unlockTimerRef = React.useRef(null);
+  const unlockRafRef = React.useRef(null);
+  const unlockStartRef = React.useRef(null);
+  const [unlockProgress, setUnlockProgress] = useState(0);
+  const startUnlockPress = (pid) => {
+    setUnlockPressId(pid); setUnlockProgress(0);
+    unlockStartRef.current = Date.now();
+    const tick = () => {
+      const elapsed = Date.now() - unlockStartRef.current;
+      const pct = Math.min(100, (elapsed / 2000) * 100);
+      setUnlockProgress(pct);
+      if (pct < 100) { unlockRafRef.current = requestAnimationFrame(tick); }
+    };
+    unlockRafRef.current = requestAnimationFrame(tick);
+    unlockTimerRef.current = setTimeout(() => {
+      setUnlockPressId(null); setUnlockProgress(0);
+      if (!roomCode) return;
+      try { firebase.firestore().collection('rooms').doc(roomCode).update({ buszTakenIds: firebase.firestore.FieldValue.arrayRemove(pid) }); } catch(e) {}
+    }, 2000);
+  };
+  const cancelUnlockPress = () => {
+    clearTimeout(unlockTimerRef.current);
+    cancelAnimationFrame(unlockRafRef.current);
+    setUnlockPressId(null); setUnlockProgress(0);
+  };
   const [lastBusRidersKey, setLastBusRidersKey] = useState(null);
   const busResultTimerRef = React.useRef(null);
   const playerIdRef = React.useRef(playerId);
@@ -44545,15 +44609,27 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
               {players.map(p => {
                 const taken = (room.buszTakenIds||[]).includes(p.id);
                 const selected = pendingId === p.id;
+                const pressing = unlockPressId === p.id;
                 return (
-                  <button key={p.id} disabled={taken} onClick={!taken ? () => setPendingId(p.id) : undefined} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background: selected ? `${p.color}18` : T.surface, border:`2px solid ${selected ? p.color : taken ? T.coral+'30' : 'transparent'}`, borderRadius:16, cursor:taken?'default':'pointer', boxShadow: selected ? `0 0 0 1px ${p.color}40, ${T.shadow}` : T.shadow, textAlign:'left', width:'100%', opacity:taken?0.45:1, transition:'background .15s, border-color .15s' }}>
-                    <div style={{ width:42, height:42, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:18, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>{p.name}</div>
-                      <div style={{ fontFamily:T.font, fontSize:12, color:taken?T.coral:T.inkSoft, marginTop:2 }}>{taken ? '🔒 Foglalt' : (buszState ? `${(buszState.hands?.[p.id]||[]).length} lap a kezében` : 'Elérhető')}</div>
-                    </div>
-                    {selected && <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill={p.color}/><path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                  </button>
+                  <div key={p.id} style={{ position:'relative', borderRadius:16, overflow:'hidden' }}>
+                    <button
+                      onClick={!taken ? () => setPendingId(p.id) : undefined}
+                      onMouseDown={taken ? () => startUnlockPress(p.id) : undefined}
+                      onMouseUp={taken ? cancelUnlockPress : undefined}
+                      onMouseLeave={taken ? cancelUnlockPress : undefined}
+                      onTouchStart={taken ? (e) => { e.preventDefault(); startUnlockPress(p.id); } : undefined}
+                      onTouchEnd={taken ? cancelUnlockPress : undefined}
+                      onTouchCancel={taken ? cancelUnlockPress : undefined}
+                      style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background: pressing ? `${T.coral}10` : selected ? `${p.color}18` : T.surface, border:`2px solid ${pressing ? T.coral : selected ? p.color : taken ? T.coral+'30' : 'transparent'}`, borderRadius:16, cursor:taken?'default':'pointer', boxShadow: selected ? `0 0 0 1px ${p.color}40, ${T.shadow}` : T.shadow, textAlign:'left', width:'100%', opacity:taken&&!pressing?0.5:1, transition:'background .15s, border-color .15s', WebkitUserSelect:'none' }}>
+                      <div style={{ width:42, height:42, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:18, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>{p.name}</div>
+                        <div style={{ fontFamily:T.font, fontSize:12, color:taken?T.coral:T.inkSoft, marginTop:2 }}>{pressing ? '🔓 Tartsd nyomva…' : taken ? '🔒 Foglalt' : (buszState ? `${(buszState.hands?.[p.id]||[]).length} lap a kezében` : 'Elérhető')}</div>
+                      </div>
+                      {selected && <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill={p.color}/><path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                    </button>
+                    {pressing && <div style={{ position:'absolute', bottom:0, left:0, height:3, background:T.coral, borderRadius:999, width:`${unlockProgress}%`, transition:'none' }} />}
+                  </div>
                 );
               })}
             </div>
