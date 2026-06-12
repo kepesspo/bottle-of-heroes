@@ -33643,7 +33643,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.89';
+const APP_VERSION = 'v9.90';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -38189,12 +38189,27 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           });
           const doGrpSwap = (t) => {
             setTsGroups(prev => {
-              const next = prev.map(grp => ({ ...grp, matches: grp.matches.map(mm => ({...mm})) }));
-              const a = next[groupIdx].matches[matchIdx];
-              const b = next[t.groupIdx].matches[t.matchIdx];
-              const tmp = a[swapSide];
-              a[swapSide] = b[t.side];
-              b[t.side] = tmp;
+              const next = prev.map(grp => ({ ...grp, players: [...grp.players], matches: grp.matches.map(mm => ({...mm})) }));
+              const playerA = next[groupIdx].matches[matchIdx][swapSide];
+              const playerB = next[t.groupIdx].matches[t.matchIdx][t.side];
+              // Swap in all matches across both groups
+              [groupIdx, t.groupIdx].forEach(gi => {
+                next[gi].matches = next[gi].matches.map(mm => {
+                  const updated = {...mm};
+                  if (updated.p1?.id === playerA.id) updated.p1 = playerB;
+                  else if (updated.p1?.id === playerB.id) updated.p1 = playerA;
+                  if (updated.p2?.id === playerA.id) updated.p2 = playerB;
+                  else if (updated.p2?.id === playerB.id) updated.p2 = playerA;
+                  if (updated.winner?.id === playerA.id) updated.winner = playerB;
+                  else if (updated.winner?.id === playerB.id) updated.winner = playerA;
+                  if (updated.loser?.id === playerA.id) updated.loser = playerB;
+                  else if (updated.loser?.id === playerB.id) updated.loser = playerA;
+                  return updated;
+                });
+                next[gi].players = next[gi].players.map(p =>
+                  p.id === playerA.id ? playerB : p.id === playerB.id ? playerA : p
+                );
+              });
               return next;
             });
             setMatchActionSheet(null);
