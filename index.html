@@ -33643,7 +33643,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.92';
+const APP_VERSION = 'v9.93';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -41773,7 +41773,7 @@ const ANAGRAMMA_SZAVAK_SHUFFLED = (() => {
   return arr;
 })();
 
-function AnagrammaGame({ gameIdx, challenger, onAdvance, onResult }) {
+function AnagrammaGame({ gameIdx, challenger, onAdvance, onResult, gameMeta }) {
   const TILE_COLORS = ['#4A90D9','#50C882','#F4A4A0','#F0C840'];
   const word = ANAGRAMMA_SZAVAK_SHUFFLED[gameIdx % ANAGRAMMA_SZAVAK_SHUFFLED.length];
 
@@ -41789,16 +41789,19 @@ function AnagrammaGame({ gameIdx, challenger, onAdvance, onResult }) {
     return arr;
   }, [gameIdx]);
 
+  const diff = gameMeta?.difficulty;
+  const TIME_LIMIT = diff === 'hard' ? 5 : diff === 'mid' ? 6 : 7;
+
   const [phase, setPhase] = React.useState('hidden'); // hidden | playing | won | lost
   const [pressed, setPressed] = React.useState([]); // tile indices tapped in order
-  const [timeLeft, setTimeLeft] = React.useState(5);
+  const [timeLeft, setTimeLeft] = React.useState(TIME_LIMIT);
   const [wrongFlash, setWrongFlash] = React.useState(false);
   const flashRef = React.useRef(false);
   const advancedRef = React.useRef(false);
   const ivRef = React.useRef(null);
 
   React.useEffect(() => {
-    setPhase('hidden'); setPressed([]); setTimeLeft(5); setWrongFlash(false);
+    setPhase('hidden'); setPressed([]); setTimeLeft(TIME_LIMIT); setWrongFlash(false);
     flashRef.current = false; advancedRef.current = false;
     clearInterval(ivRef.current);
     return () => clearInterval(ivRef.current);
@@ -41806,7 +41809,7 @@ function AnagrammaGame({ gameIdx, challenger, onAdvance, onResult }) {
 
   const startCountdown = () => {
     clearInterval(ivRef.current);
-    const endTime = Date.now() + 5000;
+    const endTime = Date.now() + TIME_LIMIT * 1000;
     ivRef.current = setInterval(() => {
       const rem = Math.max(0, (endTime - Date.now()) / 1000);
       setTimeLeft(parseFloat(rem.toFixed(1)));
@@ -41823,13 +41826,13 @@ function AnagrammaGame({ gameIdx, challenger, onAdvance, onResult }) {
   };
 
   const startGame = () => {
-    setPhase('playing'); setPressed([]); setTimeLeft(5); setWrongFlash(false);
+    setPhase('playing'); setPressed([]); setTimeLeft(TIME_LIMIT); setWrongFlash(false);
     flashRef.current = false;
     startCountdown();
   };
 
   const retry = () => {
-    setPressed([]); setTimeLeft(5); setWrongFlash(false);
+    setPressed([]); setTimeLeft(TIME_LIMIT); setWrongFlash(false);
     flashRef.current = false;
     setPhase('playing');
     startCountdown();
@@ -43813,7 +43816,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'ticktak') return <TicktakGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'erem') return <EremGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'tapper') return <TapperGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'anagramma') return <AnagrammaGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'anagramma') return <AnagrammaGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
   if (gameId === 'ringfire') return <RingFireGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
   if (gameId === 'kopapir') return <KoPapirGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'collect') return <CollectBoomGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
