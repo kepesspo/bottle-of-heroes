@@ -33643,7 +33643,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.88';
+const APP_VERSION = 'v9.89';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -38171,8 +38171,57 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
       {/* RR / Group Action Sheet */}
       {matchActionSheet && (() => {
-        const { match: m, isSelectable, isDone, onSelect, onReset } = matchActionSheet;
-        const btnStyle = (tone) => ({ width:'100%', padding:'12px 14px', border:'none', borderRadius:12, cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background: tone==='mint'?T.mint:tone==='coral'?T.coral+'22':T.surfaceMuted, color: tone==='mint'?'#fff':tone==='coral'?T.coral:T.inkSoft, textAlign:'left', display:'flex', alignItems:'center', gap:10 });
+        const { match: m, isSelectable, isDone, onSelect, onReset, swapSide, groupIdx, matchIdx } = matchActionSheet;
+        const btnStyle = (tone) => ({ width:'100%', padding:'12px 14px', border:'none', borderRadius:12, cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background: tone==='mint'?T.mint:tone==='coral'?T.coral+'22':tone==='blue'?T.blue+'18':T.surfaceMuted, color: tone==='mint'?'#fff':tone==='coral'?T.coral:tone==='blue'?T.blue:T.inkSoft, textAlign:'left', display:'flex', alignItems:'center', gap:10 });
+
+        // Swap target picker
+        if (swapSide) {
+          const swapPlayer = m[swapSide];
+          const targets = [];
+          tsGroups.forEach((grp, gi) => {
+            grp.matches.forEach((mm, mi) => {
+              ['p1','p2'].forEach(s => {
+                if (mm[s] && !(gi===groupIdx && mi===matchIdx && s===swapSide)) {
+                  targets.push({ player: mm[s], groupIdx: gi, matchIdx: mi, side: s });
+                }
+              });
+            });
+          });
+          const doGrpSwap = (t) => {
+            setTsGroups(prev => {
+              const next = prev.map(grp => ({ ...grp, matches: grp.matches.map(mm => ({...mm})) }));
+              const a = next[groupIdx].matches[matchIdx];
+              const b = next[t.groupIdx].matches[t.matchIdx];
+              const tmp = a[swapSide];
+              a[swapSide] = b[t.side];
+              b[t.side] = tmp;
+              return next;
+            });
+            setMatchActionSheet(null);
+          };
+          return (
+            <div onClick={() => setMatchActionSheet(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 24px' }}>
+              <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:300, background:T.surface, borderRadius:20, padding:'16px', boxShadow:'0 8px 32px rgba(0,0,0,0.25)', display:'flex', flexDirection:'column', gap:8 }}>
+                <div style={{ fontFamily:T.font, fontSize:13, color:T.inkMute, fontWeight:700, paddingBottom:8, borderBottom:`1px solid ${T.surfaceMuted}` }}>
+                  ⇄ <span style={{color:T.ink, fontWeight:800}}>{swapPlayer?.name}</span> cseréje — válassz célpontot:
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:260, overflowY:'auto' }}>
+                  {targets.map((t, ti) => (
+                    <button key={ti} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', border:'none', borderRadius:12, cursor:'pointer', background:T.surfaceMuted, fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink, textAlign:'left' }} onClick={() => doGrpSwap(t)}>
+                      <div style={{ width:9, height:9, borderRadius:'50%', background:t.player.color||T.inkMute, flexShrink:0 }} />
+                      <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.player.name}</span>
+                      <span style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, marginLeft:'auto', flexShrink:0 }}>{tsGroups[t.groupIdx]?.label?.replace(' csoport','')}</span>
+                    </button>
+                  ))}
+                </div>
+                <button style={btnStyle('cancel')} onClick={() => setMatchActionSheet({...matchActionSheet, swapSide:null})}>
+                  <span>←</span><span>Vissza</span>
+                </button>
+              </div>
+            </div>
+          );
+        }
+
         return (
           <div onClick={() => setMatchActionSheet(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 24px' }}>
             <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:300, background:T.surface, borderRadius:20, padding:'16px', boxShadow:'0 8px 32px rgba(0,0,0,0.25)', display:'flex', flexDirection:'column', gap:8 }}>
@@ -38191,6 +38240,16 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
               {isDone && (
                 <button style={btnStyle('coral')} onClick={() => { onReset(); setMatchActionSheet(null); }}>
                   <span>↺</span><span>Eredmény visszavonása</span>
+                </button>
+              )}
+              {m.p1 && groupIdx !== undefined && (
+                <button style={btnStyle('blue')} onClick={() => setMatchActionSheet({...matchActionSheet, swapSide:'p1'})}>
+                  <span>⇄</span><span>{m.p1.name} cseréje</span>
+                </button>
+              )}
+              {m.p2 && groupIdx !== undefined && (
+                <button style={btnStyle('blue')} onClick={() => setMatchActionSheet({...matchActionSheet, swapSide:'p2'})}>
+                  <span>⇄</span><span>{m.p2.name} cseréje</span>
                 </button>
               )}
               <button style={btnStyle('cancel')} onClick={() => setMatchActionSheet(null)}>
