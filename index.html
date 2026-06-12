@@ -33643,7 +33643,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.83';
+const APP_VERSION = 'v9.84';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -36727,7 +36727,6 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const TOURNAMENT_NAME = bpCfg.tournamentName || '';
   const doneRef = React.useRef(false);
   const teamPlayersRef = React.useRef(null);
-  const [pendingDm, setPendingDm] = React.useState(null);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const buildSERound = (parts) => {
@@ -37090,7 +37089,6 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     const finalDm = {};
     Object.entries(dm).forEach(([id, cnt]) => { finalDm[id] = cnt; });
     if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { observerAllowed: true });
-    setPendingDm(finalDm);
     onAdvance && onAdvance(finalDm);
     const profileCount = players.filter(p => p.profileId).length;
     if (typeof window.updateStats === 'function' && profileCount >= 4) {
@@ -37244,7 +37242,6 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     const finalDm = {};
     Object.entries(dm).forEach(([id, cnt]) => { finalDm[id] = cnt; });
     if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { observerAllowed: true });
-    setPendingDm(finalDm);
     onAdvance && onAdvance(finalDm);
     const profileCount = players.filter(p => p.profileId).length;
     if (typeof window.updateStats === 'function' && profileCount >= 4) {
@@ -40408,11 +40405,16 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
 
   // PlayScreen signals — must be before any early return (Rules of Hooks)
   const shouldHideFooter = (hostPlaysEnabled && !hostPlayerId) || (hostPlaysEnabled && hostPlayerId && hostViewMode === 'player' && !!buszState && isOnline);
+  React.useEffect(() => { setTakenIds([]); }, [gameIdx]);
   React.useEffect(() => { onSetHideFooter && onSetHideFooter(shouldHideFooter); }, [shouldHideFooter]);
   React.useEffect(() => () => { onSetHideFooter && onSetHideFooter(false); }, []);
   const canShowSwitch = !!(hostPlaysEnabled && hostPlayerId);
   React.useEffect(() => { onSetBuszSwitch && onSetBuszSwitch(canShowSwitch ? (() => setHostViewMode('player')) : null); }, [canShowSwitch]);
   React.useEffect(() => () => { onSetBuszSwitch && onSetBuszSwitch(null); }, []);
+  React.useEffect(() => () => {
+    cancelAnimationFrame(hostUnlockRafRef.current);
+    clearTimeout(hostUnlockTimerRef.current);
+  }, []);
 
   if (!ready) return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:40}}>
@@ -44249,7 +44251,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                 <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', lineHeight:1.5 }}>A legtöbb pontú játékos<br/>3 kortyt oszt ki:</div>
                 <div style={{ display:'flex', gap:8, justifyContent:'center', flexWrap:'wrap' }}>
                   {(bonusOverlay.recipients||[]).map((r,i) => (
-                    <div key={i} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+                    <div key={r.id + '_' + i} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
                       <div style={{ width:38, height:38, borderRadius:'50%', background:r.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:15, color:'#fff' }}>{r.name.charAt(0).toUpperCase()}</div>
                       <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft }}>{r.name}</div>
                     </div>
@@ -44567,6 +44569,10 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
 
   // Release on unmount
   React.useEffect(() => () => { releasePlayer(playerIdRef.current); }, []);
+  React.useEffect(() => () => {
+    cancelAnimationFrame(unlockRafRef.current);
+    clearTimeout(unlockTimerRef.current);
+  }, []);
 
   const leavePlayer = () => {
     releasePlayer(playerId);
