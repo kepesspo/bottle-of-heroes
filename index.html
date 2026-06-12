@@ -33643,7 +33643,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.73';
+const APP_VERSION = 'v9.74';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -44482,6 +44482,22 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
   const [busIntroShown, setBusIntroShown] = useState(forcedBusIntroShown || false);
   const [lastBusRidersKey, setLastBusRidersKey] = useState(null);
   const busResultTimerRef = React.useRef(null);
+  const playerIdRef = React.useRef(playerId);
+  React.useEffect(() => { playerIdRef.current = playerId; }, [playerId]);
+
+  const releasePlayer = React.useCallback((pid) => {
+    if (!pid || !roomCode) return;
+    try { firebase.firestore().collection('rooms').doc(roomCode).update({ buszTakenIds: firebase.firestore.FieldValue.arrayRemove(pid) }); } catch(e) {}
+  }, [roomCode]);
+
+  // Release on unmount
+  React.useEffect(() => () => { releasePlayer(playerIdRef.current); }, []);
+
+  const leavePlayer = () => {
+    releasePlayer(playerId);
+    setPlayerId(null);
+    setPendingId(null);
+  };
 
   // When waiting for others and Firestore clears our pending → show result then clear
   useEffect(() => {
