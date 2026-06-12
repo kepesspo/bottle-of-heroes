@@ -69,6 +69,7 @@
     @keyframes burstFade { to{opacity:0;transform:scale(.92) translateY(-8px)} }
     @keyframes wobble    { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-12deg) scale(1.1)} 75%{transform:rotate(10deg) scale(1.1)} }
     @keyframes slideDown  { from{transform:translateY(-80px);opacity:0} to{transform:translateY(0);opacity:1} }
+    @keyframes slideUp    { from{transform:translateY(100%)} to{transform:translateY(0)} }
     @keyframes alertPulse { 0%,100%{box-shadow:0 0 0 0 rgba(244,160,74,0)} 50%{box-shadow:0 0 0 6px rgba(244,160,74,0.35)} }
     @keyframes vinylSpin  { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
     @keyframes cardFlipIn  { 0%{transform:rotateY(90deg);opacity:0} 100%{transform:rotateY(0deg);opacity:1} }
@@ -33642,7 +33643,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.63';
+const APP_VERSION = 'v9.64';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34661,17 +34662,16 @@ function PlayerEditSheet({ player, onClose, onChange, usedColors, usedProfileIds
     onChange({ profileId: null });
   };
 
-  const bottomOffset = kbH > 0 ? kbH + 16 : 60;
-  return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.45)', zIndex:40, animation:'fadeIn .2s' }}>
+  return ReactDOM.createPortal(
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.45)', zIndex:400, animation:'fadeIn .2s' }}>
       <div onClick={e => e.stopPropagation()} style={{
         position:'absolute', left:'50%', transform:'translateX(-50%)',
-        bottom: bottomOffset,
+        bottom: 0,
         width:'calc(100% - 40px)', maxWidth:340,
-        background:T.surface, borderRadius:24,
-        boxShadow:'0 12px 48px rgba(0,0,0,0.22)', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.4)',
-        padding:'24px 22px 22px',
-        transition:'bottom .2s ease-out',
+        background:T.surface, borderRadius:'24px 24px 0 0',
+        boxShadow:'0 12px 48px rgba(0,0,0,0.22)', animation:'slideUp .25s cubic-bezier(.2,.9,.3,1.05)',
+        padding:'24px 22px 0',
+        paddingBottom: kbH > 0 ? kbH + 16 : 'max(32px, env(safe-area-inset-bottom) + 16px)',
       }}>
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
 
@@ -34762,7 +34762,8 @@ function PlayerEditSheet({ player, onClose, onChange, usedColors, usedProfileIds
           <PrimaryButton onClick={onClose} disabled={!player.name.trim()}>Mehet</PrimaryButton>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
