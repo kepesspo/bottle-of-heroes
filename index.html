@@ -33638,7 +33638,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.61';
+const APP_VERSION = 'v9.62';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -44268,7 +44268,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
 }
 
 // ─── CONFETTI ─────────────────────────────────────────────────
-function Confetti() {
+function Confetti({ originY }) {
   const canvasRef = React.useRef(null);
   React.useEffect(() => {
     const canvas = canvasRef.current;
@@ -44276,24 +44276,27 @@ function Confetti() {
     const ctx = canvas.getContext('2d');
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+    const startY = (originY != null ? originY : 0.45) * canvas.height;
     const colors = ['#4FC2A0','#E8A090','#FFD23F','#7C3AED','#F97316','#14B8A6','#EC4899'];
-    const pieces = Array.from({length:90}, () => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * -canvas.height,
+    const pieces = Array.from({length:120}, () => ({
+      x: canvas.width * 0.2 + Math.random() * canvas.width * 0.6,
+      y: startY,
       w: 8 + Math.random() * 8,
       h: 4 + Math.random() * 4,
       color: colors[Math.floor(Math.random()*colors.length)],
       rot: Math.random() * Math.PI * 2,
-      vx: (Math.random() - 0.5) * 2,
-      vy: 2 + Math.random() * 3,
-      vr: (Math.random() - 0.5) * 0.15,
+      vx: (Math.random() - 0.5) * 8,
+      vy: -(4 + Math.random() * 10),
+      vr: (Math.random() - 0.5) * 0.2,
+      gravity: 0.3 + Math.random() * 0.2,
     }));
     let raf;
     const draw = () => {
       ctx.clearRect(0,0,canvas.width,canvas.height);
       pieces.forEach(p => {
+        p.vy += p.gravity;
         p.x += p.vx; p.y += p.vy; p.rot += p.vr;
-        if (p.y > canvas.height) { p.y = -20; p.x = Math.random()*canvas.width; }
+        if (p.y > canvas.height + 20) { p.y = canvas.height + 20; }
         ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot);
         ctx.fillStyle = p.color; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
         ctx.restore();
@@ -44321,15 +44324,23 @@ function EndScreen({ players, go, resetGame }) {
   const podiumHeights = [80, 120, 60];
   const podiumRanks = [2, 1, 3];
   const podiumTones = ['#C0C0C0', T.yellow, '#CD7F32'];
+  const podiumRef = React.useRef(null);
+  const [confettiOriginY, setConfettiOriginY] = React.useState(0.45);
+  React.useEffect(() => {
+    if (podiumRef.current) {
+      const rect = podiumRef.current.getBoundingClientRect();
+      setConfettiOriginY(rect.top / window.innerHeight);
+    }
+  }, []);
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
-      <Confetti />
+      <Confetti originY={confettiOriginY} />
       <AppBar title="Játék vége! 🎉" />
       <div style={{ flex:1, overflowY:'auto', minHeight:0, WebkitOverflowScrolling:'touch' }}>
       <div className="content-box screen-pad" style={{ paddingTop:20, paddingBottom:24, display:'flex', flexDirection:'column', gap:18 }}>
 
         {/* Podium */}
-        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'center', gap:6, paddingTop:12 }}>
+        <div ref={podiumRef} style={{ display:'flex', alignItems:'flex-end', justifyContent:'center', gap:6, paddingTop:12 }}>
           {podiumOrder.map((p, i) => {
             const h = podiumHeights[i] ?? 55;
             const tone = podiumTones[i] ?? '#aaa';
