@@ -33643,7 +33643,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.70';
+const APP_VERSION = 'v9.71';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -44487,33 +44487,53 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
     ? myHand.filter(c => c.value === lastFlipped.value) : [];
 
   // ── Identity selection ──────────────────────────────────────────────────
-  if (!playerId) return (
-    <div style={{ position:'fixed', inset:0, zIndex:200, background:T.bg, display:'flex', flexDirection:'column', padding:`max(20px, calc(env(safe-area-inset-top) + 8px)) 18px 20px`, gap:16 }}>
-      <div style={{ textAlign:'center', flexShrink:0 }}>
-        <div style={{ fontSize:52 }}>🚌</div>
-        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginTop:8 }}>Te ki vagy?</div>
-        <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:6 }}>Válaszd ki a neved a listából</div>
+  if (!playerId) {
+    const [pendingId, setPendingId] = React.useState(null);
+    const pendingPlayer = pendingId ? players.find(p => p.id === pendingId) : null;
+    const confirmSelection = () => {
+      if (!pendingId) return;
+      setPlayerId(pendingId);
+      try { firebase.firestore().collection('rooms').doc(roomCode).update({ buszTakenIds: firebase.firestore.FieldValue.arrayUnion(pendingId) }); } catch(e) {}
+    };
+    return (
+      <div style={{ position:'fixed', inset:0, zIndex:200, background:T.bg, display:'flex', flexDirection:'column' }}>
+        {/* Header — fixed */}
+        <div style={{ flexShrink:0, textAlign:'center', padding:'max(24px, calc(env(safe-area-inset-top) + 12px)) 18px 16px' }}>
+          <div style={{ fontSize:52 }}>🚌</div>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginTop:8 }}>Te ki vagy?</div>
+          <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:6 }}>Válaszd ki a neved a listából</div>
+        </div>
+        {/* Scrollable list only */}
+        <div style={{ flex:1, minHeight:0, position:'relative' }}>
+          <div style={{ height:'100%', overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'0 18px' }}>
+            <div style={{ display:'flex', flexDirection:'column', gap:8, paddingBottom:16 }}>
+              {players.map(p => {
+                const taken = (room.buszTakenIds||[]).includes(p.id);
+                const selected = pendingId === p.id;
+                return (
+                  <button key={p.id} disabled={taken} onClick={!taken ? () => setPendingId(p.id) : undefined} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background: selected ? `${p.color}18` : T.surface, border:`2px solid ${selected ? p.color : taken ? T.coral+'30' : 'transparent'}`, borderRadius:16, cursor:taken?'default':'pointer', boxShadow: selected ? `0 0 0 1px ${p.color}40, ${T.shadow}` : T.shadow, textAlign:'left', width:'100%', opacity:taken?0.45:1, transition:'background .15s, border-color .15s' }}>
+                    <div style={{ width:42, height:42, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:18, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>{p.name}</div>
+                      <div style={{ fontFamily:T.font, fontSize:12, color:taken?T.coral:T.inkSoft, marginTop:2 }}>{taken ? '🔒 Foglalt' : (buszState ? `${(buszState.hands?.[p.id]||[]).length} lap a kezében` : 'Elérhető')}</div>
+                    </div>
+                    {selected && <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill={p.color}/><path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ position:'absolute', bottom:0, left:0, right:0, height:48, background:`linear-gradient(to bottom, transparent, ${T.bg})`, pointerEvents:'none' }} />
+        </div>
+        {/* Confirm button */}
+        <div style={{ flexShrink:0, padding:'8px 18px', paddingBottom:'max(20px, calc(env(safe-area-inset-bottom) + 8px))' }}>
+          <button onClick={confirmSelection} disabled={!pendingId} style={{ width:'100%', minHeight:60, border:'none', borderRadius:999, background: pendingId ? (pendingPlayer?.color || T.mint) : T.mintSoft, color: pendingId ? '#fff' : 'rgba(26,42,74,0.4)', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:18, cursor: pendingId ? 'pointer' : 'default', boxShadow: pendingId ? T.shadow : 'none', transition:'background .2s' }}>
+            {pendingId ? `Ez vagyok én: ${pendingPlayer?.name}` : 'Válassz egy nevet…'}
+          </button>
+        </div>
       </div>
-      <div style={{ display:'flex', flexDirection:'column', gap:8, overflowY:'auto', WebkitOverflowScrolling:'touch', paddingBottom:32, flex:1, minHeight:0 }}>
-        {players.map(p => {
-          const taken = (room.buszTakenIds||[]).includes(p.id);
-          return (
-            <button key={p.id} disabled={taken} onClick={!taken ? () => {
-              setPlayerId(p.id);
-              try { firebase.firestore().collection('rooms').doc(roomCode).update({ buszTakenIds: firebase.firestore.FieldValue.arrayUnion(p.id) }); } catch(e) {}
-            } : undefined} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background:T.surface, border:`2px solid ${taken?T.coral+'30':'transparent'}`, borderRadius:16, cursor:taken?'default':'pointer', boxShadow:T.shadow, textAlign:'left', width:'100%', opacity:taken?0.45:1 }}>
-              <div style={{ width:42, height:42, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:18, color:'#fff', flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>{p.name}</div>
-                <div style={{ fontFamily:T.font, fontSize:12, color:taken?T.coral:T.inkSoft, marginTop:2 }}>{taken ? '🔒 Foglalt' : (buszState ? `${(buszState.hands?.[p.id]||[]).length} lap a kezében` : 'Elérhető')}</div>
-              </div>
-              {!taken && <div style={{ width:10, height:10, borderRadius:'50%', background:p.color, opacity:0.5, flexShrink:0 }}/>}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
+    );
+  }
 
   // ── Waiting for game to start ────────────────────────────────────────────
   if (!buszState || !['pyramid','bus','done'].includes(buszState.phase)) return (
