@@ -33643,7 +33643,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.94';
+const APP_VERSION = 'v9.95';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -38519,14 +38519,24 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult }) {
   const song = ZENE_SONGS_SHUFFLED[gameIdx % ZENE_SONGS_SHUFFLED.length];
   const [playing, setPlaying] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const [spotifyFailed, setSpotifyFailed] = useState(false);
   const ctrlRef = useRef(null);
   const containerRef = useRef(null);
   const advancedRef = useRef(false);
+  const failTimerRef = useRef(null);
 
   useEffect(() => {
     setPlaying(false);
     setRevealed(false);
+    setSpotifyFailed(false);
     advancedRef.current = false;
+    ctrlRef.current = null;
+
+    // If Spotify API doesn't become ready in 4s, mark as failed
+    failTimerRef.current = setTimeout(() => {
+      if (!ctrlRef.current) setSpotifyFailed(true);
+    }, 4000);
+
     const setupCtrl = (IFrameAPI) => {
       try { if (ctrlRef.current) ctrlRef.current.pause(); } catch(e) {}
       ctrlRef.current = null;
@@ -38534,7 +38544,10 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult }) {
       IFrameAPI.createController(containerRef.current, {
         uri: `spotify:track:${song.spotifyId}`,
         width: '100%', height: 80,
-      }, (ctrl) => { ctrlRef.current = ctrl; });
+      }, (ctrl) => {
+        ctrlRef.current = ctrl;
+        clearTimeout(failTimerRef.current);
+      });
     };
     if (window._spotifyIFrameAPI) {
       setupCtrl(window._spotifyIFrameAPI);
@@ -38542,12 +38555,18 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult }) {
       const iv = setInterval(() => {
         if (window._spotifyIFrameAPI) { clearInterval(iv); setupCtrl(window._spotifyIFrameAPI); }
       }, 300);
-      return () => clearInterval(iv);
+      return () => { clearInterval(iv); clearTimeout(failTimerRef.current); };
     }
-    return () => { try { if (ctrlRef.current) ctrlRef.current.pause(); } catch(e) {} };
+    return () => {
+      clearTimeout(failTimerRef.current);
+      try { if (ctrlRef.current) ctrlRef.current.pause(); } catch(e) {}
+    };
   }, [song.spotifyId]);
 
-  const handlePlay = () => { try { ctrlRef.current.play(); setPlaying(true); } catch(e) {} };
+  const handlePlay = () => {
+    if (!ctrlRef.current) { setSpotifyFailed(true); return; }
+    try { ctrlRef.current.play(); setPlaying(true); } catch(e) { setSpotifyFailed(true); }
+  };
   const handleStop = () => { try { ctrlRef.current.pause(); setPlaying(false); } catch(e) {} };
 
   const handleResult = (correct) => {
@@ -38591,7 +38610,17 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult }) {
 
       {/* Play/Stop + Reveal or Result buttons */}
       <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8 }}>
-        {!playing
+        {spotifyFailed ? (
+          <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8 }}>
+            <div style={{ width:'100%', padding:'12px 16px', background:'rgba(255,107,107,0.12)', border:'1.5px solid rgba(255,107,107,0.3)', borderRadius:16, display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:20 }}>🎵</span>
+              <div style={{ fontFamily:T.font, fontSize:13, color:T.coral, fontWeight:700, lineHeight:1.4 }}>Nem sikerült lejátszani a zenét.<br/><span style={{ fontWeight:500, color:T.inkSoft }}>Spotify bejelentkezés szükséges.</span></div>
+            </div>
+            <button onClick={() => { if (advancedRef.current) return; advancedRef.current = true; onAdvance && onAdvance({}, {}); }} style={{ width:'100%', padding:'14px 0', background:'#1B2340', border:'none', borderRadius:16, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, cursor:'pointer' }}>
+              ⏭ Következő dal
+            </button>
+          </div>
+        ) : !playing
           ? <button onClick={handlePlay} style={{ width:'100%', padding:'14px 0', background:'#1B2340', border:'none', borderRadius:16, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
               <span style={{ fontSize:13 }}>▶</span><span>Lejátszás</span>
             </button>
