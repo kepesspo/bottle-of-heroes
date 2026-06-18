@@ -33700,7 +33700,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.136';
+const APP_VERSION = 'v9.137';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -44474,6 +44474,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const collectConfigPS = gameMeta?.collectConfig || {};
   const setCollectConfigPS = cfg => setGameMeta && setGameMeta(m => ({...m, collectConfig: typeof cfg === 'function' ? cfg(m?.collectConfig||{}) : cfg}));
   const [showMenu, setShowMenu] = useState(false);
+  const [menuTab, setMenuTab] = useState('vezerlés');
   const [menuAddName, setMenuAddName] = useState('');
   const [gameRestartKey, setGameRestartKey] = useState(0);
   const [hideFooter, setHideFooter] = useState(false);
@@ -44979,106 +44980,120 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       {hostBurst && <HostDrinkAlert items={hostBurst} players={players} onDismiss={() => setHostBurst(null)} />}
       {showMenu && (() => {
         const mSorted = [...players].sort((a,b)=>(b.points-a.points)||(a.drinks-b.drinks));
-        const mWinner = mSorted[0];
-        const mDrinkWinner = [...players].sort((a,b)=>(b.drinks-a.drinks)||(a.points-b.points))[0];
+        const mLeader = mSorted[0];
         const mMaxScore = Math.max(1, ...players.map(p=>p.points));
+        const observerOn = !!gameMeta?.observerAllowed;
+        const toggleObserver = () => {
+          const next = !observerOn;
+          setGameMeta(m => ({...m, observerAllowed: next}));
+          if (roomCode && typeof syncRoom==='function') syncRoom(roomCode, { observerAllowed: next });
+        };
+        const PLAYER_COLORS = ['#5BA0DB','#E985B8','#F4C95A','#4FC2A0','#F97316','#A78BFA','#EF4444','#14B8A6','#F59E0B','#EC4899'];
         return (
           <SheetOverlay onClose={() => setShowMenu(false)}>
-            <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'0 14px 8px' }}>
-              {trackScores && (mWinner || mDrinkWinner) && (
-                <div style={{ display:'flex', gap:8 }}>
-                  {mWinner && (
-                    <div style={{ flex:1, background:T.bg, borderRadius:14, padding:'10px 12px', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
-                      <div style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Pont Győztes</div>
-                      <div style={{ color:T.yellow, display:'flex' }}>{Icon.trophy(T.yellow)}</div>
-                      <div style={{ width:40, height:40, borderRadius:'50%', background:mWinner.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:'#fff', flexShrink:0 }}>{(mWinner.name||'?').charAt(0).toUpperCase()}</div>
-                      <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:13, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, lineHeight:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'100%' }}>{mWinner.name}</div>
-                      <Stat value={mWinner.points} label="pont" tone={T.mint}/>
-                    </div>
-                  )}
-                  {mDrinkWinner && mDrinkWinner.drinks > 0 && (
-                    <div style={{ flex:1, background:T.bg, borderRadius:14, padding:'10px 12px', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
-                      <div style={{ fontFamily:T.font, fontSize:9, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Legtöbb Korty</div>
-                      <div style={{ color:T.coral, lineHeight:0, display:'flex' }}>{Icon.beer(T.coral)}</div>
-                      <div style={{ width:40, height:40, borderRadius:'50%', background:mDrinkWinner.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:'#fff', flexShrink:0 }}>{(mDrinkWinner.name||'?').charAt(0).toUpperCase()}</div>
-                      <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:13, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, lineHeight:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'100%' }}>{mDrinkWinner.name}</div>
-                      <Stat value={mDrinkWinner.drinks} label="korty" tone={T.coral}/>
-                    </div>
-                  )}
+            <div style={{ display:'flex', flexDirection:'column', gap:10, padding:'0 14px 8px' }}>
+              {/* Tabs */}
+              <div style={{ display:'flex', background:T.surfaceMuted, borderRadius:14, padding:4, gap:4 }}>
+                {['állás','vezérlés'].map(tab => (
+                  <button key={tab} onClick={() => setMenuTab(tab)} style={{
+                    flex:1, padding:'10px 0', border:'none', borderRadius:10, cursor:'pointer',
+                    fontFamily:T.font, fontWeight:700, fontSize:14,
+                    background: menuTab===tab ? T.surface : 'transparent',
+                    color: menuTab===tab ? T.ink : T.inkSoft,
+                    boxShadow: menuTab===tab ? '0 1px 4px rgba(0,0,0,0.10)' : 'none',
+                    transition:'background .15s',
+                    textTransform:'capitalize',
+                  }}>{tab.charAt(0).toUpperCase()+tab.slice(1)}</button>
+                ))}
+              </div>
+
+              {/* ── ÁLLÁS TAB ── */}
+              {menuTab==='állás' && (
+                <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:320, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
+                  {mSorted.map((p,i) => <LeaderRow key={p.id||i} p={p} rank={i+1} maxScore={mMaxScore} showScores={true} />)}
                 </div>
               )}
-              {trackScores && (
-                <div style={{ maxHeight:180, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
-                  <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                    {mSorted.map((p,i) => <LeaderRow key={p.id||i} p={p} rank={i+1} maxScore={mMaxScore} showScores={true} />)}
+
+              {/* ── VEZÉRLÉS TAB ── */}
+              {menuTab==='vezérlés' && (<>
+                {/* Leader card */}
+                {trackScores && mLeader && (
+                  <div style={{ background:'#F5C842', borderRadius:16, padding:'12px 16px', display:'flex', alignItems:'center', gap:12 }}>
+                    <span style={{ fontSize:22 }}>🏆</span>
+                    <div style={{ width:40, height:40, borderRadius:'50%', background:mLeader.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:'#fff', flexShrink:0 }}>{(mLeader.name||'?').charAt(0).toUpperCase()}</div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:'rgba(0,0,0,0.45)', textTransform:'uppercase', letterSpacing:'0.1em' }}>Vezető</div>
+                      <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:16, color:'#1a1a1a', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{mLeader.name}</div>
+                    </div>
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:'#1a2236' }}>{mLeader.points} <span style={{ fontSize:11, fontWeight:700 }}>PONT</span></div>
                   </div>
-                </div>
-              )}
-              <button onClick={() => {
-                const next = !gameMeta?.observerAllowed;
-                setGameMeta(m => ({...m, observerAllowed: next}));
-                if (roomCode && typeof syncRoom==='function') syncRoom(roomCode, { observerAllowed: next });
-              }} style={{ width:'100%', padding:'14px 4px', border:'none', background:'transparent', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', borderBottom:`1px solid rgba(20,30,50,0.06)` }}>
-                <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>Csatlakozás engedélyezve</span>
-                <div style={{ width:26, height:26, borderRadius:'50%', border: gameMeta?.observerAllowed ? `2.5px solid ${T.mint}` : `2px solid ${T.inkMute}`, background: gameMeta?.observerAllowed ? T.mint : 'transparent', display:'grid', placeItems:'center', transition:'background .15s,border .15s' }}>{gameMeta?.observerAllowed && Icon.check('#fff')}</div>
-              </button>
-              {roomCode && (
-                <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 14px', background:'#1a2236', borderRadius:14 }}>
-                  <span style={{ width:7, height:7, borderRadius:'50%', background:'#E03A3A', animation:'pulse 1.4s infinite', flexShrink:0 }}/>
-                  <span style={{ fontFamily:T.font, fontSize:11, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:'0.1em' }}>Szobakód</span>
-                  <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:16, color:'#fff', letterSpacing:'0.15em', marginLeft:'auto' }}>{roomCode}</span>
-                </div>
-              )}
+                )}
 
+                {/* Szobakód + Csatlakozás toggle — egy sor */}
+                {roomCode && (
+                  <div style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 16px', background:'#1a2236', borderRadius:16 }}>
+                    <span style={{ width:7, height:7, borderRadius:'50%', background:'#E03A3A', flexShrink:0, animation:'pulse 1.4s infinite' }}/>
+                    <span style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.1em' }}>Szobakód</span>
+                    <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:18, color:'#fff', letterSpacing:'0.15em', flex:1, textAlign:'center' }}>{roomCode}</span>
+                    {/* Toggle switch */}
+                    <div onClick={toggleObserver} style={{ width:48, height:28, borderRadius:14, background: observerOn ? T.mint : 'rgba(255,255,255,0.2)', position:'relative', cursor:'pointer', flexShrink:0, transition:'background .2s' }}>
+                      <div style={{ position:'absolute', top:3, left: observerOn ? 23 : 3, width:22, height:22, borderRadius:'50%', background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.3)', transition:'left .2s' }}/>
+                    </div>
+                  </div>
+                )}
+                {!roomCode && (
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', background:T.bg, borderRadius:16 }}>
+                    <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>Csatlakozás engedélyezve</span>
+                    <div onClick={toggleObserver} style={{ width:48, height:28, borderRadius:14, background: observerOn ? T.mint : T.surfaceMuted, position:'relative', cursor:'pointer', flexShrink:0, transition:'background .2s' }}>
+                      <div style={{ position:'absolute', top:3, left: observerOn ? 23 : 3, width:22, height:22, borderRadius:'50%', background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left .2s' }}/>
+                    </div>
+                  </div>
+                )}
 
-              {/* Add player row */}
-              <div style={{ display:'flex', gap:8 }}>
-                <input
-                  value={menuAddName}
-                  onChange={e => setMenuAddName(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && menuAddName.trim()) {
-                      const PLAYER_COLORS = ['#5BA0DB','#E985B8','#F4C95A','#4FC2A0','#F97316','#A78BFA','#EF4444','#14B8A6','#F59E0B','#EC4899'];
-                      const newP = { id: Date.now().toString(), name: menuAddName.trim(), drinks: 0, points: 0, color: PLAYER_COLORS[players.length % PLAYER_COLORS.length] };
-                      setPlayers(prev => [...prev, newP]);
-                      setPendingCommit(null);
-                      setMenuAddName('');
-                    }
-                  }}
-                  placeholder="Új játékos neve..."
-                  style={{ flex:1, padding:'12px 14px', border:`1.5px solid ${T.inkMute}44`, borderRadius:14, fontFamily:T.font, fontSize:14, color:T.ink, background:T.surface, outline:'none' }}
-                />
-                <button
-                  disabled={!menuAddName.trim()}
-                  onClick={() => {
-                    if (!menuAddName.trim()) return;
-                    const PLAYER_COLORS = ['#5BA0DB','#E985B8','#F4C95A','#4FC2A0','#F97316','#A78BFA','#EF4444','#14B8A6','#F59E0B','#EC4899'];
-                    const newP = { id: Date.now().toString(), name: menuAddName.trim(), drinks: 0, points: 0, color: PLAYER_COLORS[players.length % PLAYER_COLORS.length] };
-                    setPlayers(prev => [...prev, newP]);
-                    setPendingCommit(null);
-                    setMenuAddName('');
-                  }}
-                  style={{ padding:'0 18px', borderRadius:14, border:'none', background: menuAddName.trim() ? T.mint : T.surfaceMuted, color: menuAddName.trim() ? '#fff' : T.inkMute, fontFamily:T.font, fontWeight:700, fontSize:14, cursor: menuAddName.trim() ? 'pointer' : 'default' }}>
-                  ➕
+                {/* Add player */}
+                <div style={{ display:'flex', gap:8 }}>
+                  <input
+                    value={menuAddName}
+                    onChange={e => setMenuAddName(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key==='Enter' && menuAddName.trim()) {
+                        const newP = { id:Date.now().toString(), name:menuAddName.trim(), drinks:0, points:0, color:PLAYER_COLORS[players.length%PLAYER_COLORS.length] };
+                        setPlayers(prev=>[...prev,newP]); setPendingCommit(null); setMenuAddName('');
+                      }
+                    }}
+                    placeholder="+ Játékos hozzáadása"
+                    style={{ flex:1, padding:'13px 16px', border:'none', borderRadius:14, fontFamily:T.font, fontSize:14, color:T.ink, background:'#F5EDD8', outline:'none' }}
+                  />
+                  {menuAddName.trim() && (
+                    <button onClick={() => {
+                      const newP = { id:Date.now().toString(), name:menuAddName.trim(), drinks:0, points:0, color:PLAYER_COLORS[players.length%PLAYER_COLORS.length] };
+                      setPlayers(prev=>[...prev,newP]); setPendingCommit(null); setMenuAddName('');
+                    }} style={{ padding:'0 18px', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:14, cursor:'pointer' }}>➕</button>
+                  )}
+                </div>
+
+                {/* Action buttons */}
+                <div style={{ display:'flex', gap:8 }}>
+                  <button onClick={() => { undoLast(); setShowMenu(false); }} disabled={!undoRef.current} style={{ flex:1, minHeight:56, border:`1.5px solid ${undoRef.current ? T.inkMute+'66' : T.inkMute+'22'}`, background:T.surface, color: undoRef.current ? T.ink : T.inkMute+'55', fontFamily:T.font, fontWeight:700, fontSize:13, borderRadius:14, cursor: undoRef.current ? 'pointer' : 'default', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3 }}>
+                    <span style={{ fontSize:18 }}>↩</span>
+                    <span>Vissza</span>
+                  </button>
+                  <button onClick={() => { setPendingCommit(null); setGameRestartKey(k=>k+1); setShowMenu(false); }} style={{ flex:1, minHeight:56, border:`1.5px solid ${T.inkMute}44`, background:T.surface, color:T.ink, fontFamily:T.font, fontWeight:700, fontSize:13, borderRadius:14, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3 }}>
+                    <span style={{ fontSize:18 }}>🔄</span>
+                    <span>Újra</span>
+                  </button>
+                  <button onClick={() => { setGameIdx(g=>g+1); setShowMenu(false); }} style={{ flex:1, minHeight:56, border:`1.5px solid ${T.ink}`, background:T.surface, color:T.ink, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, borderRadius:14, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3 }}>
+                    <span style={{ fontSize:18 }}>⏭</span>
+                    <span>Következő</span>
+                  </button>
+                </div>
+
+                <button onClick={() => { setShowMenu(false); go('end'); }} style={{ width:'100%', minHeight:52, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                  <span>🏁</span><span>Kilépés</span>
                 </button>
-              </div>
-              {/* Action buttons — 2 rows */}
-              <div style={{ display:'flex', gap:8 }}>
-                <button onClick={() => { undoLast(); setShowMenu(false); }} disabled={!undoRef.current} style={{ flex:1, minHeight:52, border:`2px solid ${undoRef.current ? T.inkMute+'88' : T.inkMute+'33'}`, background:'transparent', color: undoRef.current ? T.inkSoft : T.inkMute+'55', fontFamily:T.font, fontWeight:700, fontSize:13, borderRadius:14, cursor: undoRef.current ? 'pointer' : 'default', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2 }}>
-                  <span style={{ fontSize:16 }}>↩</span>
-                  <span>Vissza</span>
-                </button>
-                <button onClick={() => { setPendingCommit(null); setGameRestartKey(k=>k+1); setShowMenu(false); }} style={{ flex:1, minHeight:52, border:`2px solid ${T.ink}44`, background:'transparent', color:T.ink, fontFamily:T.font, fontWeight:700, fontSize:13, borderRadius:14, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2 }}>
-                  <span style={{ fontSize:16 }}>🔄</span>
-                  <span>Játék újra</span>
-                </button>
-                <button onClick={() => { setGameIdx(g=>g+1); setShowMenu(false); }} style={{ flex:1, minHeight:52, border:`2px solid ${T.ink}`, background:'transparent', color:T.ink, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, borderRadius:14, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2 }}>
-                  <span style={{ fontSize:16 }}>⏭</span>
-                  <span>Következő</span>
-                </button>
-              </div>
-              <button onClick={() => { setShowMenu(false); go('end'); }} style={{ width:'100%', minHeight:52, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', boxShadow:T.shadow }}>🏁 Kilépés</button>
-              <div style={{ height:52 }} />
+              </>)}
+
+              <div style={{ height:20 }} />
             </div>
           </SheetOverlay>
         );
