@@ -33817,7 +33817,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.175';
+const APP_VERSION = 'v9.176';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -37406,6 +37406,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const [expandedGroups_g, setExpandedGroups_g] = React.useState({});
   const [timerSecs, setTimerSecs] = React.useState(0);
   const [timerRunning, setTimerRunning] = React.useState(false);
+  const [lastMinuteAlert, setLastMinuteAlert] = React.useState(false);
+  const lastMinuteFiredRef = React.useRef(false);
   const timerRef = React.useRef(null);
 
   const resumeFromBpState = (bp) => {
@@ -37433,10 +37435,31 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
   React.useEffect(() => { if (initialBpState) resumeFromBpState(initialBpState); }, []);
 
+  const playLastMinuteBeep = () => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const beep = (freq, start, dur, vol) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'sine'; o.frequency.value = freq;
+        g.gain.setValueAtTime(0, ctx.currentTime + start);
+        g.gain.linearRampToValueAtTime(vol, ctx.currentTime + start + 0.02);
+        g.gain.linearRampToValueAtTime(0, ctx.currentTime + start + dur);
+        o.start(ctx.currentTime + start);
+        o.stop(ctx.currentTime + start + dur + 0.05);
+      };
+      beep(880, 0,    0.18, 0.4);
+      beep(880, 0.22, 0.18, 0.4);
+      beep(1100, 0.46, 0.32, 0.5);
+    } catch(e) {}
+  };
+
   React.useEffect(() => {
     if (timerRunning) {
       timerRef.current = setInterval(() => {
         setTimerSecs(s => {
+          if (s === 61) playLastMinuteBeep();
           if (s <= 1) { setTimerRunning(false); clearInterval(timerRef.current); return 0; }
           return s - 1;
         });
