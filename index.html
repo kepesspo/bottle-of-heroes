@@ -33817,7 +33817,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.178';
+const APP_VERSION = 'v9.179';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -47801,6 +47801,13 @@ function BeerPongObserverView({ room, code, onLeave }) {
   const currentGameId = selGames[gameIdx % Math.max(1, selGames.length)];
   const isBP = currentGameId === 'beerpong';
 
+  const [notifPerm, setNotifPerm] = React.useState(() => ('Notification' in window ? Notification.permission : 'unsupported'));
+
+  React.useEffect(() => {
+    if (!('Notification' in window) || Notification.permission !== 'default') return;
+    Notification.requestPermission().then(p => setNotifPerm(p)).catch(() => {});
+  }, []);
+
   const getRRSt = (parts, matches) => {
     if (!parts || !matches) return [];
     const st = {};
@@ -47896,9 +47903,21 @@ function BeerPongObserverView({ room, code, onLeave }) {
           <div style={{ background:T.surface, borderRadius:18, boxShadow:`0 0 0 2px ${T.mint}40, ${T.shadow}`, padding:'14px 14px' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
               <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>⚡ Aktuális meccs</div>
-              <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-                <span style={{ width:7, height:7, borderRadius:'50%', background:'#E03A3A', animation:'pulse 1.4s infinite' }}/>
-                <span style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:'#E03A3A', letterSpacing:'0.08em' }}>ÉLŐ</span>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                  <span style={{ width:7, height:7, borderRadius:'50%', background:'#E03A3A', animation:'pulse 1.4s infinite' }}/>
+                  <span style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:'#E03A3A', letterSpacing:'0.08em' }}>ÉLŐ</span>
+                </div>
+                <div onClick={() => { if (notifPerm === 'default') Notification.requestPermission().then(p => setNotifPerm(p)); }}
+                  style={{ display:'flex', alignItems:'center', gap:3, padding:'2px 7px', borderRadius:8,
+                    background: notifPerm === 'granted' ? `${T.mint}22` : notifPerm === 'denied' ? `${T.coral}18` : 'rgba(20,30,50,0.07)',
+                    cursor: notifPerm === 'default' ? 'pointer' : 'default' }}>
+                  <span style={{ fontSize:10 }}>{notifPerm === 'granted' ? '🔔' : notifPerm === 'denied' ? '🔕' : '🔔'}</span>
+                  <span style={{ fontFamily:T.font, fontSize:9, fontWeight:700, letterSpacing:'0.06em',
+                    color: notifPerm === 'granted' ? T.mint : notifPerm === 'denied' ? T.coral : T.inkMute }}>
+                    {notifPerm === 'granted' ? 'ÉRTESÍTÉS BE' : notifPerm === 'denied' ? 'TILTVA' : 'ÉRTESÍTÉS?'}
+                  </span>
+                </div>
               </div>
             </div>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
