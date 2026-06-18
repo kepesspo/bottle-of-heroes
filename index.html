@@ -33817,7 +33817,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.180';
+const APP_VERSION = 'v9.181';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -37486,12 +37486,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     if (timerRunning) {
       timerRef.current = setInterval(() => {
         setTimerSecs(s => {
-          if (s === 61) {
-            playLastMinuteBeep();
-            if (roomCode && typeof syncRoom === 'function') {
-              syncRoom(roomCode, { bpTimerAlert: { type: 'lastMinute', ts: Date.now() } });
-            }
-          }
+          if (s === 61) playLastMinuteBeep();
           if (s <= 1) { setTimerRunning(false); clearInterval(timerRef.current); return 0; }
           return s - 1;
         });
@@ -37501,6 +37496,22 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     }
     return () => clearInterval(timerRef.current);
   }, [timerRunning]);
+
+  React.useEffect(() => {
+    if (timerSecs !== 60 || !timerRunning) return;
+    if (!roomCode || typeof syncRoom !== 'function') return;
+    // Get current match players
+    let p1name = '', p2name = '';
+    if (TOURNAMENT === 'se' && seRounds.length > 0) {
+      const r = seRounds[seCurRound];
+      const m = r ? (Array.isArray(r) ? r[seCurMatch] : Object.values(r)[seCurMatch]) : null;
+      if (m) { p1name = m.p1?.name || ''; p2name = m.p2?.name || ''; }
+    } else if (TOURNAMENT === 'rr' && rrMatches.length > 0) {
+      const m = rrMatches.find(m => m && !m.winner && !m.draw);
+      if (m) { p1name = m.p1?.name || ''; p2name = m.p2?.name || ''; }
+    }
+    syncRoom(roomCode, { bpTimerAlert: { type: 'lastMinute', p1: p1name, p2: p2name, ts: Date.now() } });
+  }, [timerSecs]);
 
   const startTimer = () => {
     if (timerSecs === 0) setTimerSecs(MATCH_MINUTES * 60);
@@ -48252,7 +48263,9 @@ function ObserverWatching({ code, observerName, onLeave }) {
           // Beer pong 1 perces riasztás
           if (data.bpTimerAlert && (!prev?.bpTimerAlert || data.bpTimerAlert.ts !== prev.bpTimerAlert.ts)) {
             if (typeof window._bohShowNotif === 'function') {
-              window._bohShowNotif('⏰ 1 perc maradt!', 'Hajrá — csak 1 perc van hátra a meccsből!');
+              const ta = data.bpTimerAlert;
+              const matchStr = ta.p1 && ta.p2 ? ta.p1 + ' vs ' + ta.p2 : '';
+              window._bohShowNotif('⏰ 1 perc maradt!', matchStr ? matchStr + ' — csak 1 perc van hátra!' : 'Csak 1 perc van hátra a meccsből!');
             }
           }
           return data;
