@@ -33818,7 +33818,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.190';
+const APP_VERSION = 'v9.191';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -46396,7 +46396,8 @@ function ObserverScreen({ go, initialCode, onJoinAsHost }) {
       .then(room => {
         if (!room || !room.active) { setErrorMsg(`A ${code} kód nem érvényes, vagy a szoba bezárult.`); setStatus('error'); return; }
         const isBuszRoom = !!(room.buszState || (room.selectedGames||[]).includes('busz'));
-        if (!isBuszRoom) {
+        const isBPRoom = !!(room.bpState || (room.selectedGames||[]).includes('beerpong'));
+        if (!isBuszRoom && !isBPRoom) {
           if (!room.observerAllowed) { setErrorMsg('A házigazda nem engedélyezte a megfigyelőket ennél a szobánál.'); setStatus('error'); return; }
         }
         return (typeof joinRoom==='function' && !isBuszRoom ? joinRoom(code, { id:observerId, name:name.trim() }) : Promise.resolve())
@@ -47951,6 +47952,24 @@ function BeerPongObserverView({ room, code, onLeave }) {
         </div>
         <button onClick={onLeave} style={{ padding:'4px 10px', border:'none', background:T.coralSoft, color:T.coral, borderRadius:999, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:11, cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.06em' }}>Kilépés</button>
       </div>
+      {/* Notification permission banner */}
+      {notifPerm !== 'granted' && notifPerm !== 'unsupported' && (
+        <button onClick={() => {
+          if (!('Notification' in window)) return;
+          Notification.requestPermission().then(p => setNotifPerm(p)).catch(() => {});
+        }} style={{ margin:'0 16px 4px', padding:'12px 16px', border:'none', borderRadius:14, background: notifPerm === 'denied' ? T.coralSoft : `${T.mint}22`, cursor:'pointer', display:'flex', alignItems:'center', gap:10, flexShrink:0, textAlign:'left' }}>
+          <span style={{ fontSize:20 }}>{notifPerm === 'denied' ? '🔕' : '🔔'}</span>
+          <div style={{ flex:1 }}>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color: notifPerm === 'denied' ? T.coral : T.mint }}>
+              {notifPerm === 'denied' ? 'Értesítések letiltva' : 'Értesítések engedélyezése'}
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>
+              {notifPerm === 'denied' ? 'Engedélyezd böngésző beállításokban' : 'Kapj értesítést a következő meccsről'}
+            </div>
+          </div>
+          {notifPerm !== 'denied' && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.mint }}>▶</span>}
+        </button>
+      )}
 
       <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'8px 16px 24px' }}>
       <div style={{ display:'flex', flexDirection: isWide ? 'row' : 'column', gap:12, alignItems: isWide ? 'flex-start' : 'stretch' }}>
