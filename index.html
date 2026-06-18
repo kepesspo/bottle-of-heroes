@@ -33637,29 +33637,31 @@ window.triggerHaptic = function() {
   window._spotifyIFrameAPI = null;
   window.onSpotifyIframeApiReady = function(IFrameAPI) { window._spotifyIFrameAPI = IFrameAPI; };
 
-  // Spotify embed scraper: corsproxy.io → open.spotify.com/embed/track/{id}
-  // Extracts p.scdn.co preview URL from the embed page HTML
-  var _previewCache = {};
-  window.getSpotifyPreviewUrl = function(spotifyId) {
-    if (_previewCache[spotifyId] !== undefined) return Promise.resolve(_previewCache[spotifyId]);
-    var embedUrl = 'https://open.spotify.com/embed/track/' + spotifyId;
-    var proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(embedUrl);
-    return fetch(proxyUrl, { signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined })
-      .then(function(r) { return r.text(); })
-      .then(function(html) {
-        var patterns = [
-          /"audioPreview"\s*:\s*\{\s*"url"\s*:\s*"(https:\/\/p\.scdn\.co\/[^"]+)"/,
-          /"preview_url"\s*:\s*"(https:\/\/p\.scdn\.co\/[^"]+)"/,
-          /(https:\/\/p\.scdn\.co\/mp3-preview\/[a-f0-9]+[^"\s]*)/
-        ];
-        for (var i = 0; i < patterns.length; i++) {
-          var m = html.match(patterns[i]);
-          if (m) { _previewCache[spotifyId] = m[1]; return m[1]; }
+  // Deezer preview via allorigins.win CORS proxy
+  // Deezer CDN URLs never expire, CORS-enabled, 30s MP3
+  var _deezerMemCache = {};
+  window.getZenePreviewUrl = function(spotifyId, artist, title) {
+    if (_deezerMemCache[spotifyId] !== undefined) return Promise.resolve(_deezerMemCache[spotifyId]);
+    try {
+      var cached = localStorage.getItem('zdz_' + spotifyId);
+      if (cached !== null) { _deezerMemCache[spotifyId] = cached || null; return Promise.resolve(cached || null); }
+    } catch(e) {}
+    var q = encodeURIComponent('artist:"' + artist + '" track:"' + title + '"');
+    var deezerUrl = 'https://api.deezer.com/search?q=' + q + '&limit=3';
+    var proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(deezerUrl);
+    return fetch(proxyUrl)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var items = d.data || [];
+        var url = null;
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].preview) { url = items[i].preview; break; }
         }
-        _previewCache[spotifyId] = null;
-        return null;
+        _deezerMemCache[spotifyId] = url;
+        try { localStorage.setItem('zdz_' + spotifyId, url || ''); } catch(e) {}
+        return url;
       })
-      .catch(function() { _previewCache[spotifyId] = null; return null; });
+      .catch(function() { _deezerMemCache[spotifyId] = null; return null; });
   };
 })();
 </script>
@@ -33668,7 +33670,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.124';
+const APP_VERSION = 'v9.125';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -38809,9 +38811,11 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
         setTimeout(() => { onCommit && onCommit(); }, 50);
       }
     };
-    const skipTimer = setTimeout(skip, 2500);
+    var alreadyCached = false;
+    try { alreadyCached = localStorage.getItem('zdz_' + song.spotifyId) !== null; } catch(e) {}
+    const skipTimer = setTimeout(skip, alreadyCached ? 2500 : 6000);
 
-    window.getSpotifyPreviewUrl(song.spotifyId).then(url => {
+    window.getZenePreviewUrl(song.spotifyId, song.artist, song.title).then(url => {
       clearTimeout(skipTimer);
       if (url) {
         setPreviewUrl(url);
