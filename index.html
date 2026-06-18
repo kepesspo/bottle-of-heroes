@@ -33817,7 +33817,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.181';
+const APP_VERSION = 'v9.182';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -37502,15 +37502,26 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     if (!roomCode || typeof syncRoom !== 'function') return;
     // Get current match players
     let p1name = '', p2name = '';
+    let nextP1 = '', nextP2 = '';
     if (TOURNAMENT === 'se' && seRounds.length > 0) {
-      const r = seRounds[seCurRound];
-      const m = r ? (Array.isArray(r) ? r[seCurMatch] : Object.values(r)[seCurMatch]) : null;
+      const r = Array.isArray(seRounds[seCurRound]) ? seRounds[seCurRound] : Object.values(seRounds[seCurRound] || {});
+      const m = r[seCurMatch];
       if (m) { p1name = m.p1?.name || ''; p2name = m.p2?.name || ''; }
+      // next match in same round
+      const nextInRound = r.slice(seCurMatch + 1).find(m => m && !m.winner && !m.tbd);
+      if (nextInRound) { nextP1 = nextInRound.p1?.name || ''; nextP2 = nextInRound.p2?.name || ''; }
+      else if (seRounds[seCurRound + 1]) {
+        const nr = Array.isArray(seRounds[seCurRound + 1]) ? seRounds[seCurRound + 1] : Object.values(seRounds[seCurRound + 1]);
+        const nm = nr.find(m => m && !m.winner && !m.tbd && m.p1 && m.p2);
+        if (nm) { nextP1 = nm.p1?.name || ''; nextP2 = nm.p2?.name || ''; }
+      }
     } else if (TOURNAMENT === 'rr' && rrMatches.length > 0) {
-      const m = rrMatches.find(m => m && !m.winner && !m.draw);
-      if (m) { p1name = m.p1?.name || ''; p2name = m.p2?.name || ''; }
+      const idx = rrMatches.findIndex(m => m && !m.winner && !m.draw);
+      if (idx !== -1) { p1name = rrMatches[idx].p1?.name || ''; p2name = rrMatches[idx].p2?.name || ''; }
+      const nm = rrMatches.slice(idx + 1).find(m => m && !m.winner && !m.draw);
+      if (nm) { nextP1 = nm.p1?.name || ''; nextP2 = nm.p2?.name || ''; }
     }
-    syncRoom(roomCode, { bpTimerAlert: { type: 'lastMinute', p1: p1name, p2: p2name, ts: Date.now() } });
+    syncRoom(roomCode, { bpTimerAlert: { type: 'lastMinute', p1: p1name, p2: p2name, score1: cups1, score2: cups2, nextP1, nextP2, ts: Date.now() } });
   }, [timerSecs]);
 
   const startTimer = () => {
@@ -48264,8 +48275,10 @@ function ObserverWatching({ code, observerName, onLeave }) {
           if (data.bpTimerAlert && (!prev?.bpTimerAlert || data.bpTimerAlert.ts !== prev.bpTimerAlert.ts)) {
             if (typeof window._bohShowNotif === 'function') {
               const ta = data.bpTimerAlert;
-              const matchStr = ta.p1 && ta.p2 ? ta.p1 + ' vs ' + ta.p2 : '';
-              window._bohShowNotif('⏰ 1 perc maradt!', matchStr ? matchStr + ' — csak 1 perc van hátra!' : 'Csak 1 perc van hátra a meccsből!');
+              const curStr = ta.p1 && ta.p2 ? 'Jelenlegi: ' + ta.p1 + ' ' + (ta.score1 ?? 0) + ' – ' + (ta.score2 ?? 0) + ' ' + ta.p2 : '';
+              const nextStr = ta.nextP1 && ta.nextP2 ? 'Következő: ' + ta.nextP1 + ' – ' + ta.nextP2 : '';
+              const body = [curStr, nextStr].filter(Boolean).join('\n') || '1 perc van hátra!';
+              window._bohShowNotif('⏰ 1 perc maradt!', body);
             }
           }
           return data;
