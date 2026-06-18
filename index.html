@@ -33818,7 +33818,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.210';
+const APP_VERSION = 'v9.211';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -47493,25 +47493,29 @@ function EmojiKvizGame({ gameIdx, challenger, onAdvance, onResult }) {
   };
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:20 }}>
-      <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.08em' }}>{q.category}</div>
-      <div style={{ background:T.surface, borderRadius:24, padding:'28px 20px', textAlign:'center', width:'100%', boxShadow:T.shadow }}>
-        <div style={{ fontSize:56, letterSpacing:'0.1em', lineHeight:1.3 }}>{q.emojis}</div>
-        <div style={{ fontFamily:T.font, fontSize:13, color:T.inkMute, marginTop:10 }}>Mi lehet ez?</div>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, width:'100%' }}>
+      {/* Category pill */}
+      <div style={{ background:T.surface, borderRadius:999, padding:'6px 18px', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:800, color:T.ink, textTransform:'uppercase', letterSpacing:'0.1em' }}>{q.category}</div>
+      </div>
+      {/* Emoji card */}
+      <div style={{ background:T.surface, borderRadius:24, padding:'32px 20px 24px', textAlign:'center', width:'100%', boxShadow:T.shadow }}>
+        <div style={{ fontSize:64, letterSpacing:'0.12em', lineHeight:1.2 }}>{q.emojis}</div>
+        {revealed && (
+          <div style={{ marginTop:18, paddingTop:18, borderTop:`1.5px solid ${T.inkMute}22` }}>
+            <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:6 }}>MEGOLDÁS</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:T.mint }}>{q.answer}</div>
+          </div>
+        )}
       </div>
       {!revealed ? (
-        <button onClick={() => setRevealed(true)} style={{ width:'100%', padding:'14px 0', background:'#1B2340', border:'none', borderRadius:14, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer' }}>
+        <button onClick={() => setRevealed(true)} style={{ width:'100%', padding:'16px 0', background:'#1B2340', border:'none', borderRadius:16, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:16, cursor:'pointer', boxShadow:T.shadow }}>
           🔍 Felfed
         </button>
       ) : (
-        <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10 }}>
-          <div style={{ background:`${T.mint}18`, borderRadius:16, padding:'16px', textAlign:'center', border:`1.5px solid ${T.mint}44` }}>
-            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink }}>{q.answer}</div>
-          </div>
-          <div style={{ display:'flex', gap:10 }}>
-            <button onClick={() => handleResult(true)} style={{ flex:1, padding:'13px 0', background:T.mint, border:'none', borderRadius:12, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer' }}>✓ Eltalálta</button>
-            <button onClick={() => handleResult(false)} style={{ flex:1, padding:'13px 0', background:T.coral, border:'none', borderRadius:12, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer' }}>✗ Nem találta</button>
-          </div>
+        <div style={{ display:'flex', gap:10, width:'100%' }}>
+          <button onClick={() => handleResult(true)} style={{ flex:1, padding:'16px 0', background:T.mint, border:'none', borderRadius:16, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer', boxShadow:T.shadowLift }}>✓ Eltalálta</button>
+          <button onClick={() => handleResult(false)} style={{ flex:1, padding:'16px 0', background:'#F4A0A0', border:'none', borderRadius:16, color:'#C03030', fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer', boxShadow:T.shadowLift }}>× Nem találta</button>
         </div>
       )}
     </div>
@@ -47521,8 +47525,9 @@ function EmojiKvizGame({ gameIdx, challenger, onAdvance, onResult }) {
 // ── Tabu Szó (Páros) ───────────────────────────────────────────────────────────
 function TabuGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
   const q = TABU_SHUFFLED[gameIdx % TABU_SHUFFLED.length];
+  const TOTAL = 30;
   const [phase, setPhase] = useState('ready');
-  const [timeLeft, setTimeLeft] = useState(30);
+  const [timeLeft, setTimeLeft] = useState(TOTAL);
   const ivRef = useRef(null);
   const advancedRef = useRef(false);
 
@@ -47530,7 +47535,7 @@ function TabuGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
 
   const start = () => {
     setPhase('playing');
-    const end = Date.now() + 30000;
+    const end = Date.now() + TOTAL * 1000;
     clearInterval(ivRef.current);
     ivRef.current = setInterval(() => {
       const rem = Math.max(0, (end - Date.now()) / 1000);
@@ -47544,8 +47549,7 @@ function TabuGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
     advancedRef.current = true;
     clearInterval(ivRef.current);
     const both = [challenger, opponent].filter(Boolean);
-    const points = {};
-    const drinks = {};
+    const points = {}, drinks = {};
     both.forEach(p => { if (won) points[p.id] = 1; else drinks[p.id] = 1; });
     if (won) {
       onResult && onResult({ correct: true, playerName: '', drinks: 0, subtitle: (challenger?.name||'') + ' & ' + (opponent?.name||'') + ' — mindkettő +1 pont!' });
@@ -47566,26 +47570,45 @@ function TabuGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
     </div>
   );
 
+  const timerPct = timeLeft / TOTAL;
+  const r = 20, circ = 2 * Math.PI * r;
+
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-      <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:900, fontSize:28, color: timeLeft <= 5 ? T.coral : T.mint }}>
-        {phase === 'done' ? '⏰' : timeLeft + 's'}
+    <div style={{ display:'flex', flexDirection:'column', gap:12, width:'100%' }}>
+      {/* Timer row */}
+      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+        <svg width={54} height={54} style={{ flexShrink:0 }}>
+          <circle cx={27} cy={27} r={r} fill="none" stroke={T.inkMute+'33'} strokeWidth={4}/>
+          <circle cx={27} cy={27} r={r} fill="none" stroke={timeLeft<=5?T.coral:T.mint} strokeWidth={4}
+            strokeDasharray={circ} strokeDashoffset={circ*(1-timerPct)}
+            strokeLinecap="round" transform="rotate(-90 27 27)" style={{transition:'stroke-dashoffset .1s linear'}}/>
+          <text x={27} y={32} textAnchor="middle" fontFamily={T.font} fontWeight={900} fontSize={13} fill={timeLeft<=5?T.coral:T.ink}>{phase==='done'?'⏰':timeLeft}</text>
+        </svg>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:20, color: timeLeft<=5?T.coral:T.ink }}>{phase==='done' ? 'Idő lejárt!' : timeLeft + ' másodperc'}</div>
       </div>
-      <div style={{ background:'#1B2340', borderRadius:20, padding:'20px', textAlign:'center' }}>
-        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:30, color:'#fff', marginBottom:12 }}>{q.word}</div>
-        <div style={{ fontFamily:T.font, fontSize:11, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>🚫 Tiltott szavak</div>
-        <div style={{ display:'flex', gap:8, justifyContent:'center', flexWrap:'wrap' }}>
-          {q.taboo.map((t, i) => <div key={i} style={{ padding:'5px 14px', background:T.coral+'33', borderRadius:999, fontFamily:T.font, fontWeight:700, fontSize:14, color:T.coral, border:`1.5px solid ${T.coral}44` }}>{t}</div>)}
+      {/* Main card */}
+      <div style={{ background:'#1B2340', borderRadius:22, padding:'22px 20px 18px', width:'100%' }}>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:38, color:'#fff', textAlign:'center', marginBottom:18 }}>{q.word}</div>
+        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:'0.14em', marginBottom:10, display:'flex', alignItems:'center', gap:6 }}>
+          <span>🚫</span><span>TILTOTT SZAVAK</span>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+          {q.taboo.map((t, i) => (
+            <div key={i} style={{ background:'rgba(255,255,255,0.09)', borderRadius:12, padding:'10px 14px', fontFamily:T.font, fontWeight:700, fontSize:16, color:'rgba(255,255,255,0.85)' }}>{t}</div>
+          ))}
         </div>
       </div>
+      {/* Buttons */}
       <div style={{ display:'flex', gap:10 }}>
-        <button onClick={() => handleResult(true)} style={{ flex:1, padding:'14px 0', background:T.mint, border:'none', borderRadius:14, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer' }}>✓ Kitalálta!</button>
-        <button onClick={() => handleResult(false)} style={{ flex:1, padding:'14px 0', background:T.coral, border:'none', borderRadius:14, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer' }}>✗ Nem / Szabálysértés</button>
+        <button onClick={() => handleResult(true)} style={{ flex:1, padding:'16px 0', background:T.mint, border:'none', borderRadius:16, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer', boxShadow:T.shadowLift }}>✓ Kitalálta</button>
+        <button onClick={() => handleResult(false)} style={{ flex:1, padding:'16px 0', background:'#F4A0A0', border:'none', borderRadius:16, color:'#C03030', fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer', boxShadow:T.shadowLift }}>× Nem</button>
       </div>
     </div>
   );
 }
 // ── Gyors Matek ────────────────────────────────────────────────────────────────
+const MATEK_BTN_COLORS = ['#4A8FD4','#E05555','#7B68EE','#3DAA6D'];
+
 function MatekGame({ gameIdx, challenger, onAdvance, onResult }) {
   const genQuestion = (idx) => {
     const ops = ['+','-','×'];
@@ -47598,24 +47621,27 @@ function MatekGame({ gameIdx, challenger, onAdvance, onResult }) {
     else { a = rng(11, 1)+3; b = rng(11, 2)+3; answer = a*b; }
     const wrongs = new Set();
     let attempt = 0;
-    while (wrongs.size < 2) {
+    while (wrongs.size < 3) {
       attempt++;
-      const d = (rng(5, attempt*10)+1) * (rng(2, attempt*10+1)===0?1:-1);
+      const d = (rng(7, attempt*10)+1) * (rng(2, attempt*10+1)===0?1:-1);
       if (answer+d !== answer && answer+d > 0) wrongs.add(answer+d);
     }
-    const options = [answer, ...[...wrongs]].sort(() => rng(3, 99)-1);
-    return { q:`${a} ${op} ${b} = ?`, answer, options };
+    // shuffle 4 options
+    const opts = [answer, ...[...wrongs]];
+    for (let i = opts.length-1; i > 0; i--) { const j = rng(i+1, i*77); [opts[i],opts[j]]=[opts[j],opts[i]]; }
+    return { q:`${a} ${op} ${b} = ?`, answer, options: opts };
   };
 
   const [qData] = useState(() => genQuestion(gameIdx));
-  const [timeLeft, setTimeLeft] = useState(3);
+  const [streak, setStreak] = useState(() => parseInt(sessionStorage.getItem('matek_streak')||'0'));
+  const [timeLeft, setTimeLeft] = useState(5);
   const [chosen, setChosen] = useState(null);
   const [timedOut, setTimedOut] = useState(false);
   const ivRef = useRef(null);
   const advancedRef = useRef(false);
 
   useEffect(() => {
-    const end = Date.now() + 3000;
+    const end = Date.now() + 5000;
     ivRef.current = setInterval(() => {
       const rem = Math.max(0, (end - Date.now()) / 1000);
       setTimeLeft(parseFloat(rem.toFixed(1)));
@@ -47629,6 +47655,8 @@ function MatekGame({ gameIdx, challenger, onAdvance, onResult }) {
       advancedRef.current = true;
       clearInterval(ivRef.current);
       const won = chosen === qData.answer;
+      const newStreak = won ? streak + 1 : 0;
+      sessionStorage.setItem('matek_streak', String(newStreak));
       if (won) {
         onResult && onResult({ correct: true, playerName: challenger?.name||'', drinks:0, subtitle: (challenger?.name||'') + ' megoldotta — +1 pont!' });
         onAdvance && onAdvance({}, challenger ? {[challenger.id]:1} : {});
@@ -47639,33 +47667,46 @@ function MatekGame({ gameIdx, challenger, onAdvance, onResult }) {
     }
   }, [timedOut, chosen]);
 
-  const progress = Math.max(0, timeLeft / 3);
+  const progress = Math.max(0, timeLeft / 5);
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, width:'100%' }}>
+      {/* Progress bar */}
       <div style={{ width:'100%', height:6, background:T.surfaceMuted, borderRadius:3, overflow:'hidden' }}>
         <div style={{ height:'100%', width: (progress*100)+'%', background: progress > 0.5 ? T.mint : progress > 0.2 ? '#F59E0B' : T.coral, transition:'width .08s linear, background .3s' }} />
       </div>
+      {/* Equation card */}
       <div style={{ background:T.surface, borderRadius:24, padding:'28px 20px', textAlign:'center', width:'100%', boxShadow:T.shadow }}>
-        <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:38, color:T.ink, letterSpacing:'-0.02em' }}>{qData.q}</div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:40, color:T.ink, letterSpacing:'-0.01em' }}>{qData.q}</div>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, width:'100%' }}>
+      {/* 2×2 colored answer grid */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, width:'100%' }}>
         {qData.options.map((opt, i) => {
           const isChosen = chosen === opt;
           const isCorrect = opt === qData.answer;
-          let bg = T.surface, color = T.ink, border = `1.5px solid rgba(20,30,50,0.08)`;
+          const baseColor = MATEK_BTN_COLORS[i % 4];
+          let bg = baseColor, color = '#fff', opacity = 1;
           if (timedOut || chosen !== null) {
-            if (isCorrect) { bg = `${T.mint}22`; color = T.mint; border = `2px solid ${T.mint}`; }
-            else if (isChosen) { bg = `${T.coral}22`; color = T.coral; border = `2px solid ${T.coral}`; }
+            if (isCorrect) { bg = T.mint; opacity = 1; }
+            else if (isChosen) { bg = T.coral; opacity = 1; }
+            else { opacity = 0.35; }
           }
           return (
             <button key={i} onClick={() => !timedOut && chosen === null && setChosen(opt)}
-              style={{ padding:'18px 0', background:bg, border, borderRadius:16, fontFamily:'monospace', fontWeight:900, fontSize:22, color, cursor: chosen===null && !timedOut ? 'pointer' : 'default', boxShadow:T.shadow }}>
+              style={{ padding:'20px 0', background:bg, border:'none', borderRadius:18, fontFamily:T.font, fontWeight:900, fontSize:26, color, cursor: chosen===null && !timedOut ? 'pointer' : 'default', boxShadow:'0 4px 12px rgba(0,0,0,0.15)', opacity, transition:'opacity .2s' }}>
               {opt}
             </button>
           );
         })}
       </div>
+      {/* Streak info */}
+      {streak > 0 && (
+        <div style={{ display:'flex', alignItems:'center', gap:6, fontFamily:T.font, fontSize:13, color:T.inkSoft }}>
+          <span>🔥</span>
+          <span>Sorozat: <b style={{color:T.ink}}>{streak}</b></span>
+          <span style={{color:T.inkMute}}>· a gyorsabb több pontot kap</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -47732,49 +47773,71 @@ function ReakcioGame({ challenger, opponent, onAdvance, onResult }) {
   }, [phase, p1Ms, p2Ms]);
 
   if (phase === 'intro1' || phase === 'intro2') return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:20, padding:'16px 0' }}>
-      {earlyTap && <div style={{ fontFamily:T.font, fontSize:13, color:T.coral, fontWeight:700 }}>⚠️ Túl korán koppintottál! Próbáld újra.</div>}
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, textAlign:'center' }}>
-        {currentPlayer?.name || 'Játékos'} jön
-      </div>
-      <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center' }}>
-        A képernyő piroson vár, majd zöldre vált.<br/>Koppints a lehető leggyorsabban!
-      </div>
-      {phase === 'done1' || p1Ms !== null ? null : null}
-      <button onClick={startWaiting} style={{ padding:'16px 40px', background:T.mint, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:18, cursor:'pointer', boxShadow:T.shadowLift }}>
-        ▶ Start
-      </button>
-      {phase === 'intro2' && p1Ms !== null && (
-        <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft }}>
-          {challenger?.name}: <span style={{ fontFamily:'monospace', fontWeight:700, color:T.mint }}>{p1Ms}ms</span>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, padding:'8px 0' }}>
+      {earlyTap && (
+        <div style={{ background:'rgba(239,68,68,0.12)', borderRadius:12, padding:'8px 16px', fontFamily:T.font, fontSize:13, color:'#EF4444', fontWeight:700 }}>
+          ⚠️ Túl korán koppintottál! Próbáld újra.
         </div>
       )}
+      {phase === 'intro2' && p1Ms !== null && (
+        <div style={{ background:T.surface, borderRadius:16, padding:'10px 20px', boxShadow:T.shadow, display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>{challenger?.name}</span>
+          <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:20, color:T.mint }}>{p1Ms}ms</span>
+        </div>
+      )}
+      <div style={{ width:'100%', borderRadius:28, background:'#EF4444', padding:'32px 24px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:20, minHeight:260, boxShadow:'0 8px 32px rgba(239,68,68,0.3)' }}>
+        <div style={{ width:96, height:96, borderRadius:'50%', background:'rgba(255,255,255,0.18)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ width:72, height:72, borderRadius:'50%', background:'rgba(255,255,255,0.9)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <span style={{ fontSize:32 }}>⚡</span>
+          </div>
+        </div>
+        <div style={{ textAlign:'center' }}>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:24, color:'#fff', marginBottom:4 }}>{currentPlayer?.name || 'Játékos'} jön</div>
+          <div style={{ fontFamily:T.font, fontSize:14, color:'rgba(255,255,255,0.8)' }}>Amint a mező zöldre vált, koppints,<br/>amilyen gyorsan csak tudsz.</div>
+        </div>
+      </div>
+      <button onClick={startWaiting} style={{ width:'100%', padding:'16px', background:T.mint, color:'#fff', border:'none', borderRadius:18, fontFamily:T.font, fontWeight:800, fontSize:18, cursor:'pointer', boxShadow:T.shadowLift }}>
+        ▶ Start
+      </button>
     </div>
   );
 
   if (phase === 'waiting1' || phase === 'waiting2' || phase === 'ready1' || phase === 'ready2') {
     const isReady = phase.startsWith('ready');
+    const bg = isReady ? '#22C55E' : '#EF4444';
+    const shadowColor = isReady ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)';
     return (
-      <div onClick={handleTap}
-        style={{ width:'100%', minHeight:240, borderRadius:24, background: isReady ? '#22C55E' : '#EF4444', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', cursor:'pointer', userSelect:'none', WebkitUserSelect:'none', gap:10, transition:'background .1s' }}>
-        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:'#fff' }}>
-          {isReady ? '🟢 MOST! Koppints!' : '🔴 Várj...'}
+      <div onClick={handleTap} style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        <div style={{ width:'100%', borderRadius:28, background:bg, padding:'0 24px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:20, minHeight:320, boxShadow:`0 8px 32px ${shadowColor}`, cursor:'pointer', userSelect:'none', WebkitUserSelect:'none', transition:'background 0.15s' }}>
+          <div style={{ width:110, height:110, borderRadius:'50%', background:'rgba(255,255,255,0.18)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <div style={{ width:84, height:84, borderRadius:'50%', background:'rgba(255,255,255,0.92)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <span style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color: isReady ? '#22C55E' : '#EF4444' }}>{isReady ? 'MOST!' : 'Várj...'}</span>
+            </div>
+          </div>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:'#fff', marginBottom:4 }}>{isReady ? 'Koppints!' : 'Ne koppints még!'}</div>
+            <div style={{ fontFamily:T.font, fontSize:14, color:'rgba(255,255,255,0.8)' }}>{currentPlayer?.name}</div>
+          </div>
         </div>
-        <div style={{ fontFamily:T.font, fontSize:15, color:'rgba(255,255,255,0.85)' }}>{currentPlayer?.name}</div>
+        <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center' }}>Koppints bárhova a mezőre</div>
       </div>
     );
   }
 
   if (phase === 'done1') return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:20, padding:'16px 0' }}>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color:T.mint }}>
-        {p1Ms}ms ✓
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, padding:'8px 0' }}>
+      <div style={{ width:'100%', borderRadius:28, background:'#22C55E', padding:'28px 24px', display:'flex', flexDirection:'column', alignItems:'center', gap:12, boxShadow:'0 8px 32px rgba(34,197,94,0.3)' }}>
+        <div style={{ width:80, height:80, borderRadius:'50%', background:'rgba(255,255,255,0.2)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ width:60, height:60, borderRadius:'50%', background:'rgba(255,255,255,0.9)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:18, color:'#22C55E' }}>{p1Ms}ms</span>
+          </div>
+        </div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:'#fff' }}>{challenger?.name} reakcióideje ✓</div>
       </div>
-      <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>{challenger?.name} reakcióideje</div>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink, textAlign:'center', marginTop:8 }}>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink, textAlign:'center' }}>
         {opponent?.name || 'Ellenfél'} következik
       </div>
-      <button onClick={() => setPhase('intro2')} style={{ padding:'16px 40px', background:T.mint, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:18, cursor:'pointer', boxShadow:T.shadowLift }}>
+      <button onClick={() => setPhase('intro2')} style={{ width:'100%', padding:'16px', background:T.mint, color:'#fff', border:'none', borderRadius:18, fontFamily:T.font, fontWeight:800, fontSize:18, cursor:'pointer', boxShadow:T.shadowLift }}>
         ▶ Tovább
       </button>
     </div>
@@ -47782,20 +47845,17 @@ function ReakcioGame({ challenger, opponent, onAdvance, onResult }) {
 
   // result
   const p1Won = p1Ms !== null && p2Ms !== null && p1Ms <= p2Ms;
+  const winnerName = p1Won ? (challenger?.name||'Kihívó') : (opponent?.name||'Ellenfél');
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, padding:'16px 0' }}>
-      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'20px 16px', boxShadow:T.shadow }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
-          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color:T.ink }}>{challenger?.name || 'Kihívó'}</div>
-          <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:20, color: p1Won ? T.mint : T.coral }}>{p1Ms}ms</div>
-        </div>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color:T.ink }}>{opponent?.name || 'Ellenfél'}</div>
-          <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:20, color: !p1Won ? T.mint : T.coral }}>{p2Ms}ms</div>
-        </div>
-      </div>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.mint, textAlign:'center' }}>
-        🏆 {p1Won ? (challenger?.name||'Kihívó') : (opponent?.name||'Ellenfél')} nyert!
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, padding:'8px 0' }}>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.mint, textAlign:'center' }}>🏆 {winnerName} nyert!</div>
+      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'20px 16px', boxShadow:T.shadow, display:'flex', flexDirection:'column', gap:12 }}>
+        {[{player:challenger, ms:p1Ms, won:p1Won},{player:opponent, ms:p2Ms, won:!p1Won}].map(({player,ms,won},i) => (
+          <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 12px', borderRadius:14, background: won ? 'rgba(34,197,94,0.08)' : 'transparent', border: won ? '1.5px solid rgba(34,197,94,0.3)' : '1.5px solid transparent' }}>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color:T.ink }}>{won ? '🥇 ' : ''}{player?.name || (i===0?'Kihívó':'Ellenfél')}</div>
+            <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:22, color: won ? T.mint : T.coral }}>{ms}ms</div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -47811,10 +47871,10 @@ function SzamsorGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
     for (let i = 0; i < COUNT; i++) {
       let x, y, attempts = 0;
       do {
-        x = 8 + rng(i*3+attempts)*78;
-        y = 8 + rng(i*3+attempts+1)*70;
+        x = 10 + rng(i*3+attempts)*76;
+        y = 10 + rng(i*3+attempts+1)*74;
         attempts++;
-      } while (positions.some(p => Math.abs(p.x-x)<14 && Math.abs(p.y-y)<12) && attempts < 20);
+      } while (positions.some(p => Math.abs(p.x-x)<18 && Math.abs(p.y-y)<16) && attempts < 30);
       positions.push({ num: i+1, x, y });
     }
     return positions;
@@ -47840,6 +47900,7 @@ function SzamsorGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
       const t0 = Date.now();
       setStartTime(t0);
       setElapsed(0);
+      setNext(1);
       ivRef.current = setInterval(() => setElapsed(Date.now() - t0), 80);
       return () => clearInterval(ivRef.current);
     }
@@ -47858,13 +47919,12 @@ function SzamsorGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
         setP2Time(ms);
         setPhase('result');
       }
-      setNext(1);
+      setNext(COUNT + 1);
     } else {
       setNext(n => n+1);
     }
   };
 
-  // When result phase kicks in, call callbacks
   useEffect(() => {
     if (phase !== 'result' || advancedRef.current) return;
     if (p1Time === null || p2Time === null) return;
@@ -47884,42 +47944,50 @@ function SzamsorGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
     );
   }, [phase, p1Time, p2Time]);
 
-  const done = phase === 'playing1' || phase === 'playing2' ? false : (phase==='done1' || phase==='result');
-
-  const renderBoard = () => (
-    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>
-          Következő: <span style={{ color:T.mint, fontSize:18 }}>{next <= COUNT ? next : '✓'}</span>
+  const renderBoard = () => {
+    const finished = next > COUNT;
+    return (
+      <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'0 4px' }}>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:16, color:T.ink }}>
+            Következő: <span style={{ color:T.mint, fontSize:22, fontWeight:900 }}>{next <= COUNT ? next : '✓'}</span>
+          </div>
+          <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:22, color: finished ? T.mint : T.ink }}>
+            {(elapsed/1000).toFixed(finished ? 2 : 1)}s
+          </div>
         </div>
-        <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:18, color: next > COUNT ? T.mint : T.ink }}>
-          {(elapsed/1000).toFixed(next > COUNT ? 2 : 1)}s
+        <div style={{ display:'flex', justifyContent:'center', gap:6, padding:'2px 0' }}>
+          {Array.from({length:COUNT}, (_,i) => (
+            <div key={i} style={{ width:8, height:8, borderRadius:'50%', background: i+1 < next ? T.mint : i+1 === next ? T.ink : 'rgba(20,30,50,0.15)', transition:'background .15s' }} />
+          ))}
+        </div>
+        <div style={{ position:'relative', width:'100%', paddingBottom:'90%', background:'#EEE9E0', borderRadius:24, overflow:'hidden' }}>
+          {currentPositions.map(({ num, x, y }) => {
+            const tapped = num < next;
+            const isNext = num === next;
+            return (
+              <div key={num} onClick={() => tap(num)}
+                style={{ position:'absolute', left:x+'%', top:y+'%', width:64, height:64, borderRadius:18, background: tapped ? T.mint : isNext ? '#1B2340' : '#fff', border: isNext ? `2.5px solid ${T.mint}` : tapped ? 'none' : '1.5px solid rgba(20,30,50,0.08)', display:'grid', placeItems:'center', cursor: tapped ? 'default' : 'pointer', transform:'translate(-50%,-50%)', boxShadow: isNext ? `0 0 18px ${T.mint}99, 0 4px 12px rgba(0,0,0,0.12)` : '0 2px 8px rgba(0,0,0,0.1)', transition:'background .15s, box-shadow .15s', userSelect:'none', WebkitUserSelect:'none' }}>
+                <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:20, color: tapped ? '#fff' : isNext ? '#fff' : T.ink }}>{tapped ? '✓' : num}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
-      <div style={{ position:'relative', width:'100%', paddingBottom:'85%', background:T.surfaceMuted, borderRadius:20, overflow:'hidden' }}>
-        {currentPositions.map(({ num, x, y }) => {
-          const tapped = num < next;
-          const isNext = num === next;
-          return (
-            <div key={num} onClick={() => tap(num)}
-              style={{ position:'absolute', left:x+'%', top:y+'%', width:44, height:44, borderRadius:14, background: tapped ? T.mint : isNext ? '#1B2340' : T.surface, border: isNext ? `2.5px solid ${T.mint}` : tapped ? 'none' : `1.5px solid rgba(20,30,50,0.1)`, display:'grid', placeItems:'center', cursor: tapped ? 'default' : 'pointer', transform:'translate(-50%,-50%)', boxShadow: isNext ? `0 0 14px ${T.mint}88` : T.shadow, transition:'background .15s', userSelect:'none', WebkitUserSelect:'none' }}>
-              <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:16, color: tapped ? '#fff' : isNext ? '#fff' : T.ink }}>{tapped ? '✓' : num}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+    );
+  };
 
   if (phase === 'intro1') return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:20, padding:'16px 0' }}>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, textAlign:'center' }}>
-        {challenger?.name || 'Kihívó'} jön
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:20, padding:'8px 0' }}>
+      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'20px 16px', boxShadow:T.shadow, textAlign:'center' }}>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, marginBottom:8 }}>
+          {challenger?.name || 'Kihívó'} jön
+        </div>
+        <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>
+          Koppints 1-től 9-ig a lehető leggyorsabban!
+        </div>
       </div>
-      <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center' }}>
-        Koppints 1-től 9-ig a lehető leggyorsabban!
-      </div>
-      <button onClick={() => setPhase('playing1')} style={{ padding:'16px 40px', background:T.mint, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:18, cursor:'pointer', boxShadow:T.shadowLift }}>
+      <button onClick={() => setPhase('playing1')} style={{ width:'100%', padding:'16px', background:T.mint, color:'#fff', border:'none', borderRadius:18, fontFamily:T.font, fontWeight:800, fontSize:18, cursor:'pointer', boxShadow:T.shadowLift }}>
         ▶ Start
       </button>
     </div>
@@ -47928,17 +47996,19 @@ function SzamsorGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
   if (phase === 'playing1') return renderBoard();
 
   if (phase === 'done1') return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:20, padding:'16px 0' }}>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.mint, textAlign:'center' }}>
-        {challenger?.name || 'Kihívó'}: {(p1Time/1000).toFixed(2)}s ✓
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, padding:'8px 0' }}>
+      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'20px 16px', boxShadow:T.shadow, textAlign:'center' }}>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:24, color:T.mint, marginBottom:4 }}>
+          {challenger?.name || 'Kihívó'}: {(p1Time/1000).toFixed(2)}s ✓
+        </div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink, marginBottom:4 }}>
+          {opponent?.name || 'Ellenfél'} következik
+        </div>
+        <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>
+          Koppints 1-től 9-ig a lehető leggyorsabban!
+        </div>
       </div>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, textAlign:'center' }}>
-        {opponent?.name || 'Ellenfél'} következik
-      </div>
-      <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center' }}>
-        Koppints 1-től 9-ig a lehető leggyorsabban!
-      </div>
-      <button onClick={() => setPhase('playing2')} style={{ padding:'16px 40px', background:T.mint, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:18, cursor:'pointer', boxShadow:T.shadowLift }}>
+      <button onClick={() => setPhase('playing2')} style={{ width:'100%', padding:'16px', background:T.mint, color:'#fff', border:'none', borderRadius:18, fontFamily:T.font, fontWeight:800, fontSize:18, cursor:'pointer', boxShadow:T.shadowLift }}>
         ▶ Start
       </button>
     </div>
@@ -47946,22 +48016,19 @@ function SzamsorGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
 
   if (phase === 'playing2') return renderBoard();
 
-  // result phase — show summary while callbacks fire
+  // result
   const p1Won = p1Time !== null && p2Time !== null && p1Time <= p2Time;
+  const winnerName = p1Won ? (challenger?.name||'Kihívó') : (opponent?.name||'Ellenfél');
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, padding:'16px 0' }}>
-      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'20px 16px', boxShadow:T.shadow }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
-          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color:T.ink }}>{challenger?.name || 'Kihívó'}</div>
-          <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:20, color: p1Won ? T.mint : T.coral }}>{p1Time !== null ? (p1Time/1000).toFixed(2)+'s' : '—'}</div>
-        </div>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color:T.ink }}>{opponent?.name || 'Ellenfél'}</div>
-          <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:20, color: !p1Won ? T.mint : T.coral }}>{p2Time !== null ? (p2Time/1000).toFixed(2)+'s' : '—'}</div>
-        </div>
-      </div>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.mint, textAlign:'center' }}>
-        🏆 {p1Won ? (challenger?.name||'Kihívó') : (opponent?.name||'Ellenfél')} nyert!
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, padding:'8px 0' }}>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.mint, textAlign:'center' }}>🏆 {winnerName} nyert!</div>
+      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'20px 16px', boxShadow:T.shadow, display:'flex', flexDirection:'column', gap:12 }}>
+        {[{player:challenger, t:p1Time, won:p1Won},{player:opponent, t:p2Time, won:!p1Won}].map(({player,t,won},i) => (
+          <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 12px', borderRadius:14, background: won ? 'rgba(34,197,94,0.08)' : 'transparent', border: won ? '1.5px solid rgba(34,197,94,0.3)' : '1.5px solid transparent' }}>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color:T.ink }}>{won ? '🥇 ' : ''}{player?.name || (i===0?'Kihívó':'Ellenfél')}</div>
+            <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:22, color: won ? T.mint : T.coral }}>{t !== null ? (t/1000).toFixed(2)+'s' : '—'}</div>
+          </div>
+        ))}
       </div>
     </div>
   );
