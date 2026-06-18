@@ -33700,7 +33700,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.138';
+const APP_VERSION = 'v9.139';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -38940,10 +38940,10 @@ function ZeneConfigSheet({ config, setConfig, onClose }) {
   const genre = config.genre || 'all';
   const ERA_OPTIONS = [
     { v:'all',     label:'Minden korszak' },
-    { v:'classic', label:'Klasszikusok (pre-2000)' },
-    { v:'2000s',   label:'2000-es évek' },
-    { v:'2010s',   label:'2010-es évek' },
-    { v:'2020s',   label:'2020-as évek' },
+    { v:'classic', label:'Pre-2000' },
+    { v:'2000s',   label:'2000-es' },
+    { v:'2010s',   label:'2010-es' },
+    { v:'2020s',   label:'2020-as' },
   ];
   const GENRE_OPTIONS = [
     { v:'all',        label:'Minden stílus' },
@@ -38955,47 +38955,55 @@ function ZeneConfigSheet({ config, setConfig, onClose }) {
     { v:'indie',      label:'Indie' },
     { v:'magyar',     label:'Magyar zene 🇭🇺' },
   ];
-  const chip = (active) => ({
-    flex:1, padding:'10px 0', borderRadius:12, border:'none', cursor:'pointer',
-    fontFamily:T.font, fontWeight:700, fontSize:13,
-    background: active ? T.mint : T.surfaceMuted,
-    color: active ? '#fff' : T.ink,
-  });
+
+  const renderOptions = (options, current, onChange) => {
+    const allOpt = options[0];
+    const rest   = options.slice(1);
+    const btnBase = { border:'1.5px solid rgba(26,42,74,0.12)', borderRadius:14, cursor:'pointer', fontFamily:T.font, fontWeight:600, fontSize:15, padding:'13px 10px', textAlign:'center', transition:'background .12s,color .12s,border .12s' };
+    return (
+      <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+        {/* "Minden X" — full width */}
+        <button onClick={() => onChange(allOpt.v)} style={{
+          ...btnBase,
+          width:'100%',
+          background: current===allOpt.v ? T.mintSoft : '#fff',
+          color:       current===allOpt.v ? T.mintDeep : T.ink,
+          border:      current===allOpt.v ? `1.5px solid ${T.mint}` : '1.5px solid rgba(26,42,74,0.12)',
+          fontWeight:  current===allOpt.v ? 700 : 600,
+        }}>{allOpt.label}</button>
+        {/* Rest — 2 column grid */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          {rest.map(o => (
+            <button key={o.v} onClick={() => onChange(o.v)} style={{
+              ...btnBase,
+              background: current===o.v ? T.mintSoft : '#fff',
+              color:       current===o.v ? T.mintDeep : T.ink,
+              border:      current===o.v ? `1.5px solid ${T.mint}` : '1.5px solid rgba(26,42,74,0.12)',
+              fontWeight:  current===o.v ? 700 : 600,
+            }}>{o.label}</button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <SheetOverlay onClose={onClose}>
       <div style={{padding:'4px 20px 32px'}}>
-        <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:18,color:T.ink,marginBottom:4,letterSpacing:T.letterDisplay}}>🎵 Zenefelismerés beállítások</div>
-        <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,marginBottom:18}}>Szűrd a zenéket korszak és stílus szerint</div>
+        <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:22,color:T.ink,marginBottom:4,letterSpacing:T.letterDisplay}}>🎵 Zenefelismerés beállítások</div>
+        <div style={{fontFamily:T.font,fontSize:14,color:T.inkSoft,marginBottom:20}}>Szűrd a zenéket korszak és stílus szerint</div>
 
-        <div style={{borderTop:`1px solid ${T.surfaceMuted}`,paddingTop:14,marginBottom:4}}>
-          <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:14,color:T.ink,marginBottom:10}}>Korszak</div>
-          <div style={{display:'flex',flexDirection:'column',gap:8}}>
-            {ERA_OPTIONS.map(o => (
-              <button key={o.v} onClick={()=>setConfig(c=>({...c,era:o.v}))} style={{
-                width:'100%', padding:'11px 14px', borderRadius:12, border: era===o.v?`1.5px solid ${T.mint}`:'1.5px solid rgba(26,42,74,0.10)',
-                background: era===o.v?T.mintSoft:'#fff', cursor:'pointer',
-                fontFamily:T.font, fontWeight: era===o.v?700:500, fontSize:14,
-                color: era===o.v?T.mintDeep:T.ink, textAlign:'left',
-              }}>{o.label}</button>
-            ))}
-          </div>
+        <div style={{borderTop:`1px solid ${T.surfaceMuted}`,paddingTop:16,marginBottom:4}}>
+          <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:16,color:T.ink,marginBottom:12}}>Korszak</div>
+          {renderOptions(ERA_OPTIONS, era, v => setConfig(c=>({...c,era:v})))}
         </div>
 
-        <div style={{borderTop:`1px solid ${T.surfaceMuted}`,paddingTop:14,marginTop:14,marginBottom:4}}>
-          <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:14,color:T.ink,marginBottom:10}}>Stílus</div>
-          <div style={{display:'flex',flexDirection:'column',gap:8}}>
-            {GENRE_OPTIONS.map(o => (
-              <button key={o.v} onClick={()=>setConfig(c=>({...c,genre:o.v}))} style={{
-                width:'100%', padding:'11px 14px', borderRadius:12, border: genre===o.v?`1.5px solid ${T.mint}`:'1.5px solid rgba(26,42,74,0.10)',
-                background: genre===o.v?T.mintSoft:'#fff', cursor:'pointer',
-                fontFamily:T.font, fontWeight: genre===o.v?700:500, fontSize:14,
-                color: genre===o.v?T.mintDeep:T.ink, textAlign:'left',
-              }}>{o.label}</button>
-            ))}
-          </div>
+        <div style={{borderTop:`1px solid ${T.surfaceMuted}`,paddingTop:16,marginTop:18,marginBottom:4}}>
+          <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:16,color:T.ink,marginBottom:12}}>Stílus</div>
+          {renderOptions(GENRE_OPTIONS, genre, v => setConfig(c=>({...c,genre:v})))}
         </div>
 
-        <PrimaryButton onClick={onClose} style={{marginTop:16}}>Kész</PrimaryButton>
+        <PrimaryButton onClick={onClose} style={{marginTop:20}}>Kész</PrimaryButton>
       </div>
     </SheetOverlay>
   );
