@@ -33818,7 +33818,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.191';
+const APP_VERSION = 'v9.192';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -37475,23 +37475,35 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
   React.useEffect(() => { if (initialBpState) resumeFromBpState(initialBpState); }, []);
 
+  const audioCtxRef = React.useRef(null);
+  const getAudioCtx = () => {
+    if (!audioCtxRef.current) {
+      try { audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+    }
+    return audioCtxRef.current;
+  };
   const playLastMinuteBeep = () => {
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const beep = (freq, start, dur, vol) => {
-        const o = ctx.createOscillator();
-        const g = ctx.createGain();
-        o.connect(g); g.connect(ctx.destination);
-        o.type = 'sine'; o.frequency.value = freq;
-        g.gain.setValueAtTime(0, ctx.currentTime + start);
-        g.gain.linearRampToValueAtTime(vol, ctx.currentTime + start + 0.02);
-        g.gain.linearRampToValueAtTime(0, ctx.currentTime + start + dur);
-        o.start(ctx.currentTime + start);
-        o.stop(ctx.currentTime + start + dur + 0.05);
+      const ctx = getAudioCtx();
+      if (!ctx) return;
+      const play = () => {
+        const beep = (freq, start, dur, vol) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'sine'; o.frequency.value = freq;
+          g.gain.setValueAtTime(0, ctx.currentTime + start);
+          g.gain.linearRampToValueAtTime(vol, ctx.currentTime + start + 0.02);
+          g.gain.linearRampToValueAtTime(0, ctx.currentTime + start + dur);
+          o.start(ctx.currentTime + start);
+          o.stop(ctx.currentTime + start + dur + 0.05);
+        };
+        beep(880, 0,    0.18, 0.4);
+        beep(880, 0.22, 0.18, 0.4);
+        beep(1100, 0.46, 0.32, 0.5);
       };
-      beep(880, 0,    0.18, 0.4);
-      beep(880, 0.22, 0.18, 0.4);
-      beep(1100, 0.46, 0.32, 0.5);
+      if (ctx.state === 'suspended') ctx.resume().then(play).catch(() => {});
+      else play();
     } catch(e) {}
   };
 
@@ -37543,6 +37555,9 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   }, [timerSecs]);
 
   const startTimer = () => {
+    // Wake up AudioContext on user gesture so later beep works on mobile
+    const ctx = getAudioCtx();
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
     if (timerSecs === 0) setTimerSecs(MATCH_MINUTES * 60);
     setTimerRunning(true);
   };
@@ -38015,10 +38030,10 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
   // ── CupCounter ────────────────────────────────────────────────────────────
   const CupCounter = ({ value, onChange, color, max, winning }) => (
-    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-      <button onClick={() => onChange(Math.max(0, value - 1))} style={{ width:42, height:42, borderRadius:14, border:'none', background:T.coralSoft, color:'#D85F5C', fontFamily:T.font, fontWeight:900, fontSize:22, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>−</button>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:30, color: winning ? T.mint : T.ink, minWidth:32, textAlign:'center', fontVariantNumeric:'tabular-nums', transition:'color .2s' }}>{value}</div>
-      <button onClick={() => onChange(Math.min(max, value + 1))} style={{ width:42, height:42, borderRadius:14, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:22, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>+</button>
+    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+      <button onClick={() => onChange(Math.max(0, value - 1))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.coralSoft, color:'#D85F5C', fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>−</button>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color: winning ? T.mint : T.ink, minWidth:28, textAlign:'center', fontVariantNumeric:'tabular-nums', transition:'color .2s' }}>{value}</div>
+      <button onClick={() => onChange(Math.min(max, value + 1))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>+</button>
     </div>
   );
 
@@ -38229,9 +38244,9 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         )}
 
         {/* Players row */}
-        <div style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
           {/* Player 1 */}
-          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+          <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
             <div style={{ width:80, height:80, borderRadius:'50%', background:currentMatch.p1.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:34, color:'#fff', border: cups1 > cups2 ? `4px solid ${currentMatch.p1.color}` : `4px solid ${currentMatch.p1.color}44`, boxShadow: cups1 > cups2 ? `0 0 0 3px #fff, 0 0 0 6px ${currentMatch.p1.color}66` : '0 2px 10px rgba(0,0,0,0.10)', transition:'box-shadow .2s, border .2s' }}>
               {currentMatch.p1.name.charAt(0).toUpperCase()}
             </div>
@@ -38265,7 +38280,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           </div>
 
           {/* Player 2 */}
-          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+          <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
             <div style={{ width:80, height:80, borderRadius:'50%', background:currentMatch.p2.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:34, color:'#fff', border: cups2 > cups1 ? `4px solid ${currentMatch.p2.color}` : `4px solid ${currentMatch.p2.color}44`, boxShadow: cups2 > cups1 ? `0 0 0 3px #fff, 0 0 0 6px ${currentMatch.p2.color}66` : '0 2px 10px rgba(0,0,0,0.10)', transition:'box-shadow .2s, border .2s' }}>
               {currentMatch.p2.name.charAt(0).toUpperCase()}
             </div>
@@ -47875,6 +47890,12 @@ function BeerPongObserverView({ room, code, onLeave }) {
   const isBP = currentGameId === 'beerpong';
 
   const [notifPerm, setNotifPerm] = React.useState(() => ('Notification' in window ? Notification.permission : 'unsupported'));
+  React.useEffect(() => {
+    const iv = setInterval(() => {
+      if ('Notification' in window) setNotifPerm(Notification.permission);
+    }, 1000);
+    return () => clearInterval(iv);
+  }, []);
 
   const getRRSt = (parts, matches) => {
     if (!parts || !matches) return [];
