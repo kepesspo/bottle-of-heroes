@@ -33817,7 +33817,28 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.176';
+const APP_VERSION = 'v9.177';
+
+// ── Service Worker + Notification permission ──
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+window._bohRequestNotifPermission = function() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    Notification.requestPermission().catch(() => {});
+  }
+};
+window._bohShowNotif = function(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (navigator.serviceWorker?.controller) {
+    navigator.serviceWorker.ready.then(reg => {
+      reg.showNotification(title, { body, icon: './icon-192.png', badge: './icon-192.png', tag: 'bp-match', renotify: true });
+    }).catch(() => { new Notification(title, { body }); });
+  } else {
+    try { new Notification(title, { body }); } catch(e) {}
+  }
+};
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -37280,6 +37301,7 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult }) {
 
 function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCode, initialBpState, onSetHideFooter }) {
   const bpCfg = gameMeta?.beerpongConfig || {};
+  React.useEffect(() => { if (typeof window._bohRequestNotifPermission === 'function') window._bohRequestNotifPermission(); }, []);
   const DRINKS_PER_LOSS = bpCfg.drinksPerLoss ?? 5;
   const MAX_CUPS = bpCfg.maxCups ?? 10;
   const VISSZAVAGO   = !!(bpCfg.visszavago);
@@ -37453,6 +37475,11 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       beep(880, 0.22, 0.18, 0.4);
       beep(1100, 0.46, 0.32, 0.5);
     } catch(e) {}
+  };
+
+  const notifyCurrentMatch = (p1name, p2name) => {
+    if (!roomCode || typeof syncRoom !== 'function') return;
+    syncRoom(roomCode, { bpNotif: { p1: p1name || '?', p2: p2name || '?', ts: Date.now() } });
   };
 
   React.useEffect(() => {
@@ -37638,12 +37665,22 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
       // Next pending in current round (skip TBD placeholders)
       const nextInRound = nr[curRound].findIndex(m => m.winner === null && !m.tbd);
-      if (nextInRound !== -1) { setSeCurMatch(nextInRound); return nr; }
+      if (nextInRound !== -1) {
+        setSeCurMatch(nextInRound);
+        const nm = nr[curRound][nextInRound];
+        if (nm?.p1 && nm?.p2) notifyCurrentMatch(nm.p1.name, nm.p2.name);
+        return nr;
+      }
 
       // Current round done — advance to pre-built next round if it exists
       if (nr[curRound + 1]) {
         const nextPre = nr[curRound + 1].findIndex(m => m.winner === null && !m.tbd);
-        if (nextPre !== -1) { setSeCurRound(curRound + 1); setSeCurMatch(nextPre); return nr; }
+        if (nextPre !== -1) {
+          setSeCurRound(curRound + 1); setSeCurMatch(nextPre);
+          const nm = nr[curRound + 1][nextPre];
+          if (nm?.p1 && nm?.p2) notifyCurrentMatch(nm.p1.name, nm.p2.name);
+          return nr;
+        }
         const preWinners = nr[curRound + 1].map(m => m.winner).filter(Boolean);
         if (preWinners.length === 1) { finishSE(preWinners[0], newDrink); return nr; }
       }
@@ -37741,7 +37778,11 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     setMatchesCB(prev => {
       const nm = prev.map((mm, i) => i === idx ? { ...mm, winner, loser, score, draw: isDraw } : mm);
       const nextIdx = nm.findIndex(mm => mm.winner === null && !mm.draw);
-      if (nextIdx !== -1) { setRrIdx(nextIdx); }
+      if (nextIdx !== -1) {
+        setRrIdx(nextIdx);
+        const nm2 = nm[nextIdx];
+        if (nm2?.p1 && nm2?.p2) notifyCurrentMatch(nm2.p1.name, nm2.p2.name);
+      }
       else { onFinish(nm, newDrink); }
       return nm;
     });
@@ -48095,6 +48136,12 @@ function ObserverWatching({ code, observerName, onLeave }) {
               if (p.points > pp.points) { setPulseId(p.id+':p'); setTimeout(()=>setPulseId(null),700); }
               else if (p.drinks > pp.drinks) { setPulseId(p.id+':d'); setTimeout(()=>setPulseId(null),700); }
             });
+          }
+          // Beer pong match notification
+          if (data.bpNotif && (!prev?.bpNotif || data.bpNotif.ts !== prev.bpNotif.ts)) {
+            if (typeof window._bohShowNotif === 'function') {
+              window._bohShowNotif('🏓 Következő meccs!', data.bpNotif.p1 + ' vs ' + data.bpNotif.p2);
+            }
           }
           return data;
         });
