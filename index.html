@@ -33637,59 +33637,7 @@ window.triggerHaptic = function() {
   window._spotifyIFrameAPI = null;
   window.onSpotifyIframeApiReady = function(IFrameAPI) { window._spotifyIFrameAPI = IFrameAPI; };
 
-  // Deezer preview — tries multiple CORS proxies in order
-  var _deezerMemCache = {};
-  var ZENE_PROXIES = [
-    function(url) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url); },
-    function(url) { return 'https://corsproxy.io/?' + encodeURIComponent(url); },
-    function(url) { return 'https://proxy.cors.sh/' + url; },
-  ];
-  window.getZenePreviewUrl = function(spotifyId, artist, title) {
-    if (_deezerMemCache[spotifyId] !== undefined) return Promise.resolve(_deezerMemCache[spotifyId]);
-    try {
-      var cached = localStorage.getItem('zdz_' + spotifyId);
-      if (cached !== null) { _deezerMemCache[spotifyId] = cached || null; return Promise.resolve(cached || null); }
-    } catch(e) {}
-    var q = encodeURIComponent('artist:"' + artist + '" track:"' + title + '"');
-    var deezerUrl = 'https://api.deezer.com/search?q=' + q + '&limit=3';
-
-    // Try proxies in sequence until one works
-    var tryProxy = function(idx) {
-      if (idx >= ZENE_PROXIES.length) { _deezerMemCache[spotifyId] = null; return Promise.resolve(null); }
-      return fetch(ZENE_PROXIES[idx](deezerUrl))
-        .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-        .then(function(d) {
-          var items = d.data || [];
-          var url = null;
-          for (var i = 0; i < items.length; i++) {
-            if (items[i].preview) { url = items[i].preview; break; }
-          }
-          if (!url) throw new Error('no preview');
-          _deezerMemCache[spotifyId] = url;
-          try { localStorage.setItem('zdz_' + spotifyId, url); } catch(e) {}
-          return url;
-        })
-        .catch(function() { return tryProxy(idx + 1); });
-    };
-    return tryProxy(0);
-  };
-
-  // Quick connectivity test — called from ZeneGame on mount
-  window.testZeneProxy = function() {
-    var url = 'https://api.deezer.com/search?q=Queen+Bohemian+Rhapsody&limit=1';
-    var results = [];
-    var tests = ZENE_PROXIES.map(function(proxy, i) {
-      var start = Date.now();
-      return fetch(proxy(url))
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-          var preview = (d.data && d.data[0]) ? d.data[0].preview : null;
-          results.push({ proxy: i, ok: !!preview, ms: Date.now()-start, url: preview ? preview.substring(0,40) : 'null' });
-        })
-        .catch(function(e) { results.push({ proxy: i, ok: false, ms: Date.now()-start, err: e.message }); });
-    });
-    return Promise.all(tests).then(function() { return results; });
-  };
+  // Spotify IFrame API used for ZeneGame audio (see onSpotifyIframeApiReady above)
 })();
 </script>
 <script src="https://open.spotify.com/embed/iframe-api/v1" async></script>
@@ -33697,7 +33645,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.127';
+const APP_VERSION = 'v9.129';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -38805,6 +38753,11 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
     if (selectedEra !== 'all') songs = songs.filter(s => s.era === selectedEra);
     if (selectedGenre !== 'all') songs = songs.filter(s => s.genre === selectedGenre);
     if (songs.length === 0) songs = [...ZENE_SONGS];
+    // Filter out blacklisted songs (failed to load previously)
+    try {
+      const good = songs.filter(s => !localStorage.getItem('znobad_' + s.spotifyId));
+      if (good.length >= 5) songs = good;
+    } catch(e) {}
     for (let i = songs.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [songs[i], songs[j]] = [songs[j], songs[i]];
@@ -38817,87 +38770,80 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
 
   const [playing, setPlaying] = React.useState(false);
   const [revealed, setRevealed] = React.useState(false);
-  const [previewUrl, setPreviewUrl] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
-  const [debugLines, setDebugLines] = React.useState(null);
-  const audioRef    = React.useRef(null);
-  const advancedRef = React.useRef(false);
-
-  // Prefetch next N songs in background so they load instantly when reached
-  const prefetchAhead = React.useCallback((currentSong) => {
-    if (!currentSong) return;
-    const idx = filteredSongs.findIndex(s => s.spotifyId === currentSong.spotifyId);
-    for (let i = 1; i <= 4; i++) {
-      const next = filteredSongs[(idx + i) % filteredSongs.length];
-      if (next) {
-        try {
-          if (localStorage.getItem('zdz_' + next.spotifyId) === null) {
-            window.getZenePreviewUrl(next.spotifyId, next.artist, next.title);
-          }
-        } catch(e) {
-          window.getZenePreviewUrl(next.spotifyId, next.artist, next.title);
-        }
-      }
-    }
-  }, [filteredSongs]);
+  const [embedReady, setEmbedReady] = React.useState(false);
+  const embedRef      = React.useRef(null);
+  const controllerRef = React.useRef(null);
+  const advancedRef   = React.useRef(false);
 
   React.useEffect(() => {
     if (!song) return;
     setPlaying(false);
     setRevealed(false);
-    setLoading(true);
-    setPreviewUrl(null);
+    setEmbedReady(false);
     advancedRef.current = false;
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ''; }
+    if (controllerRef.current) {
+      try { controllerRef.current.destroy(); } catch(e) {}
+      controllerRef.current = null;
+    }
 
-    const skip = () => {
+    const skipAndBlacklist = () => {
+      // Blacklist this song so it never appears again
+      try { localStorage.setItem('znobad_' + song.spotifyId, '1'); } catch(e) {}
       if (!advancedRef.current) {
         advancedRef.current = true;
         onAdvance && onAdvance({}, {});
         setTimeout(() => { onCommit && onCommit(); }, 50);
       }
     };
-    var alreadyCached = false;
-    try { alreadyCached = localStorage.getItem('zdz_' + song.spotifyId) !== null; } catch(e) {}
-    const skipTimer = setTimeout(skip, alreadyCached ? 2500 : 8000);
+    const skipTimer = setTimeout(skipAndBlacklist, 4000);
 
-    window.getZenePreviewUrl(song.spotifyId, song.artist, song.title).then(url => {
-      clearTimeout(skipTimer);
-      if (url) {
-        setPreviewUrl(url);
-        setLoading(false);
-        if (navigator.mediaSession) {
-          navigator.mediaSession.metadata = new MediaMetadata({
-            title: '🎵 Melyik szám ez?', artist: '???', album: 'Bottle of Heroes'
+    const create = () => {
+      if (!window._spotifyIFrameAPI || !embedRef.current) return;
+      window._spotifyIFrameAPI.createController(
+        embedRef.current,
+        { uri: 'spotify:track:' + song.spotifyId, width: 300, height: 80 },
+        (ctrl) => {
+          controllerRef.current = ctrl;
+          ctrl.addListener('ready', () => { clearTimeout(skipTimer); setEmbedReady(true); });
+          ctrl.addListener('playback_update', (e) => {
+            setPlaying(!e.data.isPaused && e.data.position > 0);
           });
         }
-        // Prefetch next songs in background
-        prefetchAhead(song);
-      } else {
-        skip();
-      }
-    });
+      );
+    };
+
+    if (window._spotifyIFrameAPI) { create(); }
+    else {
+      const prev = window.onSpotifyIframeApiReady;
+      window.onSpotifyIframeApiReady = (api) => {
+        window._spotifyIFrameAPI = api;
+        if (prev) prev(api);
+        create();
+      };
+    }
 
     return () => {
       clearTimeout(skipTimer);
-      if (audioRef.current) audioRef.current.pause();
+      if (controllerRef.current) { try { controllerRef.current.pause(); } catch(e) {} }
     };
   }, [song?.spotifyId]);
 
   const handlePlay = () => {
-    if (!audioRef.current || !previewUrl || !song) return;
-    audioRef.current.currentTime = song.start || 0;
-    audioRef.current.play().catch(() => {});
+    if (!controllerRef.current) return;
+    try {
+      controllerRef.current.seek(((song?.start) || 0) * 1000);
+      controllerRef.current.play();
+    } catch(e) {}
   };
   const handleStop = () => {
-    if (!audioRef.current) return;
-    audioRef.current.pause();
+    if (!controllerRef.current) return;
+    try { controllerRef.current.pause(); } catch(e) {}
     setPlaying(false);
   };
   const handleResult = (correct) => {
     if (advancedRef.current) return;
     advancedRef.current = true;
-    if (audioRef.current) audioRef.current.pause();
+    if (controllerRef.current) { try { controllerRef.current.pause(); } catch(e) {} }
     if (correct) {
       onResult && onResult({ correct: true, playerName: challenger?.name || '', drinks: 0, subtitle: (challenger?.name || '') + ' felismerte — +1 pont!' });
       onAdvance && onAdvance({}, { [challenger?.id]: 1 });
@@ -38909,12 +38855,10 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
 
   return (
     <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
-      {previewUrl && (
-        <audio ref={audioRef} src={previewUrl}
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-          onEnded={() => setPlaying(false)} />
-      )}
+      {/* Spotify embed — clipped to 0x0, IFrame API controls audio only */}
+      <div style={{ position:'absolute', width:0, height:0, overflow:'hidden', top:0, left:0 }}>
+        <div ref={embedRef} />
+      </div>
 
       {/* Vinyl */}
       <div style={{ position:'relative', width:200, height:200, flexShrink:0 }}>
@@ -38938,7 +38882,7 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
 
       {/* Buttons */}
       <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8 }}>
-        {loading ? (
+        {!embedReady ? (
           <div style={{ width:'100%', padding:'14px 0', borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center' }}>
             <span style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>⏳ Betöltés...</span>
           </div>
@@ -38953,7 +38897,7 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
             <span style={{ fontSize:13 }}>⏸</span><span>Megállítás</span>
           </button>
         )}
-        {!loading && (!revealed
+        {embedReady && (!revealed
           ? <button onClick={() => setRevealed(true)}
               style={{ width:'100%', padding:'13px 0', background:'#fff', border:'none', borderRadius:16, color:'#1B2340', fontFamily:T.font, fontWeight:700, fontSize:15, cursor:'pointer', boxShadow:'0 2px 10px rgba(0,0,0,0.14)', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
               <span>🔍</span><span>Felfedés</span>
