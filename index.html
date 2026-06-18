@@ -33818,7 +33818,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.202';
+const APP_VERSION = 'v9.203';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -34121,7 +34121,7 @@ const GAMES = [
   { id:'anagramma', roundTime:'fast',  name:'Anagramma',             difficulty:'könnyű',  category:'Egyéni', emoji:'💬', symbol:IMGS['anagramma_symbol.png'], img:IMGS['anagramma_icon.png'], banner:IMGS['anagramma_banner.png'], color:'#FF3DA1', desc:'Az applikáció kisorsol egy játékost aki játszani fog. A Start gombra nyomva megjelenik a képernyőn 4 betű amiből 5 mp alatt egy értelmes magyar szót kell kiraknia. Amennyiben ez nem sikerül úgy innia kell a játékosnak.' },
   { id:'ringfire',  roundTime:'fast',  name:'Ring of Fire',          difficulty:'közepes', category:'Egyéni', emoji:'🔥', symbol:IMGS['ringfire_symbol.png'], img:IMGS['ringfire_icon.png'], banner:IMGS['ringfire_banner.png'], color:'#F97316', desc:'Választani kell a kártyák közül és a kártyának a leírását kell megcsinálni.\n2 — Choose: válassz valakit aki iszik\n3 — Me: én iszok\n4 — Whore: összes lány iszik\n5 — Thumb Master: aki kihúzza ő lesz a játékmester\n6 — Dicks: összes fiú iszik\n7 — Heaven: fel kell mutatni az égre\n8 — Mate: válassz valakit aki iszik veled\n9 — Rhyme: rímelni kell\n10 — Categories: kategóriákat kell mondani\nJack — Make a Rule: hozni kell egy szabályt\nQueen — Questions: kérdésekkel kell beszélni\nKing — Pour: össze kell önteni a piákat\nA — Waterfall: addig kell inni amíg az ászt húzó iszik.' },
   { id:'rulett',    roundTime:'fast',  name:'Orosz Rulett',          difficulty:'könnyű',  category:'Egyéni', emoji:'🎯', symbol:IMGS['rulett_symbol.png'], img:IMGS['rulett_icon.png'], banner:IMGS['rulett_banner.png'], color:'#A855F7', desc:'Három darab kártya közül kell választani. 2 alatt Tűzjáték van, 1 alatt pia. Egyet kell húzni — ha tűzjátékot húzol akkor megúsztál nem kell innod. Ha piát akkor kell. Ezt a játékot csak egy ember játsza.' },
-  { id:'kisebb',    roundTime:'mid',  name:'Kisebb / Nagyobb', symbol:IMGS['kisebb_symbol.png'],   difficulty:'közepes', category:'Csapat', emoji:'🚩', img:IMGS['kisebb_icon.png'], banner:IMGS['kisebb_banner.png'], dnr:true, color:'#EF4444', desc:'A játék úgy kezdődik hogy az app kiválaszt egy játékost aki a sort fogja kezdeni. Neki meg kell mondania, hogy a következő szám kisebb, vagy nagyobb lesz mint amit a játék kiír. Ez után a következő játékos jön. Minél tovabb megy a játék annál többet kell innia annak aki hibázik.' },
+  { id:'kisebb',    roundTime:'mid',  name:'Kisebb / Nagyobb', symbol:IMGS['kisebb_symbol.png'],   difficulty:'közepes', category:'Csapat', emoji:'🚩', img:IMGS['kisebb_icon.png'], banner:IMGS['kisebb_banner.png'], dnr:true, observer:true, color:'#EF4444', desc:'A játék úgy kezdődik hogy az app kiválaszt egy játékost aki a sort fogja kezdeni. Neki meg kell mondania, hogy a következő szám kisebb, vagy nagyobb lesz mint amit a játék kiír. Ez után a következő játékos jön. Minél tovabb megy a játék annál többet kell innia annak aki hibázik.' },
   { id:'tapper',    roundTime:'fast',  name:'Tapper',                difficulty:'könnyű',  category:'Páros',  emoji:'👇', symbol:IMGS['tapper_symbol.png'], img:IMGS['tapper_icon.png'], banner:IMGS['tapper_banner.png'], color:'#10B981', observer:true, desc:'Az app kiválaszt egy játékost aki kihivhat valakit hogy játsszon vele. Mind a két játékosnak a kijelölt pontra kell raknia az egyik ujját. Egy visszaszámláló elindul 5-től és minél közelebb a 0-hoz kell elengednie a gombot. Csak a vesztes iszik.' },
   { id:'kategoria', roundTime:'mid',  name:'Kategória',             difficulty:'nehéz',   category:'Csapat', emoji:'🗂️', symbol:IMGS['kategoria_symbol.png'], img:IMGS['kategoria_icon.png'], banner:IMGS['kategoria_banner.png'], color:'#3B82F6', desc:'A játék választ egy kategóriát és erre az első embernek kell mondani rá egy szót ami abba a kategóriába beleillik. Ez után a következő játékosnak az előző szónak az utolsó betűjével kell egy szót mondania. Az aki először hibázik az iszik. 5 másodperc a megengedett gondolkodási idő.' },
   { id:'fingerit',  roundTime:'fast',  name:'Finger It',             difficulty:'könnyű',  category:'Csapat', emoji:'👆', symbol:IMGS['fingerit_symbol.png'], img:IMGS['fingerit_icon.png'], banner:IMGS['fingerit_banner.png'], color:'#06B6D4', desc:'Minden játékos az asztalra rakja a mutató ujját. Aztán számolni kezd az első ember akit a játék választ ki: 1, 2, 3 — ekkor hirtelen mindenkinek el kell vennie az ujját az asztalról, vagy rajta hagyja. A lényeg hogy pontosan annyi ujj maradjon az asztalon ahány szám be lett mondva. Ha eltalálod akkor mindenki más iszik. Ha nem találod el akkor te iszol.' },
@@ -41868,10 +41868,11 @@ function RulettGame({ gameIdx, challenger, onAdvance, onResult }) {
   );
 }
 
-function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, gameMeta }) {
+function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, gameMeta, roomCode }) {
   const [gs, setGs] = React.useState(null);
   const gsRef = React.useRef(null);
   const pendRef = React.useRef(false);
+  const handleGuessRef = React.useRef(null);
   const [guessRes, setGuessRes] = React.useState(null);
   const [gameOver, setGameOver] = React.useState(false);
 
@@ -41891,6 +41892,30 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
     players.forEach(p=>{ st.playerLives[p.id]=liveCount; });
     gsRef.current=st; setGs({...st}); setGuessRes(null); setGameOver(false); pendRef.current=false;
   },[gameIdx]);
+
+  // Sync current turn to Firestore for observer screens
+  React.useEffect(() => {
+    if (!roomCode || typeof syncRoom !== 'function' || !gs) return;
+    const st = gs;
+    const pid = st.activePids[st.turnPos % Math.max(st.activePids.length, 1)];
+    syncRoom(roomCode, { kisebbTurn: { pid, pot: st.pot, deckPos: st.deckPos, gameIdx } });
+  }, [gs?.turnPos, gs?.deckPos, gs?.pot, gameIdx, roomCode]);
+
+  // Listen for observer guess
+  React.useEffect(() => {
+    if (!roomCode || typeof subscribeRoom !== 'function') return;
+    const unsub = subscribeRoom(roomCode, data => {
+      if (!data?.kisebbGuess || pendRef.current) return;
+      const { pid, guess } = data.kisebbGuess;
+      const st = gsRef.current;
+      if (!st) return;
+      const curPid = st.activePids[st.turnPos % Math.max(st.activePids.length, 1)];
+      if (pid !== curPid) return;
+      if (typeof db !== 'undefined') db.collection('rooms').doc(roomCode).update({ kisebbGuess: null }).catch(() => {});
+      if (handleGuessRef.current) handleGuessRef.current(guess);
+    });
+    return () => unsub && unsub();
+  }, [roomCode, gameIdx]);
 
   if (!gs) return null;
   const { deck, deckPos, activePids, turnPos, drinkMap, playerLives } = gs;
@@ -41921,7 +41946,7 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
     } else if (!ok) {
       onResult && onResult({ correct: false, playerName: currentPlayer?.name, drinks: pot||1, subtitle: `${currentPlayer?.name||'Játékos'} iszik ${pot||1} kortyt` });
     } else {
-      onResult && onResult(null);
+      onResult && onResult({ correct: true, playerName: currentPlayer?.name, drinks: 0, subtitle: `${currentPlayer?.name||'Játékos'} helyesen tippelt!` });
     }
 
     setTimeout(()=>{
@@ -41955,6 +41980,7 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
       gsRef.current=nst; setGs({...nst}); setGuessRes(null); pendRef.current=false;
     }, 900);
   };
+  handleGuessRef.current = handleGuess;
 
   if(gameOver) {
     // Legjobb: legkevesebb hibázás (legkevesebb drink)
@@ -44762,7 +44788,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onSetBuszSwitch={onSetBuszSwitch} />;
   if (gameId === 'ovfj') return <OVFJGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={typeof roomCode!=='undefined'?roomCode:undefined} gameMeta={gameMeta} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} gameMeta={gameMeta} />;
+  if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} gameMeta={gameMeta} roomCode={roomCode} />;
   if (gameId === 'szolánc') return <SzolancGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'idopárbaj') return <IdoparbajGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'csakegyszó') return <CsakEgySzoGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
@@ -48273,6 +48299,66 @@ function ObserverStatus({ icon, title, sub, spinning, actionLabel, onAction }) {
   );
 }
 
+function KisebbObserverView({ code, room, observerName }) {
+  const players = room.players || [];
+  const [selectedName, setSelectedName] = React.useState(() =>
+    players.find(p => p.name === observerName)?.name || null
+  );
+  const myPlayer = players.find(p => p.name === selectedName) || null;
+  const kisebbTurn = room.kisebbTurn || null;
+  const isMyTurn = myPlayer && kisebbTurn && kisebbTurn.pid === myPlayer.id;
+  const pot = kisebbTurn?.pot || 1;
+  const [voted, setVoted] = React.useState(false);
+
+  React.useEffect(() => { setVoted(false); }, [kisebbTurn?.deckPos]);
+
+  const sendGuess = (guess) => {
+    if (!myPlayer || typeof db === 'undefined' || voted) return;
+    setVoted(true);
+    db.collection('rooms').doc(code).update({ kisebbGuess: { pid: myPlayer.id, guess } }).catch(() => {});
+  };
+
+  if (!myPlayer) {
+    return (
+      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, padding:24 }}>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:18, color:T.ink }}>Ki vagy te?</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:10, width:'100%', maxWidth:300 }}>
+          {players.map(p => (
+            <button key={p.id} onClick={() => setSelectedName(p.name)}
+              style={{ width:'100%', padding:'14px 0', borderRadius:16, border:'none', background:p.color, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:18, cursor:'pointer' }}>
+              {p.name}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:20, padding:24 }}>
+      <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.inkSoft }}>{myPlayer.name}</div>
+      {isMyTurn && !voted ? (
+        <>
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:20, color:T.ink, textAlign:'center' }}>Te jössz!</div>
+          <div style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(255,255,255,0.65)', borderRadius:14, padding:'8px 18px' }}>
+            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Tét:</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color: pot>=3 ? '#D05040' : pot>=2 ? '#E0A030' : T.ink }}>{pot}</div>
+          </div>
+          <div style={{ display:'flex', gap:12, width:'100%', maxWidth:300 }}>
+            <button onClick={() => sendGuess('K')} style={{ flex:1, minHeight:72, border:'none', background:'#F2C4BC', color:'#C0504A', fontFamily:T.font, fontWeight:800, fontSize:20, borderRadius:18, cursor:'pointer' }}>↓ Kisebb</button>
+            <button onClick={() => sendGuess('N')} style={{ flex:1, minHeight:72, border:'none', background:'#B8E8D4', color:'#2E8B60', fontFamily:T.font, fontWeight:800, fontSize:20, borderRadius:18, cursor:'pointer' }}>↑ Nagyobb</button>
+          </div>
+        </>
+      ) : voted ? (
+        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:16, color:T.mint, textAlign:'center' }}>Tipp elküldve!</div>
+      ) : (
+        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:16, color:T.inkSoft, textAlign:'center' }}>Várakozás a te köröd re…</div>
+      )}
+      <button onClick={() => setSelectedName(null)} style={{ marginTop:8, padding:'6px 18px', borderRadius:20, border:'none', background:T.surface, color:T.inkSoft, fontFamily:T.font, fontWeight:600, fontSize:12, cursor:'pointer' }}>Névcsere</button>
+    </div>
+  );
+}
+
 function TapperObserverView({ code, room, observerName }) {
   const gameIdx = room.gameIdx || 0;
   const p1 = room.players?.[0] || null;
@@ -48417,6 +48503,7 @@ function ObserverWatching({ code, observerName, onLeave }) {
   const _ovCurG = _ovSelG[(room.gameIdx||0) % Math.max(1,_ovSelG.length)];
   if (_ovCurG === 'ovfj') return <OVFJObserverView room={room} code={code} myName={observerName} onLeave={onLeave} />;
   if (_ovCurG === 'tapper') return <TapperObserverView code={code} room={room} observerName={observerName} />;
+  if (_ovCurG === 'kisebb') return <KisebbObserverView code={code} room={room} observerName={observerName} />;
     if (room.buszState || (room.selectedGames||[]).includes('busz')) {
     return (
       <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, minHeight:0, overflow:'hidden' }}>
