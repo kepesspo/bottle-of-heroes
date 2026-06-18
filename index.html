@@ -33817,7 +33817,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.179';
+const APP_VERSION = 'v9.180';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -37486,7 +37486,12 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     if (timerRunning) {
       timerRef.current = setInterval(() => {
         setTimerSecs(s => {
-          if (s === 61) playLastMinuteBeep();
+          if (s === 61) {
+            playLastMinuteBeep();
+            if (roomCode && typeof syncRoom === 'function') {
+              syncRoom(roomCode, { bpTimerAlert: { type: 'lastMinute', ts: Date.now() } });
+            }
+          }
           if (s <= 1) { setTimerRunning(false); clearInterval(timerRef.current); return 0; }
           return s - 1;
         });
@@ -48242,6 +48247,12 @@ function ObserverWatching({ code, observerName, onLeave }) {
           if (data.bpNotif && (!prev?.bpNotif || data.bpNotif.ts !== prev.bpNotif.ts)) {
             if (typeof window._bohShowNotif === 'function') {
               window._bohShowNotif('🏓 Következő meccs!', data.bpNotif.p1 + ' vs ' + data.bpNotif.p2);
+            }
+          }
+          // Beer pong 1 perces riasztás
+          if (data.bpTimerAlert && (!prev?.bpTimerAlert || data.bpTimerAlert.ts !== prev.bpTimerAlert.ts)) {
+            if (typeof window._bohShowNotif === 'function') {
+              window._bohShowNotif('⏰ 1 perc maradt!', 'Hajrá — csak 1 perc van hátra a meccsből!');
             }
           }
           return data;
