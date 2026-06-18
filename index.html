@@ -33818,7 +33818,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.195';
+const APP_VERSION = 'v9.196';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -48276,10 +48276,14 @@ function TapperObserverView({ code, room, observerName }) {
   const pNum = myPlayer?.id === challenger?.id ? 1 : 2;
 
   const [holding, setHolding] = React.useState(false);
+  const writeRef = React.useRef(null);
 
   const setRemote = (down) => {
-    if (!myPlayer || typeof syncRoom !== 'function') return;
-    syncRoom(code, { tapperInput: { [myPlayer.name]: down } });
+    if (!myPlayer || typeof db === 'undefined') return;
+    clearTimeout(writeRef.current);
+    writeRef.current = setTimeout(() => {
+      db.collection('rooms').doc(code).update({ [`tapperInput.${myPlayer.name}`]: down }).catch(() => {});
+    }, 30);
   };
 
   return (
