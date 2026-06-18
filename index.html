@@ -33818,7 +33818,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.187';
+const APP_VERSION = 'v9.188';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -37301,20 +37301,16 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult }) {
 }
 
 function QRModal({ url, onClose }) {
-  const qrRef = React.useRef(null);
-  React.useEffect(() => {
-    if (!qrRef.current || typeof QRCode === 'undefined') return;
-    qrRef.current.innerHTML = '';
-    new QRCode(qrRef.current, { text: url, width: 260, height: 260, correctLevel: QRCode.CorrectLevel.M });
-  }, [url]);
+  const roomCode = url.split('room=')[1] || '';
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&color=141424&bgcolor=ffffff&data=${encodeURIComponent(url)}`;
   return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:9999, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background:'#fff', borderRadius:24, padding:28, display:'flex', flexDirection:'column', alignItems:'center', gap:16, boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
-        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:'#1B2340' }}>Csatlakozás a szobához</div>
-        <div ref={qrRef} style={{ borderRadius:12, overflow:'hidden' }} />
-        <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:22, color:'#1B2340', letterSpacing:'0.15em' }}>{url.split('room=')[1]}</div>
-        <div style={{ fontFamily:T.font, fontSize:12, color:'#94A3B8', textAlign:'center' }}>Szkenneld be a QR kódot vagy írd be a szoba kódot</div>
-        <button onClick={onClose} style={{ marginTop:4, padding:'12px 32px', background:'#1B2340', border:'none', borderRadius:14, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer' }}>Bezár</button>
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.72)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,padding:24}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:T.surface,borderRadius:24,padding:28,display:'flex',flexDirection:'column',alignItems:'center',gap:14,width:'100%',maxWidth:300,boxShadow:'0 8px 40px rgba(0,0,0,0.4)'}}>
+        <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:17,color:T.ink}}>Csatlakozási QR kód</div>
+        <img src={qrUrl} width={200} height={200} style={{borderRadius:12,border:`2px solid ${T.surfaceMuted}`}} alt="QR" />
+        <div style={{fontFamily:'monospace',fontWeight:700,fontSize:26,color:T.mint,letterSpacing:'0.18em'}}>{roomCode}</div>
+        <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,textAlign:'center',lineHeight:1.5}}>Szkenneld be a kamerával,<br/>egyből a csatlakozó oldalra dob</div>
+        <button onClick={onClose} style={{width:'100%',padding:'12px',background:T.mint,color:'#fff',border:'none',borderRadius:12,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,cursor:'pointer'}}>Bezár</button>
       </div>
     </div>
   );
@@ -38200,6 +38196,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
     return (
       <div style={{ width:'100%', background:T.surface, borderRadius:22, padding:'16px 18px 18px', boxShadow:T.shadow }}>
+        {showQR && <QRModal url={joinUrl} onClose={() => setShowQR(false)} />}
 
         {/* Match label — single one-line row */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10, gap:6 }}>
@@ -38244,10 +38241,10 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           </div>
 
           {/* VS + QR */}
-          <div style={{ width:48, display:'flex', flexDirection:'column', alignItems:'center', gap:8, paddingTop:24, flexShrink:0, zIndex:10, position:'relative' }}>
+          <div style={{ width:48, display:'flex', flexDirection:'column', alignItems:'center', gap:8, paddingTop:32, flexShrink:0, zIndex:10, position:'relative' }}>
             <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color:T.inkSoft, letterSpacing:'0.06em' }}>VS</div>
             {roomCode && (
-              <button onClick={() => setShowQR(true)} style={{ width:38, height:38, borderRadius:10, border:'none', background:'rgba(20,30,50,0.08)', cursor:'pointer', display:'grid', placeItems:'center', touchAction:'manipulation', WebkitTapHighlightColor:'rgba(0,0,0,0.1)' }}>
+              <button onClick={() => setShowQR(true)} style={{ width:38, height:38, borderRadius:10, border:'none', background:'rgba(20,30,50,0.08)', cursor:'pointer', display:'grid', placeItems:'center', touchAction:'manipulation', WebkitTapHighlightColor:'rgba(0,0,0,0.1)', pointerEvents:'auto' }}>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <rect x="1" y="1" width="7" height="7" rx="1" stroke="#64748B" strokeWidth="1.5" fill="none"/>
                   <rect x="3" y="3" width="3" height="3" fill="#64748B"/>
