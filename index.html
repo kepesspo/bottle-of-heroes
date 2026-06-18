@@ -33658,7 +33658,7 @@ window.triggerHaptic = function() {
     return _ccFetching;
   };
 
-  // Batch ellenőrzés: 50 track egyszerre
+  // Batch ellenőrzés: 50 track egyszerre — visszaadja {id: previewUrl}
   window.checkZeneBatch = function(ids) {
     return window.getSpotifyCCToken().then(function(token) {
       if (!token) return {};
@@ -33667,7 +33667,7 @@ window.triggerHaptic = function() {
       }).then(function(r) { return r.json(); }).then(function(d) {
         var result = {};
         (d.tracks || []).forEach(function(track, i) {
-          result[ids[i]] = !!(track && track.preview_url);
+          if (track && track.preview_url) result[ids[i]] = track.preview_url;
         });
         return result;
       });
@@ -33680,7 +33680,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.111';
+const APP_VERSION = 'v9.112';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -38782,29 +38782,30 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta }) {
   const selectedGenre = gameMeta?.zeneConfig?.genre || 'all';
 
   // Egyszeri batch ellenőrzés — melyik dalnak van Spotify preview?
-  const [okIds, setOkIds] = React.useState(() => {
+  // previewUrls: {spotifyId -> previewUrl} — localStorage-ból töltve
+  const [previewMap, setPreviewMap] = React.useState(() => {
     try {
-      const s = localStorage.getItem('zene_ok_ids_v2');
-      return s ? new Set(JSON.parse(s)) : null;
+      const s = localStorage.getItem('zene_preview_map_v1');
+      return s ? JSON.parse(s) : null;
     } catch(e) { return null; }
   });
   const [checkPct, setCheckPct] = React.useState(0);
 
   React.useEffect(() => {
-    if (okIds !== null) return;
+    if (previewMap !== null) return;
     const allIds = ZENE_SONGS.map(s => s.spotifyId);
     const BATCH = 50;
-    const working = [];
+    const map = {};
     let i = 0;
     const next = () => {
       if (i >= allIds.length) {
-        try { localStorage.setItem('zene_ok_ids_v2', JSON.stringify(working)); } catch(e) {}
-        setOkIds(new Set(working));
+        try { localStorage.setItem('zene_preview_map_v1', JSON.stringify(map)); } catch(e) {}
+        setPreviewMap(map);
         return;
       }
       setCheckPct(Math.round(i / allIds.length * 100));
       window.checkZeneBatch(allIds.slice(i, i + BATCH)).then(res => {
-        Object.keys(res).forEach(id => { if (res[id]) working.push(id); });
+        Object.assign(map, res);
         i += BATCH;
         setTimeout(next, 150);
       });
@@ -38813,18 +38814,18 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta }) {
   }, []);
 
   const filteredSongs = React.useMemo(() => {
-    if (!okIds) return [];
-    let songs = ZENE_SONGS.filter(s => okIds.has(s.spotifyId));
+    if (!previewMap) return [];
+    let songs = ZENE_SONGS.filter(s => previewMap[s.spotifyId]);
     if (selectedEra !== 'all') songs = songs.filter(s => s.era === selectedEra);
     if (selectedGenre !== 'all') songs = songs.filter(s => s.genre === selectedGenre);
-    if (songs.length === 0) songs = ZENE_SONGS.filter(s => okIds.has(s.spotifyId));
+    if (songs.length === 0) songs = ZENE_SONGS.filter(s => previewMap[s.spotifyId]);
     const a = [...songs];
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [a[i], a[j]] = [a[j], a[i]];
     }
     return a;
-  }, [okIds, selectedEra, selectedGenre]);
+  }, [previewMap, selectedEra, selectedGenre]);
 
   const song     = filteredSongs.length > 0 ? filteredSongs[gameIdx % filteredSongs.length] : null;
   const nextSong = filteredSongs.length > 0 ? filteredSongs[(gameIdx + 1) % filteredSongs.length] : null;
@@ -38838,25 +38839,24 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta }) {
   const advancedRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (!song) return;
+    if (!song || !previewMap) return;
     setPlaying(false);
     setRevealed(false);
-    setLoading(true);
     setSkipped(false);
-    setPreviewUrl(null);
     advancedRef.current = false;
     if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ''; }
 
-    window.getSpotifyCCToken().then(token => {
-      if (!token) { setLoading(false); setSkipped(true); if (!advancedRef.current) { advancedRef.current = true; onAdvance && onAdvance({}, {}); } return; }
-      fetch('https://api.spotify.com/v1/tracks/' + song.spotifyId + '?market=US', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      }).then(r => r.json()).then(d => {
-        const url = d.preview_url || null;
-        if (url) { setPreviewUrl(url); setLoading(false); }
-        else { setLoading(false); setSkipped(true); if (!advancedRef.current) { advancedRef.current = true; onAdvance && onAdvance({}, {}); } }
-      }).catch(() => { setLoading(false); setSkipped(true); if (!advancedRef.current) { advancedRef.current = true; onAdvance && onAdvance({}, {}); } });
-    });
+    // URL már a previewMap-ben van — nincs szükség API hívásra
+    const url = previewMap[song.spotifyId] || null;
+    if (url) {
+      setPreviewUrl(url);
+      setLoading(false);
+    } else {
+      setPreviewUrl(null);
+      setLoading(false);
+      setSkipped(true);
+      if (!advancedRef.current) { advancedRef.current = true; onAdvance && onAdvance({}, {}); }
+    }
 
     return () => { if (audioRef.current) audioRef.current.pause(); };
   }, [song?.spotifyId]);
@@ -38885,7 +38885,7 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta }) {
   };
 
   // Ellenőrzés képernyő
-  if (okIds === null) {
+  if (previewMap === null) {
     return (
       <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:16, padding:'20px 0' }}>
         <div style={{ fontSize:40 }}>🎵</div>
