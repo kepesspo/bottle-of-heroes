@@ -33700,7 +33700,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.139';
+const APP_VERSION = 'v9.140';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -38936,17 +38936,16 @@ function SohanemGame({ gameIdx, onAdvance }) {
 }
 
 function ZeneConfigSheet({ config, setConfig, onClose }) {
-  const era   = config.era   || 'all';
-  const genre = config.genre || 'all';
+  // eras/genres: string[] — empty = all
+  const eras   = config.eras   || [];
+  const genres = config.genres || [];
   const ERA_OPTIONS = [
-    { v:'all',     label:'Minden korszak' },
     { v:'classic', label:'Pre-2000' },
     { v:'2000s',   label:'2000-es' },
     { v:'2010s',   label:'2010-es' },
     { v:'2020s',   label:'2020-as' },
   ];
   const GENRE_OPTIONS = [
-    { v:'all',        label:'Minden stílus' },
     { v:'pop',        label:'Pop' },
     { v:'rnb',        label:'R&B / Hip-hop' },
     { v:'hiphop',     label:'Hip-hop' },
@@ -38956,32 +38955,35 @@ function ZeneConfigSheet({ config, setConfig, onClose }) {
     { v:'magyar',     label:'Magyar zene 🇭🇺' },
   ];
 
-  const renderOptions = (options, current, onChange) => {
-    const allOpt = options[0];
-    const rest   = options.slice(1);
+  const toggle = (arr, v) => arr.includes(v) ? arr.filter(x=>x!==v) : [...arr, v];
+
+  const renderOptions = (options, selected, configKey) => {
+    const allActive = selected.length === 0;
     const btnBase = { border:'1.5px solid rgba(26,42,74,0.12)', borderRadius:14, cursor:'pointer', fontFamily:T.font, fontWeight:600, fontSize:15, padding:'13px 10px', textAlign:'center', transition:'background .12s,color .12s,border .12s' };
     return (
       <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-        {/* "Minden X" — full width */}
-        <button onClick={() => onChange(allOpt.v)} style={{
-          ...btnBase,
-          width:'100%',
-          background: current===allOpt.v ? T.mintSoft : '#fff',
-          color:       current===allOpt.v ? T.mintDeep : T.ink,
-          border:      current===allOpt.v ? `1.5px solid ${T.mint}` : '1.5px solid rgba(26,42,74,0.12)',
-          fontWeight:  current===allOpt.v ? 700 : 600,
-        }}>{allOpt.label}</button>
-        {/* Rest — 2 column grid */}
+        {/* "Minden X" — full width, clears selection */}
+        <button onClick={() => setConfig(c=>({...c,[configKey]:[]}))} style={{
+          ...btnBase, width:'100%',
+          background: allActive ? T.mintSoft : '#fff',
+          color:       allActive ? T.mintDeep : T.ink,
+          border:      allActive ? `1.5px solid ${T.mint}` : '1.5px solid rgba(26,42,74,0.12)',
+          fontWeight:  allActive ? 700 : 600,
+        }}>{configKey==='eras' ? 'Minden korszak' : 'Minden stílus'}</button>
+        {/* Options — 2 column grid, multi-select */}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-          {rest.map(o => (
-            <button key={o.v} onClick={() => onChange(o.v)} style={{
-              ...btnBase,
-              background: current===o.v ? T.mintSoft : '#fff',
-              color:       current===o.v ? T.mintDeep : T.ink,
-              border:      current===o.v ? `1.5px solid ${T.mint}` : '1.5px solid rgba(26,42,74,0.12)',
-              fontWeight:  current===o.v ? 700 : 600,
-            }}>{o.label}</button>
-          ))}
+          {options.map(o => {
+            const active = selected.includes(o.v);
+            return (
+              <button key={o.v} onClick={() => setConfig(c=>({...c,[configKey]:toggle(c[configKey]||[],o.v)}))} style={{
+                ...btnBase,
+                background: active ? T.mintSoft : '#fff',
+                color:       active ? T.mintDeep : T.ink,
+                border:      active ? `1.5px solid ${T.mint}` : '1.5px solid rgba(26,42,74,0.12)',
+                fontWeight:  active ? 700 : 600,
+              }}>{o.label}</button>
+            );
+          })}
         </div>
       </div>
     );
@@ -38995,12 +38997,12 @@ function ZeneConfigSheet({ config, setConfig, onClose }) {
 
         <div style={{borderTop:`1px solid ${T.surfaceMuted}`,paddingTop:16,marginBottom:4}}>
           <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:16,color:T.ink,marginBottom:12}}>Korszak</div>
-          {renderOptions(ERA_OPTIONS, era, v => setConfig(c=>({...c,era:v})))}
+          {renderOptions(ERA_OPTIONS, eras, 'eras')}
         </div>
 
         <div style={{borderTop:`1px solid ${T.surfaceMuted}`,paddingTop:16,marginTop:18,marginBottom:4}}>
           <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:16,color:T.ink,marginBottom:12}}>Stílus</div>
-          {renderOptions(GENRE_OPTIONS, genre, v => setConfig(c=>({...c,genre:v})))}
+          {renderOptions(GENRE_OPTIONS, genres, 'genres')}
         </div>
 
         <PrimaryButton onClick={onClose} style={{marginTop:20}}>Kész</PrimaryButton>
@@ -39010,15 +39012,15 @@ function ZeneConfigSheet({ config, setConfig, onClose }) {
 }
 
 function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit }) {
-  const selectedEra   = gameMeta?.zeneConfig?.era   || 'all';
-  const selectedGenre = gameMeta?.zeneConfig?.genre || 'all';
+  const selectedEras   = gameMeta?.zeneConfig?.eras   || [];
+  const selectedGenres = gameMeta?.zeneConfig?.genres || [];
 
 
 
   const filteredSongs = React.useMemo(() => {
     let songs = [...ZENE_SONGS];
-    if (selectedEra !== 'all') songs = songs.filter(s => s.era === selectedEra);
-    if (selectedGenre !== 'all') songs = songs.filter(s => s.genre === selectedGenre);
+    if (selectedEras.length > 0) songs = songs.filter(s => selectedEras.includes(s.era));
+    if (selectedGenres.length > 0) songs = songs.filter(s => selectedGenres.includes(s.genre));
     if (songs.length === 0) songs = [...ZENE_SONGS];
     // Filter out blacklisted songs (shared Firestore list + local fallback)
     try {
@@ -39032,7 +39034,7 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
       [songs[i], songs[j]] = [songs[j], songs[i]];
     }
     return songs;
-  }, [selectedEra, selectedGenre, blacklistVersion]);
+  }, [selectedEras.join(','), selectedGenres.join(','), blacklistVersion]);
 
   const [songOffset, setSongOffset] = React.useState(0);
   const [blacklistVersion, setBlacklistVersion] = React.useState(0);
