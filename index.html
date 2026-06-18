@@ -33700,7 +33700,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.132';
+const APP_VERSION = 'v9.133';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -38859,8 +38859,8 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
     return songs;
   }, [selectedEra, selectedGenre]);
 
-  const song     = filteredSongs.length > 0 ? filteredSongs[gameIdx % filteredSongs.length] : null;
-  const nextSong = filteredSongs.length > 0 ? filteredSongs[(gameIdx + 1) % filteredSongs.length] : null;
+  const [songOffset, setSongOffset] = React.useState(0);
+  const song = filteredSongs.length > 0 ? filteredSongs[(gameIdx + songOffset) % filteredSongs.length] : null;
 
   const [playing, setPlaying] = React.useState(false);
   const [revealed, setRevealed] = React.useState(false);
@@ -38868,6 +38868,9 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
   const [loading, setLoading] = React.useState(true);
   const audioRef    = React.useRef(null);
   const advancedRef = React.useRef(false);
+
+  // Reset offset when turn changes
+  React.useEffect(() => { setSongOffset(0); }, [gameIdx]);
 
   React.useEffect(() => {
     if (!song) return;
@@ -38878,26 +38881,23 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
     advancedRef.current = false;
     if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ''; }
 
-    const skipAndBlacklist = () => {
+    const tryNextSong = () => {
+      // Blacklist and silently move to next song within the same turn
       window.markZeneBad && window.markZeneBad(song.spotifyId);
-      if (!advancedRef.current) {
-        advancedRef.current = true;
-        onAdvance && onAdvance({}, {});
-        setTimeout(() => { onCommit && onCommit(); }, 50);
-      }
+      setSongOffset(o => o + 1);
     };
 
-    // Use cached entry: if already known bad, skip instantly
+    // Known bad — skip instantly without waiting
     var knownBad = false;
     try { knownBad = !!localStorage.getItem('znobad_' + song.spotifyId); } catch(e) {}
     if (knownBad || (window._zeneBadIds && window._zeneBadIds.has(song.spotifyId))) {
-      skipAndBlacklist();
+      tryNextSong();
       return;
     }
 
     var isCached = false;
     try { isCached = localStorage.getItem('zdz_' + song.spotifyId) !== null; } catch(e) {}
-    const skipTimer = setTimeout(skipAndBlacklist, isCached ? 3000 : 7000);
+    const skipTimer = setTimeout(tryNextSong, isCached ? 3000 : 7000);
 
     window.getZenePreviewUrl(song.spotifyId, song.artist, song.title).then(url => {
       clearTimeout(skipTimer);
@@ -38910,7 +38910,7 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
           });
         }
       } else {
-        skipAndBlacklist();
+        tryNextSong();
       }
     });
 
