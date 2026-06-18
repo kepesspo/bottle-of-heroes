@@ -33818,7 +33818,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.211';
+const APP_VERSION = 'v9.212';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -46906,24 +46906,40 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
   if (phase === 'p1playing' || phase === 'p2playing') {
     const isP2 = phase === 'p2playing';
     const currentPlayer = isP2 ? p2 : p1;
+    const PASTEL_COLORS = [
+      '#F4B8A8','#F4CCA8','#A8D8C8','#C8B8E0',
+      '#F4B8A8','#A8D8C8','#F4CCA8','#C8B8E0',
+      '#C8D4F0','#C8B8E0','#C8D4F0','#A8D8C8',
+    ];
+    const rT = 20, circT = 2 * Math.PI * rT;
+    const timerPctT = timeLeft / DURATION;
     return (
-      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+      <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
         <div style={{ display:'flex', justifyContent:'space-between', width:'100%', alignItems:'center' }}>
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>{currentPlayer?.name}</div>
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color: timeLeft <= 5 ? T.coral : T.mint }}>{timeLeft}s</div>
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>✅ {currentScore}</div>
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{currentPlayer?.name}</div>
+          <svg width={48} height={48} viewBox="0 0 48 48">
+            <circle cx={24} cy={24} r={rT} fill="none" stroke="rgba(20,30,50,0.1)" strokeWidth={3.5}/>
+            <circle cx={24} cy={24} r={rT} fill="none" stroke={timeLeft <= 5 ? T.coral : T.mint} strokeWidth={3.5}
+              strokeDasharray={circT} strokeDashoffset={circT * (1 - timerPctT)}
+              strokeLinecap="round" transform="rotate(-90 24 24)" style={{transition:'stroke-dashoffset 0.1s, stroke 0.3s'}}/>
+            <text x={24} y={29} textAnchor="middle" fontFamily={T.font} fontWeight={900} fontSize={14} fill={timeLeft <= 5 ? T.coral : T.ink}>{timeLeft}</text>
+          </svg>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>✓ {currentScore}</div>
         </div>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10, width:'100%' }}>
           {gridPositions.map((_, i) => {
             const isActive = activeBtn && activeBtn.pos === i;
+            const isTrap = isActive && activeBtn.isTrap;
+            const cellBg = isActive ? (isTrap ? '#EF4444' : '#34D399') : PASTEL_COLORS[i % PASTEL_COLORS.length];
             return (
               <div key={i} onClick={() => handleTap(i)}
-                style={{ height:72, borderRadius:16, background: isActive ? (activeBtn.isTrap ? T.coral : T.mint) : T.surfaceMuted, border: isActive ? `3px solid ${activeBtn.isTrap ? T.coral : T.mint}` : '3px solid transparent', display:'grid', placeItems:'center', cursor:'pointer', transition:'background .06s', boxShadow: isActive ? `0 0 18px ${activeBtn.isTrap ? T.coral : T.mint}88` : 'none' }}>
-                {isActive && <span style={{ fontSize:30, animation:'popIn .1s' }}>{activeBtn.emoji}</span>}
+                style={{ height:76, borderRadius:18, background: cellBg, display:'grid', placeItems:'center', cursor:'pointer', transition:'background .08s', boxShadow: isActive ? `0 0 20px ${isTrap ? '#EF444488' : '#34D39988'}` : '0 2px 6px rgba(0,0,0,0.08)' }}>
+                {isActive && <span style={{ fontSize:32 }}>{activeBtn.emoji}</span>}
               </div>
             );
           })}
         </div>
+        <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, textAlign:'center' }}>Az aktív pad lüktet — koppints rá a minta szerint</div>
       </div>
     );
   }
@@ -47018,12 +47034,24 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult }) {
   const majorityA = q.statsA >= 50;
   const won = choice ? (choice === 'a' ? majorityA : !majorityA) : false;
 
+  const TOTAL_T = 5;
+  const timerPct = timeLeft / TOTAL_T;
+  const r2 = 22, circ2 = 2 * Math.PI * r2;
+
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:12, width:'100%' }}>
+    <div style={{ display:'flex', flexDirection:'column', gap:14, width:'100%' }}>
       <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:900, fontSize:13, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.08em' }}>Mit Választanál?</div>
 
       {!revealed && !timedOut && (
-        <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:900, fontSize:28, color: timeLeft <= 2 ? T.coral : T.mint, marginBottom:4 }}>{timeLeft}s</div>
+        <div style={{ display:'flex', justifyContent:'center' }}>
+          <svg width={56} height={56} viewBox="0 0 56 56">
+            <circle cx={28} cy={28} r={r2} fill="none" stroke="rgba(20,30,50,0.1)" strokeWidth={4}/>
+            <circle cx={28} cy={28} r={r2} fill="none" stroke={timeLeft <= 2 ? T.coral : T.mint} strokeWidth={4}
+              strokeDasharray={circ2} strokeDashoffset={circ2 * (1 - timerPct)}
+              strokeLinecap="round" transform="rotate(-90 28 28)" style={{transition:'stroke-dashoffset 0.1s, stroke 0.3s'}}/>
+            <text x={28} y={33} textAnchor="middle" fontFamily={T.font} fontWeight={900} fontSize={18} fill={timeLeft <= 2 ? T.coral : T.ink}>{timeLeft}</text>
+          </svg>
+        </div>
       )}
 
       {timedOut && !revealed && (
@@ -47033,8 +47061,8 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult }) {
         </div>
       )}
 
-      <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-        {['a','b'].map(side => {
+      <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+        {['a','b'].map((side, idx) => {
           const text = side === 'a' ? q.a : q.b;
           const stat = side === 'a' ? q.statsA : 100 - q.statsA;
           const isChosen = choice === side;
@@ -47045,12 +47073,25 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult }) {
             else if (isChosen && !isMajority) { bg = `${T.coral}18`; border = `2px solid ${T.coral}`; textColor = T.coral; }
             else if (!isChosen && isMajority) { bg = `${T.mint}12`; border = `1.5px dashed ${T.mint}66`; }
           }
+          const badge = side === 'a' ? 'A' : 'B';
           return (
-            <button key={side} onClick={!revealed && !timedOut ? (() => { if (!choice) { startTimer(); } handleChoose(side); }) : undefined}
-              style={{ width:'100%', padding:'18px 16px', background:bg, border, borderRadius:18, cursor: !revealed && !timedOut ? 'pointer' : 'default', fontFamily:T.font, fontWeight:800, fontSize:15, color:textColor, textAlign:'left', transition:'all .2s', boxShadow: T.shadow, display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
-              <span style={{ flex:1, lineHeight:1.4 }}>{text}</span>
-              {revealed && <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color: isMajority ? T.mint : T.inkMute, flexShrink:0 }}>{stat}%</span>}
-            </button>
+            <React.Fragment key={side}>
+              <button onClick={!revealed && !timedOut ? (() => { if (!choice) { startTimer(); } handleChoose(side); }) : undefined}
+                style={{ width:'100%', padding:'16px', background:bg, border, borderRadius:18, cursor: !revealed && !timedOut ? 'pointer' : 'default', fontFamily:T.font, fontWeight:800, fontSize:15, color:textColor, textAlign:'left', transition:'all .2s', boxShadow: T.shadow, display:'flex', alignItems:'center', gap:12 }}>
+                <div style={{ width:32, height:32, borderRadius:10, background:'#4A8FD4', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:'#fff' }}>{badge}</span>
+                </div>
+                <span style={{ flex:1, lineHeight:1.4 }}>{text}</span>
+                {revealed && <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color: isMajority ? T.mint : T.inkMute, flexShrink:0 }}>{stat}%</span>}
+              </button>
+              {idx === 0 && (
+                <div style={{ display:'flex', justifyContent:'center', alignItems:'center', margin:'6px 0' }}>
+                  <div style={{ padding:'4px 18px', background:'#1B2340', borderRadius:20 }}>
+                    <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', letterSpacing:'0.06em' }}>VAGY</span>
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
           );
         })}
       </div>
@@ -47064,7 +47105,7 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult }) {
       )}
 
       {!revealed && !timedOut && !choice && (
-        <div style={{ textAlign:'center', fontFamily:T.font, fontSize:12, color:T.inkMute }}>Koppints az egyik opcióra — az 5 mp visszaszámláló elindul!</div>
+        <div style={{ textAlign:'center', fontFamily:T.font, fontSize:12, color:T.inkMute }}>Koppints az egyik opcióra — az 5 mp visszaszámláló elindul.</div>
       )}
     </div>
   );
