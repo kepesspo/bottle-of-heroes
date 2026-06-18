@@ -33817,7 +33817,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.158';
+const APP_VERSION = 'v9.159';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -46522,6 +46522,7 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
   const advancedRef = useRef(false);
   const scoreRef = useRef(0);
   const endTimeRef = useRef(0);
+  const startTimeRef = useRef(0);
   const isP2Ref = useRef(false);
 
   const p1 = challenger;
@@ -46538,12 +46539,16 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
     const pos = Math.floor(Math.random() * GRID);
     const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
     setActiveBtn({ pos, emoji });
-    // Button visible 380–580ms then disappears, next spawns immediately after
-    const visibleMs = 380 + Math.random() * 200;
+    // Progress 0→1 over DURATION seconds — button gets faster as time passes
+    const elapsed = Date.now() - startTimeRef.current;
+    const progress = Math.min(1, elapsed / (DURATION * 1000));
+    // visible: 750ms at start → 200ms at end
+    const visibleMs = Math.max(200, 750 - progress * 550) + Math.random() * 80;
+    // gap: 120ms at start → 40ms at end
+    const gapMs = Math.max(40, 120 - progress * 80);
     btnTimerRef.current = setTimeout(() => {
       setActiveBtn(null);
-      // 80ms gap between buttons
-      spawnTimerRef.current = setTimeout(spawnNext, 80);
+      spawnTimerRef.current = setTimeout(spawnNext, gapMs);
     }, visibleMs);
   };
 
@@ -46556,6 +46561,7 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
     setPhase(isP2 ? 'p2playing' : 'p1playing');
     const endTime = Date.now() + DURATION * 1000;
     endTimeRef.current = endTime;
+    startTimeRef.current = Date.now();
     clearInterval(ivRef.current);
     ivRef.current = setInterval(() => {
       const rem = Math.max(0, (endTime - Date.now()) / 1000);
