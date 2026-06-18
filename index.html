@@ -33495,7 +33495,7 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
 </head>
 <body>
 <!-- Splash screen -->
-<div id="splash">
+<div id="splash" style="display:none">
   <div id="splash-bg"></div>
   <div class="splash-ring" style="animation-delay:0s"></div>
   <div class="splash-ring" style="animation-delay:1s"></div>
@@ -33530,6 +33530,11 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   var s2 = document.createElement('style');
   s2.textContent = '@keyframes splashGlow{0%,100%{filter:drop-shadow(0 0 28px ' + t.glow + ') drop-shadow(0 8px 24px rgba(0,0,0,0.25))}50%{filter:drop-shadow(0 0 52px ' + t.glow + ') drop-shadow(0 8px 32px rgba(0,0,0,0.18))}}';
   document.head.appendChild(s2);
+  // Ha splash ki van kapcsolva, ne jelenjen meg
+  var splashEnabled = localStorage.getItem('boh_splash') !== '0';
+  if (splashEnabled) {
+    splash.style.display = '';
+  }
 })();
 </script>
 <!-- iOS 18+ haptic trigger -->
@@ -33812,7 +33817,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.154';
+const APP_VERSION = 'v9.155';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -34573,6 +34578,12 @@ function StatsScreen({ go, onOpenObserver }) {
 }
 
 function HomeScreen({ go, onStartGame, setTheme, currentTheme, setLang, currentLang, resumeRoomData, onResume }) {
+  const [splashOn, setSplashOn] = React.useState(() => localStorage.getItem('boh_splash') !== '0');
+  const toggleSplash = () => {
+    const next = !splashOn;
+    setSplashOn(next);
+    localStorage.setItem('boh_splash', next ? '1' : '0');
+  };
   const [showInstall, setShowInstall] = React.useState(false);
   const [showSettings, setShowSettings] = React.useState(false);
   const isStandalone = typeof window !== 'undefined' && (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches);
@@ -34633,6 +34644,17 @@ function HomeScreen({ go, onStartGame, setTheme, currentTheme, setLang, currentL
                     {label}
                   </button>
                 ))}
+              </div>
+              {/* Splash screen toggle */}
+              <div style={{ width:1, background:T.inkMute+'25', margin:'20px 0' }} />
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div>
+                  <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>Splash screen</div>
+                  <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>Betöltési animáció indításkor</div>
+                </div>
+                <div onClick={toggleSplash} style={{ width:48, height:28, borderRadius:14, background: splashOn ? T.mint : T.surfaceMuted, position:'relative', cursor:'pointer', flexShrink:0, transition:'background .2s' }}>
+                  <div style={{ position:'absolute', top:3, left: splashOn ? 23 : 3, width:22, height:22, borderRadius:'50%', background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left .2s' }}/>
+                </div>
               </div>
             </div>
           </SheetOverlay>
