@@ -33818,7 +33818,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.197';
+const APP_VERSION = 'v9.198';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -37198,11 +37198,10 @@ const SOHANEM_CARDS = [
   {t:'egyszerre két emberrel randiztam',l:'vad'},
 ];
 
-function OtdologGame({ gameIdx, challenger, onAdvance, onResult }) {
+function OtdologGame({ gameIdx, challenger, onAdvance, onResult, difficulty }) {
   const cat = OTDOLOG_CATEGORIES[gameIdx % OTDOLOG_CATEGORIES.length];
   const [phase, setPhase] = React.useState('ready'); // 'ready' | 'running' | 'done'
-  const [difficulty, setDifficulty] = React.useState('könnyű'); // 'könnyű'|'médium'|'nehéz'
-  const DIFF_TIME = { 'könnyű': 9, 'médium': 7, 'nehéz': 5 };
+  const DIFF_TIME = { 'easy': 9, 'mid': 7, 'hard': 5 };
   const totalTime = DIFF_TIME[difficulty] || 9;
   const [timeLeft, setTimeLeft] = React.useState(totalTime);
   const [checked, setChecked] = React.useState([false,false,false,false,false]);
@@ -37210,7 +37209,7 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult }) {
 
   React.useEffect(() => {
     setPhase('ready'); setTimeLeft(DIFF_TIME[difficulty] || 9); setChecked([false,false,false,false,false]); advancedRef.current = false;
-  }, [gameIdx]);
+  }, [gameIdx, difficulty]);
 
   React.useEffect(() => {
     if (phase !== 'running') return;
@@ -37262,20 +37261,10 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult }) {
       </div>
 
       {phase === 'ready' ? (
-        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
-          <div style={{ display:'flex', gap:8 }}>
-            {[['könnyű','9mp','#4FC2A0'],['médium','7mp','#F59E0B'],['nehéz','5mp','#EF4444']].map(([d, label, col]) => (
-              <button key={d} onClick={() => { setDifficulty(d); setTimeLeft(DIFF_TIME[d]); }}
-                style={{ padding:'8px 14px', borderRadius:12, border:`2px solid ${difficulty===d ? col : 'transparent'}`, background: difficulty===d ? col+'22' : T.surface, fontFamily:T.font, fontWeight:800, fontSize:12, color: difficulty===d ? col : T.inkSoft, cursor:'pointer', transition:'all .15s' }}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <button onClick={() => { setTimeLeft(DIFF_TIME[difficulty]); setPhase('running'); }} style={{ width:148, height:148, borderRadius:'50%', background:T.mint, border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, boxShadow:T.shadow }}>
-            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:36, color:'#fff', lineHeight:1 }}>▶</div>
-            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.85)' }}>Felfed & Indít</div>
-          </button>
-        </div>
+        <button onClick={() => { setTimeLeft(totalTime); setPhase('running'); }} style={{ width:148, height:148, borderRadius:'50%', background:T.mint, border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, boxShadow:T.shadow }}>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:36, color:'#fff', lineHeight:1 }}>▶</div>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.85)' }}>{totalTime}mp · Felfed & Indít</div>
+        </button>
       ) : (
         <div style={{ position:'relative', width:160, height:160 }}>
           <svg viewBox="0 0 160 160" style={{ position:'absolute', inset:0, width:'100%', height:'100%', transform:'rotate(-90deg)' }}>
@@ -44782,7 +44771,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'kategoria') return <KategoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'memoria') return <MemoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kezcsere') return <KezCsereGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
-  if (gameId === 'otdolog') return <OtdologGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'otdolog') return <OtdologGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
   if (gameId === 'sohanem') return <SohanemGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
   return null;
 }
