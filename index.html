@@ -33685,7 +33685,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.106';
+const APP_VERSION = 'v9.107';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -35318,6 +35318,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   const [kisebbSheet, setKisebbSheet] = useState(false);
   const [collectSheet, setCollectSheet] = useState(false);
   const [ovfjSheet, setOvfjSheet] = useState(false);
+  const [zeneSheet, setZeneSheet] = useState(false);
   const [filterSheet, setFilterSheet] = useState(false);
   const [activeFilters, setActiveFilters] = useState([]); // [] = show all
   const buszConfig = gameMeta?.buszConfig || {};
@@ -35330,6 +35331,8 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   const setOvfjConfig = cfg => setGameMeta(m => ({...m, ovfjConfig: typeof cfg === 'function' ? cfg(m?.ovfjConfig||{}) : cfg}));
   const beerpongConfig = gameMeta?.beerpongConfig || {};
   const setBeerpongConfig = cfg => setGameMeta(m => ({...m, beerpongConfig: typeof cfg === 'function' ? cfg(m?.beerpongConfig||{}) : cfg}));
+  const zeneConfig = gameMeta?.zeneConfig || {};
+  const setZeneConfig = cfg => setGameMeta(m => ({...m, zeneConfig: typeof cfg === 'function' ? cfg(m?.zeneConfig||{}) : cfg}));
 
   const allOn = selectedGames.length === GAMES.length;
   const anySelected = selectedGames.length > 0;
@@ -35442,6 +35445,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
                   const dim = locked || (anySelected && !isSelected);
                   const longPress = g.id==='busz' ? ()=>{ if(!selectedGames.includes('busz')) toggle('busz'); setBuszSheet(true); }
                     : g.id==='beerpong' ? ()=>{ if(!selectedGames.includes('beerpong')) toggle('beerpong'); setBeerpongSheet(true); }
+                    : g.id==='zene' ? ()=>{ if(!selectedGames.includes('zene')) toggle('zene'); setZeneSheet(true); }
                     : undefined;
                   return (
                     <FavTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked}
@@ -35465,7 +35469,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
             return (
               <GameTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked || !!g.comingSoon}
                 onClick={() => { if (!g.comingSoon) toggle(g.id); }} onInfo={() => setInfo(g.id)}
-                onLongPress={g.id==='busz' ? ()=>{ if(!selectedGames.includes('busz')) toggle('busz'); setBuszSheet(true); } : g.id==='beerpong' ? ()=>{ if(!selectedGames.includes('beerpong')) toggle('beerpong'); setBeerpongSheet(true); } : g.id==='kisebb' ? ()=>{ if(!selectedGames.includes('kisebb')) toggle('kisebb'); setKisebbSheet(true); } : g.id==='collect' ? ()=>{ if(!selectedGames.includes('collect')) toggle('collect'); setCollectSheet(true); } : g.id==='ovfj' ? ()=>{ if(!selectedGames.includes('ovfj')) toggle('ovfj'); setOvfjSheet(true); } : undefined} />
+                onLongPress={g.id==='busz' ? ()=>{ if(!selectedGames.includes('busz')) toggle('busz'); setBuszSheet(true); } : g.id==='beerpong' ? ()=>{ if(!selectedGames.includes('beerpong')) toggle('beerpong'); setBeerpongSheet(true); } : g.id==='kisebb' ? ()=>{ if(!selectedGames.includes('kisebb')) toggle('kisebb'); setKisebbSheet(true); } : g.id==='collect' ? ()=>{ if(!selectedGames.includes('collect')) toggle('collect'); setCollectSheet(true); } : g.id==='ovfj' ? ()=>{ if(!selectedGames.includes('ovfj')) toggle('ovfj'); setOvfjSheet(true); } : g.id==='zene' ? ()=>{ if(!selectedGames.includes('zene')) toggle('zene'); setZeneSheet(true); } : undefined} />
             );
           })}
         </div>
@@ -35494,6 +35498,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
       {kisebbSheet && <KisebbConfigSheet config={kisebbConfig} setConfig={setKisebbConfig} onClose={() => setKisebbSheet(false)} />}
       {collectSheet && <CollectBoomConfigSheet config={collectConfig} setConfig={setCollectConfig} onClose={() => setCollectSheet(false)} />}
       {ovfjSheet && <OVFJConfigSheet config={ovfjConfig} setConfig={setOvfjConfig} onClose={() => setOvfjSheet(false)} />}
+      {zeneSheet && <ZeneConfigSheet config={zeneConfig} setConfig={setZeneConfig} onClose={() => setZeneSheet(false)} />}
       {beerpongSheet && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setBeerpongSheet(false)} playerCount={99} />}
       {filterSheet && (
         <SheetOverlay onClose={() => setFilterSheet(false)}>
@@ -38712,13 +38717,74 @@ function SohanemGame({ gameIdx, onAdvance }) {
   );
 }
 
-function ZeneGame({ gameIdx, challenger, onAdvance, onResult }) {
-  const [selectedEra, setSelectedEra] = React.useState(() => {
-    try { return localStorage.getItem('zene_era') || 'all'; } catch(e) { return 'all'; }
+function ZeneConfigSheet({ config, setConfig, onClose }) {
+  const era   = config.era   || 'all';
+  const genre = config.genre || 'all';
+  const ERA_OPTIONS = [
+    { v:'all',     label:'Minden korszak' },
+    { v:'classic', label:'Klasszikusok (pre-2000)' },
+    { v:'2000s',   label:'2000-es évek' },
+    { v:'2010s',   label:'2010-es évek' },
+    { v:'2020s',   label:'2020-as évek' },
+  ];
+  const GENRE_OPTIONS = [
+    { v:'all',        label:'Minden stílus' },
+    { v:'pop',        label:'Pop' },
+    { v:'rnb',        label:'R&B / Hip-hop' },
+    { v:'hiphop',     label:'Hip-hop' },
+    { v:'rock',       label:'Rock' },
+    { v:'electronic', label:'Electronic' },
+    { v:'indie',      label:'Indie' },
+  ];
+  const chip = (active) => ({
+    flex:1, padding:'10px 0', borderRadius:12, border:'none', cursor:'pointer',
+    fontFamily:T.font, fontWeight:700, fontSize:13,
+    background: active ? T.mint : T.surfaceMuted,
+    color: active ? '#fff' : T.ink,
   });
-  const [selectedGenre, setSelectedGenre] = React.useState(() => {
-    try { return localStorage.getItem('zene_genre') || 'all'; } catch(e) { return 'all'; }
-  });
+  return (
+    <SheetOverlay onClose={onClose}>
+      <div style={{padding:'4px 20px 32px'}}>
+        <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:18,color:T.ink,marginBottom:4,letterSpacing:T.letterDisplay}}>🎵 Zenefelismerés beállítások</div>
+        <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,marginBottom:18}}>Szűrd a zenéket korszak és stílus szerint</div>
+
+        <div style={{borderTop:`1px solid ${T.surfaceMuted}`,paddingTop:14,marginBottom:4}}>
+          <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:14,color:T.ink,marginBottom:10}}>Korszak</div>
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {ERA_OPTIONS.map(o => (
+              <button key={o.v} onClick={()=>setConfig(c=>({...c,era:o.v}))} style={{
+                width:'100%', padding:'11px 14px', borderRadius:12, border: era===o.v?`1.5px solid ${T.mint}`:'1.5px solid rgba(26,42,74,0.10)',
+                background: era===o.v?T.mintSoft:'#fff', cursor:'pointer',
+                fontFamily:T.font, fontWeight: era===o.v?700:500, fontSize:14,
+                color: era===o.v?T.mintDeep:T.ink, textAlign:'left',
+              }}>{o.label}</button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{borderTop:`1px solid ${T.surfaceMuted}`,paddingTop:14,marginTop:14,marginBottom:4}}>
+          <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:14,color:T.ink,marginBottom:10}}>Stílus</div>
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {GENRE_OPTIONS.map(o => (
+              <button key={o.v} onClick={()=>setConfig(c=>({...c,genre:o.v}))} style={{
+                width:'100%', padding:'11px 14px', borderRadius:12, border: genre===o.v?`1.5px solid ${T.mint}`:'1.5px solid rgba(26,42,74,0.10)',
+                background: genre===o.v?T.mintSoft:'#fff', cursor:'pointer',
+                fontFamily:T.font, fontWeight: genre===o.v?700:500, fontSize:14,
+                color: genre===o.v?T.mintDeep:T.ink, textAlign:'left',
+              }}>{o.label}</button>
+            ))}
+          </div>
+        </div>
+
+        <PrimaryButton onClick={onClose} style={{marginTop:16}}>Kész</PrimaryButton>
+      </div>
+    </SheetOverlay>
+  );
+}
+
+function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta }) {
+  const selectedEra   = gameMeta?.zeneConfig?.era   || 'all';
+  const selectedGenre = gameMeta?.zeneConfig?.genre || 'all';
 
   const filteredSongs = React.useMemo(() => {
     let songs = ZENE_SONGS;
@@ -38789,46 +38855,8 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult }) {
     }
   };
 
-  const saveEra   = v => { setSelectedEra(v);   try { localStorage.setItem('zene_era',   v); } catch(e){} };
-  const saveGenre = v => { setSelectedGenre(v); try { localStorage.setItem('zene_genre', v); } catch(e){} };
-
-  const ERA_OPTIONS = [
-    { v:'all',     label:'Minden' },
-    { v:'classic', label:'Klassz.' },
-    { v:'2000s',   label:'2000-es' },
-    { v:'2010s',   label:'2010-es' },
-    { v:'2020s',   label:'2020-as' },
-  ];
-  const GENRE_OPTIONS = [
-    { v:'all',        label:'Minden' },
-    { v:'pop',        label:'Pop' },
-    { v:'rnb',        label:'R&B' },
-    { v:'hiphop',     label:'Hip-hop' },
-    { v:'rock',       label:'Rock' },
-    { v:'electronic', label:'Electronic' },
-    { v:'indie',      label:'Indie' },
-  ];
-
-  const chip = (active) => ({
-    padding:'5px 11px', borderRadius:999, border:'none', cursor:'pointer',
-    fontFamily:T.font, fontWeight:700, fontSize:11,
-    background: active ? T.mint : T.surfaceMuted,
-    color: active ? '#fff' : T.inkSoft,
-    whiteSpace:'nowrap', flexShrink:0, transition:'background .15s',
-  });
-
   return (
     <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
-      {/* Filter chips */}
-      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:5 }}>
-        <div style={{ overflowX:'auto', display:'flex', gap:5, paddingBottom:1, WebkitOverflowScrolling:'touch' }}>
-          {ERA_OPTIONS.map(o => <button key={o.v} onClick={() => saveEra(o.v)} style={chip(selectedEra===o.v)}>{o.label}</button>)}
-        </div>
-        <div style={{ overflowX:'auto', display:'flex', gap:5, paddingBottom:1, WebkitOverflowScrolling:'touch' }}>
-          {GENRE_OPTIONS.map(o => <button key={o.v} onClick={() => saveGenre(o.v)} style={chip(selectedGenre===o.v)}>{o.label}</button>)}
-        </div>
-      </div>
-
       {previewUrl && (
         <audio ref={audioRef} src={previewUrl}
           onPlay={() => setPlaying(true)}
@@ -44094,7 +44122,7 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
 }
 
 function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, roomCode, gameMeta, challenger, opponent, onSetHideFooter, onSetBuszSwitch }) {
-  if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
   if (gameId === 'ritmus')   return <RitmusGame key={gameIdx} gameIdx={gameIdx} players={players} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'mitval')   return <MitValasztanalGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'meduza')   return <MeduzaGame key={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
