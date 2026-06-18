@@ -33818,7 +33818,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.203';
+const APP_VERSION = 'v9.204';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -44637,40 +44637,112 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
   ];
   const [wordIdx] = React.useState(() => Math.floor(Math.random() * WORDS.length));
   const word = WORDS[(gameIdx * 7 + wordIdx) % WORDS.length];
-  const [phase, setPhase] = React.useState('reveal'); // 'reveal'|'guessing'|'done'
+  // phase: 'reveal' | 'guessing' | 'second_reveal' | 'guessing2' | 'done'
+  const [phase, setPhase] = React.useState('reveal');
   const [timeLeft, setTimeLeft] = React.useState(15);
+  const [paused, setPaused] = React.useState(false);
   const [holding, setHolding] = React.useState(false);
   const timerRef = React.useRef(null);
+  const pausedRef = React.useRef(false);
   const advRef = React.useRef(false);
 
-  React.useEffect(() => { setPhase('reveal'); setTimeLeft(15); clearInterval(timerRef.current); advRef.current = false; }, [gameIdx]);
+  React.useEffect(() => {
+    setPhase('reveal'); setTimeLeft(15); setPaused(false);
+    clearInterval(timerRef.current); advRef.current = false; pausedRef.current = false;
+  }, [gameIdx]);
   React.useEffect(() => () => clearInterval(timerRef.current), []);
 
-  const startGuessing = () => {
-    setPhase('guessing');
+  const startTimer = (fromTime) => {
+    clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
+      if (pausedRef.current) return;
       setTimeLeft(t => {
-        if (t <= 1) { clearInterval(timerRef.current); commitResult(false); return 0; }
+        if (t <= 1) { clearInterval(timerRef.current); commitResult(false, false); return 0; }
         return t - 1;
       });
     }, 1000);
   };
 
-  const commitResult = (success) => {
+  const startGuessing = () => {
+    setPhase('guessing');
+    setPaused(false); pausedRef.current = false;
+    startTimer(15);
+  };
+
+  const togglePause = () => {
+    const next = !pausedRef.current;
+    pausedRef.current = next;
+    setPaused(next);
+  };
+
+  const goSecondChance = () => {
+    clearInterval(timerRef.current);
+    setPhase('second_reveal');
+    setHolding(false);
+  };
+
+  const startGuessing2 = () => {
+    setPhase('guessing2');
+    setPaused(false); pausedRef.current = false;
+    // restart timer for 2nd attempt (use remaining time, min 10s)
+    const t2 = Math.max(timeLeft, 10);
+    setTimeLeft(t2);
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      if (pausedRef.current) return;
+      setTimeLeft(t => {
+        if (t <= 1) { clearInterval(timerRef.current); commitResult(false, true); return 0; }
+        return t - 1;
+      });
+    }, 1000);
+  };
+
+  const commitResult = (success, isSecond) => {
     if (advRef.current) return;
     advRef.current = true;
     clearInterval(timerRef.current);
     setPhase('done');
+    const drinks = (!success && isSecond) ? 2 : 1;
     if (success) {
       onResult && onResult({ correct: true, playerName: challenger?.name, drinks: 0, subtitle: `${challenger?.name} & ${opponent?.name} — mindketten +1 pont!` });
+      onAdvance && onAdvance({}, { [challenger?.id]:1,[opponent?.id]:1 });
     } else {
-      onResult && onResult({ correct: false, playerName: null, drinks: 1, subtitle: `Nem sikerült — mindketten isznak 🍺` });
+      onResult && onResult({ correct: false, playerName: null, drinks, subtitle: isSecond ? `2 szóból sem sikerült — mindketten ${drinks} kortyt isznak 🍺🍺` : `Nem sikerült — mindketten isznak 🍺` });
+      onAdvance && onAdvance({ [challenger?.id]:drinks,[opponent?.id]:drinks }, {});
     }
-    onAdvance && onAdvance(success ? {} : { [challenger?.id]:1,[opponent?.id]:1 }, success ? { [challenger?.id]:1,[opponent?.id]:1 } : {});
   };
 
   const pct = (timeLeft / 15) * 100;
   const circumference = 2 * Math.PI * 44;
+  const isGuessing = phase === 'guessing' || phase === 'guessing2';
+
+  const RevealCard = ({ label }) => (
+    <div style={{ width:'100%', background:'#1B2340', borderRadius:20, padding:'20px 18px 16px', display:'flex', flexDirection:'column', alignItems:'center', gap:14 }}>
+      <div style={{ width:'100%', minHeight:100, borderRadius:18, border:'2px dashed rgba(255,255,255,0.28)', background:'rgba(255,255,255,0.05)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, padding:20 }}>
+        {holding ? (
+          <div style={{ textAlign:'center', animation:'burstPop .25s' }}>
+            <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:8 }}>👁 CSAK {(challenger?.name||'?').toUpperCase()} LÁTJA</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:36, color:'#fff', textTransform:'uppercase', letterSpacing:'-0.01em', lineHeight:1.1 }}>{word}</div>
+            <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.5)', marginTop:8 }}>Ezt magyarázd el — egyetlen szóval</div>
+          </div>
+        ) : (
+          <svg width="52" height="52" viewBox="0 0 34 34" fill="none">
+            <ellipse cx="17" cy="17" rx="14" ry="9" stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+            <circle cx="17" cy="17" r="5" stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
+          </svg>
+        )}
+      </div>
+      <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.38)', textAlign:'center' }}>Tartsd lenyomva a felfedéshez</div>
+      <button
+        onPointerDown={e=>{e.preventDefault();setHolding(true);}}
+        onPointerUp={()=>setHolding(false)}
+        onPointerLeave={()=>setHolding(false)}
+        onPointerCancel={()=>setHolding(false)}
+        style={{ width:'100%', padding:'14px 0', background: holding ? '#8C7AE6' : '#6C5CE7', border:'none', borderRadius:14, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, cursor:'pointer', userSelect:'none', WebkitUserSelect:'none', display:'flex', alignItems:'center', justifyContent:'center', gap:8, transition:'background .1s' }}>
+        <span style={{ fontSize:14 }}>⬇</span><span>Nyomd &amp; tartsd</span>
+      </button>
+    </div>
+  );
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16, alignItems:'center', width:'100%' }}>
@@ -44693,56 +44765,44 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
         </div>
       </div>
 
-      {/* Word card — hold to reveal (reveal phase only) */}
-      {phase === 'reveal' ? (
-        <div style={{ width:'100%', background:'#1B2340', borderRadius:20, padding:'20px 18px 16px', display:'flex', flexDirection:'column', alignItems:'center', gap:14 }}>
-          <div style={{ width:'100%', minHeight:120, borderRadius:18, border:'2px dashed rgba(255,255,255,0.28)', background:'rgba(255,255,255,0.05)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, padding:20 }}>
-            {holding ? (
-              <div style={{ textAlign:'center', animation:'burstPop .25s' }}>
-                <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:8 }}>👁 CSAK {(challenger?.name||'?').toUpperCase()} LÁTJA</div>
-                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:36, color:'#fff', textTransform:'uppercase', letterSpacing:'-0.01em', lineHeight:1.1 }}>{word}</div>
-                <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.5)', marginTop:8 }}>Ezt magyarázd el — egyetlen szóval</div>
-              </div>
-            ) : (
-              <svg width="52" height="52" viewBox="0 0 34 34" fill="none">
-                <ellipse cx="17" cy="17" rx="14" ry="9" stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
-                <circle cx="17" cy="17" r="5" stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
-              </svg>
-            )}
-          </div>
-          <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.38)', textAlign:'center' }}>Tartsd lenyomva a felfedéshez</div>
-          <button
-            onPointerDown={e=>{e.preventDefault();setHolding(true);}}
-            onPointerUp={()=>setHolding(false)}
-            onPointerLeave={()=>setHolding(false)}
-            onPointerCancel={()=>setHolding(false)}
-            style={{ width:'100%', padding:'14px 0', background: holding ? '#8C7AE6' : '#6C5CE7', border:'none', borderRadius:14, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, cursor:'pointer', userSelect:'none', WebkitUserSelect:'none', display:'flex', alignItems:'center', justifyContent:'center', gap:8, transition:'background .1s' }}>
-            <span style={{ fontSize:14 }}>⬇</span><span>Nyomd &amp; tartsd</span>
-          </button>
+      {/* Word card */}
+      {phase === 'reveal' && <RevealCard />}
+      {phase === 'second_reveal' && (
+        <div style={{ width:'100%', background:'#1B2340', borderRadius:20, padding:'12px 18px 8px', display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:'#F4A04A', textTransform:'uppercase', letterSpacing:'0.1em' }}>2. szó — dupla büntetés!</div>
+          <RevealCard />
         </div>
-      ) : phase === 'done' ? (
+      )}
+      {phase === 'done' && (
         <div style={{ background:'#1B2340', borderRadius:18, padding:'18px 20px', width:'100%', textAlign:'center', boxSizing:'border-box' }}>
           <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:8 }}>A szó</div>
           <div style={{ fontFamily:T.font, fontWeight:900, fontSize:32, color:'#fff', textTransform:'uppercase' }}>{word}</div>
         </div>
-      ) : null}
+      )}
 
-      {/* Timer circle */}
-      {phase === 'guessing' && (
-        <svg width={100} height={100} style={{ flexShrink:0 }}>
-          <circle cx={50} cy={50} r={44} fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth={8} />
-          <circle cx={50} cy={50} r={44} fill="none" stroke={timeLeft<=5?T.coral:T.mint} strokeWidth={8}
-            strokeDasharray={circumference} strokeDashoffset={circumference*(1-pct/100)}
-            strokeLinecap="round" transform="rotate(-90 50 50)" style={{ transition:'stroke-dashoffset .9s linear' }}/>
-          <text x={50} y={55} textAnchor="middle" fontFamily={T.font} fontWeight={900} fontSize={28} fill={timeLeft<=5?T.coral:T.ink}>{timeLeft}</text>
-        </svg>
+      {/* Timer circle + pause */}
+      {isGuessing && (
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+          <svg width={100} height={100} style={{ flexShrink:0 }}>
+            <circle cx={50} cy={50} r={44} fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth={8} />
+            <circle cx={50} cy={50} r={44} fill="none" stroke={paused ? T.inkSoft : timeLeft<=5?T.coral:T.mint} strokeWidth={8}
+              strokeDasharray={circumference} strokeDashoffset={circumference*(1-pct/100)}
+              strokeLinecap="round" transform="rotate(-90 50 50)" style={{ transition:'stroke-dashoffset .9s linear' }}/>
+            <text x={50} y={55} textAnchor="middle" fontFamily={T.font} fontWeight={900} fontSize={28} fill={paused ? T.inkSoft : timeLeft<=5?T.coral:T.ink}>{timeLeft}</text>
+          </svg>
+          <button onClick={togglePause} style={{ padding:'6px 18px', borderRadius:20, border:'none', background: paused ? T.mint : T.surface, color: paused ? '#fff' : T.inkSoft, fontFamily:T.font, fontWeight:700, fontSize:13, cursor:'pointer', boxShadow:T.shadow }}>
+            {paused ? '▶ Folytatás' : '⏸ Megáll'}
+          </button>
+        </div>
       )}
 
       {/* Rule reminder */}
       {phase !== 'done' && (
         <div style={{ background:T.surfaceMuted, borderRadius:14, padding:'12px 16px', width:'100%', display:'flex', alignItems:'center', gap:10, boxSizing:'border-box' }}>
           <span style={{ fontSize:18 }}>💬</span>
-          <div style={{ fontFamily:T.font, fontSize:13, color:T.ink, fontWeight:600, lineHeight:1.4 }}>Mondj <b>egyetlen szót</b> — tilos mutogatni!</div>
+          <div style={{ fontFamily:T.font, fontSize:13, color:T.ink, fontWeight:600, lineHeight:1.4 }}>
+            {phase === 'second_reveal' ? <span>Mondj <b>egy másik szót</b> — dupla büntetés ha nem sikerül!</span> : <span>Mondj <b>egyetlen szót</b> — tilos mutogatni!</span>}
+          </div>
         </div>
       )}
 
@@ -44752,13 +44812,33 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
           ▶ Kezdés — 15 mp
         </button>
       )}
+      {phase === 'second_reveal' && (
+        <button onClick={startGuessing2} style={{ width:'100%', padding:'16px', background:'#F4A04A', color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:T.shadowLift }}>
+          ▶ Folytatás
+        </button>
+      )}
       {phase === 'guessing' && (
-        <div style={{ display:'flex', gap:10, width:'100%' }}>
-          <button onClick={() => commitResult(true)} style={{ flex:1, padding:'16px 8px', background:T.mint, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer', boxShadow:T.shadowLift, display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-            <span>Kitalálta! ✓</span><span style={{ fontSize:12, fontWeight:600, opacity:0.85 }}>+1 pont mindkettőnek</span>
+        <div style={{ display:'flex', flexDirection:'column', gap:8, width:'100%' }}>
+          <button onClick={() => commitResult(true, false)} style={{ width:'100%', padding:'16px 8px', background:T.mint, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer', boxShadow:T.shadowLift }}>
+            Kitalálta! ✓ — +1 pont mindkettőnek
           </button>
-          <button onClick={() => commitResult(false)} style={{ flex:1, padding:'16px 8px', background:T.coral, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer', boxShadow:T.shadowLift, display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-            <span>Nem sikerült</span><span style={{ fontSize:12, fontWeight:600, opacity:0.85 }}>mindketten isznak 🍺</span>
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={goSecondChance} style={{ flex:1, padding:'14px 8px', background:'#F4A04A', color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:14, cursor:'pointer', boxShadow:T.shadowLift, display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
+              <span>Második szó →</span><span style={{ fontSize:11, fontWeight:600, opacity:0.9 }}>2x büntetés kockázat</span>
+            </button>
+            <button onClick={() => commitResult(false, false)} style={{ flex:1, padding:'14px 8px', background:T.coral, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:14, cursor:'pointer', boxShadow:T.shadowLift, display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
+              <span>Nem sikerült</span><span style={{ fontSize:11, fontWeight:600, opacity:0.9 }}>mindketten isznak 🍺</span>
+            </button>
+          </div>
+        </div>
+      )}
+      {phase === 'guessing2' && (
+        <div style={{ display:'flex', gap:8, width:'100%' }}>
+          <button onClick={() => commitResult(true, true)} style={{ flex:1, padding:'16px 8px', background:T.mint, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer', boxShadow:T.shadowLift }}>
+            Kitalálta! ✓
+          </button>
+          <button onClick={() => commitResult(false, true)} style={{ flex:1, padding:'16px 8px', background:T.coral, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:14, cursor:'pointer', boxShadow:T.shadowLift, display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
+            <span>Nem sikerült</span><span style={{ fontSize:11, fontWeight:600, opacity:0.9 }}>mindketten 2× isznak 🍺🍺</span>
           </button>
         </div>
       )}
