@@ -33700,7 +33700,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.133';
+const APP_VERSION = 'v9.134';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -38860,6 +38860,7 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
   }, [selectedEra, selectedGenre]);
 
   const [songOffset, setSongOffset] = React.useState(0);
+  const [debugOpen, setDebugOpen] = React.useState(false);
   const song = filteredSongs.length > 0 ? filteredSongs[(gameIdx + songOffset) % filteredSongs.length] : null;
 
   const [playing, setPlaying] = React.useState(false);
@@ -39013,6 +39014,31 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
         <div style={{ background:'rgba(255,255,255,0.85)', borderRadius:18, padding:'16px 22px', textAlign:'center', boxShadow:'0 4px 20px rgba(0,0,0,0.10)', width:'100%', boxSizing:'border-box' }}>
           <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:'#1B2340', letterSpacing:'-0.01em', lineHeight:1.15 }}>{song.artist}</div>
           <div style={{ fontFamily:T.font, fontWeight:600, fontSize:17, color:'#555', marginTop:5 }}>„{song.title}"</div>
+        </div>
+      )}
+
+      {/* Debug */}
+      <button onClick={() => setDebugOpen(o => !o)} style={{ marginTop:4, background:'none', border:'1px solid #ccc', borderRadius:8, padding:'4px 10px', fontFamily:T.font, fontSize:11, color:'#999', cursor:'pointer' }}>
+        🐛 debug
+      </button>
+      {debugOpen && song && (
+        <div style={{ width:'100%', background:'#1a1a2e', borderRadius:12, padding:'12px 14px', fontFamily:'monospace', fontSize:11, color:'#7effa0', lineHeight:1.7, boxSizing:'border-box', overflowX:'auto' }}>
+          <div>song: {song.artist} — {song.title}</div>
+          <div>spotifyId: {song.spotifyId}</div>
+          <div>era: {song.era} | genre: {song.genre}</div>
+          <div>offset: {songOffset} | listLen: {filteredSongs.length}</div>
+          <div>loading: {String(loading)} | previewUrl: {previewUrl ? previewUrl.substring(0,40)+'…' : 'null'}</div>
+          <div>lsCache(zdz): {(() => { try { const v = localStorage.getItem('zdz_'+song.spotifyId); return v === null ? 'miss' : v ? 'hit:'+v.substring(0,30) : 'empty'; } catch(e) { return 'err'; } })()}</div>
+          <div>lsBad(znobad): {(() => { try { return localStorage.getItem('znobad_'+song.spotifyId) ? 'BLACKLISTED' : 'ok'; } catch(e) { return 'err'; } })()}</div>
+          <div>_zeneBadIds: {window._zeneBadIds?.has(song.spotifyId) ? 'BLACKLISTED' : 'ok'} (total: {window._zeneBadIds?.size ?? '?'})</div>
+          <div style={{marginTop:4}}>
+            <button onClick={() => { try { localStorage.removeItem('zdz_'+song.spotifyId); localStorage.removeItem('znobad_'+song.spotifyId); window._zeneBadIds?.delete(song.spotifyId); } catch(e){} alert('Cache cleared for this song'); }} style={{ background:'#ff4444', color:'#fff', border:'none', borderRadius:6, padding:'3px 8px', fontFamily:'monospace', fontSize:11, cursor:'pointer', marginRight:6 }}>
+              Clear cache
+            </button>
+            <button onClick={() => { const lines = filteredSongs.slice(0,20).map((s,i) => { const bad = window._zeneBadIds?.has(s.spotifyId); const ls = (() => { try { return localStorage.getItem('znobad_'+s.spotifyId) ? '❌' : ''; } catch(e){return '';} })(); return `${i===songOffset?'▶':'  '} [${bad||ls?'BAD':'ok '}] ${s.artist} — ${s.title}`; }).join('\n'); alert('First 20 songs:\n'+lines); }} style={{ background:'#444', color:'#fff', border:'none', borderRadius:6, padding:'3px 8px', fontFamily:'monospace', fontSize:11, cursor:'pointer' }}>
+              List songs
+            </button>
+          </div>
         </div>
       )}
     </div>
