@@ -33817,7 +33817,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.164';
+const APP_VERSION = 'v9.165';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -46709,6 +46709,23 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult }) {
 
   useEffect(() => () => clearInterval(ivRef.current), []);
 
+  // Auto-fire result after reveal or timeout — no button needed
+  useEffect(() => {
+    if (revealed && !advancedRef.current) {
+      const majorityA = q.statsA >= 50;
+      const won = choice ? (choice === 'a' ? majorityA : !majorityA) : false;
+      const t = setTimeout(() => handleResult(won), 1200);
+      return () => clearTimeout(t);
+    }
+  }, [revealed]);
+
+  useEffect(() => {
+    if (timedOut && !revealed && !advancedRef.current) {
+      const t = setTimeout(() => handleResult(false), 800);
+      return () => clearTimeout(t);
+    }
+  }, [timedOut]);
+
   const handleChoose = (side) => {
     if (timedOut || revealed) return;
     clearInterval(ivRef.current);
@@ -46743,7 +46760,6 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult }) {
         <div style={{ background:`${T.coral}18`, borderRadius:16, padding:'14px 18px', textAlign:'center' }}>
           <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.coral }}>⏰ Lejárt az idő!</div>
           <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:4 }}>{challenger?.name} nem döntött — iszik!</div>
-          <button onClick={() => handleResult(false)} style={{ marginTop:12, width:'100%', padding:'14px 0', background:T.coral, border:'none', borderRadius:14, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:16, cursor:'pointer' }}>Tovább</button>
         </div>
       )}
 
@@ -46774,9 +46790,6 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult }) {
           <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color: won ? T.mint : T.coral }}>
             {won ? '✓ A többséggel értettél egyet!' : '✗ Kisebbségben voltál!'}
           </div>
-          <button onClick={() => handleResult(won)} style={{ marginTop:10, width:'100%', padding:'14px 0', background: won ? T.mint : T.coral, border:'none', borderRadius:14, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:16, cursor:'pointer' }}>
-            {won ? '+1 pont!' : 'Iszik 1-et!'}
-          </button>
         </div>
       )}
 
