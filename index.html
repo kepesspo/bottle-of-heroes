@@ -33813,11 +33813,12 @@ window.triggerHaptic = function() {
 })();
 </script>
 <script src="https://open.spotify.com/embed/iframe-api/v1" async></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script type="text/babel">
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.183';
+const APP_VERSION = 'v9.184';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -37299,9 +37300,31 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult }) {
   );
 }
 
+function QRModal({ url, onClose }) {
+  const qrRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!qrRef.current || typeof QRCode === 'undefined') return;
+    qrRef.current.innerHTML = '';
+    new QRCode(qrRef.current, { text: url, width: 260, height: 260, correctLevel: QRCode.CorrectLevel.M });
+  }, [url]);
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:9999, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:'#fff', borderRadius:24, padding:28, display:'flex', flexDirection:'column', alignItems:'center', gap:16, boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:'#1B2340' }}>Csatlakozás a szobához</div>
+        <div ref={qrRef} style={{ borderRadius:12, overflow:'hidden' }} />
+        <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:22, color:'#1B2340', letterSpacing:'0.15em' }}>{url.split('room=')[1]}</div>
+        <div style={{ fontFamily:T.font, fontSize:12, color:'#94A3B8', textAlign:'center' }}>Szkenneld be a QR kódot vagy írd be a szoba kódot</div>
+        <button onClick={onClose} style={{ marginTop:4, padding:'12px 32px', background:'#1B2340', border:'none', borderRadius:14, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer' }}>Bezár</button>
+      </div>
+    </div>
+  );
+}
+
 function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCode, initialBpState, onSetHideFooter }) {
   const bpCfg = gameMeta?.beerpongConfig || {};
   React.useEffect(() => { if (typeof window._bohRequestNotifPermission === 'function') window._bohRequestNotifPermission(); }, []);
+  const [showQR, setShowQR] = React.useState(false);
+  const joinUrl = roomCode ? (window.location.origin + window.location.pathname + '?room=' + roomCode) : '';
   const DRINKS_PER_LOSS = bpCfg.drinksPerLoss ?? 5;
   const MAX_CUPS = bpCfg.maxCups ?? 10;
   const VISSZAVAGO   = !!(bpCfg.visszavago);
@@ -38136,6 +38159,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       return (
         <div style={{ width:'100%', background:T.surface, borderRadius:22, padding:'28px 20px', textAlign:'center', boxShadow:T.shadow, display:'flex', flexDirection:'column', alignItems:'center', gap:12, position:'relative', overflow:'hidden' }}>
           <BeerPongConfetti />
+          {showQR && <QRModal url={joinUrl} onClose={() => setShowQR(false)} />}
           <div style={{ fontFamily:T.font, fontSize:32 }}>🏆</div>
           <div style={{ width:88, height:88, borderRadius:'50%', background:champion.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:38, color:'#fff', boxShadow:'0 6px 24px ' + champion.color + '55' }}>
             {champion.name.charAt(0).toUpperCase()}
@@ -38219,8 +38243,15 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
             <CupCounter value={cups1} onChange={setCups1} color={currentMatch.p1.color} max={MAX_CUPS} winning={cups1 > cups2} />
           </div>
 
-          {/* VS */}
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', paddingTop:28, fontFamily:T.font, fontWeight:800, fontSize:16, color:T.inkSoft, flexShrink:0, letterSpacing:'0.06em' }}>VS</div>
+          {/* VS + QR */}
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', paddingTop:28, gap:10, flexShrink:0 }}>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color:T.inkSoft, letterSpacing:'0.06em' }}>VS</div>
+            {roomCode && (
+              <button onClick={() => setShowQR(true)} style={{ width:36, height:36, borderRadius:10, border:'none', background:'rgba(20,30,50,0.08)', cursor:'pointer', display:'grid', placeItems:'center', fontSize:18 }} title="QR kód">
+                📲
+              </button>
+            )}
+          </div>
 
           {/* Player 2 */}
           <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
