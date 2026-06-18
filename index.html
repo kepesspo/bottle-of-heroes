@@ -33637,9 +33637,13 @@ window.triggerHaptic = function() {
   window._spotifyIFrameAPI = null;
   window.onSpotifyIframeApiReady = function(IFrameAPI) { window._spotifyIFrameAPI = IFrameAPI; };
 
-  // Deezer preview via allorigins.win CORS proxy
-  // Deezer CDN URLs never expire, CORS-enabled, 30s MP3
+  // Deezer preview — tries multiple CORS proxies in order
   var _deezerMemCache = {};
+  var ZENE_PROXIES = [
+    function(url) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url); },
+    function(url) { return 'https://corsproxy.io/?' + encodeURIComponent(url); },
+    function(url) { return 'https://proxy.cors.sh/' + url; },
+  ];
   window.getZenePreviewUrl = function(spotifyId, artist, title) {
     if (_deezerMemCache[spotifyId] !== undefined) return Promise.resolve(_deezerMemCache[spotifyId]);
     try {
@@ -33648,20 +33652,43 @@ window.triggerHaptic = function() {
     } catch(e) {}
     var q = encodeURIComponent('artist:"' + artist + '" track:"' + title + '"');
     var deezerUrl = 'https://api.deezer.com/search?q=' + q + '&limit=3';
-    var proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(deezerUrl);
-    return fetch(proxyUrl)
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        var items = d.data || [];
-        var url = null;
-        for (var i = 0; i < items.length; i++) {
-          if (items[i].preview) { url = items[i].preview; break; }
-        }
-        _deezerMemCache[spotifyId] = url;
-        try { localStorage.setItem('zdz_' + spotifyId, url || ''); } catch(e) {}
-        return url;
-      })
-      .catch(function() { _deezerMemCache[spotifyId] = null; return null; });
+
+    // Try proxies in sequence until one works
+    var tryProxy = function(idx) {
+      if (idx >= ZENE_PROXIES.length) { _deezerMemCache[spotifyId] = null; return Promise.resolve(null); }
+      return fetch(ZENE_PROXIES[idx](deezerUrl))
+        .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function(d) {
+          var items = d.data || [];
+          var url = null;
+          for (var i = 0; i < items.length; i++) {
+            if (items[i].preview) { url = items[i].preview; break; }
+          }
+          if (!url) throw new Error('no preview');
+          _deezerMemCache[spotifyId] = url;
+          try { localStorage.setItem('zdz_' + spotifyId, url); } catch(e) {}
+          return url;
+        })
+        .catch(function() { return tryProxy(idx + 1); });
+    };
+    return tryProxy(0);
+  };
+
+  // Quick connectivity test — called from ZeneGame on mount
+  window.testZeneProxy = function() {
+    var url = 'https://api.deezer.com/search?q=Queen+Bohemian+Rhapsody&limit=1';
+    var results = [];
+    var tests = ZENE_PROXIES.map(function(proxy, i) {
+      var start = Date.now();
+      return fetch(proxy(url))
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          var preview = (d.data && d.data[0]) ? d.data[0].preview : null;
+          results.push({ proxy: i, ok: !!preview, ms: Date.now()-start, url: preview ? preview.substring(0,40) : 'null' });
+        })
+        .catch(function(e) { results.push({ proxy: i, ok: false, ms: Date.now()-start, err: e.message }); });
+    });
+    return Promise.all(tests).then(function() { return results; });
   };
 })();
 </script>
@@ -33670,7 +33697,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.125';
+const APP_VERSION = 'v9.126';
 const THEMES = {
   warm: {
     bg: '#F4C57E',
@@ -38792,6 +38819,7 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
   const [revealed, setRevealed] = React.useState(false);
   const [previewUrl, setPreviewUrl] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
+  const [debugLines, setDebugLines] = React.useState(null);
   const audioRef    = React.useRef(null);
   const advancedRef = React.useRef(false);
 
@@ -38894,8 +38922,21 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
       {/* Buttons */}
       <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8 }}>
         {loading ? (
-          <div style={{ width:'100%', padding:'14px 0', borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center' }}>
-            <span style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>⏳ Betöltés...</span>
+          <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8 }}>
+            <div style={{ width:'100%', padding:'14px 0', borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+              <span style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>⏳ Betöltés...</span>
+              <button onClick={() => {
+                setDebugLines(['Teszt indul...']);
+                window.testZeneProxy().then(results => {
+                  setDebugLines(results.map(r => (r.ok ? '✅' : '❌') + ' proxy' + r.proxy + ' ' + r.ms + 'ms' + (r.url ? ' → ' + r.url : '') + (r.err ? ' err:' + r.err : '')));
+                });
+              }} style={{ padding:'4px 10px', borderRadius:8, border:'1px solid #ccc', background:'#fff', fontFamily:'monospace', fontSize:11, cursor:'pointer' }}>🔍 debug</button>
+            </div>
+            {debugLines && (
+              <div style={{ background:'#0d1117', borderRadius:10, padding:'8px 10px' }}>
+                {debugLines.map((l,i) => <div key={i} style={{ fontFamily:'monospace', fontSize:11, color:'#58a6ff' }}>{l}</div>)}
+              </div>
+            )}
           </div>
         ) : !playing ? (
           <button onClick={handlePlay}
