@@ -33818,7 +33818,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.196';
+const APP_VERSION = 'v9.197';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35947,7 +35947,7 @@ const SCENARIOS = {
   rulett:    { prompt:'Válassz egy poharat — ez a kemény?', cta:[] },
   uveg:      { prompt:'Pörgesd meg az üveget — akire mutat, az iszik.', cta:['Rám mutatott','Másra mutatott'] },
   zene:      { prompt:'Hallgasd meg a részletet — ki az előadó és mi a cím?', cta:['Nem ismertem fel','Felismertem!'] },
-  otdolog:   { prompt:'Mondj 5 odaillő szót 5 mp alatt a kategóriában!', cta:['Nem sikerült','Megvan!'] },
+  otdolog:   { prompt:'Mondj 5 odaillő szót a megadott időn belül!', cta:['Nem sikerült','Megvan!'] },
   szerencse: { prompt:'Pörgesd meg a kereket — akire mutat, az iszik.', cta:['Rám mutatott','Másra mutatott'] },
   sohanem:   { prompt:'Én még soha — igaz rád?', cta:['Igaz rám — iszom','Nem igaz rám'] },
   mindenki:  { prompt:'', cta:[] },
@@ -37201,12 +37201,15 @@ const SOHANEM_CARDS = [
 function OtdologGame({ gameIdx, challenger, onAdvance, onResult }) {
   const cat = OTDOLOG_CATEGORIES[gameIdx % OTDOLOG_CATEGORIES.length];
   const [phase, setPhase] = React.useState('ready'); // 'ready' | 'running' | 'done'
-  const [timeLeft, setTimeLeft] = React.useState(5);
+  const [difficulty, setDifficulty] = React.useState('könnyű'); // 'könnyű'|'médium'|'nehéz'
+  const DIFF_TIME = { 'könnyű': 9, 'médium': 7, 'nehéz': 5 };
+  const totalTime = DIFF_TIME[difficulty] || 9;
+  const [timeLeft, setTimeLeft] = React.useState(totalTime);
   const [checked, setChecked] = React.useState([false,false,false,false,false]);
   const advancedRef = React.useRef(false);
 
   React.useEffect(() => {
-    setPhase('ready'); setTimeLeft(5); setChecked([false,false,false,false,false]); advancedRef.current = false;
+    setPhase('ready'); setTimeLeft(DIFF_TIME[difficulty] || 9); setChecked([false,false,false,false,false]); advancedRef.current = false;
   }, [gameIdx]);
 
   React.useEffect(() => {
@@ -37222,7 +37225,7 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult }) {
   }, [phase]);
 
   const checkedCount = checked.filter(Boolean).length;
-  const pct = timeLeft / 5;
+  const pct = timeLeft / totalTime;
   const r = 72, circ = +(2 * Math.PI * r).toFixed(1);
   const timerColor = pct > 0.5 ? T.mint : pct > 0.2 ? T.yellow : T.coral;
 
@@ -37259,10 +37262,20 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult }) {
       </div>
 
       {phase === 'ready' ? (
-        <button onClick={() => setPhase('running')} style={{ width:148, height:148, borderRadius:'50%', background:T.mint, border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, boxShadow:T.shadow }}>
-          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:36, color:'#fff', lineHeight:1 }}>▶</div>
-          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.85)' }}>Felfed & Indít</div>
-        </button>
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
+          <div style={{ display:'flex', gap:8 }}>
+            {[['könnyű','9mp','#4FC2A0'],['médium','7mp','#F59E0B'],['nehéz','5mp','#EF4444']].map(([d, label, col]) => (
+              <button key={d} onClick={() => { setDifficulty(d); setTimeLeft(DIFF_TIME[d]); }}
+                style={{ padding:'8px 14px', borderRadius:12, border:`2px solid ${difficulty===d ? col : 'transparent'}`, background: difficulty===d ? col+'22' : T.surface, fontFamily:T.font, fontWeight:800, fontSize:12, color: difficulty===d ? col : T.inkSoft, cursor:'pointer', transition:'all .15s' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <button onClick={() => { setTimeLeft(DIFF_TIME[difficulty]); setPhase('running'); }} style={{ width:148, height:148, borderRadius:'50%', background:T.mint, border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, boxShadow:T.shadow }}>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:36, color:'#fff', lineHeight:1 }}>▶</div>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.85)' }}>Felfed & Indít</div>
+          </button>
+        </div>
       ) : (
         <div style={{ position:'relative', width:160, height:160 }}>
           <svg viewBox="0 0 160 160" style={{ position:'absolute', inset:0, width:'100%', height:'100%', transform:'rotate(-90deg)' }}>
