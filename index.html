@@ -33821,7 +33821,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.222';
+const APP_VERSION = 'v9.223';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -45231,13 +45231,15 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { players: updated });
   };
 
-  const advanceLoverseny = (drinkMap, pointsMap) => {
+  const advanceLoverseny = (drinkMap, pointsMap, opts) => {
     if (transitioning) return;
     const dm = drinkMap || {};
     const pm = pointsMap || {};
+    // Lóverseny manages its own drink amounts (bets), so skip diffDrinks scaling for it
+    const scale = (opts?.raw || currentGameId === 'loverseny') ? 1 : diffDrinks;
     const latestPlayers = playersRef.current;
     const newPlayers = trackScores
-      ? latestPlayers.map(p => ({ ...p, drinks: p.drinks + (dm[p.id] || 0), points: p.points + (pm[p.id] || 0) }))
+      ? latestPlayers.map(p => ({ ...p, drinks: p.drinks + (dm[p.id] || 0) * scale, points: p.points + (pm[p.id] || 0) }))
       : latestPlayers;
     const hasPoints = Object.values(pm).some(v => v > 0);
     const hasDrinks = Object.values(dm).some(v => v > 0);
