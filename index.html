@@ -33887,7 +33887,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.253';
+const APP_VERSION = 'v9.254';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -36204,26 +36204,43 @@ function GameInfoModal({ game, onClose }) {
   const diff = DIFFICULTY_META[game.difficulty];
   const cat = CATEGORY_META[game.category];
   const rt = game.roundTime ? ROUND_TIME_META[game.roundTime] : null;
+  const diffDots = game.difficulty === 'könnyű' ? 1 : game.difficulty === 'közepes' ? 2 : 3;
   return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.5)', zIndex:50, display:'flex', alignItems:'center', justifyContent:'center', padding:22, animation:'fadeIn .2s' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background:T.surface, borderRadius:22, padding:'22px 22px 20px', width:'100%', maxWidth:340, maxHeight:'90%', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.25)', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.4)' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:14 }}>
-          <div style={{ width:76, height:76, borderRadius:18, background:`${game.color}26`, display:'grid', placeItems:'center', padding:8, flexShrink:0 }}>
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.55)', zIndex:50, display:'flex', alignItems:'flex-end', justifyContent:'center', animation:'fadeIn .2s' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background:T.surface, borderRadius:'22px 22px 0 0', width:'100%', maxWidth:480, maxHeight:'88%', overflowY:'auto', boxShadow:'0 -8px 40px rgba(0,0,0,0.3)', animation:'slideUp .3s cubic-bezier(.2,.9,.3,1)' }}>
+        {/* Banner / preview header */}
+        <div style={{ position:'relative', background:`linear-gradient(135deg, ${game.color}33 0%, ${game.color}66 100%)`, borderRadius:'22px 22px 0 0', padding:'28px 22px 22px', overflow:'hidden', display:'flex', alignItems:'center', gap:16 }}>
+          <div style={{ position:'absolute', top:-30, right:-30, width:120, height:120, borderRadius:'50%', background:`${game.color}22` }} />
+          <div style={{ position:'absolute', bottom:-20, left:60, width:80, height:80, borderRadius:'50%', background:`${game.color}15` }} />
+          <div style={{ width:80, height:80, borderRadius:20, background:`${game.color}33`, display:'grid', placeItems:'center', padding:10, flexShrink:0, boxShadow:`0 4px 20px ${game.color}44`, zIndex:1 }}>
             <GameImg g={game} size="full" />
           </div>
-          <div style={{ minWidth:0 }}>
-            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, lineHeight:1.05 }}>{game.name}</div>
-            <div style={{ display:'flex', gap:6, marginTop:8, flexWrap:'wrap' }}>
-              <Tag tone={diff.tone}>{diff.label}</Tag>
-              <Tag tone={T.inkSoft} subtle><img src={IMGS[cat.imgKey]} style={{ width:13, height:13, objectFit:'contain', verticalAlign:'middle', marginRight:3, opacity:0.7 }} />{cat.label}</Tag>
-              {rt && <Tag tone={rt.tone}>{rt.icon} {rt.label}</Tag>}
-              {(game.id === 'busz' || game.dnr) && <Tag tone="#FFD23F">★ DNR</Tag>}
-              {game.observer && <Tag tone="#22D3EE">📱 Observer játék</Tag>}
+          <div style={{ zIndex:1, minWidth:0 }}>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:24, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, lineHeight:1.05 }}>{game.name}</div>
+            <div style={{ display:'flex', gap:3, alignItems:'center', marginTop:6 }}>
+              {[1,2,3].map(n => <div key={n} style={{ width:8, height:8, borderRadius:'50%', background: n <= diffDots ? diff.tone : `${diff.tone}33` }} />)}
+              <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:diff.tone, marginLeft:4 }}>{diff.label}</span>
             </div>
           </div>
         </div>
-        <div style={{ fontFamily:T.font, fontSize:13.5, lineHeight:1.55, color:T.inkSoft, marginBottom:18, fontWeight:500, whiteSpace:'pre-line' }}>{game.desc}</div>
-        <PrimaryButton onClick={onClose} big={false}>Értem</PrimaryButton>
+        {/* Banner image if available */}
+        {game.banner && (
+          <div style={{ padding:'0 22px', marginTop:16 }}>
+            <img src={game.banner} alt={game.name} style={{ width:'100%', height:'auto', borderRadius:14, display:'block', objectFit:'contain' }} />
+          </div>
+        )}
+        {/* Tags */}
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap', padding:'16px 22px 0' }}>
+          <Tag tone={T.inkSoft} subtle><img src={IMGS[cat.imgKey]} style={{ width:13, height:13, objectFit:'contain', verticalAlign:'middle', marginRight:3, opacity:0.7 }} />{cat.label}</Tag>
+          {rt && <Tag tone={rt.tone}>{rt.icon} {rt.label}</Tag>}
+          {(game.id === 'busz' || game.dnr) && <Tag tone="#FFD23F">★ DNR</Tag>}
+          {game.observer && <Tag tone="#22D3EE">📱 Observer játék</Tag>}
+        </div>
+        {/* Description */}
+        <div style={{ padding:'14px 22px 22px' }}>
+          <div style={{ fontFamily:T.font, fontSize:14, lineHeight:1.6, color:T.inkSoft, fontWeight:500, whiteSpace:'pre-line', marginBottom:18 }}>{game.desc}</div>
+          <PrimaryButton onClick={onClose} big={false}>Értem</PrimaryButton>
+        </div>
       </div>
     </div>
   );
@@ -45506,7 +45523,15 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         const wc = isWildcardRound ? WILDCARDS[Math.floor(Math.random() * WILDCARDS.length)] : null;
         // Show popup if: counter is on OR it's a wildcard round
         if (showCounter || isWildcardRound) {
-          setRoundPopup({ round: newRound, wildcard: wc, showRound: showCounter, leaving: false });
+          const nextGame = games[newGameIdx % games.length];
+          const nextPlayer = newPlayers[newTurn % newPlayers.length];
+          let playerLabel = null;
+          if (nextGame) {
+            if (nextGame.category === 'Csapat') playerLabel = 'Mindenki játéka';
+            else if (nextGame.category === 'Páros') playerLabel = nextPlayer ? nextPlayer.name + ' köre' : null;
+            else playerLabel = nextPlayer ? nextPlayer.name + ' játéka' : null;
+          }
+          setRoundPopup({ round: newRound, wildcard: wc, showRound: showCounter, leaving: false, playerLabel });
           const duration = isWildcardRound ? null : 1500; // wildcard: stays until tapped
           if (duration) {
             setTimeout(() => setRoundPopup(p => p ? {...p, leaving:true} : p), duration);
@@ -45767,7 +45792,12 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         <div onClick={() => { setRoundPopup(null); }} style={{ position:'fixed', inset:0, zIndex:9998, background:'rgba(0,0,0,0.65)', display:'flex', alignItems:'center', justifyContent:'center', backdropFilter:'blur(4px)' }}>
           <div style={{ position:'absolute', left:'50%', top:'50%', animation: roundPopup.leaving ? 'roundPopOut 0.5s ease-in forwards' : 'roundPopIn 0.5s cubic-bezier(.2,.9,.3,1.2) forwards', textAlign:'center', width:'88%', maxWidth:340 }}>
             {roundPopup.showRound && (
-              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:64, color:'#fff', lineHeight:1, textShadow:'0 4px 24px rgba(0,0,0,0.4)', letterSpacing:'-0.02em', marginBottom: roundPopup.wildcard ? 20 : 0 }}>{roundPopup.round}. Kör</div>
+              <div style={{ marginBottom: roundPopup.wildcard ? 20 : 0 }}>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:64, color:'#fff', lineHeight:1, textShadow:'0 4px 24px rgba(0,0,0,0.4)', letterSpacing:'-0.02em' }}>{roundPopup.round}. Kör</div>
+                {roundPopup.playerLabel && (
+                  <div style={{ fontFamily:T.font, fontWeight:700, fontSize:18, color:'rgba(255,255,255,0.85)', marginTop:10, textShadow:'0 2px 12px rgba(0,0,0,0.3)' }}>{roundPopup.playerLabel}</div>
+                )}
+              </div>
             )}
             {roundPopup.wildcard && (
               <>
