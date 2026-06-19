@@ -33886,41 +33886,9 @@ window.triggerHaptic = function() {
 <script type="text/babel">
 const { useState, useEffect, useRef, useMemo } = React;
 
-// ─── Sound Effects (WAV blob — same engine as lóverseny) ────────
-const SFX = (() => {
-  const SR = 22050;
-  const mkWav = (samples) => {
-    const N = samples.length;
-    const buf = new ArrayBuffer(44 + N * 2);
-    const v = new DataView(buf);
-    const s = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
-    s(0,'RIFF'); v.setUint32(4, 36 + N*2, true); s(8,'WAVE'); s(12,'fmt ');
-    v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
-    v.setUint32(24,SR,true); v.setUint32(28,SR*2,true);
-    v.setUint16(32,2,true); v.setUint16(34,16,true);
-    s(36,'data'); v.setUint32(40, N*2, true);
-    samples.forEach((x, i) => v.setInt16(44 + i*2, Math.max(-32767, Math.min(32767, x|0)), true));
-    return URL.createObjectURL(new Blob([buf], {type:'audio/wav'}));
-  };
-  const gen = (dur, fn) => {
-    const N = Math.ceil(SR * dur);
-    return mkWav(Array.from({length: N}, (_, i) => fn(i / SR, i / N)));
-  };
-  // Pre-generate sound URLs once
-  const urls = {
-    tap:  gen(0.07, (t, p) => Math.sin(2*Math.PI*1100*t) * Math.exp(-t*60) * 0.12 * 32767),
-    win:  gen(0.50, (t, p) => Math.sin(2*Math.PI*(400 + 500*p)*t) * Math.exp(-t*3) * 0.22 * 32767),
-    lose: gen(0.50, (t, p) => Math.sin(2*Math.PI*(320 - 180*p)*t) * Math.exp(-t*3) * 0.22 * 32767),
-    ding: gen(0.60, (t, p) => (Math.sin(2*Math.PI*660*t) + 0.3*Math.sin(2*Math.PI*1320*t)) * Math.exp(-t*4) * 0.18 * 32767),
-  };
-  const play = (name) => {
-    try { const a = new Audio(urls[name]); a.volume = 0.9; a.play().catch(()=>{}); } catch(e) {}
-  };
-  return { tap:()=>play('tap'), win:()=>play('win'), lose:()=>play('lose'), ding:()=>play('ding') };
-})();
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.278';
+const APP_VERSION = 'v9.279';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -45706,8 +45674,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     setFeedback(fb);
     setPlayers(newPlayers);
     try { localStorage.setItem('boh_session', JSON.stringify({ players: newPlayers, turn: newTurn, gameIdx: newGameIdx, round: newRound, selectedGames, gameMeta })); } catch(e) {}
-    if (fb==='win') { SFX.win(); setScorePulse(true); setTimeout(()=>setScorePulse(false),600); setStarAnim(true); setTimeout(()=>setStarAnim(false),900); }
-    else if (fb==='lose') { SFX.lose(); setDrinkPulse(true); setTimeout(()=>setDrinkPulse(false),600); }
+    if (fb==='win') { setScorePulse(true); setTimeout(()=>setScorePulse(false),600); setStarAnim(true); setTimeout(()=>setStarAnim(false),900); }
+    else if (fb==='lose') { setDrinkPulse(true); setTimeout(()=>setDrinkPulse(false),600); }
     if (roomCode && typeof syncRoom==='function')
       syncRoom(roomCode, { players:newPlayers, turn:newTurn, gameIdx:newGameIdx, round:newRound });
     setTimeout(() => {
@@ -45723,8 +45691,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         return;
       }
       if (newRound > round) {
-        SFX.ding();
-        const showCounter = gameMeta?.showRoundCounter !== false;
+                const showCounter = gameMeta?.showRoundCounter !== false;
         const isWildcardRound = gameMeta?.modes?.includes('wildcard') && newRound % 5 === 0;
         const wc = isWildcardRound ? WILDCARDS[Math.floor(Math.random() * WILDCARDS.length)] : null;
         // Show popup if: counter is on OR it's a wildcard round
@@ -45742,7 +45709,6 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
 
   const commitPending = () => {
     if (!pendingCommit || transitioning) return;
-    SFX.tap();
     const {newPlayers, fb, newTurn, newGameIdx, newRound} = pendingCommit;
     // 10% bónusz esély
     if (bonusEnabled && Math.random() < 0.10) {
