@@ -33886,8 +33886,30 @@ window.triggerHaptic = function() {
 <script type="text/babel">
 const { useState, useEffect, useRef, useMemo } = React;
 
+// ─── Sound Effects (Web Audio API) ─────────────────────────────
+const SFX = (() => {
+  let ctx = null;
+  const ac = () => { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); return ctx; };
+  const play = (fn) => { try { fn(ac()); } catch(e) {} };
+  const tone = (freq, type, dur, vol, startFreq) => play(c => {
+    const o = c.createOscillator(), g = c.createGain();
+    o.connect(g); g.connect(c.destination);
+    o.type = type; o.frequency.setValueAtTime(startFreq||freq, c.currentTime);
+    if (startFreq) o.frequency.exponentialRampToValueAtTime(freq, c.currentTime + dur);
+    g.gain.setValueAtTime(vol||0.18, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
+    o.start(c.currentTime); o.stop(c.currentTime + dur);
+  });
+  return {
+    tap:   () => tone(1200, 'sine',     0.04, 0.10),
+    win:   () => tone(880,  'sine',     0.35, 0.18, 440),
+    lose:  () => tone(160,  'triangle', 0.35, 0.22, 280),
+    ding:  () => tone(660,  'sine',     0.50, 0.15, 660),
+  };
+})();
+
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.268';
+const APP_VERSION = 'v9.269';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -45659,8 +45681,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     setFeedback(fb);
     setPlayers(newPlayers);
     try { localStorage.setItem('boh_session', JSON.stringify({ players: newPlayers, turn: newTurn, gameIdx: newGameIdx, round: newRound, selectedGames, gameMeta })); } catch(e) {}
-    if (fb==='win') { setScorePulse(true); setTimeout(()=>setScorePulse(false),600); setStarAnim(true); setTimeout(()=>setStarAnim(false),900); }
-    else if (fb==='lose') { setDrinkPulse(true); setTimeout(()=>setDrinkPulse(false),600); }
+    if (fb==='win') { SFX.win(); setScorePulse(true); setTimeout(()=>setScorePulse(false),600); setStarAnim(true); setTimeout(()=>setStarAnim(false),900); }
+    else if (fb==='lose') { SFX.lose(); setDrinkPulse(true); setTimeout(()=>setDrinkPulse(false),600); }
     if (roomCode && typeof syncRoom==='function')
       syncRoom(roomCode, { players:newPlayers, turn:newTurn, gameIdx:newGameIdx, round:newRound });
     setTimeout(() => {
@@ -45668,6 +45690,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       setRound(newRound); setTransitioning(false); transRef.current = false;
       processPendingDrinks();
       if (newRound > round) {
+        SFX.ding();
         const showCounter = gameMeta?.showRoundCounter !== false;
         const isWildcardRound = gameMeta?.modes?.includes('wildcard') && newRound % 5 === 0;
         const wc = isWildcardRound ? WILDCARDS[Math.floor(Math.random() * WILDCARDS.length)] : null;
@@ -45686,6 +45709,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
 
   const commitPending = () => {
     if (!pendingCommit || transitioning) return;
+    SFX.tap();
     const {newPlayers, fb, newTurn, newGameIdx, newRound} = pendingCommit;
     // 10% bónusz esély
     if (bonusEnabled && Math.random() < 0.10) {
