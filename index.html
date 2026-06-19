@@ -143,6 +143,8 @@
     @keyframes dotBounce { 0%,80%,100%{transform:translateY(0);opacity:.4} 40%{transform:translateY(-6px);opacity:1} }
     @keyframes caretBlink{ 0%,50%{opacity:.85} 51%,100%{opacity:0} }
     @keyframes burstPop  { from{transform:scale(.5);opacity:0} to{transform:scale(1);opacity:1} }
+    @keyframes bubbleRise { 0%{transform:translateY(0) scale(1);opacity:0.7} 100%{transform:translateY(-110vh) scale(1.2);opacity:0} }
+    @keyframes waveShift  { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
     @keyframes burstFade { to{opacity:0;transform:scale(.92) translateY(-8px)} }
     @keyframes wobble    { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-12deg) scale(1.1)} 75%{transform:rotate(10deg) scale(1.1)} }
     @keyframes slideDown  { from{transform:translateY(-80px);opacity:0} to{transform:translateY(0);opacity:1} }
@@ -33821,7 +33823,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.226';
+const APP_VERSION = 'v9.227';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -34245,6 +34247,33 @@ function AppBar({ title, onBack, right }) {
         <div style={{ flex:1, textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, letterSpacing:'0.06em', textTransform:'uppercase', color:T.ink }}>{title}</div>
         <div style={{ minWidth:38, display:'flex', justifyContent:'flex-end', flexShrink:0 }}>{right}</div>
       </div>
+    </div>
+  );
+}
+
+function BubbleBackground() {
+  const bubbles = React.useMemo(() => {
+    const cols = [T.mint, T.blue||'#5BA0DB', T.purple||'#A88AE8', T.coral, T.yellow||'#F4C95A'];
+    return Array.from({length:12}, (_,i) => ({
+      id: i,
+      size: 18 + (i * 17) % 40,
+      left: (i * 7.9 + 5) % 95,
+      delay: (i * 1.3) % 10,
+      duration: 14 + (i * 2.1) % 16,
+      color: cols[i % cols.length],
+      opacity: 0.08 + (i % 4) * 0.03,
+    }));
+  }, []);
+  return (
+    <div style={{ position:'fixed', inset:0, pointerEvents:'none', zIndex:0, overflow:'hidden' }}>
+      {bubbles.map(b => (
+        <div key={b.id} style={{
+          position:'absolute', bottom: `-${b.size}px`, left:`${b.left}%`,
+          width:b.size, height:b.size, borderRadius:'50%',
+          background:b.color, opacity:b.opacity,
+          animation:`bubbleRise ${b.duration}s ${b.delay}s ease-in infinite`,
+        }}/>
+      ))}
     </div>
   );
 }
@@ -35624,6 +35653,18 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
       )}
       </div>
 
+      {/* Duration estimate */}
+      {selectedGames.length > 0 && (
+        <div style={{ paddingLeft:16, paddingRight:16, paddingBottom:8 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:6, background:T.surfaceMuted||T.bgSoft, borderRadius:12, padding:'8px 14px' }}>
+            <span style={{ fontSize:15 }}>⏱</span>
+            <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft }}>
+              Becsült játékidő: kb. {Math.round(selectedGames.length * 2.5 / 5) * 5 || 5} perc
+            </span>
+          </div>
+        </div>
+      )}
+
       <div style={{ flex:1, minHeight:0, position:'relative' }}>
         <div style={{ height:'100%', overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
         <div className="screen-wide screen-pad" style={{ paddingTop:14, paddingBottom:100 }}>
@@ -36009,6 +36050,13 @@ function GameSettingsContent({ meta, setMeta, onDone, go }) {
         onChange={() => setMeta({...meta, showRoundCounter: meta.showRoundCounter === false ? true : false})}
         infoKey="roundcounter"
         infoText="Minden körváltásnál megjelenik egy nagy 'KÖR X!' felirat. Ha kikapcsolod, a körváltás csendesen történik (a Wildcard kivételével, az mindig megjelenik)."
+      />
+      <ToggleRow
+        label="💧 Hidratációs szünet"
+        value={!!meta.hydrationReminder}
+        onChange={() => setMeta({...meta, hydrationReminder: !meta.hydrationReminder})}
+        infoKey="hydration"
+        infoText="30 percenként megjelenik egy 'Igyál egy pohár vizet!' értesítés. 60 másodpercig nem lehet eltüntetni — addig a játék szünetel."
       />
       <ToggleRow
         label="📱 Csatlakozás"
@@ -44981,6 +45029,9 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const [scorePulse, setScorePulse] = useState(false);
   const [starAnim, setStarAnim] = useState(false);
   const [roundPopup, setRoundPopup] = useState(null); // {round, wildcard, leaving}
+  const [hydrationPopup, setHydrationPopup] = useState(null); // {countdown, dismissable}
+  const hydrationIntervalRef = React.useRef(null);
+  const hydrationCountdownRef = React.useRef(null);
   const [feedback, setFeedback] = useState(null);
   const [transitioning, setTransitioning] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -45021,6 +45072,30 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       setTimeout(() => setRoundPopup(null), 2000);
     }
   }, []);
+
+  // Hydration reminder every 30 min
+  React.useEffect(() => {
+    if (!gameMeta?.hydrationReminder) return;
+    hydrationIntervalRef.current = setInterval(() => {
+      setHydrationPopup({ countdown: 60, dismissable: false });
+    }, 30 * 60 * 1000);
+    return () => clearInterval(hydrationIntervalRef.current);
+  }, [gameMeta?.hydrationReminder]);
+
+  React.useEffect(() => {
+    if (!hydrationPopup) {
+      clearInterval(hydrationCountdownRef.current);
+      return;
+    }
+    if (hydrationPopup.countdown > 0) {
+      hydrationCountdownRef.current = setTimeout(() => {
+        setHydrationPopup(p => p ? { countdown: p.countdown - 1, dismissable: p.countdown <= 1 } : p);
+      }, 1000);
+    } else {
+      setHydrationPopup(p => p ? { ...p, dismissable: true } : p);
+    }
+    return () => clearTimeout(hydrationCountdownRef.current);
+  }, [hydrationPopup?.countdown]);
   const [pendingCommit, setPendingCommit] = useState(null);
   const [hostBurst, setHostBurst] = useState(null);
   const [selectedOpponent, setSelectedOpponent] = useState(null);
@@ -45389,6 +45464,27 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                 </div>
                 <div style={{ marginTop:14, fontFamily:T.font, fontSize:13, fontWeight:700, color:'rgba(255,255,255,0.7)', background:'rgba(255,255,255,0.12)', borderRadius:20, padding:'8px 20px', display:'inline-block' }}>Koppints a folytatáshoz</div>
               </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Hydration reminder popup */}
+      {hydrationPopup && (
+        <div style={{ position:'fixed', inset:0, zIndex:9999, background:'rgba(0,30,60,0.82)', display:'flex', alignItems:'center', justifyContent:'center', backdropFilter:'blur(6px)' }}>
+          <div style={{ textAlign:'center', width:'88%', maxWidth:340, animation:'roundPopIn 0.5s cubic-bezier(.2,.9,.3,1.2) forwards' }}>
+            <div style={{ background:'linear-gradient(135deg,#00B4DB,#0083B0)', borderRadius:24, padding:'28px 24px', boxShadow:'0 8px 40px rgba(0,0,0,0.5), 0 0 0 3px rgba(255,255,255,0.15)', border:'2px solid rgba(255,255,255,0.2)' }}>
+              <div style={{ fontSize:56, marginBottom:12 }}>💧</div>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:'#fff', lineHeight:1.3, marginBottom:8 }}>Hidratációs szünet!</div>
+              <div style={{ fontFamily:T.font, fontWeight:600, fontSize:15, color:'rgba(255,255,255,0.85)', lineHeight:1.5, marginBottom:20 }}>Igyál egy pohár vizet!</div>
+              {hydrationPopup.countdown > 0 && (
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:40, color:'rgba(255,255,255,0.9)', lineHeight:1 }}>{hydrationPopup.countdown}</div>
+              )}
+            </div>
+            {hydrationPopup.dismissable ? (
+              <div onClick={() => setHydrationPopup(null)} style={{ marginTop:14, fontFamily:T.font, fontSize:14, fontWeight:700, color:'rgba(255,255,255,0.9)', background:'rgba(255,255,255,0.18)', borderRadius:20, padding:'10px 24px', display:'inline-block', cursor:'pointer' }}>Koppints a folytatáshoz</div>
+            ) : (
+              <div style={{ marginTop:14, fontFamily:T.font, fontSize:13, fontWeight:600, color:'rgba(255,255,255,0.45)', background:'rgba(255,255,255,0.08)', borderRadius:20, padding:'8px 20px', display:'inline-block' }}>Várj {hydrationPopup.countdown} másodpercet…</div>
             )}
           </div>
         </div>
@@ -49325,6 +49421,7 @@ function BottleApp() {
 
   return (
     <div style={{ minHeight:'100dvh', width:'100%', position:'relative', fontFamily:T.font, color:T.ink, WebkitFontSmoothing:'antialiased', background:T.bg }} data-theme={appTheme}>
+      <BubbleBackground />
       <div key={screen} style={{ height:'100dvh', width:'100%', display:'flex', flexDirection:'column', overflow:'hidden', animation:`slide${dir>0?'In':'Back'} .35s cubic-bezier(.2,.85,.3,1.05)` }}>
         {screen==='home'     && <HomeScreen     go={go} onStartGame={onStartGame} setTheme={handleSetTheme} currentTheme={appTheme} setLang={handleSetLang} currentLang={appLang} resumeRoomData={resumeRoomData} onResume={goResume} />}
         {screen==='stats'    && <StatsScreen    go={go} onOpenObserver={openObserver} />}
