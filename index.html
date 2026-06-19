@@ -33821,7 +33821,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.220';
+const APP_VERSION = 'v9.221';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -40638,13 +40638,19 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult }) {
 
   useEffect(() => {
     if (phase !== 'result') return;
+    const losers = players.filter(p => bets[p.id]?.horseId !== raceWinner);
     if (winnerPool === 0) {
       // Don't auto-finish — show "everyone lost" banner, user must press button
       return;
     }
-    // winnerPool > 0: auto-advance when all drinks distributed, un-ready if taken back
+    if (losers.length === 0) {
+      // Everyone bet on the winner — no drinks to distribute, auto-finish
+      if (!advancedRef.current) finishGame({});
+      return;
+    }
+    // winnerPool > 0 and there are losers: auto-advance when all drinks distributed
     if (remaining === 0) {
-      advancedRef.current = false; // allow re-fire after un-ready
+      advancedRef.current = false;
       finishGame(giftsRef.current);
     } else {
       advancedRef.current = false;
@@ -40839,6 +40845,12 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult }) {
             <button onClick={() => finishGame(giftsRef.current)} style={{ width:'100%', padding:'14px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, borderRadius:14, border:'none', cursor:'pointer', boxShadow:T.shadow }}>
               Tovább →
             </button>
+          </div>
+        )}
+        {winnerPool > 0 && players.filter(p => bets[p.id]?.horseId !== raceWinner).length === 0 && (
+          <div style={{ textAlign:'center', padding:'14px 16px', borderRadius:16, background:`${T.mint}15`, border:`2px solid ${T.mint}`, animation:'popIn .4s' }}>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.mint }}>🎉 Mindenki nyert!</div>
+            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:4 }}>Nincs vesztes — nem kell inni</div>
           </div>
         )}
       </div>
