@@ -35091,7 +35091,7 @@ function StatsScreen({ go, onOpenObserver }) {
   );
 }
 
-function HomeScreen({ go, onStartGame, setTheme, currentTheme, setLang, currentLang, resumeRoomData, onResume }) {
+function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setLang, currentLang, resumeRoomData, onResume }) {
   const [splashOn, setSplashOn] = React.useState(() => localStorage.getItem('boh_splash') !== '0');
   const toggleSplash = () => {
     const next = !splashOn;
@@ -35195,6 +35195,15 @@ function HomeScreen({ go, onStartGame, setTheme, currentTheme, setLang, currentL
               </div>
             </button>
           </div>
+          <button onClick={onQuickGame} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:16, padding:'24px 12px 20px', border:'none', background:T.surface, borderRadius:20, cursor:'pointer', boxShadow:T.shadow }}>
+            <div style={{ width:64, height:64, borderRadius:'50%', background:'#F59E0B22', display:'grid', placeItems:'center', flexShrink:0 }}>
+              <span style={{ fontSize:30 }}>⚡</span>
+            </div>
+            <div style={{ textAlign:'left' }}>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:'#F59E0B', letterSpacing:'-0.01em' }}>Quick Game</div>
+              <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:3 }}>2 véletlenszerű játékos, összes játék</div>
+            </div>
+          </button>
           {!isStandalone && (
             <button onClick={() => setShowInstall(true)} style={{ display:'flex', alignItems:'center', gap:14, width:'100%', padding:'14px 16px', background:T.surface, border:'none', borderRadius:16, cursor:'pointer', textAlign:'left', boxShadow:T.shadow }}>
               <div style={{ width:44, height:44, borderRadius:12, background:T.mint, display:'grid', placeItems:'center', flexShrink:0 }}>
@@ -50419,6 +50428,35 @@ function BottleApp() {
     setPlayers([]); setSelectedGames([]); setRoomCode(null);
     setPrev(screen); setScreen('players');
   };
+  const onQuickGame = () => {
+    const FUNNY_NAMES = [
+      { name:'Kókuszdió Kenő', color:'#F59E0B' }, { name:'Bubák Bence', color:'#6366F1' },
+      { name:'Talpraesett Tomi', color:'#EC4899' }, { name:'Zavaros Zoli', color:'#14B8A6' },
+      { name:'Csapzott Csabi', color:'#F97316' }, { name:'Nyúlánk Norbi', color:'#8B5CF6' },
+      { name:'Gömbölyű Gábor', color:'#EF4444' }, { name:'Sunyi Sanyi', color:'#10B981' },
+      { name:'Lompos Lali', color:'#3B82F6' }, { name:'Rőfös Robi', color:'#F43F5E' },
+      { name:'Pislogó Péter', color:'#A3E635' }, { name:'Kancsal Karcsi', color:'#FB923C' },
+      { name:'Fapados Feri', color:'#22D3EE' }, { name:'Dagadt Dani', color:'#C084FC' },
+      { name:'Hebegő Huba', color:'#F472B6' }, { name:'Topogó Tibi', color:'#4ADE80' },
+      { name:'Álmos Ábel', color:'#60A5FA' }, { name:'Nyeszlett Nándor', color:'#FBBF24' },
+      { name:'Döcögős Dezső', color:'#34D399' }, { name:'Kapkodó Kinga', color:'#E879F9' },
+      { name:'Szelíd Szilárd', color:'#F87171' }, { name:'Botladozó Balázs', color:'#38BDF8' },
+      { name:'Nyafka Nóra', color:'#A78BFA' }, { name:'Tétova Tünde', color:'#4FC3A1' },
+      { name:'Morgós Márton', color:'#FCD34D' }, { name:'Szuszogó Szabi', color:'#F9A8D4' },
+      { name:'Kacskaringós Kende', color:'#6EE7B7' }, { name:'Pufók Panka', color:'#FCA5A5' },
+      { name:'Nyakigláb Norbert', color:'#93C5FD' }, { name:'Borzas Béla', color:'#C4B5FD' },
+    ];
+    const shuffled = [...FUNNY_NAMES].sort(() => Math.random() - 0.5);
+    const p1 = { id: 'qg_1', ...shuffled[0], drinks: 0, points: 0 };
+    const p2 = { id: 'qg_2', ...shuffled[1], drinks: 0, points: 0 };
+    const allGames = GAMES.filter(g => !g.comingSoon && g.id !== 'busz' && g.id !== 'beerpong' && g.id !== 'powerhour' && g.id !== 'ovfj' && g.id !== 'ringfire').map(g => g.id);
+    const shuffledGames = [...allGames].sort(() => Math.random() - 0.5);
+    setPlayers([p1, p2]);
+    setSelectedGames(shuffledGames);
+    setScoreHistory([]);
+    setRoomCode(null);
+    setPrev(screen); setScreen('play');
+  };
   const resetGame = () => { setPlayers(players.map(p => ({...p,drinks:0,points:0}))); setScoreHistory([]); setScreen('play'); };
 
   const [observerInitCode, setObserverInitCode] = React.useState('');
@@ -50445,7 +50483,7 @@ function BottleApp() {
       <BubbleBackground />
       <div key={screen} style={{ height:'100dvh', width:'100%', display:'flex', flexDirection:'column', overflow:'hidden', animation:`slide${dir>0?'In':'Back'} .35s cubic-bezier(.2,.85,.3,1.05)` }}>
         {showOnboarding && <OnboardingOverlay onDone={() => setShowOnboarding(false)} />}
-        {screen==='home'     && <HomeScreen     go={go} onStartGame={onStartGame} setTheme={handleSetTheme} currentTheme={appTheme} setLang={handleSetLang} currentLang={appLang} resumeRoomData={resumeRoomData} onResume={goResume} />}
+        {screen==='home'     && <HomeScreen     go={go} onStartGame={onStartGame} onQuickGame={onQuickGame} setTheme={handleSetTheme} currentTheme={appTheme} setLang={handleSetLang} currentLang={appLang} resumeRoomData={resumeRoomData} onResume={goResume} />}
         {screen==='stats'    && <StatsScreen    go={go} onOpenObserver={openObserver} />}
         {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
         {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
