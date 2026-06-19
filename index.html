@@ -33887,7 +33887,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.255';
+const APP_VERSION = 'v9.256';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -45523,15 +45523,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         const wc = isWildcardRound ? WILDCARDS[Math.floor(Math.random() * WILDCARDS.length)] : null;
         // Show popup if: counter is on OR it's a wildcard round
         if (showCounter || isWildcardRound) {
-          const nextGame = games[newGameIdx % games.length];
-          const nextPlayer = newPlayers[newTurn % newPlayers.length];
-          let playerLabel = null;
-          if (nextGame) {
-            if (nextGame.category === 'Csapat') playerLabel = 'Mindenki játéka';
-            else if (nextGame.category === 'Páros') playerLabel = nextPlayer ? nextPlayer.name + ' köre' : null;
-            else playerLabel = nextPlayer ? nextPlayer.name + ' játéka' : null;
-          }
-          setRoundPopup({ round: newRound, wildcard: wc, showRound: showCounter, leaving: false, playerLabel });
+          setRoundPopup({ round: newRound, wildcard: wc, showRound: showCounter, leaving: false });
           const duration = isWildcardRound ? null : 1500; // wildcard: stays until tapped
           if (duration) {
             setTimeout(() => setRoundPopup(p => p ? {...p, leaving:true} : p), duration);
@@ -45791,14 +45783,46 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       {roundPopup && (
         <div onClick={() => { setRoundPopup(null); }} style={{ position:'fixed', inset:0, zIndex:9998, background:'rgba(0,0,0,0.65)', display:'flex', alignItems:'center', justifyContent:'center', backdropFilter:'blur(4px)' }}>
           <div style={{ position:'absolute', left:'50%', top:'50%', animation: roundPopup.leaving ? 'roundPopOut 0.5s ease-in forwards' : 'roundPopIn 0.5s cubic-bezier(.2,.9,.3,1.2) forwards', textAlign:'center', width:'88%', maxWidth:340 }}>
-            {roundPopup.showRound && (
-              <div style={{ marginBottom: roundPopup.wildcard ? 20 : 0 }}>
-                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:64, color:'#fff', lineHeight:1, textShadow:'0 4px 24px rgba(0,0,0,0.4)', letterSpacing:'-0.02em' }}>{roundPopup.round}. Kör</div>
-                {roundPopup.playerLabel && (
-                  <div style={{ fontFamily:T.font, fontWeight:700, fontSize:18, color:'rgba(255,255,255,0.85)', marginTop:10, textShadow:'0 2px 12px rgba(0,0,0,0.3)' }}>{roundPopup.playerLabel}</div>
-                )}
-              </div>
-            )}
+            {roundPopup.showRound && (() => {
+              const curP = players[turn % players.length];
+              const cat = currentGame?.category;
+              return (
+                <div style={{ marginBottom: roundPopup.wildcard ? 20 : 0 }}>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:64, color:'#fff', lineHeight:1, textShadow:'0 4px 24px rgba(0,0,0,0.4)', letterSpacing:'-0.02em' }}>{roundPopup.round}. Kör</div>
+                  <div style={{ marginTop:14 }}>
+                    {cat === 'Csapat' ? (
+                      <div style={{ display:'inline-flex', alignItems:'center', gap:10, background:'rgba(255,255,255,0.15)', backdropFilter:'blur(8px)', borderRadius:20, padding:'10px 20px', border:'1.5px solid rgba(255,255,255,0.25)' }}>
+                        <span style={{ fontSize:22 }}>🍺</span>
+                        <span style={{ fontFamily:T.font, fontWeight:800, fontSize:18, color:'#fff' }}>Mindenki játéka</span>
+                      </div>
+                    ) : cat === 'Páros' && curP && selectedOpponent ? (
+                      <div style={{ display:'inline-flex', alignItems:'center', gap:10, background:'rgba(255,255,255,0.15)', backdropFilter:'blur(8px)', borderRadius:20, padding:'10px 18px', border:'1.5px solid rgba(255,255,255,0.25)' }}>
+                        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+                          <div style={{ width:36, height:36, borderRadius:'50%', background:curP.color, display:'grid', placeItems:'center', overflow:'hidden', boxShadow:'0 2px 8px rgba(0,0,0,0.3)' }}>
+                            {curP.img ? <img src={curP.img} style={{ width:36, height:36, objectFit:'cover', borderRadius:'50%' }} /> : <span style={{ fontSize:16 }}>👤</span>}
+                          </div>
+                          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:'#fff', maxWidth:70, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{curP.name}</span>
+                        </div>
+                        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:'rgba(255,255,255,0.6)' }}>VS</span>
+                        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+                          <div style={{ width:36, height:36, borderRadius:'50%', background:selectedOpponent.color, display:'grid', placeItems:'center', overflow:'hidden', boxShadow:'0 2px 8px rgba(0,0,0,0.3)' }}>
+                            {selectedOpponent.img ? <img src={selectedOpponent.img} style={{ width:36, height:36, objectFit:'cover', borderRadius:'50%' }} /> : <span style={{ fontSize:16 }}>👤</span>}
+                          </div>
+                          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:'#fff', maxWidth:70, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{selectedOpponent.name}</span>
+                        </div>
+                      </div>
+                    ) : curP ? (
+                      <div style={{ display:'inline-flex', alignItems:'center', gap:10, background:'rgba(255,255,255,0.15)', backdropFilter:'blur(8px)', borderRadius:20, padding:'10px 18px', border:'1.5px solid rgba(255,255,255,0.25)' }}>
+                        <div style={{ width:36, height:36, borderRadius:'50%', background:curP.color, display:'grid', placeItems:'center', overflow:'hidden', boxShadow:'0 2px 8px rgba(0,0,0,0.3)' }}>
+                          {curP.img ? <img src={curP.img} style={{ width:36, height:36, objectFit:'cover', borderRadius:'50%' }} /> : <span style={{ fontSize:16 }}>👤</span>}
+                        </div>
+                        <span style={{ fontFamily:T.font, fontWeight:800, fontSize:18, color:'#fff' }}>{curP.name} játéka</span>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })()}
             {roundPopup.wildcard && (
               <>
                 <div style={{ background:'linear-gradient(135deg,#FFE066,#FF6B35)', borderRadius:24, padding:'20px 24px', boxShadow:'0 8px 40px rgba(0,0,0,0.4), 0 0 0 3px rgba(255,255,255,0.2)', border:'2px dashed rgba(255,255,255,0.5)' }}>
