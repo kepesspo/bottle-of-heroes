@@ -33888,7 +33888,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.293';
+const APP_VERSION = 'v9.294';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35167,6 +35167,18 @@ function PlayersScreen({ players, setPlayers, go }) {
   const [editing, setEditing] = useState(null);
   const [secretTaps, setSecretTaps] = useState(0);
   const secretTimerRef = React.useRef(null);
+  const [allTimeStats, setAllTimeStats] = React.useState({});
+  React.useEffect(() => {
+    if (typeof window.getAllStats !== 'function') return;
+    window.getAllStats().then(st => setAllTimeStats(st || {}));
+  }, []);
+  const getBadge = (p) => {
+    if (!p.profileId) return null;
+    const profileIds = players.filter(x => x.profileId).map(x => x.profileId);
+    const ranked = [...profileIds].sort((a,b) => (allTimeStats[b]?.totalPoints||0) - (allTimeStats[a]?.totalPoints||0));
+    const ri = ranked.indexOf(p.profileId);
+    return ri >= 0 && ri < 3 && (allTimeStats[p.profileId]?.totalPoints||0) > 0 ? ['🥇','🥈','🥉'][ri] : null;
+  };
 
 
   const PRESET_PLAYERS = [
@@ -35248,7 +35260,7 @@ function PlayersScreen({ players, setPlayers, go }) {
         <div className="screen-wide screen-pad" style={{ paddingTop:20, paddingBottom:20 }}>
         <div className="grid-players">
           {players.map((p, i) =>
-            <PlayerCard key={p.id} p={p} index={i} onEdit={() => setEditing(p.id)} onRemove={() => removePlayer(p.id)} badge={(() => { const sorted=[...players].sort((a,b)=>b.points-a.points); const ri=sorted.findIndex(x=>x.id===p.id); return p.points>0&&ri<3?['🥇','🥈','🥉'][ri]:null; })()} />
+            <PlayerCard key={p.id} p={p} index={i} onEdit={() => setEditing(p.id)} onRemove={() => removePlayer(p.id)} badge={getBadge(p)} />
           )}
           <button onClick={addPlayer} style={{
             aspectRatio:'1/1.18', minHeight:120,
