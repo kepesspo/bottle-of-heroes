@@ -33821,7 +33821,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.221';
+const APP_VERSION = 'v9.222';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -36003,6 +36003,13 @@ function GameSettingsContent({ meta, setMeta, onDone, go }) {
       </div>
 
       <div style={{ fontFamily:T.font, fontWeight:900, fontSize:10, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'20px 0 4px' }}>Egyéb</div>
+      <ToggleRow
+        label="🔢 Körszámláló"
+        value={meta.showRoundCounter !== false}
+        onChange={() => setMeta({...meta, showRoundCounter: meta.showRoundCounter === false ? true : false})}
+        infoKey="roundcounter"
+        infoText="Minden körváltásnál megjelenik egy nagy 'KÖR X!' felirat. Ha kikapcsolod, a körváltás csendesen történik (a Wildcard kivételével, az mindig megjelenik)."
+      />
       <ToggleRow
         label="📱 Csatlakozás"
         value={!!meta.observerAllowed}
@@ -45100,15 +45107,19 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       setFeedback(null); setTurn(newTurn); setGameIdx(newGameIdx);
       setRound(newRound); setTransitioning(false); transRef.current = false;
       processPendingDrinks();
-      if (newRound > round && gameMeta?.modes?.includes('wildcard') && newRound % 5 === 0) {
-        const wc = WILDCARDS[Math.floor(Math.random() * WILDCARDS.length)];
-        setRoundPopup({ round: newRound, wildcard: wc, leaving: false });
-        setTimeout(() => setRoundPopup(p => p ? {...p, leaving:true} : p), 2800);
-        setTimeout(() => setRoundPopup(null), 3300);
-      } else if (newRound > round) {
-        setRoundPopup({ round: newRound, wildcard: null, leaving: false });
-        setTimeout(() => setRoundPopup(p => p ? {...p, leaving:true} : p), 1500);
-        setTimeout(() => setRoundPopup(null), 2000);
+      if (newRound > round) {
+        const showCounter = gameMeta?.showRoundCounter !== false;
+        const isWildcardRound = gameMeta?.modes?.includes('wildcard') && newRound % 5 === 0;
+        const wc = isWildcardRound ? WILDCARDS[Math.floor(Math.random() * WILDCARDS.length)] : null;
+        // Show popup if: counter is on OR it's a wildcard round
+        if (showCounter || isWildcardRound) {
+          setRoundPopup({ round: newRound, wildcard: wc, showRound: showCounter, leaving: false });
+          const duration = isWildcardRound ? null : 1500; // wildcard: stays until tapped
+          if (duration) {
+            setTimeout(() => setRoundPopup(p => p ? {...p, leaving:true} : p), duration);
+            setTimeout(() => setRoundPopup(null), duration + 500);
+          }
+        }
       }
     }, 700);
   };
@@ -45352,16 +45363,19 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
 
       {/* Round transition popup */}
       {roundPopup && (
-        <div onClick={() => { setRoundPopup(null); }} style={{ position:'fixed', inset:0, zIndex:9998, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'center', justifyContent:'center', backdropFilter:'blur(4px)' }}>
-          <div style={{ position:'absolute', left:'50%', top:'50%', animation: roundPopup.leaving ? 'roundPopOut 0.5s ease-in forwards' : 'roundPopIn 0.5s cubic-bezier(.2,.9,.3,1.2) forwards', textAlign:'center' }}>
-            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:64, color:'#fff', lineHeight:1, textShadow:'0 4px 24px rgba(0,0,0,0.4)', letterSpacing:'-0.02em' }}>KÖR {roundPopup.round}</div>
+        <div onClick={() => { setRoundPopup(null); }} style={{ position:'fixed', inset:0, zIndex:9998, background:'rgba(0,0,0,0.65)', display:'flex', alignItems:'center', justifyContent:'center', backdropFilter:'blur(4px)' }}>
+          <div style={{ position:'absolute', left:'50%', top:'50%', animation: roundPopup.leaving ? 'roundPopOut 0.5s ease-in forwards' : 'roundPopIn 0.5s cubic-bezier(.2,.9,.3,1.2) forwards', textAlign:'center', width:'88%', maxWidth:340 }}>
+            {roundPopup.showRound && (
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:64, color:'#fff', lineHeight:1, textShadow:'0 4px 24px rgba(0,0,0,0.4)', letterSpacing:'-0.02em', marginBottom: roundPopup.wildcard ? 20 : 0 }}>KÖR {roundPopup.round}</div>
+            )}
             {roundPopup.wildcard && (
               <>
-                <div style={{ marginTop:24, background:T.surface, borderRadius:24, padding:'16px 28px', maxWidth:280, boxShadow:'0 8px 40px rgba(0,0,0,0.3)' }}>
-                  <div style={{ fontSize:36, marginBottom:8 }}>{roundPopup.wildcard.emoji}</div>
-                  <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, lineHeight:1.5 }}>{roundPopup.wildcard.text}</div>
+                <div style={{ background:'linear-gradient(135deg,#FFE066,#FF6B35)', borderRadius:24, padding:'20px 24px', boxShadow:'0 8px 40px rgba(0,0,0,0.4), 0 0 0 3px rgba(255,255,255,0.2)', border:'2px dashed rgba(255,255,255,0.5)' }}>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:'rgba(0,0,0,0.5)', textTransform:'uppercase', letterSpacing:'0.18em', marginBottom:10 }}>🃏 WILDCARD KÖR</div>
+                  <div style={{ fontSize:48, marginBottom:12 }}>{roundPopup.wildcard.emoji}</div>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:'#1A0A00', lineHeight:1.4 }}>{roundPopup.wildcard.text}</div>
                 </div>
-                <div style={{ marginTop:12, fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.6)' }}>Koppints a folytatáshoz</div>
+                <div style={{ marginTop:14, fontFamily:T.font, fontSize:13, fontWeight:700, color:'rgba(255,255,255,0.7)', background:'rgba(255,255,255,0.12)', borderRadius:20, padding:'8px 20px', display:'inline-block' }}>Koppints a folytatáshoz</div>
               </>
             )}
           </div>
@@ -47809,7 +47823,6 @@ function MatekGame({ gameIdx, challenger, onAdvance, onResult, difficulty }) {
       const d = (rng(7, attempt*10)+1) * (rng(2, attempt*10+1)===0?1:-1);
       if (answer+d !== answer && answer+d > 0) wrongs.add(answer+d);
     }
-    // shuffle 4 options
     const opts = [answer, ...[...wrongs]];
     for (let i = opts.length-1; i > 0; i--) { const j = rng(i+1, i*77); [opts[i],opts[j]]=[opts[j],opts[i]]; }
     return { q:`${a} ${op} ${b} = ?`, answer, options: opts };
@@ -47819,21 +47832,24 @@ function MatekGame({ gameIdx, challenger, onAdvance, onResult, difficulty }) {
   const MATEK_TOTAL = MATEK_DIFF_TIME[difficulty] || 5;
   const [qData] = useState(() => genQuestion(gameIdx));
   const [streak, setStreak] = useState(() => parseInt(sessionStorage.getItem('matek_streak')||'0'));
+  const [phase, setPhase] = useState('ready'); // 'ready' | 'playing'
   const [timeLeft, setTimeLeft] = useState(MATEK_TOTAL);
   const [chosen, setChosen] = useState(null);
   const [timedOut, setTimedOut] = useState(false);
   const ivRef = useRef(null);
   const advancedRef = useRef(false);
 
-  useEffect(() => {
+  useEffect(() => () => clearInterval(ivRef.current), []);
+
+  const startGame = () => {
+    setPhase('playing');
     const end = Date.now() + MATEK_TOTAL * 1000;
     ivRef.current = setInterval(() => {
       const rem = Math.max(0, (end - Date.now()) / 1000);
       setTimeLeft(parseFloat(rem.toFixed(1)));
       if (rem <= 0) { clearInterval(ivRef.current); setTimedOut(true); }
     }, 80);
-    return () => clearInterval(ivRef.current);
-  }, []);
+  };
 
   useEffect(() => {
     if ((timedOut || chosen !== null) && !advancedRef.current) {
@@ -47852,19 +47868,29 @@ function MatekGame({ gameIdx, challenger, onAdvance, onResult, difficulty }) {
     }
   }, [timedOut, chosen]);
 
+  if (phase === 'ready') return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, padding:'8px 0' }}>
+      <div style={{ background:T.surface, borderRadius:20, padding:'24px 20px', textAlign:'center', width:'100%', boxShadow:T.shadow }}>
+        <div style={{ fontSize:40, marginBottom:8 }}>🧮</div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink }}>{challenger?.name} — készen állsz?</div>
+        <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:6 }}>Az egyenlet és a visszaszámláló egyszerre indul.</div>
+      </div>
+      <button onClick={startGame} style={{ width:'100%', padding:'16px', background:T.mint, border:'none', borderRadius:18, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:18, cursor:'pointer', boxShadow:T.shadowLift }}>
+        ▶ Mutat & Start!
+      </button>
+    </div>
+  );
+
   const progress = Math.max(0, timeLeft / MATEK_TOTAL);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, width:'100%' }}>
-      {/* Progress bar */}
       <div style={{ width:'100%', height:6, background:T.surfaceMuted, borderRadius:3, overflow:'hidden' }}>
         <div style={{ height:'100%', width: (progress*100)+'%', background: progress > 0.5 ? T.mint : progress > 0.2 ? '#F59E0B' : T.coral, transition:'width .08s linear, background .3s' }} />
       </div>
-      {/* Equation card */}
       <div style={{ background:T.surface, borderRadius:24, padding:'28px 20px', textAlign:'center', width:'100%', boxShadow:T.shadow }}>
         <div style={{ fontFamily:T.font, fontWeight:900, fontSize:40, color:T.ink, letterSpacing:'-0.01em' }}>{qData.q}</div>
       </div>
-      {/* 2×2 colored answer grid */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, width:'100%' }}>
         {qData.options.map((opt, i) => {
           const isChosen = chosen === opt;
@@ -47884,12 +47910,9 @@ function MatekGame({ gameIdx, challenger, onAdvance, onResult, difficulty }) {
           );
         })}
       </div>
-      {/* Streak info */}
       {streak > 0 && (
         <div style={{ display:'flex', alignItems:'center', gap:6, fontFamily:T.font, fontSize:13, color:T.inkSoft }}>
-          <span>🔥</span>
-          <span>Sorozat: <b style={{color:T.ink}}>{streak}</b></span>
-          <span style={{color:T.inkMute}}>· a gyorsabb több pontot kap</span>
+          <span>🔥</span><span>Sorozat: <b style={{color:T.ink}}>{streak}</b></span>
         </div>
       )}
     </div>
