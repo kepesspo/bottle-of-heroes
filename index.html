@@ -33891,7 +33891,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.300';
+const APP_VERSION = 'v9.306';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -46727,7 +46727,10 @@ function EndScreen({ players, go, resetGame, lastRound, scoreHistory }) {
           const maxPt = Math.max(1, ...allPts);
           const px = i => PAD + (i / (steps - 1)) * (W - PAD * 2);
           const py = v => H - PAD - ((v - minPt) / (maxPt - minPt)) * (H - PAD * 2);
-          const playerIds = scoreHistory[0].map(p => p.id);
+          // Collect all unique players across all snapshots (handles mid-game additions)
+          const allPlayerMap = {};
+          scoreHistory.forEach(snap => snap.forEach(p => { if (!allPlayerMap[p.id]) allPlayerMap[p.id] = { id:p.id, name:p.name, color:p.color }; }));
+          const allPlayers = Object.values(allPlayerMap);
           return (
             <div style={{ background:T.surface, borderRadius:16, padding:'14px 12px 10px', boxShadow:T.shadow }}>
               <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:8 }}>📈 Pontok alakulása</div>
@@ -46741,14 +46744,12 @@ function EndScreen({ players, go, resetGame, lastRound, scoreHistory }) {
                     <text x={PAD-4} y={y+4} textAnchor="end" fontSize="9" fill={T.inkMute} fontFamily={T.font}>{Math.round(yv)}</text>
                   </g>;
                 })}
-                {/* Player lines */}
-                {playerIds.map(pid => {
-                  const info = scoreHistory[0].find(p => p.id === pid);
-                  if (!info) return null;
-                  const pts = scoreHistory.map(snap => (snap.find(p => p.id === pid) || {pts:0}).pts);
+                {/* Player lines — include players added mid-game (they start at 0) */}
+                {allPlayers.map(info => {
+                  const pts = scoreHistory.map(snap => (snap.find(p => p.id === info.id) || {pts:0}).pts);
                   const d = pts.map((v,i) => `${i===0?'M':'L'}${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
                   const lastX = px(steps-1), lastY = py(pts[steps-1]);
-                  return <g key={pid}>
+                  return <g key={info.id}>
                     <path d={d} fill="none" stroke={info.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                     <circle cx={lastX} cy={lastY} r="4" fill={info.color} />
                   </g>;
@@ -46756,7 +46757,7 @@ function EndScreen({ players, go, resetGame, lastRound, scoreHistory }) {
               </svg>
               {/* Legend */}
               <div style={{ display:'flex', flexWrap:'wrap', gap:'6px 12px', marginTop:6 }}>
-                {scoreHistory[0].map(p => (
+                {allPlayers.map(p => (
                   <div key={p.id} style={{ display:'flex', alignItems:'center', gap:5 }}>
                     <div style={{ width:10, height:10, borderRadius:'50%', background:p.color, flexShrink:0 }} />
                     <span style={{ fontFamily:T.font, fontSize:11, color:T.ink, fontWeight:700 }}>{p.name}</span>
