@@ -33854,7 +33854,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.242';
+const APP_VERSION = 'v9.243';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -34559,6 +34559,7 @@ function StatsScreen({ go, onOpenObserver }) {
                     <div style={{ display:'flex', alignItems:'center', gap:12, marginTop:10, marginLeft:68, flexWrap:'wrap' }}>
                       {[
                         { emoji:'🍺', val: s.totalDrinks||0, label:'korty' },
+                        { emoji:'⭐', val: s.totalPoints||0, label:'pont' },
                         { emoji:'⚡', val: s.bestReactionTime != null ? s.bestReactionTime+'ms' : '—', label:'reakció' },
                       ].map((it, ci) => (
                         <div key={ci} style={{ display:'flex', alignItems:'center', gap:4 }}>
@@ -34741,7 +34742,9 @@ function StatsScreen({ go, onOpenObserver }) {
               {gameRows.map((g, i) => (
                 <div key={g.id} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow, display:'flex', alignItems:'center', gap:12 }}>
                   <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color: i===0?'#F59E0B':i===1?'#9CA3AF':i===2?'#CD7F32':T.inkMute, minWidth:18, textAlign:'center', flexShrink:0 }}>{i+1}</div>
-                  <div style={{ width:40, height:40, borderRadius:12, background: g.color||T.bgSoft, display:'grid', placeItems:'center', fontSize:22, flexShrink:0 }}>{g.emoji||'🎮'}</div>
+                  <div style={{ width:40, height:40, borderRadius:12, background: g.color||T.bgSoft, display:'grid', placeItems:'center', flexShrink:0, overflow:'hidden' }}>
+                    {g.img ? <img src={g.img} style={{ width:32, height:32, objectFit:'contain' }} /> : <span style={{ fontSize:20 }}>{g.emoji||'🎮'}</span>}
+                  </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{g.name}</div>
                     <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:2 }}>⏱ {fmtTime(g.gs.totalSeconds)}</div>
@@ -39459,6 +39462,75 @@ function MindenkiGame({ gameIdx, players, onAdvance, onResult }) {
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+function FingeritGame({ gameIdx, players, onAdvance }) {
+  const [phase, setPhase] = React.useState('ready'); // 'ready' | 'countdown' | 'result'
+  const [count, setCount] = React.useState(3);
+  const [loser, setLoser] = React.useState(null);
+  const advancedRef = React.useRef(false);
+
+  const start = () => {
+    if (phase !== 'ready') return;
+    setPhase('countdown');
+    setCount(3);
+  };
+
+  React.useEffect(() => {
+    if (phase !== 'countdown') return;
+    if (count <= 0) {
+      const idx = Math.floor(Math.random() * players.length);
+      const picked = players[idx];
+      setLoser(picked);
+      setPhase('result');
+      return;
+    }
+    const t = setTimeout(() => setCount(c => c - 1), 900);
+    return () => clearTimeout(t);
+  }, [phase, count]);
+
+  const finish = () => {
+    if (advancedRef.current) return;
+    advancedRef.current = true;
+    const dm = loser ? { [loser.id]: 1 } : {};
+    onAdvance && onAdvance(dm, {});
+  };
+
+  if (phase === 'result' && loser) return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:20, padding:'12px 0' }}>
+      <div style={{ fontSize:64 }}>👆</div>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, textAlign:'center' }}>
+        {loser.name} iszik!
+      </div>
+      <div style={{ width:72, height:72, borderRadius:'50%', background:loser.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:28, color:'#fff' }}>
+        {loser.name.charAt(0).toUpperCase()}
+      </div>
+      <button onClick={finish} style={{ marginTop:8, padding:'14px 40px', borderRadius:20, background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:16, border:'none', cursor:'pointer', boxShadow:`0 4px 16px ${T.mint}60` }}>
+        Megvan ✔
+      </button>
+    </div>
+  );
+
+  if (phase === 'countdown') return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:24, padding:'24px 0' }}>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.inkSoft, textAlign:'center' }}>Mindenki tartsa az ujját a képernyőn!</div>
+      <div style={{ width:100, height:100, borderRadius:'50%', background:T.bgSoft, display:'grid', placeItems:'center', boxShadow:`0 0 0 12px ${T.mint}22` }}>
+        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:52, color:T.mint, lineHeight:1 }}>{count}</span>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:20, padding:'12px 0' }}>
+      <div style={{ fontSize:56 }}>👆</div>
+      <div style={{ fontFamily:T.font, fontWeight:700, fontSize:16, color:T.inkSoft, textAlign:'center', lineHeight:1.5 }}>
+        Mindenki tegye az ujját a képernyőre,<br/>majd egyszerre emeljék fel!
+      </div>
+      <button onClick={start} style={{ padding:'16px 48px', borderRadius:20, background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, border:'none', cursor:'pointer', boxShadow:`0 4px 20px ${T.mint}60` }}>
+        ▶ Start!
+      </button>
     </div>
   );
 }
@@ -45151,6 +45223,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'kezcsere') return <KezCsereGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'otdolog') return <OtdologGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
   if (gameId === 'sohanem') return <SohanemGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
+  if (gameId === 'fingerit') return <FingeritGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   return null;
 }
 
