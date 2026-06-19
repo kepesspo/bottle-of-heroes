@@ -33888,7 +33888,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.297';
+const APP_VERSION = 'v9.298';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -34814,7 +34814,7 @@ function StatsScreen({ go, onOpenObserver }) {
                       {[
                         { emoji:'🍺', val: s.totalDrinks||0, label:'korty' },
                         { emoji:'⭐', val: s.totalPoints||0, label:'pont' },
-                        { emoji:'🔥', val: s.currentStreak ? s.currentStreak+'×' : '—', label:'streak' },
+                        { emoji:'🏅', val: s.bestStreak ? s.bestStreak+'×' : '—', label:'best streak' },
 
                       ].map((it, ci) => (
                         <div key={ci} style={{ display:'flex', alignItems:'center', gap:4 }}>
@@ -35361,7 +35361,6 @@ function PlayerProfileStats({ profileId }) {
     { emoji:'🍺', label:'Összes korty', value: stats.totalDrinks ?? '—' },
     { emoji:'⭐', label:'Összesített pont', value: stats.totalPoints ?? '—' },
     { emoji:'🏆', label:'Win rate', value: winRate != null ? `${winRate}%` : '—' },
-    { emoji:'🔥', label:'Jelenlegi streak', value: stats.currentStreak ? `${stats.currentStreak}×` : '—' },
     { emoji:'🏅', label:'Legjobb streak', value: stats.bestStreak ? `${stats.bestStreak}×` : '—' },
 
     { emoji:'🔄', label:'Körök', value: stats.totalRounds ?? '—' },
@@ -46403,7 +46402,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                       onKeyDown={e => {
                         if (e.key==='Enter' && menuAddName.trim()) {
                           const newP = { id:Date.now().toString(), name:menuAddName.trim(), drinks:0, points:0, color:PLAYER_COLORS[players.length%PLAYER_COLORS.length] };
-                          setPlayers(prev=>[...prev,newP]); setPendingCommit(null); setMenuAddName(''); setMenuTab('állás');
+                          setPlayers(prev => { const next=[...prev,newP]; if (roomCode && typeof syncRoom==='function') syncRoom(roomCode,{players:next}); return next; });
+                          setPendingCommit(null); setMenuAddName(''); setMenuTab('állás');
                         }
                       }}
                       placeholder="+ Név beírása"
@@ -46412,7 +46412,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                     {menuAddName.trim() && (
                       <button onClick={() => {
                         const newP = { id:Date.now().toString(), name:menuAddName.trim(), drinks:0, points:0, color:PLAYER_COLORS[players.length%PLAYER_COLORS.length] };
-                        setPlayers(prev=>[...prev,newP]); setPendingCommit(null); setMenuAddName(''); setMenuTab('állás');
+                        setPlayers(prev => { const next=[...prev,newP]; if (roomCode && typeof syncRoom==='function') syncRoom(roomCode,{players:next}); return next; });
+                        setPendingCommit(null); setMenuAddName(''); setMenuTab('állás');
                       }} style={{ padding:'0 18px', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:14, cursor:'pointer' }}>➕</button>
                     )}
                   </div>
@@ -46422,12 +46423,17 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                       {menuProfiles.filter(pr => !players.some(p => p.profileId === pr.id)).map(pr => (
                         <button key={pr.id} onClick={() => {
                           const newP = { id:Date.now().toString(), name:pr.name, drinks:0, points:0, color:pr.color||PLAYER_COLORS[players.length%PLAYER_COLORS.length], profileId:pr.id, img:pr.img||null };
-                          setPlayers(prev=>[...prev,newP]); setPendingCommit(null); setMenuTab('állás');
+                          setPlayers(prev => {
+                            const next = [...prev, newP];
+                            if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { players: next });
+                            return next;
+                          });
+                          setPendingCommit(null); setMenuTab('állás');
                         }} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 10px', borderRadius:10, border:'none', background:T.bgSoft, cursor:'pointer', flexShrink:0 }}>
                           <div style={{ width:24, height:24, borderRadius:'50%', background:pr.color||T.mint, display:'grid', placeItems:'center', overflow:'hidden', flexShrink:0 }}>
                             {pr.img ? <img src={pr.img} style={{ width:24, height:24, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:10, color:'#fff' }}>{(pr.name||'?').charAt(0).toUpperCase()}</span>}
                           </div>
-                          <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.ink, whiteSpace:'nowrap' }}>{pr.name}</span>
+                          <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.ink, whiteSpace:'nowrap' }}>{pr.nickname || pr.name}</span>
                         </button>
                       ))}
                     </div>
