@@ -33701,13 +33701,35 @@ window.triggerHaptic = function() {
       return snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
     }).catch(function() { return []; });
   };
-  window.incrementGameStats = function(gameId, increments) {
+  window.incrementGameStats = function(gameId, increments, bestValues) {
     var data = {};
-    Object.keys(increments).forEach(function(k) {
+    Object.keys(increments || {}).forEach(function(k) {
       if (increments[k]) data[k] = firebase.firestore.FieldValue.increment(increments[k]);
     });
+    var ref = db.collection('game_stats').doc(gameId);
+    if (bestValues && bestValues.bestReactionTime != null) {
+      return ref.get().then(function(d) {
+        var cur = d.exists ? (d.data().bestReactionTime || Infinity) : Infinity;
+        if (bestValues.bestReactionTime < cur) data.bestReactionTime = bestValues.bestReactionTime;
+        if (!Object.keys(data).length) return;
+        return ref.set(data, { merge: true });
+      }).catch(function(e) { console.warn('incrementGameStats', e); });
+    }
     if (!Object.keys(data).length) return Promise.resolve();
-    return db.collection('game_stats').doc(gameId).set(data, { merge: true }).catch(function(e) { console.warn('incrementGameStats', e); });
+    return ref.set(data, { merge: true }).catch(function(e) { console.warn('incrementGameStats', e); });
+  };
+  window.recordGameWin = function(gameId, profileId) {
+    var update = {};
+    update['winners.' + profileId] = firebase.firestore.FieldValue.increment(1);
+    return db.collection('game_stats').doc(gameId).set(update, { merge: true }).catch(function(e) { console.warn('recordGameWin', e); });
+  };
+  window.updateStreak = function(profileId, won) {
+    return db.collection('stats').doc(profileId).get().then(function(d) {
+      var s = d.exists ? d.data() : {};
+      var cur = won ? (s.currentStreak || 0) + 1 : 0;
+      var best = Math.max(cur, s.bestStreak || 0);
+      return db.collection('stats').doc(profileId).set({ currentStreak: cur, bestStreak: best }, { merge: true });
+    }).catch(function(e) { console.warn('updateStreak', e); });
   };
   window.getAllGameStats = function() {
     return db.collection('game_stats').get().then(function(snap) {
@@ -33854,7 +33876,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.248';
+const APP_VERSION = 'v9.249';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -34621,6 +34643,7 @@ function StatsScreen({ go, onOpenObserver }) {
                       {[
                         { emoji:'🍺', val: s.totalDrinks||0, label:'korty' },
                         { emoji:'⭐', val: s.totalPoints||0, label:'pont' },
+                        { emoji:'🔥', val: s.currentStreak ? s.currentStreak+'×' : '—', label:'streak' },
                         { emoji:'⚡', val: s.bestReactionTime != null ? s.bestReactionTime+'ms' : '—', label:'reakció' },
                       ].map((it, ci) => (
                         <div key={ci} style={{ display:'flex', alignItems:'center', gap:4 }}>
@@ -34808,7 +34831,23 @@ function StatsScreen({ go, onOpenObserver }) {
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{g.name}</div>
-                    <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:2 }}>⏱ {fmtTime(g.gs.totalSeconds)}</div>
+                    <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:3, flexWrap:'wrap' }}>
+                      <span style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>⏱ {fmtTime(g.gs.totalSeconds)}</span>
+                      {(g.gs.totalDrinks > 0) && <span style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>🍺 {g.gs.totalDrinks}</span>}
+                      {(g.gs.totalRounds > 0) && <span style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>🔄 {g.gs.totalRounds}</span>}
+                      {g.gs.bestReactionTime && <span style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>⚡ {g.gs.bestReactionTime}ms</span>}
+                    </div>
+                    {(() => {
+                      const winners = g.gs.winners || {};
+                      const topId = Object.keys(winners).sort((a,b) => winners[b]-winners[a])[0];
+                      const topProfile = topId && profiles.find(p => p.id === topId);
+                      return topProfile ? (
+                        <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:3 }}>
+                          <span style={{ fontSize:10 }}>🏆</span>
+                          <span style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.mintDeep }}>{topProfile.name} ({winners[topId]}×)</span>
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
                   <div style={{ textAlign:'right', flexShrink:0 }}>
                     <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.mint, lineHeight:1 }}>{g.gs.playCount||0}</div>
@@ -35137,11 +35176,13 @@ function PlayerProfileStats({ profileId }) {
     { emoji:'🍺', label:'Összes korty', value: stats.totalDrinks ?? '—' },
     { emoji:'⭐', label:'Összesített pont', value: stats.totalPoints ?? '—' },
     { emoji:'🏆', label:'Win rate', value: winRate != null ? `${winRate}%` : '—' },
+    { emoji:'🔥', label:'Jelenlegi streak', value: stats.currentStreak ? `${stats.currentStreak}×` : '—' },
+    { emoji:'🏅', label:'Legjobb streak', value: stats.bestStreak ? `${stats.bestStreak}×` : '—' },
     { emoji:'⚡', label:'Legjobb reakció', value: stats.bestReactionTime != null ? `${stats.bestReactionTime}ms` : '—' },
     { emoji:'🔄', label:'Körök', value: stats.totalRounds ?? '—' },
   ];
   return (
-    <div style={{ background:T.bgSoft, borderRadius:14, padding:'12px 14px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+    <div style={{ background:T.bgSoft, borderRadius:14, padding:'12px 14px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
       {items.map(it => (
         <div key={it.label} style={{ display:'flex', flexDirection:'column', gap:2 }}>
           <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, fontWeight:600 }}>{it.emoji} {it.label}</div>
@@ -45245,6 +45286,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const [hydrationPopup, setHydrationPopup] = useState(null); // {countdown, dismissable}
   const hydrationIntervalRef = React.useRef(null);
   const gameStartTimeRef = React.useRef(Date.now());
+  const gameStartRoundRef = React.useRef(1);
+  const gameStartDrinksRef = React.useRef({});
   const hydrationCountdownRef = React.useRef(null);
   const [feedback, setFeedback] = useState(null);
   const [transitioning, setTransitioning] = useState(false);
@@ -45395,12 +45438,28 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const saveCurrentGameStats = () => {
     if (typeof window.incrementGameStats !== 'function') return;
     const elapsed = Math.floor((Date.now() - gameStartTimeRef.current) / 1000);
-    window.incrementGameStats(currentGameId, { playCount: 1, totalSeconds: Math.max(1, elapsed) });
+    const startDrinks = gameStartDrinksRef.current;
+    const drinksDiff = latestPlayers.reduce((sum, p) => sum + Math.max(0, p.drinks - (startDrinks[p.id]||0)), 0);
+    const roundsDiff = Math.max(1, round - gameStartRoundRef.current + 1);
+    window.incrementGameStats(currentGameId, {
+      playCount: 1,
+      totalSeconds: Math.max(1, elapsed),
+      totalDrinks: drinksDiff,
+      totalRounds: roundsDiff,
+    });
     gameStartTimeRef.current = Date.now();
+    gameStartRoundRef.current = round;
+    gameStartDrinksRef.current = latestPlayers.reduce((acc, p) => ({...acc, [p.id]: p.drinks}), {});
   };
 
   const commitRound = (newPlayers, fb, newTurn, newGameIdx, newRound) => {
     if (newGameIdx !== gameIdx) saveCurrentGameStats();
+    if (fb === 'win') {
+      const winner = players[turn % players.length];
+      if (winner?.profileId && typeof window.recordGameWin === 'function') {
+        window.recordGameWin(currentGameId, winner.profileId);
+      }
+    }
     undoRef.current = { players, turn, gameIdx, round };
     transRef.current = true;
     setTransitioning(true);
@@ -46053,9 +46112,11 @@ function EndScreen({ players, go, resetGame, lastRound }) {
     const winner = sorted[0];
     players.forEach(p => {
       if (!p.profileId) return;
+      const isWinner = winner && p.id === winner.id;
       const inc = { totalDrinks: p.drinks || 0, totalPoints: p.points || 0, totalSessions: 1, totalRounds: lastRound || 1 };
-      if (winner && p.id === winner.id) inc.totalWins = 1;
+      if (isWinner) inc.totalWins = 1;
       window.incrementStats(p.profileId, inc);
+      if (typeof window.updateStreak === 'function') window.updateStreak(p.profileId, isWinner);
     });
   }, []);
   const drunkSorted = [...players].sort((a,b) => (b.drinks-a.drinks)||(a.points-b.points));
@@ -48322,6 +48383,10 @@ function ReakcioGame({ challenger, opponent, onAdvance, onResult }) {
     if (typeof window.incrementStats === 'function') {
       if (challenger?.profileId && p1Ms != null) window.incrementStats(challenger.profileId, {}, { bestReactionTime: p1Ms });
       if (opponent?.profileId && p2Ms != null) window.incrementStats(opponent.profileId, {}, { bestReactionTime: p2Ms });
+    }
+    if (typeof window.incrementGameStats === 'function') {
+      const bestMs = Math.min(p1Ms ?? Infinity, p2Ms ?? Infinity);
+      if (bestMs < Infinity) window.incrementGameStats('reakcio', {}, { bestReactionTime: bestMs });
     }
   }, [phase, p1Ms, p2Ms]);
 
