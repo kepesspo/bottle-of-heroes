@@ -154,6 +154,9 @@
     @keyframes coinFlip    { 0%,100%{transform:scaleX(1)} 15%,45%,75%{transform:scaleX(0.05)} 30%,60%{transform:scaleX(1)} }
     @keyframes waveBar    { 0%,100%{transform:scaleY(0.25)} 50%{transform:scaleY(1)} }
     @keyframes emojiRise { 0%{transform:translateY(20px) rotate(0);opacity:0} 15%{opacity:1} 100%{transform:translateY(-560px) rotate(20deg);opacity:0} }
+    @keyframes bounceSelect { 0%{transform:scale(1)} 25%{transform:scale(1.13)} 55%{transform:scale(0.95)} 75%{transform:scale(1.04)} 100%{transform:scale(1)} }
+    @keyframes fadeInUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes gameProgressGrow { from{width:0} to{width:100%} }
 
     /* ── Disable text/content selection across the whole app ── */
     * { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
@@ -33876,7 +33879,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.249';
+const APP_VERSION = 'v9.251';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -34358,7 +34361,7 @@ function AppBar({ title, onBack, right }) {
           ? <button onClick={onBack} style={{ width:38, height:38, border:'none', background:'transparent', color:T.ink, cursor:'pointer', display:'grid', placeItems:'center', borderRadius:12, flexShrink:0 }}>{Icon.back(T.ink)}</button>
           : <div style={{ width:38, flexShrink:0 }} />
         }
-        <div style={{ flex:1, textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, letterSpacing:'0.06em', textTransform:'uppercase', color:T.ink }}>{title}</div>
+        <div style={{ flex:1, textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, letterSpacing:'0.05em', textTransform:'uppercase', color:T.ink }}>{title}</div>
         <div style={{ minWidth:38, display:'flex', justifyContent:'flex-end', flexShrink:0 }}>{right}</div>
       </div>
     </div>
@@ -35083,8 +35086,8 @@ function PlayersScreen({ players, setPlayers, go }) {
         <div style={{ height:'100%', overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
         <div className="screen-wide screen-pad" style={{ paddingTop:20, paddingBottom:20 }}>
         <div className="grid-players">
-          {players.map(p =>
-            <PlayerCard key={p.id} p={p} onEdit={() => setEditing(p.id)} onRemove={() => removePlayer(p.id)} />
+          {players.map((p, i) =>
+            <PlayerCard key={p.id} p={p} index={i} onEdit={() => setEditing(p.id)} onRemove={() => removePlayer(p.id)} />
           )}
           <button onClick={addPlayer} style={{
             aspectRatio:'1/1.18', minHeight:120,
@@ -35129,13 +35132,14 @@ function PlayersScreen({ players, setPlayers, go }) {
   );
 }
 
-function PlayerCard({ p, onEdit, onRemove }) {
+function PlayerCard({ p, onEdit, onRemove, index }) {
   return (
     <div onClick={onEdit} style={{
       position:'relative', background:T.surface, borderRadius:18,
       padding:'10px 8px 10px', boxShadow:T.shadow,
       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6,
       cursor:'pointer', aspectRatio:'1/1.18', minHeight:120,
+      animation:'fadeInUp 0.32s ease both', animationDelay:`${(index||0)*0.06}s`,
     }}>
       <button onClick={e => { e.stopPropagation(); onRemove(); }} style={{
         position:'absolute', top:-6, right:-6, width:24, height:24,
@@ -35154,7 +35158,11 @@ function PlayerCard({ p, onEdit, onRemove }) {
         {p.img ? <img src={p.img} style={{ width:56, height:56, objectFit:'cover', borderRadius:'50%' }} /> : Icon.user('#fff')}
       </div>
       <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink, textAlign:'center', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'100%' }}>{p.name || 'Új játékos'}</div>
-      <div style={{ width:22, height:2, background:p.color, borderRadius:1, opacity:0.5 }} />
+      <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+        {p.points > 0 && <div style={{ display:'flex', alignItems:'center', gap:2, background:`${T.yellow}22`, borderRadius:8, padding:'2px 6px' }}><span style={{ fontSize:9 }}>⭐</span><span style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.ink }}>{p.points}</span></div>}
+        {p.drinks > 0 && <div style={{ display:'flex', alignItems:'center', gap:2, background:`${T.coral}22`, borderRadius:8, padding:'2px 6px' }}><span style={{ fontSize:9 }}>🍺</span><span style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.ink }}>{p.drinks}</span></div>}
+        {p.points === 0 && p.drinks === 0 && <div style={{ width:22, height:2, background:p.color, borderRadius:1, opacity:0.5 }} />}
+      </div>
     </div>
   );
 }
@@ -36080,8 +36088,15 @@ function GameTile({ g, selected, dim, locked, onClick, onInfo, onLongPress }) {
   const selColor = diff.tone;
   const dimCss = dim ? DIM_STYLES.fade : DIM_STYLES.none;
   const pressRef = React.useRef(null);
+  const [bouncing, setBouncing] = React.useState(false);
+  const prevSelected = React.useRef(selected);
+  React.useEffect(() => {
+    if (selected && !prevSelected.current) { setBouncing(true); setTimeout(() => setBouncing(false), 400); }
+    prevSelected.current = selected;
+  }, [selected]);
   const startPress = () => { if (onLongPress) pressRef.current = setTimeout(onLongPress, 500); };
   const cancelPress = () => clearTimeout(pressRef.current);
+  const diffDots = g.difficulty === 'könnyű' ? 1 : g.difficulty === 'közepes' ? 2 : 3;
   return (
     <div onClick={onClick} onTouchStart={startPress} onTouchEnd={cancelPress} onTouchCancel={cancelPress} onMouseDown={startPress} onMouseUp={cancelPress} onMouseLeave={cancelPress} style={{
       position:'relative', cursor: locked ? 'not-allowed' : 'pointer',
@@ -36093,6 +36108,7 @@ function GameTile({ g, selected, dim, locked, onClick, onInfo, onLongPress }) {
       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-start', gap:6,
       height:125, width:'100%',
       transition:'box-shadow .2s, opacity .25s, border-color .2s',
+      animation: bouncing ? 'bounceSelect 0.4s ease' : 'none',
       userSelect:'none', WebkitUserSelect:'none', WebkitTouchCallout:'none',
       ...dimCss,
     }}>
@@ -36100,7 +36116,9 @@ function GameTile({ g, selected, dim, locked, onClick, onInfo, onLongPress }) {
         <GameImg g={g} size="full" />
       </div>
       <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, color:T.ink, textAlign:'center', lineHeight:1.15, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'100%' }}>{g.name}</div>
-      <div style={{ width:22, height:3, borderRadius:2, background:diff.tone }} />
+      <div style={{ display:'flex', gap:3, alignItems:'center' }}>
+        {[1,2,3].map(n => <div key={n} style={{ width:6, height:6, borderRadius:'50%', background: n <= diffDots ? diff.tone : `${diff.tone}33` }} />)}
+      </div>
 
       {/* pencil chip for configurable games */}
       {onLongPress && (
@@ -45661,6 +45679,15 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           );
         })()}
       </div>
+
+      {/* ── Game progress bar ── */}
+      {games.length > 1 && (
+        <div style={{ flexShrink:0, padding:'0 16px 6px', maxWidth:960, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
+          <div style={{ height:4, borderRadius:2, background:`${T.inkMute}22`, overflow:'hidden' }}>
+            <div style={{ height:'100%', borderRadius:2, background:T.mint, width:`${Math.min(100, (gameIdx % games.length) / games.length * 100)}%`, transition:'width 0.5s ease' }} />
+          </div>
+        </div>
+      )}
 
       {/* ── Scrollable content ── */}
       <div style={{ flex:'1 1 0', minHeight:0, overflowY:'scroll', WebkitOverflowScrolling:'touch' }}>
