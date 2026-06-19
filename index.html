@@ -33888,7 +33888,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.291';
+const APP_VERSION = 'v9.292';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -34793,8 +34793,11 @@ function StatsScreen({ go, onOpenObserver }) {
                   <div key={p.id} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow }}>
                     <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                       <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color: i===0?'#F59E0B':i===1?'#9CA3AF':i===2?'#CD7F32':T.inkMute, minWidth:18, textAlign:'center', flexShrink:0 }}>{i+1}</div>
-                      <div style={{ width:40, height:40, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:17, color:'#fff', flexShrink:0, overflow:'hidden' }}>
-                        {p.img ? <img src={p.img} style={{ width:40, height:40, objectFit:'cover' }} /> : p.name.charAt(0).toUpperCase()}
+                      <div style={{ position:'relative', flexShrink:0 }}>
+                        <div style={{ width:40, height:40, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:17, color:'#fff', overflow:'hidden' }}>
+                          {p.img ? <img src={p.img} style={{ width:40, height:40, objectFit:'cover' }} /> : p.name.charAt(0).toUpperCase()}
+                        </div>
+                        {i < 3 && <div style={{ position:'absolute', bottom:-3, right:-4, fontSize:13, lineHeight:1 }}>{['🥇','🥈','🥉'][i]}</div>}
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
                         <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
@@ -45535,7 +45538,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   return null;
 }
 
-function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta, setGameMeta, setLastGameRound }) {
+function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta, setGameMeta, setLastGameRound, setScoreHistory }) {
   const trackScores = gameMeta?.modes?.includes('points') ?? true;
   const [round, setRound] = useState(1);
   const [turn, setTurn] = useState(0);
@@ -45742,6 +45745,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     setTransitioning(true);
     setFeedback(fb);
     setPlayers(newPlayers);
+    if (setScoreHistory) setScoreHistory(prev => [...prev, newPlayers.map(p => ({ id: p.id, name: p.name, color: p.color, pts: p.points }))]);
     try { localStorage.setItem('boh_session', JSON.stringify({ players: newPlayers, turn: newTurn, gameIdx: newGameIdx, round: newRound, selectedGames, gameMeta })); } catch(e) {}
     if (fb==='win') { setScorePulse(true); setTimeout(()=>setScorePulse(false),600); setStarAnim(true); setTimeout(()=>setStarAnim(false),900); }
     else if (fb==='lose') { setDrinkPulse(true); setTimeout(()=>setDrinkPulse(false),600); }
@@ -46486,7 +46490,7 @@ function Confetti({ originY }) {
 }
 
 // ─── END SCREEN ───────────────────────────────────────────────
-function EndScreen({ players, go, resetGame, lastRound }) {
+function EndScreen({ players, go, resetGame, lastRound, scoreHistory }) {
   const sorted = [...players].sort((a,b) => (b.points-a.points)||(a.drinks-b.drinks));
 
   React.useEffect(() => {
@@ -46577,6 +46581,55 @@ function EndScreen({ players, go, resetGame, lastRound }) {
             </div>
           ))}
         </div>
+
+        {/* Pont grafikon */}
+        {scoreHistory && scoreHistory.length > 2 && (() => {
+          const W = 320, H = 140, PAD = 28;
+          const steps = scoreHistory.length;
+          const allPts = scoreHistory.flatMap(snap => snap.map(p => p.pts));
+          const minPt = Math.min(0, ...allPts);
+          const maxPt = Math.max(1, ...allPts);
+          const px = i => PAD + (i / (steps - 1)) * (W - PAD * 2);
+          const py = v => H - PAD - ((v - minPt) / (maxPt - minPt)) * (H - PAD * 2);
+          const playerIds = scoreHistory[0].map(p => p.id);
+          return (
+            <div style={{ background:T.surface, borderRadius:16, padding:'14px 12px 10px', boxShadow:T.shadow }}>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:8 }}>📈 Pontok alakulása</div>
+              <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', height:'auto', overflow:'visible' }}>
+                {/* Y gridlines */}
+                {[0,0.5,1].map(f => {
+                  const yv = minPt + f * (maxPt - minPt);
+                  const y = py(yv);
+                  return <g key={f}>
+                    <line x1={PAD} x2={W-PAD} y1={y} y2={y} stroke={T.bgSoft} strokeWidth="1" />
+                    <text x={PAD-4} y={y+4} textAnchor="end" fontSize="9" fill={T.inkMute} fontFamily={T.font}>{Math.round(yv)}</text>
+                  </g>;
+                })}
+                {/* Player lines */}
+                {playerIds.map(pid => {
+                  const info = scoreHistory[0].find(p => p.id === pid);
+                  if (!info) return null;
+                  const pts = scoreHistory.map(snap => (snap.find(p => p.id === pid) || {pts:0}).pts);
+                  const d = pts.map((v,i) => `${i===0?'M':'L'}${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
+                  const lastX = px(steps-1), lastY = py(pts[steps-1]);
+                  return <g key={pid}>
+                    <path d={d} fill="none" stroke={info.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx={lastX} cy={lastY} r="4" fill={info.color} />
+                  </g>;
+                })}
+              </svg>
+              {/* Legend */}
+              <div style={{ display:'flex', flexWrap:'wrap', gap:'6px 12px', marginTop:6 }}>
+                {scoreHistory[0].map(p => (
+                  <div key={p.id} style={{ display:'flex', alignItems:'center', gap:5 }}>
+                    <div style={{ width:10, height:10, borderRadius:'50%', background:p.color, flexShrink:0 }} />
+                    <span style={{ fontFamily:T.font, fontSize:11, color:T.ink, fontWeight:700 }}>{p.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Full leaderboard */}
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
@@ -50157,6 +50210,7 @@ function BottleApp() {
   const [prev, setPrev] = useState(null);
   const [players, setPlayers] = useState(INITIAL_PLAYERS);
   const [lastGameRound, setLastGameRound] = React.useState(1);
+  const [scoreHistory, setScoreHistory] = React.useState([]);
   const [selectedGames, setSelectedGames] = useState(['busz','memoria','erem']);
   const [gameMeta, setGameMeta] = useState({ modes:['points'], difficulty:'easy', observerAllowed:false });
 
@@ -50272,7 +50326,7 @@ function BottleApp() {
     setPlayers([]); setSelectedGames([]); setRoomCode(null);
     setPrev(screen); setScreen('players');
   };
-  const resetGame = () => { setPlayers(players.map(p => ({...p,drinks:0,points:0}))); setScreen('play'); };
+  const resetGame = () => { setPlayers(players.map(p => ({...p,drinks:0,points:0}))); setScoreHistory([]); setScreen('play'); };
 
   const [observerInitCode, setObserverInitCode] = React.useState('');
   const openObserver = (code) => { setObserverInitCode(code || ''); setPrev(screen); setScreen('observer'); };
@@ -50280,8 +50334,21 @@ function BottleApp() {
   const order = ['home','stats','players','games','play','end','observer'];
   const dir = order.indexOf(screen) >= order.indexOf(prev||'home') ? 1 : -1;
 
+  const [isOnline, setIsOnline] = React.useState(navigator.onLine);
+  React.useEffect(() => {
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+  }, []);
   return (
     <div style={{ minHeight:'100dvh', width:'100%', position:'relative', fontFamily:T.font, color:T.ink, WebkitFontSmoothing:'antialiased', background:T.bg }} data-theme={appTheme}>
+      {!isOnline && (
+        <div style={{ position:'fixed', top:0, left:0, right:0, background:'#EF4444', color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:12, textAlign:'center', padding:'6px 16px', letterSpacing:'0.04em', zIndex:9999 }}>
+          📡 Nincs internetkapcsolat — multiplayer nem elérhető
+        </div>
+      )}
       <BubbleBackground />
       <div key={screen} style={{ height:'100dvh', width:'100%', display:'flex', flexDirection:'column', overflow:'hidden', animation:`slide${dir>0?'In':'Back'} .35s cubic-bezier(.2,.85,.3,1.05)` }}>
         {showOnboarding && <OnboardingOverlay onDone={() => setShowOnboarding(false)} />}
@@ -50289,8 +50356,8 @@ function BottleApp() {
         {screen==='stats'    && <StatsScreen    go={go} onOpenObserver={openObserver} />}
         {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
         {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
-        {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} gameMeta={gameMeta} setGameMeta={setGameMeta} setLastGameRound={setLastGameRound} />}
-        {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} lastRound={lastGameRound} />}
+        {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} gameMeta={gameMeta} setGameMeta={setGameMeta} setLastGameRound={setLastGameRound} setScoreHistory={setScoreHistory} />}
+        {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} lastRound={lastGameRound} scoreHistory={scoreHistory} />}
         {screen==='observer' && <ObserverScreen go={go} initialCode={observerInitCode || (!_initRoomConsumedRef.current && _initRoom ? (_initRoomConsumedRef.current = true, _initRoom) : '')} onJoinAsHost={goJoinAsHost} />}
       </div>
       {creatingRoom && (
