@@ -33888,7 +33888,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.296';
+const APP_VERSION = 'v9.297';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -34815,7 +34815,7 @@ function StatsScreen({ go, onOpenObserver }) {
                         { emoji:'🍺', val: s.totalDrinks||0, label:'korty' },
                         { emoji:'⭐', val: s.totalPoints||0, label:'pont' },
                         { emoji:'🔥', val: s.currentStreak ? s.currentStreak+'×' : '—', label:'streak' },
-                        { emoji:'⚡', val: s.bestReactionTime != null ? s.bestReactionTime+'ms' : '—', label:'reakció' },
+
                       ].map((it, ci) => (
                         <div key={ci} style={{ display:'flex', alignItems:'center', gap:4 }}>
                           <span style={{ fontSize:11 }}>{it.emoji}</span>
@@ -35363,7 +35363,7 @@ function PlayerProfileStats({ profileId }) {
     { emoji:'🏆', label:'Win rate', value: winRate != null ? `${winRate}%` : '—' },
     { emoji:'🔥', label:'Jelenlegi streak', value: stats.currentStreak ? `${stats.currentStreak}×` : '—' },
     { emoji:'🏅', label:'Legjobb streak', value: stats.bestStreak ? `${stats.bestStreak}×` : '—' },
-    { emoji:'⚡', label:'Legjobb reakció', value: stats.bestReactionTime != null ? `${stats.bestReactionTime}ms` : '—' },
+
     { emoji:'🔄', label:'Körök', value: stats.totalRounds ?? '—' },
   ];
   return (
@@ -45584,6 +45584,10 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const [showMenu, setShowMenu] = useState(false);
   const [menuTab, setMenuTab] = useState('vezérlés');
   const [menuAddName, setMenuAddName] = useState('');
+  const [menuProfiles, setMenuProfiles] = React.useState([]);
+  React.useEffect(() => {
+    if (typeof window.getProfiles === 'function') window.getProfiles().then(p => setMenuProfiles(p || []));
+  }, []);
   const [gameRestartKey, setGameRestartKey] = useState(0);
   const [hideFooter, setHideFooter] = useState(false);
   const [buszSwitchFn, setBuszSwitchFn] = useState(null); // fn to switch to player view
@@ -46391,24 +46395,42 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                 )}
 
                 {/* Add player */}
-                <div style={{ display:'flex', gap:8 }}>
-                  <input
-                    value={menuAddName}
-                    onChange={e => setMenuAddName(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key==='Enter' && menuAddName.trim()) {
+                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <input
+                      value={menuAddName}
+                      onChange={e => setMenuAddName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key==='Enter' && menuAddName.trim()) {
+                          const newP = { id:Date.now().toString(), name:menuAddName.trim(), drinks:0, points:0, color:PLAYER_COLORS[players.length%PLAYER_COLORS.length] };
+                          setPlayers(prev=>[...prev,newP]); setPendingCommit(null); setMenuAddName(''); setMenuTab('állás');
+                        }
+                      }}
+                      placeholder="+ Név beírása"
+                      style={{ flex:1, padding:'13px 16px', border:'none', borderRadius:14, fontFamily:T.font, fontSize:14, color:T.ink, background:T.bgSoft, outline:'none' }}
+                    />
+                    {menuAddName.trim() && (
+                      <button onClick={() => {
                         const newP = { id:Date.now().toString(), name:menuAddName.trim(), drinks:0, points:0, color:PLAYER_COLORS[players.length%PLAYER_COLORS.length] };
-                        setPlayers(prev=>[...prev,newP]); setPendingCommit(null); setMenuAddName('');
-                      }
-                    }}
-                    placeholder="+ Játékos hozzáadása"
-                    style={{ flex:1, padding:'13px 16px', border:'none', borderRadius:14, fontFamily:T.font, fontSize:14, color:T.ink, background:T.bgSoft, outline:'none' }}
-                  />
-                  {menuAddName.trim() && (
-                    <button onClick={() => {
-                      const newP = { id:Date.now().toString(), name:menuAddName.trim(), drinks:0, points:0, color:PLAYER_COLORS[players.length%PLAYER_COLORS.length] };
-                      setPlayers(prev=>[...prev,newP]); setPendingCommit(null); setMenuAddName('');
-                    }} style={{ padding:'0 18px', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:14, cursor:'pointer' }}>➕</button>
+                        setPlayers(prev=>[...prev,newP]); setPendingCommit(null); setMenuAddName(''); setMenuTab('állás');
+                      }} style={{ padding:'0 18px', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:14, cursor:'pointer' }}>➕</button>
+                    )}
+                  </div>
+                  {/* Profil picker */}
+                  {menuProfiles.filter(pr => !players.some(p => p.profileId === pr.id)).length > 0 && (
+                    <div style={{ display:'flex', gap:6, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
+                      {menuProfiles.filter(pr => !players.some(p => p.profileId === pr.id)).map(pr => (
+                        <button key={pr.id} onClick={() => {
+                          const newP = { id:Date.now().toString(), name:pr.name, drinks:0, points:0, color:pr.color||PLAYER_COLORS[players.length%PLAYER_COLORS.length], profileId:pr.id, img:pr.img||null };
+                          setPlayers(prev=>[...prev,newP]); setPendingCommit(null); setMenuTab('állás');
+                        }} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 10px', borderRadius:10, border:'none', background:T.bgSoft, cursor:'pointer', flexShrink:0 }}>
+                          <div style={{ width:24, height:24, borderRadius:'50%', background:pr.color||T.mint, display:'grid', placeItems:'center', overflow:'hidden', flexShrink:0 }}>
+                            {pr.img ? <img src={pr.img} style={{ width:24, height:24, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:10, color:'#fff' }}>{(pr.name||'?').charAt(0).toUpperCase()}</span>}
+                          </div>
+                          <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.ink, whiteSpace:'nowrap' }}>{pr.name}</span>
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
 
