@@ -33818,7 +33818,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.212';
+const APP_VERSION = 'v9.213';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -44822,7 +44822,7 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
 function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, roomCode, gameMeta, challenger, opponent, onSetHideFooter, onSetBuszSwitch, onCommit }) {
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} onCommit={onCommit} />;
   if (gameId === 'ritmus')   return <RitmusGame key={gameIdx} gameIdx={gameIdx} players={players} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'mitval')   return <MitValasztanalGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'mitval')   return <MitValasztanalGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
   if (gameId === 'meduza')   return <MeduzaGame key={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'farkasos') return <FarkasosGame key={gameIdx} players={players||[]} gameIdx={gameIdx} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'mutasd')   return <MutasdGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
@@ -46959,20 +46959,22 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
 }
 
 // ── Mit Választanál ───────────────────────────────────────────────────────────
-function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult }) {
+function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult, difficulty }) {
+  const DIFF_TIME = { easy: 15, mid: 10, hard: 8, extreme: 5 };
+  const TOTAL_SECS = DIFF_TIME[difficulty] || 15;
   const q = MIT_VALASZTANAL_SHUFFLED[gameIdx % MIT_VALASZTANAL_SHUFFLED.length];
   const [choice, setChoice] = useState(null);
   const [revealed, setRevealed] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(5);
+  const [timeLeft, setTimeLeft] = useState(TOTAL_SECS);
   const [timedOut, setTimedOut] = useState(false);
   const ivRef = useRef(null);
   const advancedRef = useRef(false);
 
   useEffect(() => {
-    setChoice(null); setRevealed(false); setTimeLeft(5); setTimedOut(false);
+    setChoice(null); setRevealed(false); setTimeLeft(TOTAL_SECS); setTimedOut(false);
     advancedRef.current = false;
     clearInterval(ivRef.current);
-    const end = Date.now() + 5000;
+    const end = Date.now() + TOTAL_SECS * 1000;
     ivRef.current = setInterval(() => {
       const rem = Math.max(0, (end - Date.now()) / 1000);
       setTimeLeft(Math.ceil(rem));
@@ -46982,7 +46984,7 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult }) {
 
   const startTimer = () => {
     clearInterval(ivRef.current);
-    const end = Date.now() + 5000;
+    const end = Date.now() + TOTAL_SECS * 1000;
     ivRef.current = setInterval(() => {
       const rem = Math.max(0, (end - Date.now()) / 1000);
       setTimeLeft(Math.ceil(rem));
@@ -47034,8 +47036,7 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult }) {
   const majorityA = q.statsA >= 50;
   const won = choice ? (choice === 'a' ? majorityA : !majorityA) : false;
 
-  const TOTAL_T = 5;
-  const timerPct = timeLeft / TOTAL_T;
+  const timerPct = timeLeft / TOTAL_SECS;
   const r2 = 22, circ2 = 2 * Math.PI * r2;
 
   return (
@@ -47046,10 +47047,10 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult }) {
         <div style={{ display:'flex', justifyContent:'center' }}>
           <svg width={56} height={56} viewBox="0 0 56 56">
             <circle cx={28} cy={28} r={r2} fill="none" stroke="rgba(20,30,50,0.1)" strokeWidth={4}/>
-            <circle cx={28} cy={28} r={r2} fill="none" stroke={timeLeft <= 2 ? T.coral : T.mint} strokeWidth={4}
+            <circle cx={28} cy={28} r={r2} fill="none" stroke={timeLeft <= 3 ? T.coral : T.mint} strokeWidth={4}
               strokeDasharray={circ2} strokeDashoffset={circ2 * (1 - timerPct)}
               strokeLinecap="round" transform="rotate(-90 28 28)" style={{transition:'stroke-dashoffset 0.1s, stroke 0.3s'}}/>
-            <text x={28} y={33} textAnchor="middle" fontFamily={T.font} fontWeight={900} fontSize={18} fill={timeLeft <= 2 ? T.coral : T.ink}>{timeLeft}</text>
+            <text x={28} y={33} textAnchor="middle" fontFamily={T.font} fontWeight={900} fontSize={18} fill={timeLeft <= 3 ? T.coral : T.ink}>{timeLeft}</text>
           </svg>
         </div>
       )}
