@@ -157,6 +157,9 @@
     @keyframes bounceSelect { 0%{transform:scale(1)} 25%{transform:scale(1.13)} 55%{transform:scale(0.95)} 75%{transform:scale(1.04)} 100%{transform:scale(1)} }
     @keyframes fadeInUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
     @keyframes gameProgressGrow { from{width:0} to{width:100%} }
+    @keyframes nextBounce  { 0%,100%{transform:translateY(0) scale(1)} 40%{transform:translateY(-7px) scale(1.10)} 70%{transform:translateY(-3px) scale(1.03)} }
+    @keyframes shakeDrink  { 0%{transform:rotate(0) scale(1)} 15%{transform:rotate(-20deg) scale(1.25)} 35%{transform:rotate(15deg) scale(1.18)} 55%{transform:rotate(-10deg) scale(1.1)} 75%{transform:rotate(8deg)} 90%{transform:rotate(-3deg)} 100%{transform:rotate(0) scale(1)} }
+    @keyframes confettiUp  { 0%{transform:translateY(0) rotate(0deg) scale(1);opacity:1} 100%{transform:translateY(-130px) rotate(540deg) scale(0.4);opacity:0} }
 
     /* ── Disable text/content selection across the whole app ── */
     * { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
@@ -34627,7 +34630,9 @@ function SheetOverlay({ onClose, children }) {
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         style={{
-          width:'100%', background:T.surface,
+          width:'100%', background: T.surface + 'EE',
+          backdropFilter:'blur(20px) saturate(1.6)',
+          WebkitBackdropFilter:'blur(20px) saturate(1.6)',
           borderTopLeftRadius:20, borderTopRightRadius:20,
           boxShadow:'0 -10px 40px rgba(0,0,0,0.2)',
           animation: closing ? 'none' : 'slideUp .3s cubic-bezier(.2,.9,.3,1)',
@@ -45926,7 +45931,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     const scaled = d > 0 ? d * diffDrinks : 0;
     // If subtitle hardcodes "egyet" or a drink count, drop it so ResultBanner auto-generates correctly
     const subtitle = (d === 1 && diffDrinks > 1) ? null : res.subtitle;
-    setGameResult({ ...res, drinks: scaled, subtitle });
+    setGameResult({ ...res, drinks: scaled, subtitle, ts: Date.now() });
   };
 
   // Egyéni: current player wins or loses
@@ -46216,11 +46221,37 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         </div>
       )}
 
+      {/* ConfettiPop */}
+      {gameResult?.correct && (() => {
+        const COLS = ['#F59E0B','#10B981','#6366F1','#EC4899','#F97316','#14B8A6','#EF4444','#8B5CF6','#FBBF24','#34D399','#A78BFA','#F472B6'];
+        const pts = Array.from({length:14}, (_,i) => ({
+          id: i,
+          left: 5 + (i * 7.2) % 90,
+          color: COLS[i % COLS.length],
+          delay: (i * 0.07).toFixed(2),
+          dur: (0.7 + (i % 5) * 0.12).toFixed(2),
+          size: 5 + (i % 4) * 3,
+          round: i % 3 !== 0,
+        }));
+        return (
+          <div key={gameResult.ts} style={{ position:'fixed', bottom:85, left:0, right:0, height:0, pointerEvents:'none', zIndex:300 }}>
+            {pts.map(p => (
+              <div key={p.id} style={{
+                position:'absolute', left:`${p.left}%`, bottom:0,
+                width:p.size, height:p.size,
+                borderRadius: p.round ? '50%' : 2,
+                background: p.color,
+                animation: `confettiUp ${p.dur}s ${p.delay}s ease-out forwards`,
+              }} />
+            ))}
+          </div>
+        );
+      })()}
       {/* ResultBanner */}
       {gameResult && (
         <div style={{ flexShrink:0, padding:'0 18px 8px', maxWidth:960, margin:'0 auto', width:'100%', boxSizing:'border-box' }}>
           <div style={{ borderRadius:16, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, animation:'popIn .3s cubic-bezier(.2,.9,.3,1.2)', background: gameResult.correct ? 'rgba(80,168,130,0.12)' : 'rgba(232,160,144,0.18)', border:`2px solid ${gameResult.correct ? '#50A882' : '#E8A090'}` }}>
-            <div style={{ fontSize:26 }}>{gameResult.correct ? '🎉' : '🍺'}</div>
+            <div key={gameResult.ts} style={{ fontSize:26, display:'inline-block', animation: gameResult.correct ? undefined : 'shakeDrink 0.75s ease-in-out' }}>{gameResult.correct ? '🎉' : '🍺'}</div>
             <div>
               <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color: gameResult.correct ? '#50A882' : '#C05050' }}>
                 {gameResult.correct ? 'Helyes! +1 pont 🌟' : 'Inni kell!'}
@@ -46306,6 +46337,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3,
               padding:'8px 0', minWidth:0,
               transition:'background .25s',
+              animation: active ? 'nextBounce 1.4s ease-in-out infinite' : undefined,
             }}>
               <div style={{ width:32, height:32, borderRadius:10, background: active ? 'rgba(255,255,255,0.22)' : `${nextGame.color}18`, display:'grid', placeItems:'center', padding:5, overflow:'hidden', flexShrink:0 }}>
                 <GameImg g={nextGame} size="full" />
