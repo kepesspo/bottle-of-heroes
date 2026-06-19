@@ -33821,7 +33821,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.217';
+const APP_VERSION = 'v9.218';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35921,62 +35921,103 @@ function GameInfoModal({ game, onClose }) {
 }
 
 function GameSettingsContent({ meta, setMeta, onDone, go }) {
+  const [openInfo, setOpenInfo] = React.useState(null);
+  const toggleInfo = (key, e) => { e.stopPropagation(); setOpenInfo(p => p === key ? null : key); };
+
+  const InfoBtn = ({ id }) => (
+    <button onClick={e => toggleInfo(id, e)} style={{ background:'none', border:'none', cursor:'pointer', padding:'2px 4px', color: openInfo===id ? T.mint : T.inkMute, fontSize:15, lineHeight:1, flexShrink:0 }}>ℹ</button>
+  );
+  const InfoBox = ({ id, text }) => openInfo !== id ? null : (
+    <div style={{ margin:'6px 0 2px', padding:'10px 12px', background:`${T.mint}14`, borderRadius:10, borderLeft:`3px solid ${T.mint}`, fontFamily:T.font, fontSize:12, color:T.inkSoft, lineHeight:1.5 }}>{text}</div>
+  );
+
   const modes = [
-    { id:'points', label:'Pontgyűjtés' },
-    { id:'bonus',  label:'Bonus Képernyő' },
-    { id:'group',  label:'Csoportos Ivás' },
+    { id:'points', label:'⭐ Pontgyűjtés',    info:'A játékosok minden győztes körnél csillagot kapnak. A legtöbb csillaggal rendelkező játékos nyeri a meccset.' },
+    { id:'bonus',  label:'🎁 Bónusz képernyő', info:'Minden kör végén megjelenik egy rövid összefoglaló: ki nyert pontot és ki iszik.' },
+    { id:'group',  label:'🍺 Csoportos ivás',  info:'Vesztes esetén az egész csapat iszik egyet, nem csak a vesztes játékos.' },
   ];
   const diffs = [
-    { id:'easy',    label:'Könnyű' },
-    { id:'mid',     label:'Közepes' },
-    { id:'hard',    label:'Nehéz' },
-    { id:'extreme', label:'Extrém' },
+    { id:'easy',    label:'Könnyű',  note:'Hosszabb időzítők, megbocsátóbb feltételek. Ajánlott új játékosoknak.' },
+    { id:'mid',     label:'Közepes', note:'Normál játéksebesség. Alapértelmezett beállítás.' },
+    { id:'hard',    label:'Nehéz',   note:'Rövidebb időzítők. Gyors reflexek kellenek.' },
+    { id:'extreme', label:'Extrém',  note:'Minimális idő, maximum nyomás. Csak a legbátrabbaknak!' },
   ];
+  const selDiff = diffs.find(d => d.id === (meta.difficulty || 'easy'));
   const toggleMode = id => setMeta({ ...meta, modes: meta.modes.includes(id) ? meta.modes.filter(x=>x!==id) : [...meta.modes,id] });
+
+  const ToggleRow = ({ label, value, onChange, infoKey, infoText }) => (
+    <div style={{ borderTop:'1px solid rgba(26,42,74,0.08)', paddingTop:12, marginTop:4 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{label}</span>
+          <InfoBtn id={infoKey} />
+        </div>
+        <button onClick={onChange} style={{ width:50, height:30, borderRadius:15, background:value?T.mint:'rgba(26,42,74,0.12)', border:'none', cursor:'pointer', position:'relative', transition:'background .2s', flexShrink:0 }}>
+          <div style={{ position:'absolute', top:3, left:value?23:3, width:24, height:24, borderRadius:'50%', background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.22)', transition:'left .2s' }}/>
+        </button>
+      </div>
+      <InfoBox id={infoKey} text={infoText} />
+    </div>
+  );
+
   return (
-    <div style={{ padding:'0 18px 18px', display:'flex', flexDirection:'column' }}>
+    <div style={{ padding:'0 18px 18px', display:'flex', flexDirection:'column' }} onClick={() => setOpenInfo(null)}>
       <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:'-0.01em', padding:'12px 0 6px' }}>Játékmenet</div>
+
       <div style={{ fontFamily:T.font, fontWeight:900, fontSize:10, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'16px 0 8px' }}>Módok</div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+      <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
         {modes.map(m => {
           const on = meta.modes.includes(m.id);
           return (
-            <button key={m.id} onClick={() => toggleMode(m.id)} style={{ padding:'14px 8px', borderRadius:14, border: on?'none':'1.5px solid rgba(26,42,74,0.10)', background: on?T.mint:'#fff', color: on?'#fff':T.ink, fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer', lineHeight:1.15 }}>{m.label}</button>
+            <div key={m.id} style={{ borderTop:'1px solid rgba(26,42,74,0.08)', paddingTop:12, marginTop:4 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <button onClick={() => toggleMode(m.id)} style={{ flex:1, padding:'13px 12px', borderRadius:14, border: on?'none':'1.5px solid rgba(26,42,74,0.10)', background: on?T.mint:`${T.surfaceMuted}`, color: on?'#fff':T.ink, fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer', textAlign:'left', transition:'all .15s' }}>{m.label}</button>
+                <InfoBtn id={m.id} />
+              </div>
+              <InfoBox id={m.id} text={m.info} />
+            </div>
           );
         })}
       </div>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:10, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'16px 0 8px' }}>Nehézségi szint</div>
+
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:10, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'20px 0 8px' }}>Nehézségi szint</div>
       <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4 }}>
         {diffs.map(d => {
           const on = meta.difficulty===d.id;
           return <button key={d.id} onClick={() => setMeta({...meta,difficulty:d.id})} style={{ flex:1, padding:'11px 6px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background:on?T.mint:'transparent', color:on?'#fff':T.inkSoft, boxShadow:on?'0 2px 7px -1px rgba(79,194,160,0.5)':'none', transition:'all .15s' }}>{d.label}</button>;
         })}
       </div>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:10, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'16px 0 8px' }}>Játéksorrend</div>
+      {selDiff && (
+        <div style={{ marginTop:8, padding:'8px 12px', background:`${T.mint}12`, borderRadius:10, borderLeft:`3px solid ${T.mint}`, fontFamily:T.font, fontSize:12, color:T.inkSoft, lineHeight:1.5 }}>
+          <strong style={{ color:T.ink }}>{selDiff.label}:</strong> {selDiff.note}
+        </div>
+      )}
+
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:10, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'20px 0 8px' }}>Játéksorrend</div>
       <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4 }}>
         {[{key:'sorban',label:'Sorban'},{key:'random',label:'Random'}].map(o => {
           const on = (meta.gameOrder||'sorban')===o.key;
           return <button key={o.key} onClick={() => setMeta({...meta, gameOrder: o.key})} style={{ flex:1, padding:'11px 6px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background:on?T.mint:'transparent', color:on?'#fff':T.inkSoft, boxShadow:on?'0 2px 7px -1px rgba(79,194,160,0.5)':'none', transition:'all .15s' }}>{o.label}</button>;
         })}
       </div>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:10, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'16px 0 8px' }}>Csatlakozás</div>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'1px solid rgba(26,42,74,0.10)' }}>
-        <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>Csatlakozás engedélyezve</span>
-        <button onClick={() => setMeta({...meta, observerAllowed: !meta.observerAllowed})} style={{ width:50, height:30, borderRadius:15, background:meta.observerAllowed?T.mint:'rgba(26,42,74,0.12)', border:'none', cursor:'pointer', position:'relative', transition:'background .2s', flexShrink:0 }}>
-          <div style={{ position:'absolute', top:3, left:meta.observerAllowed?23:3, width:24, height:24, borderRadius:'50%', background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.22)', transition:'left .2s' }}/>
-        </button>
-      </div>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:10, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'16px 0 8px' }}>Körváltás</div>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'1px solid rgba(26,42,74,0.10)' }}>
-        <div>
-          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>🃏 Wildcard körök</span>
-          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>Random különleges szabály minden körben</div>
-        </div>
-        <button onClick={() => setMeta({...meta, wildcardEnabled: meta.wildcardEnabled === false ? true : false})} style={{ width:50, height:30, borderRadius:15, background:meta.wildcardEnabled===false?'rgba(26,42,74,0.12)':T.mint, border:'none', cursor:'pointer', position:'relative', transition:'background .2s', flexShrink:0 }}>
-          <div style={{ position:'absolute', top:3, left:meta.wildcardEnabled===false?3:23, width:24, height:24, borderRadius:'50%', background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.22)', transition:'left .2s' }}/>
-        </button>
-      </div>
-      <button onClick={onDone} style={{ width:'100%', padding:'15px', borderRadius:16, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)', marginTop:16 }}>Kész</button>
+
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:10, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'20px 0 4px' }}>Egyéb</div>
+      <ToggleRow
+        label="📱 Csatlakozás"
+        value={!!meta.observerAllowed}
+        onChange={() => setMeta({...meta, observerAllowed: !meta.observerAllowed})}
+        infoKey="observer"
+        infoText="Engedélyezi, hogy más játékosok megfigyelőként csatlakozzanak QR-kóddal a saját telefonjukon."
+      />
+      <ToggleRow
+        label="🃏 Wildcard körök"
+        value={meta.wildcardEnabled !== false}
+        onChange={() => setMeta({...meta, wildcardEnabled: meta.wildcardEnabled === false ? true : false})}
+        infoKey="wildcard"
+        infoText="Minden új kör elején megjelenik egy random különleges szabály (pl. bal kézzel inni, pókerpofa kör). Koppints bárhova a bezáráshoz."
+      />
+
+      <button onClick={onDone} style={{ width:'100%', padding:'15px', borderRadius:16, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)', marginTop:20 }}>Kész</button>
     </div>
   );
 }
