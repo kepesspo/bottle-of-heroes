@@ -33818,7 +33818,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.213';
+const APP_VERSION = 'v9.214';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -44827,8 +44827,8 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'farkasos') return <FarkasosGame key={gameIdx} players={players||[]} gameIdx={gameIdx} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'mutasd')   return <MutasdGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'emojikv')  return <EmojiKvizGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'tabu')     return <TabuGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'matek')    return <MatekGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'tabu')     return <TabuGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
+  if (gameId === 'matek')    return <MatekGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
   if (gameId === 'reakcio')  return <ReakcioGame key={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'szamsor')  return <SzamsorGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'beerpong') return <BeerPongGame key={gameIdx + '_' + (gameMeta?.beerpongConfig?.tournamentType||'se')} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} initialBpState={gameMeta?._resumeBpState || null} onSetHideFooter={onSetHideFooter} />;
@@ -47565,9 +47565,10 @@ function EmojiKvizGame({ gameIdx, challenger, onAdvance, onResult }) {
 }
 
 // ── Tabu Szó (Páros) ───────────────────────────────────────────────────────────
-function TabuGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
+function TabuGame({ gameIdx, challenger, opponent, onAdvance, onResult, difficulty }) {
   const q = TABU_SHUFFLED[gameIdx % TABU_SHUFFLED.length];
-  const TOTAL = 30;
+  const DIFF_TIME = { easy: 50, mid: 40, hard: 30, extreme: 20 };
+  const TOTAL = DIFF_TIME[difficulty] || 30;
   const [phase, setPhase] = useState('ready');
   const [timeLeft, setTimeLeft] = useState(TOTAL);
   const ivRef = useRef(null);
@@ -47607,7 +47608,7 @@ function TabuGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
       <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink, textAlign:'center' }}>
         {challenger?.name} magyaráz — {opponent?.name} talál!
       </div>
-      <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center' }}>30 mp, 3 tiltott szó nélkül. Ha sikerül — mindkettő +1 pont, ha nem — mindkettő iszik.</div>
+      <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center' }}>{TOTAL} mp, 3 tiltott szó nélkül. Ha sikerül — mindkettő +1 pont, ha nem — mindkettő iszik.</div>
       <button onClick={start} style={{ width:'100%', padding:'16px 0', background:T.mint, border:'none', borderRadius:16, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer' }}>Start!</button>
     </div>
   );
@@ -47651,7 +47652,7 @@ function TabuGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
 // ── Gyors Matek ────────────────────────────────────────────────────────────────
 const MATEK_BTN_COLORS = ['#4A8FD4','#E05555','#7B68EE','#3DAA6D'];
 
-function MatekGame({ gameIdx, challenger, onAdvance, onResult }) {
+function MatekGame({ gameIdx, challenger, onAdvance, onResult, difficulty }) {
   const genQuestion = (idx) => {
     const ops = ['+','-','×'];
     const s = (idx * 1234567 + 7654321) >>> 0;
@@ -47674,16 +47675,18 @@ function MatekGame({ gameIdx, challenger, onAdvance, onResult }) {
     return { q:`${a} ${op} ${b} = ?`, answer, options: opts };
   };
 
+  const MATEK_DIFF_TIME = { easy: 7, mid: 5, hard: 4, extreme: 3 };
+  const MATEK_TOTAL = MATEK_DIFF_TIME[difficulty] || 5;
   const [qData] = useState(() => genQuestion(gameIdx));
   const [streak, setStreak] = useState(() => parseInt(sessionStorage.getItem('matek_streak')||'0'));
-  const [timeLeft, setTimeLeft] = useState(5);
+  const [timeLeft, setTimeLeft] = useState(MATEK_TOTAL);
   const [chosen, setChosen] = useState(null);
   const [timedOut, setTimedOut] = useState(false);
   const ivRef = useRef(null);
   const advancedRef = useRef(false);
 
   useEffect(() => {
-    const end = Date.now() + 5000;
+    const end = Date.now() + MATEK_TOTAL * 1000;
     ivRef.current = setInterval(() => {
       const rem = Math.max(0, (end - Date.now()) / 1000);
       setTimeLeft(parseFloat(rem.toFixed(1)));
@@ -47709,7 +47712,7 @@ function MatekGame({ gameIdx, challenger, onAdvance, onResult }) {
     }
   }, [timedOut, chosen]);
 
-  const progress = Math.max(0, timeLeft / 5);
+  const progress = Math.max(0, timeLeft / MATEK_TOTAL);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, width:'100%' }}>
