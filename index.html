@@ -33821,7 +33821,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.216';
+const APP_VERSION = 'v9.217';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35964,6 +35964,16 @@ function GameSettingsContent({ meta, setMeta, onDone, go }) {
         <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>Csatlakozás engedélyezve</span>
         <button onClick={() => setMeta({...meta, observerAllowed: !meta.observerAllowed})} style={{ width:50, height:30, borderRadius:15, background:meta.observerAllowed?T.mint:'rgba(26,42,74,0.12)', border:'none', cursor:'pointer', position:'relative', transition:'background .2s', flexShrink:0 }}>
           <div style={{ position:'absolute', top:3, left:meta.observerAllowed?23:3, width:24, height:24, borderRadius:'50%', background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.22)', transition:'left .2s' }}/>
+        </button>
+      </div>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:10, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'16px 0 8px' }}>Körváltás</div>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'1px solid rgba(26,42,74,0.10)' }}>
+        <div>
+          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>🃏 Wildcard körök</span>
+          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>Random különleges szabály minden körben</div>
+        </div>
+        <button onClick={() => setMeta({...meta, wildcardEnabled: meta.wildcardEnabled === false ? true : false})} style={{ width:50, height:30, borderRadius:15, background:meta.wildcardEnabled===false?'rgba(26,42,74,0.12)':T.mint, border:'none', cursor:'pointer', position:'relative', transition:'background .2s', flexShrink:0 }}>
+          <div style={{ position:'absolute', top:3, left:meta.wildcardEnabled===false?3:23, width:24, height:24, borderRadius:'50%', background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.22)', transition:'left .2s' }}/>
         </button>
       </div>
       <button onClick={onDone} style={{ width:'100%', padding:'15px', borderRadius:16, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)', marginTop:16 }}>Kész</button>
@@ -45044,11 +45054,15 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       setFeedback(null); setTurn(newTurn); setGameIdx(newGameIdx);
       setRound(newRound); setTransitioning(false); transRef.current = false;
       processPendingDrinks();
-      if (newRound > round) {
+      if (newRound > round && gameMeta?.wildcardEnabled !== false) {
         const wc = WILDCARDS[Math.floor(Math.random() * WILDCARDS.length)];
         setRoundPopup({ round: newRound, wildcard: wc, leaving: false });
         setTimeout(() => setRoundPopup(p => p ? {...p, leaving:true} : p), 2800);
         setTimeout(() => setRoundPopup(null), 3300);
+      } else if (newRound > round) {
+        setRoundPopup({ round: newRound, wildcard: null, leaving: false });
+        setTimeout(() => setRoundPopup(p => p ? {...p, leaving:true} : p), 1500);
+        setTimeout(() => setRoundPopup(null), 2000);
       }
     }, 700);
   };
@@ -45295,11 +45309,15 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         <div onClick={() => { setRoundPopup(null); }} style={{ position:'fixed', inset:0, zIndex:9998, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'center', justifyContent:'center', backdropFilter:'blur(4px)' }}>
           <div style={{ position:'absolute', left:'50%', top:'50%', animation: roundPopup.leaving ? 'roundPopOut 0.5s ease-in forwards' : 'roundPopIn 0.5s cubic-bezier(.2,.9,.3,1.2) forwards', textAlign:'center' }}>
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:64, color:'#fff', lineHeight:1, textShadow:'0 4px 24px rgba(0,0,0,0.4)', letterSpacing:'-0.02em' }}>KÖR {roundPopup.round}</div>
-            <div style={{ marginTop:24, background:T.surface, borderRadius:24, padding:'16px 28px', maxWidth:280, boxShadow:'0 8px 40px rgba(0,0,0,0.3)' }}>
-              <div style={{ fontSize:36, marginBottom:8 }}>{roundPopup.wildcard.emoji}</div>
-              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, lineHeight:1.5 }}>{roundPopup.wildcard.text}</div>
-            </div>
-            <div style={{ marginTop:12, fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.6)' }}>Koppints a folytatáshoz</div>
+            {roundPopup.wildcard && (
+              <>
+                <div style={{ marginTop:24, background:T.surface, borderRadius:24, padding:'16px 28px', maxWidth:280, boxShadow:'0 8px 40px rgba(0,0,0,0.3)' }}>
+                  <div style={{ fontSize:36, marginBottom:8 }}>{roundPopup.wildcard.emoji}</div>
+                  <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, lineHeight:1.5 }}>{roundPopup.wildcard.text}</div>
+                </div>
+                <div style={{ marginTop:12, fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.6)' }}>Koppints a folytatáshoz</div>
+              </>
+            )}
           </div>
         </div>
       )}
