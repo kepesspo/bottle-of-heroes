@@ -33676,6 +33676,23 @@ window.triggerHaptic = function() {
   window.updateStats = function(profileId, updates) {
     return db.collection('stats').doc(profileId).set(updates, { merge: true }).catch(function(e) { console.warn('updateStats', e); });
   };
+  window.incrementStats = function(profileId, increments, bestValues) {
+    var data = {};
+    Object.keys(increments || {}).forEach(function(k) {
+      if (increments[k]) data[k] = firebase.firestore.FieldValue.increment(increments[k]);
+    });
+    var ref = db.collection('stats').doc(profileId);
+    if (bestValues && bestValues.bestReactionTime != null) {
+      return ref.get().then(function(d) {
+        var cur = d.exists ? (d.data().bestReactionTime || Infinity) : Infinity;
+        if (bestValues.bestReactionTime < cur) data.bestReactionTime = bestValues.bestReactionTime;
+        if (Object.keys(data).length === 0) return;
+        return ref.set(data, { merge: true });
+      }).catch(function(e) { console.warn('incrementStats', e); });
+    }
+    if (Object.keys(data).length === 0) return Promise.resolve();
+    return ref.set(data, { merge: true }).catch(function(e) { console.warn('incrementStats', e); });
+  };
   window.saveTournament = function(data) {
     return db.collection('bp_tournaments').add(data).catch(function(e) { console.warn('saveTournament', e); });
   };
@@ -33822,7 +33839,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.237';
+const APP_VERSION = 'v9.238';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -34919,6 +34936,37 @@ function PlayerCard({ p, onEdit, onRemove }) {
   );
 }
 
+function PlayerProfileStats({ profileId }) {
+  const [stats, setStats] = React.useState(null);
+  React.useEffect(() => {
+    if (!profileId || typeof window.getStats !== 'function') return;
+    setStats(null);
+    window.getStats(profileId).then(s => setStats(s || {}));
+  }, [profileId]);
+
+  if (!stats) return (
+    <div style={{ textAlign:'center', padding:'10px 0', color:T.inkMute, fontFamily:T.font, fontSize:12 }}>Statisztika betöltése…</div>
+  );
+
+  const winRate = stats.totalSessions > 0 ? Math.round((stats.totalWins || 0) / stats.totalSessions * 100) : null;
+  const items = [
+    { emoji:'🍺', label:'Összes korty', value: stats.totalDrinks ?? '—' },
+    { emoji:'🏆', label:'Win rate', value: winRate != null ? `${winRate}%` : '—' },
+    { emoji:'⚡', label:'Legjobb reakció', value: stats.bestReactionTime != null ? `${stats.bestReactionTime}ms` : '—' },
+    { emoji:'🔄', label:'Körök', value: stats.totalRounds ?? '—' },
+  ];
+  return (
+    <div style={{ background:T.bgSoft, borderRadius:14, padding:'12px 14px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+      {items.map(it => (
+        <div key={it.label} style={{ display:'flex', flexDirection:'column', gap:2 }}>
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, fontWeight:600 }}>{it.emoji} {it.label}</div>
+          <div style={{ fontFamily:T.font, fontSize:17, fontWeight:900, color:T.ink }}>{it.value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PlayerEditSheet({ player, onClose, onChange, usedColors, usedProfileIds = new Set() }) {
   const [kbH, setKbH] = useState(0);
   const [profiles, setProfiles] = React.useState([]);
@@ -35005,6 +35053,9 @@ function PlayerEditSheet({ player, onClose, onChange, usedColors, usedProfileIds
               </div>
             )}
           </div>
+
+          {/* Profil statisztika */}
+          {player.profileId && <PlayerProfileStats profileId={player.profileId} />}
 
           {/* Név input */}
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -44985,7 +45036,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   return null;
 }
 
-function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta, setGameMeta }) {
+function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta, setGameMeta, setLastGameRound }) {
   const trackScores = gameMeta?.modes?.includes('points') ?? true;
   const [round, setRound] = useState(1);
   const [turn, setTurn] = useState(0);
@@ -45727,7 +45778,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                   </button>
                 </div>
 
-                <button onClick={() => { setShowMenu(false); go('end'); }} style={{ width:'100%', minHeight:52, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                <button onClick={() => { setShowMenu(false); if (setLastGameRound) setLastGameRound(round); go('end'); }} style={{ width:'100%', minHeight:52, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, borderRadius:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
                   <span>🏁</span><span>Kilépés</span>
                 </button>
                 <div style={{ height:8 }} />
@@ -45788,8 +45839,19 @@ function Confetti({ originY }) {
 }
 
 // ─── END SCREEN ───────────────────────────────────────────────
-function EndScreen({ players, go, resetGame }) {
+function EndScreen({ players, go, resetGame, lastRound }) {
   const sorted = [...players].sort((a,b) => (b.points-a.points)||(a.drinks-b.drinks));
+
+  React.useEffect(() => {
+    if (typeof window.incrementStats !== 'function') return;
+    const winner = sorted[0];
+    players.forEach(p => {
+      if (!p.profileId) return;
+      const inc = { totalDrinks: p.drinks || 0, totalSessions: 1, totalRounds: lastRound || 1 };
+      if (winner && p.id === winner.id) inc.totalWins = 1;
+      window.incrementStats(p.profileId, inc);
+    });
+  }, []);
   const drunkSorted = [...players].sort((a,b) => (b.drinks-a.drinks)||(a.points-b.points));
   const maxScore = Math.max(1, ...players.map(p=>p.points));
   const podium = sorted.slice(0,3);
@@ -48051,6 +48113,10 @@ function ReakcioGame({ challenger, opponent, onAdvance, onResult }) {
       loser  ? {[loser.id]:1}  : {},
       winner ? {[winner.id]:1} : {}
     );
+    if (typeof window.incrementStats === 'function') {
+      if (challenger?.profileId && p1Ms != null) window.incrementStats(challenger.profileId, {}, { bestReactionTime: p1Ms });
+      if (opponent?.profileId && p2Ms != null) window.incrementStats(opponent.profileId, {}, { bestReactionTime: p2Ms });
+    }
   }, [phase, p1Ms, p2Ms]);
 
   if (phase === 'intro1' || phase === 'intro2') return (
@@ -49261,6 +49327,7 @@ function BottleApp() {
   const _initRoomConsumedRef = React.useRef(false);
   const [prev, setPrev] = useState(null);
   const [players, setPlayers] = useState(INITIAL_PLAYERS);
+  const [lastGameRound, setLastGameRound] = React.useState(1);
   const [selectedGames, setSelectedGames] = useState(['busz','memoria','erem']);
   const [gameMeta, setGameMeta] = useState({ modes:['points'], difficulty:'easy', observerAllowed:false });
 
@@ -49392,8 +49459,8 @@ function BottleApp() {
         {screen==='stats'    && <StatsScreen    go={go} onOpenObserver={openObserver} />}
         {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
         {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
-        {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
-        {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} />}
+        {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} gameMeta={gameMeta} setGameMeta={setGameMeta} setLastGameRound={setLastGameRound} />}
+        {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} lastRound={lastGameRound} />}
         {screen==='observer' && <ObserverScreen go={go} initialCode={observerInitCode || (!_initRoomConsumedRef.current && _initRoom ? (_initRoomConsumedRef.current = true, _initRoom) : '')} onJoinAsHost={goJoinAsHost} />}
       </div>
       {creatingRoom && (
