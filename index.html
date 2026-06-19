@@ -33888,7 +33888,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.281';
+const APP_VERSION = 'v9.282';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -46252,9 +46252,9 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                 </div>
               </div>
 
-              {/* SORREND — standalone component */}
+              {/* SORREND — always mounted, visibility toggled */}
               <div style={{ visibility: menuTab==='sorrend' ? 'visible' : 'hidden', position:'absolute', top:0, left:14, right:14, bottom:0, overflowY:'auto' }}>
-                {menuTab==='sorrend' && <SorrendTab players={players} setPlayers={setPlayers} turn={turn} setTurn={setTurn} pendingCommit={pendingCommit} setPendingCommit={setPendingCommit} />}
+                <SorrendTab players={players} setPlayers={setPlayers} turn={turn} setTurn={setTurn} pendingCommit={pendingCommit} setPendingCommit={setPendingCommit} />
               </div>
 
               {/* VEZÉRLÉS — relative, determines container height */}
@@ -49994,20 +49994,17 @@ function OnboardingOverlay({ onDone }) {
 }
 
 function SorrendTab({ players, setPlayers, turn, setTurn, pendingCommit, setPendingCommit }) {
-  // Local copy so UI is always responsive
   const [localOrder, setLocalOrder] = React.useState(players);
   const [saved, setSaved] = React.useState(false);
 
-  // Keep local in sync if players change externally (new round etc)
-  const prevPlayersRef = React.useRef(players);
+  // Only sync from parent if the SET of player IDs changed (add/remove), never on reorder
+  const prevIdSetRef = React.useRef(new Set(players.map(p=>p.id)));
   React.useEffect(() => {
-    // Only sync if IDs changed (new player added/removed), not on reorder
-    const prevIds = prevPlayersRef.current.map(p=>p.id).join(',');
-    const nextIds = players.map(p=>p.id).join(',');
-    if (prevIds !== nextIds) {
-      setLocalOrder(players);
-    }
-    prevPlayersRef.current = players;
+    const newSet = new Set(players.map(p=>p.id));
+    const prev = prevIdSetRef.current;
+    const changed = newSet.size !== prev.size || [...newSet].some(id => !prev.has(id));
+    prevIdSetRef.current = newSet;
+    if (changed) setLocalOrder(players);
   }, [players]);
 
   const applyOrder = (arr) => {
