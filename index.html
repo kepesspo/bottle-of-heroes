@@ -135,6 +135,7 @@
     @keyframes slideIn   { from{transform:translateX(40px);opacity:0} to{transform:translateX(0);opacity:1} }
     @keyframes slideBack { from{transform:translateX(-40px);opacity:0} to{transform:translateX(0);opacity:1} }
     @keyframes shakeWin  { 0%{transform:scale(1)} 30%{transform:scale(1.18) rotate(-3deg)} 60%{transform:scale(1.05) rotate(2deg)} 100%{transform:scale(1)} }
+    @keyframes starFly   { 0%{transform:translate(-50%,-50%) scale(1.2);opacity:1} 100%{transform:translate(-50%,-350%) scale(0.3);opacity:0} }
     @keyframes shakeLose { 0%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} 100%{transform:translateX(0)} }
     @keyframes pulse     { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.08);opacity:.85} }
     @keyframes dotBounce { 0%,80%,100%{transform:translateY(0);opacity:.4} 40%{transform:translateY(-6px);opacity:1} }
@@ -33818,7 +33819,7 @@ window.triggerHaptic = function() {
 const { useState, useEffect, useRef, useMemo } = React;
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.214';
+const APP_VERSION = 'v9.215';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -33895,6 +33896,33 @@ const THEMES = {
     shadow: '0 2px 0 rgba(0,0,0,0.2), 0 6px 20px rgba(0,0,0,0.3)',
     shadowLift: '0 4px 0 rgba(0,0,0,0.25), 0 12px 32px rgba(0,0,0,0.4)',
   },
+  summer: {
+    bg: '#FFE166',
+    bgSoft: '#FFEEA0',
+    bgDeep: '#F5C800',
+    surface: '#FFFFFF',
+    surfaceMuted: '#FFF7CC',
+    ink: '#1A2A0A',
+    inkSoft: '#4A5830',
+    inkMute: '#8A9360',
+    mint: '#00B894',
+    mintSoft: '#C8F5E8',
+    mintDeep: '#008F74',
+    coral: '#FF6B6B',
+    coralSoft: '#FFD6D6',
+    purple: '#A855F7',
+    yellow: '#FFA500',
+    blue: '#00BFFF',
+    pink: '#FF69B4',
+    font: '"Nunito", -apple-system, system-ui, sans-serif',
+    weightDisplay: 900,
+    weightTitle: 800,
+    weightBody: 600,
+    letter: '-0.01em',
+    letterDisplay: '-0.02em',
+    shadow: '0 2px 0 rgba(80,100,0,0.06), 0 6px 20px rgba(80,100,0,0.10)',
+    shadowLift: '0 4px 0 rgba(80,100,0,0.08), 0 12px 32px rgba(80,100,0,0.14)',
+  },
   sky: {
     bg: '#E4EEF8',
     bgSoft: '#EDF4FC',
@@ -33940,7 +33968,7 @@ let LANG = localStorage.getItem('boh_lang') || 'hu';
 const TR = {
   hu: {
     play: 'Játék', join: 'Csatlakozás', settings: 'Beállítások',
-    theme: 'Téma', language: 'Nyelv', themeWarm: 'Meleg', themeSky: 'Kék', themeDark: 'Sötét',
+    theme: 'Téma', language: 'Nyelv', themeWarm: 'Meleg', themeSky: 'Kék', themeDark: 'Sötét', themeSummer: 'Nyár',
     langHu: 'Magyar 🇭🇺', langEn: 'English 🇬🇧',
     addToHome: 'Főképernyőre mentés', addToHomeDesc: 'Telepítsd appként — ingyen, App Store nélkül',
     next: 'Kövi', menu: 'MENÜ', whoPlays: 'Ki játszik',
@@ -33952,7 +33980,7 @@ const TR = {
   },
   en: {
     play: 'Play', join: 'Join', settings: 'Settings',
-    theme: 'Theme', language: 'Language', themeWarm: 'Warm', themeSky: 'Blue', themeDark: 'Dark',
+    theme: 'Theme', language: 'Language', themeWarm: 'Warm', themeSky: 'Blue', themeDark: 'Dark', themeSummer: 'Summer',
     langHu: 'Magyar 🇭🇺', langEn: 'English 🇬🇧',
     addToHome: 'Add to Home Screen', addToHomeDesc: 'Install as app — free, no App Store needed',
     next: 'Next', menu: 'MENU', whoPlays: 'Playing',
@@ -34651,7 +34679,7 @@ function HomeScreen({ go, onStartGame, setTheme, currentTheme, setLang, currentL
               {/* Theme */}
               <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>{t('theme')}</div>
               <div style={{ display:'flex', gap:8, marginBottom:24 }}>
-                {[['warm','☀️',t('themeWarm')],['sky','🌤️',t('themeSky')],['dark','🌙',t('themeDark')]].map(([key, icon, label]) => (
+                {[['warm','☀️',t('themeWarm')],['sky','🌤️',t('themeSky')],['dark','🌙',t('themeDark')],['summer','🏖️',t('themeSummer')]].map(([key, icon, label]) => (
                   <button key={key} onClick={() => { setTheme && setTheme(key); }} style={{ flex:1, padding:'12px 8px', borderRadius:14, border: currentTheme===key ? `2px solid ${T.mint}` : `2px solid transparent`, background: currentTheme===key ? T.mintSoft : T.surfaceMuted, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
                     <span style={{ fontSize:22 }}>{icon}</span>
                     <span style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color: currentTheme===key ? T.mintDeep : T.inkSoft }}>{label}</span>
@@ -44869,6 +44897,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const [gameIdx, setGameIdx] = useState(0);
   const [drinkPulse, setDrinkPulse] = useState(false);
   const [scorePulse, setScorePulse] = useState(false);
+  const [starAnim, setStarAnim] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [transitioning, setTransitioning] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -44987,7 +45016,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     setTransitioning(true);
     setFeedback(fb);
     setPlayers(newPlayers);
-    if (fb==='win') { setScorePulse(true); setTimeout(()=>setScorePulse(false),600); }
+    if (fb==='win') { setScorePulse(true); setTimeout(()=>setScorePulse(false),600); setStarAnim(true); setTimeout(()=>setStarAnim(false),900); }
     else if (fb==='lose') { setDrinkPulse(true); setTimeout(()=>setDrinkPulse(false),600); }
     if (roomCode && typeof syncRoom==='function')
       syncRoom(roomCode, { players:newPlayers, turn:newTurn, gameIdx:newGameIdx, round:newRound });
@@ -45232,6 +45261,13 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               {currentGameId === 'sohanem' ? 'Senki sem igaz rá ✔' : 'Senki nem rontott ✔'}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Flying star animation */}
+      {starAnim && (
+        <div style={{ position:'fixed', left:'50%', bottom:'80px', zIndex:9999, pointerEvents:'none', animation:'starFly 0.85s cubic-bezier(.2,.9,.3,1) forwards' }}>
+          <span style={{ fontSize:48, filter:'drop-shadow(0 0 12px gold)' }}>⭐</span>
         </div>
       )}
 
