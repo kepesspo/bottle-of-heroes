@@ -33940,7 +33940,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.377';
+const APP_VERSION = 'v9.378';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -51299,7 +51299,22 @@ function Root() {
   return <ErrorBoundary><BottleApp /></ErrorBoundary>;
 }
 
-// Hide splash after React renders
+// Hide splash: wait for BOTH React ready AND minimum display time (3s)
+window._splashReactReady = false;
+window._splashTimerDone  = false;
+window._hideSplash = function() {
+  if (!window._splashReactReady || !window._splashTimerDone) return;
+  const splash = document.getElementById('splash');
+  if (splash) {
+    splash.classList.add('hidden');
+    setTimeout(() => { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 600);
+  }
+};
+// Minimum 3s — covers logo drop (0.7s) + letter slams (0.9s–2.1s) + tagline (2.7s) + buffer
+setTimeout(function() {
+  window._splashTimerDone = true;
+  window._hideSplash();
+}, 3000);
 const _origRender = ReactDOM.createRoot;
 ReactDOM.createRoot = function(container, opts) {
   const root = _origRender.call(this, container, opts);
@@ -51307,11 +51322,8 @@ ReactDOM.createRoot = function(container, opts) {
   root.render = function(element) {
     _origRootRender(element);
     requestAnimationFrame(() => {
-      const splash = document.getElementById('splash');
-      if (splash) {
-        splash.classList.add('hidden');
-        setTimeout(() => { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 500);
-      }
+      window._splashReactReady = true;
+      window._hideSplash();
     });
   };
   return root;
