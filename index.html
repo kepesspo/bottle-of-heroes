@@ -33896,7 +33896,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.314';
+const APP_VERSION = 'v9.315';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -45698,6 +45698,13 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   React.useEffect(() => { if (setGameMeta) setGameMeta(m => ({...m, _resumeBpState: null})); }, []);
 
   // Show round popup on game start (round 1)
+  // Sync selectedGames on mount so observers know which games are selected
+  React.useEffect(() => {
+    if (roomCode && typeof syncRoom === 'function') {
+      syncRoom(roomCode, { selectedGames, players, turn: 0, gameIdx: 0, round: 1 });
+    }
+  }, []);
+
   React.useEffect(() => {
     const showCounter = gameMeta?.showRoundCounter !== false;
     if (showCounter) {
@@ -45863,8 +45870,14 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     try { localStorage.setItem('boh_session', JSON.stringify({ players: newPlayers, turn: newTurn, gameIdx: newGameIdx, round: newRound, selectedGames, gameMeta })); } catch(e) {}
     if (fb==='win') { setScorePulse(true); setTimeout(()=>setScorePulse(false),600); setStarAnim(true); setTimeout(()=>setStarAnim(false),900); }
     else if (fb==='lose') { setDrinkPulse(true); setTimeout(()=>setDrinkPulse(false),600); }
-    if (roomCode && typeof syncRoom==='function')
-      syncRoom(roomCode, { players:newPlayers, turn:newTurn, gameIdx:newGameIdx, round:newRound });
+    if (roomCode && typeof syncRoom==='function') {
+      const roundEventData = (newRound > round) ? { round: newRound, ts: Date.now() } : null;
+      syncRoom(roomCode, {
+        players: newPlayers, turn: newTurn, gameIdx: newGameIdx, round: newRound,
+        selectedGames,
+        ...(roundEventData ? { roundEvent: roundEventData } : {}),
+      });
+    }
     setTimeout(() => {
       setFeedback(null); setTurn(newTurn); setGameIdx(newGameIdx);
       setRound(newRound); setTransitioning(false); transRef.current = false;
@@ -45963,9 +45976,12 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     if (!res) { setGameResult(null); return; }
     const d = res.drinks ?? 0;
     const scaled = d > 0 ? d * diffDrinks : 0;
-    // If subtitle hardcodes "egyet" or a drink count, drop it so ResultBanner auto-generates correctly
     const subtitle = (d === 1 && diffDrinks > 1) ? null : res.subtitle;
-    setGameResult({ ...res, drinks: scaled, subtitle, ts: Date.now() });
+    const ts = Date.now();
+    setGameResult({ ...res, drinks: scaled, subtitle, ts });
+    if (roomCode && typeof syncRoom === 'function') {
+      syncRoom(roomCode, { gameEvent: { correct: !!res.correct, playerName: res.playerName || null, drinks: scaled, subtitle: subtitle || null, ts } });
+    }
   };
 
   // Egyéni: current player wins or loses
@@ -49925,6 +49941,8 @@ function ObserverWatching({ code, observerName, onLeave }) {
   const [groupUsed, setGroupUsed] = useState(false);
   const [kortyUsed, setKortyUsed] = useState(false);
 
+  const [obsRoundPopup, setObsRoundPopup] = React.useState(null);
+  const [obsGameEvent, setObsGameEvent] = React.useState(null);
   const prevGameIdxRef = React.useRef(null);
   React.useEffect(() => {
     const idx = room?.gameIdx ?? null;
@@ -49948,6 +49966,17 @@ function ObserverWatching({ code, observerName, onLeave }) {
               if (p.points > pp.points) { setPulseId(p.id+':p'); setTimeout(()=>setPulseId(null),700); }
               else if (p.drinks > pp.drinks) { setPulseId(p.id+':d'); setTimeout(()=>setPulseId(null),700); }
             });
+          }
+          // Round popup event
+          if (data.roundEvent && (!prev?.roundEvent || data.roundEvent.ts !== prev.roundEvent.ts)) {
+            setObsRoundPopup({ round: data.roundEvent.round, leaving: false });
+            setTimeout(() => setObsRoundPopup(p => p ? {...p, leaving:true} : p), 1500);
+            setTimeout(() => setObsRoundPopup(null), 2000);
+          }
+          // Game result event
+          if (data.gameEvent && (!prev?.gameEvent || data.gameEvent.ts !== prev.gameEvent.ts)) {
+            setObsGameEvent(data.gameEvent);
+            setTimeout(() => setObsGameEvent(null), 3500);
           }
           // Beer pong match notification
           if (data.bpNotif && (!prev?.bpNotif || data.bpNotif.ts !== prev.bpNotif.ts)) {
@@ -50031,6 +50060,28 @@ function ObserverWatching({ code, observerName, onLeave }) {
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', position:'relative', overflow:'hidden' }}>
+      {/* Round popup overlay */}
+      {obsRoundPopup && (
+        <div style={{ position:'fixed', inset:0, zIndex:9998, pointerEvents:'none', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ animation: obsRoundPopup.leaving ? 'roundPopOut 0.5s ease-in forwards' : 'roundPopIn 0.5s cubic-bezier(.2,.9,.3,1.2) forwards', background:T.surface, borderRadius:24, padding:'24px 40px', boxShadow:'0 8px 40px rgba(0,0,0,0.25)', textAlign:'center' }}>
+            <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, letterSpacing:'0.12em', textTransform:'uppercase', marginBottom:4 }}>📡 Körváltás</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:48, color:T.ink, lineHeight:1 }}>{obsRoundPopup.round}.</div>
+            <div style={{ fontFamily:T.font, fontSize:14, fontWeight:700, color:T.inkSoft, marginTop:4 }}>Kör</div>
+          </div>
+        </div>
+      )}
+      {/* Game event banner */}
+      {obsGameEvent && (
+        <div style={{ position:'fixed', top:16, left:16, right:16, zIndex:9999, animation:'slideDown .3s cubic-bezier(.2,.9,.3,1)' }}>
+          <div style={{ borderRadius:16, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, background: obsGameEvent.correct ? 'rgba(80,168,130,0.95)' : 'rgba(220,80,80,0.95)', boxShadow:'0 4px 20px rgba(0,0,0,0.3)' }}>
+            <div style={{ fontSize:28 }}>{obsGameEvent.correct ? '🎉' : '🍺'}</div>
+            <div>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:'#fff' }}>{obsGameEvent.correct ? 'Helyes! +1 pont' : 'Inni kell!'}</div>
+              {obsGameEvent.playerName && <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.85)', marginTop:2 }}>{obsGameEvent.playerName}{!obsGameEvent.correct && obsGameEvent.drinks > 0 ? ` — ${obsGameEvent.drinks} korty` : ''}</div>}
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
       <div style={{ padding:'12px 18px 12px', display: (winW >= 1024 && currentGameId === 'beerpong' && room.bpState) ? 'grid' : 'flex', gridTemplateColumns: '1fr 260px', flexDirection:'column', gap:12 }}>
         {/* live banner */}
