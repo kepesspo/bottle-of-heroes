@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.402';
+const APP_VERSION = 'v9.403';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -46023,9 +46023,17 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
   React.useEffect(() => {
     if (S.phase !== 'done') return;
     const {p1W, p2W} = results;
-    if (onResult) {
-      if (p1W > p2W) onResult({correct: true});
-      else if (p2W > p1W) onResult({correct: false});
+    const p1id = challenger?.id;
+    const p2id = opponent?.id;
+    if (p1W > p2W) {
+      if (onAdvance) onAdvance({[p2id]: 1}, {[p1id]: 1});
+      if (onResult) onResult({ correct: true, playerName: challenger?.name, drinks: 0, subtitle: (challenger?.name||'1. játékos') + ' nyerte a meccset!' });
+    } else if (p2W > p1W) {
+      if (onAdvance) onAdvance({[p1id]: 1}, {[p2id]: 1});
+      if (onResult) onResult({ correct: false, playerName: opponent?.name, drinks: 0, subtitle: (opponent?.name||'2. játékos') + ' nyerte a meccset!' });
+    } else {
+      if (onAdvance) onAdvance({[p1id]: 1, [p2id]: 1}, {});
+      if (onResult) onResult({ correct: false, playerName: null, drinks: 1, subtitle: 'Döntetlen — mindenki iszik!' });
     }
   }, [S.phase]);
 
