@@ -61,16 +61,15 @@
     #splash-bg { position:absolute; inset:0; }
     #splash-flash {
       position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none;
-      animation: splashFlash 0.65s ease-out 0.68s forwards;
     }
     .splash-shock {
       position:absolute; top:50%; left:50%; width:10px; height:10px; margin:-5px 0 0 -5px;
-      border-radius:50%; border:3px solid rgba(0,0,0,0.28); opacity:0; pointer-events:none;
+      border-radius:50%; opacity:0; pointer-events:none;
     }
-    .splash-shock:nth-child(3) { animation:splashShock 0.80s cubic-bezier(0.1,0.5,0.2,1) 0.68s forwards; border-width:3px; border-color:rgba(0,0,0,0.40); }
-    .splash-shock:nth-child(4) { animation:splashShock 1.00s cubic-bezier(0.1,0.5,0.2,1) 0.72s forwards; border-width:2px; border-color:rgba(0,0,0,0.25); }
-    .splash-shock:nth-child(5) { animation:splashShock 1.20s cubic-bezier(0.1,0.5,0.2,1) 0.76s forwards; border-width:2px; border-color:rgba(0,0,0,0.15); }
-    .splash-shock:nth-child(6) { animation:splashShock 1.50s cubic-bezier(0.1,0.5,0.2,1) 0.80s forwards; border-width:1.5px; border-color:rgba(0,0,0,0.08); }
+    .splash-shock:nth-child(3) { border:3px solid rgba(0,0,0,0.40); }
+    .splash-shock:nth-child(4) { border:2px solid rgba(0,0,0,0.25); }
+    .splash-shock:nth-child(5) { border:2px solid rgba(0,0,0,0.15); }
+    .splash-shock:nth-child(6) { border:1.5px solid rgba(0,0,0,0.08); }
     #splash-logo-wrap {
       position:relative; z-index:2;
       animation: impactDrop 0.7s cubic-bezier(0.25,0.1,0.25,1.4) 0s both,
@@ -96,7 +95,7 @@
     #splash-tagline {
       margin-top:10px; font-family:'Nunito',-apple-system,system-ui,sans-serif; font-size:11px;
       letter-spacing:4px; text-transform:uppercase; color:var(--splash-ink-soft,#4A5878);
-      opacity:0; animation:splashTagline 0.5s ease-out 2.2s forwards;
+      opacity:0;
     }
 
     @keyframes impactDrop {
@@ -33586,21 +33585,45 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
     '@keyframes splashLogoIdle{0%,100%{filter:drop-shadow(0 0 28px ' + t.glow + ') drop-shadow(0 8px 24px rgba(0,0,0,0.3));}50%{filter:drop-shadow(0 0 48px ' + t.glow + ') drop-shadow(0 8px 32px rgba(0,0,0,0.2));}}';
   document.head.appendChild(s);
 
-  // Letter slam — staggered
-  var letters = document.querySelectorAll('.splash-letter');
-  var base = 0.95, stagger = 0.06;
-  letters.forEach(function(el, i) {
-    el.style.animation = 'splashLetterSlam 0.55s cubic-bezier(0.22,1,0.36,1) ' + (base + i*stagger).toFixed(3) + 's both';
-  });
+  if (localStorage.getItem('boh_splash') !== '0') {
+    splash.style.display = '';
 
-  // Idle glow after letters finish
-  var logo = document.getElementById('splash-logo');
-  var idleAt = base + letters.length * stagger + 0.6;
-  if (logo) setTimeout(function() {
-    if (logo) logo.style.animation = 'splashLogoIdle 3s ease-in-out infinite';
-  }, idleAt * 1000);
+    // ── JS-vezérelt animációk ──
+    var logo   = document.getElementById('splash-logo');
+    var flash  = document.getElementById('splash-flash');
+    var shocks = document.querySelectorAll('.splash-shock');
+    var letters = document.querySelectorAll('.splash-letter');
 
-  if (localStorage.getItem('boh_splash') !== '0') splash.style.display = '';
+    // Impact: 700ms — flash + shockwave gyűrűk
+    setTimeout(function() {
+      if (flash) flash.style.animation = 'splashFlash 0.65s ease-out forwards';
+      shocks.forEach(function(el, i) {
+        setTimeout(function() {
+          el.style.animation = 'splashShock ' + (0.8 + i * 0.2) + 's cubic-bezier(0.1,0.5,0.2,1) forwards';
+        }, i * 50);
+      });
+    }, 700);
+
+    // Letter slam: 900ms — staggered becsapódás
+    setTimeout(function() {
+      letters.forEach(function(el, i) {
+        setTimeout(function() {
+          el.style.animation = 'splashLetterSlam 0.55s cubic-bezier(0.22,1,0.36,1) both';
+        }, i * 60);
+      });
+    }, 900);
+
+    // Tagline: 2200ms
+    setTimeout(function() {
+      var tagline = document.getElementById('splash-tagline');
+      if (tagline) tagline.style.animation = 'splashTagline 0.5s ease-out forwards';
+    }, 2200);
+
+    // Idle glow: 2600ms
+    setTimeout(function() {
+      if (logo) logo.style.animation = 'splashLogoIdle 3s ease-in-out infinite';
+    }, 2600);
+  }
 })();
 </script>
 <!-- iOS 18+ haptic trigger -->
@@ -33940,7 +33963,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.380';
+const APP_VERSION = 'v9.381';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
