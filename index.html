@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.398';
+const APP_VERSION = 'v9.399';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -34919,7 +34919,7 @@ const GAMES = [
   { id:'ovfj', name:'Ország-Város', difficulty:'közepes', category:'Csapat', emoji:'🌍', symbol:null, img:IMGS['ovfj_icon.png'], banner:IMGS['ovfj_banner.png'], color:'#22C55E', desc:'Betű kisorsol, mindenki kitölti a 8 kategóriát a saját telefonján. Aki elsőként kész, a többieknek +10 mp. Szavazással dől el ki érvényes — egyedi válasz 10 pt, dupla 5 pt.' },
   { id:'hajime',    roundTime:'mid',  name:'Hajime',                difficulty:'nehéz',   category:'Csapat', emoji:'😆', comingSoon:true, symbol:IMGS['hajime_symbol.png'], img:IMGS['hajime_icon.png'], banner:IMGS['hajime_banner.png'], color:'#FACC15', desc:'Számolj helyesen! El kell kezdeni számolni 1-től és ha 5-tel vagy 7-tel osztható a szám vagy szerepel benne az 5 vagy a 7 akkor "hajime"-t kell mondani. Aki eltéveszti az iszik. Egy plusz csavar: minden "hajime" után megfordul a kör.' },
   { id:'kopapir',   roundTime:'mid',  name:'Kő Papír Olló',         difficulty:'nehéz',   category:'Csapat', emoji:'✊', comingSoon:true, symbol:IMGS['kopapir_symbol.png'], img:IMGS['kopapir_icon.png'], banner:IMGS['kopapir_banner.png'], color:'#7C3AED', desc:'Annyi kört kell játszani ahány játékos van. Kell egy kezdő ember aki kihivja a mellette ülőt, ezt a játék választja ki. Ha te nyersz akkor ő iszik és az ő mellette ülővel kell játszania. Ha te vesztesz akkor a te melletted ülővel kell játszanod. Ha döntetlen akkor mind a ketten isztok.' },
-  { id:'szolánc',   name:'Szólánc',              difficulty:'közepes', category:'Csapat', emoji:'🔗', symbol:IMGS['szolanc_symbol.png'], img:IMGS['szolanc_icon.png'], banner:IMGS['szolanc_banner.png'], color:'#F59E0B', comingSoon:true, desc:'Ismételd el a sort, majd told hozzá egy új szót a kategóriából. Aki elront, iszik.' },
+  { id:'szolánc',   name:'Szólánc',              difficulty:'közepes', category:'Csapat', emoji:'🔗', symbol:IMGS['szolanc_symbol.png'], img:IMGS['szolanc_icon.png'], banner:IMGS['szolanc_banner.png'], color:'#F59E0B', desc:'Minden körben egy szóval több villog fel a képernyőn. Sorrendben vissza kell koppintani a szavakat. Aki elront, iszik — a többiek pontot kapnak.' },
   { id:'ritmus',   roundTime:'fast', name:'Ritmus Játék',     difficulty:'közepes', category:'Páros',  emoji:'🥁', img:IMGS['ritmus_icon.png'], symbol:IMGS['ritmus_symbol.png'], color:'#F97316', desc:'Az app kisorsol két játékost. Az első játékos 30 másodpercig próbálja megkoppintani a felvillanó gombokat mielőtt eltűnnek. Majd a második játékos is lejátssza. Aki kevesebbet talált el, iszik annyit amennyi a különbség.' },
   { id:'mitval',   roundTime:'fast', name:'Mit Választanál?', difficulty:'könnyű',  category:'Egyéni', emoji:'🤔', img:IMGS['mitval_icon.png'], banner:IMGS['mitval_banner.png'], symbol:IMGS['mitval_symbol.png'], color:'#8B5CF6', desc:'Megjelenik két opció és döntened kell melyiket választanád. 5 másodperc van dönteni hangosan. Ha nem tudsz dönteni, iszol. A végén kiderül hogy a világ hány százaléka választotta azt amit te.' },
   { id:'meduza',   roundTime:'fast', name:'Medúza',           difficulty:'könnyű',  category:'Csapat', emoji:'🎯', img:IMGS['meduza_icon.png'], banner:IMGS['meduza_banner.png'], symbol:IMGS['meduza_symbol.png'], color:'#06B6D4', desc:'Mindenki lehajtja a fejét és a körben álló játékosokra néz valakire. 3-2-1-re felemelik a fejüket. Ha szemkontaktus van két játékos között, mindkettő iszik. Addig megy amíg 1-2 ember nem marad.' },
@@ -45743,692 +45743,209 @@ function KezCsereGame({ gameIdx, players, onAdvance, onResult }) {
 }
 
 // ─── SZÓLÁNC ────────────────────────────────────────────────────────────────
-function SzolancGame({ gameIdx, players, onAdvance, onResult }) {
-  const CATS = [
-    'Gyümölcsök 🍎','Állatok 🐾','Fővárosok 🌍','Autómárkák 🚗','Ételek 🍕',
-    'Sportágak ⚽','Filmek 🎬','Zenekarok 🎸','Foglalkozások 👷','Országok 🌐',
-    'Zöldségek 🥦','Italok 🍹','Ruhamárkák 👗','Magyar városok 🏙️','Hangszerek 🎺',
-    'Sütemények 🍰','TV-sorozatok 📺','Olimpiai sportok 🏅','Állatfajok 🦁',
+function SzolancGame({ gameIdx, players, onAdvance, onResult, onSetHideFooter }) {
+  const LISTS = [
+    { cat:'Gyümölcsök 🍎', words:['alma','körte','szilva','barack','szőlő','dinnye','eper','málna','cseresznye','banán','narancs','citrom','mangó','ananász','kivi'] },
+    { cat:'Állatok 🐾',    words:['kutya','macska','ló','tehén','birka','nyúl','egér','róka','farkas','medve','oroszlán','tigris','elefánt','zsiráf','pingvin'] },
+    { cat:'Fővárosok 🌍',  words:['Budapest','Berlin','Párizs','London','Róma','Madrid','Varsó','Prága','Bécs','Amszterdam','Bukarest','Athén','Lisszabon','Koppenhága','Stockholm'] },
+    { cat:'Ételek 🍕',     words:['gulyás','pizza','hamburger','rántotta','palacsinta','rétes','lángos','fasírt','rakott krumpli','halászlé','töltött káposzta','kürtőskalács','lecsó','savanyúkáposzta','bruschetta'] },
+    { cat:'Sportágak ⚽',  words:['foci','kosárlabda','tenisz','úszás','atlétika','birkózás','ökölvívás','vízilabda','röplabda','kézilabda','jégkorong','kerékpár','lovaglás','golf','evezés'] },
+    { cat:'Autómárkák 🚗', words:['Toyota','BMW','Mercedes','Audi','Volkswagen','Ford','Opel','Renault','Peugeot','Fiat','Honda','Suzuki','Hyundai','Kia','Tesla'] },
+    { cat:'Italok 🍹',     words:['víz','bor','sör','pálinka','kávé','tea','limonádé','cola','whisky','vodka','koktél','gyümölcslé','fröccs','rum','rosé'] },
+    { cat:'Magyar városok 🏙️', words:['Pécs','Győr','Miskolc','Debrecen','Eger','Sopron','Veszprém','Kecskemét','Nyíregyháza','Szolnok','Kaposvár','Szombathely','Tatabánya','Érd','Zalaegerszeg'] },
+    { cat:'Hangszerek 🎺', words:['zongora','gitár','hegedű','dob','furulya','trombita','szaxofon','bőgő','hárfa','fuvola','ukulele','mandolin','brácsa','cselló','klarinét'] },
+    { cat:'Filmek 🎬',     words:['Titanic','Avatar','Inception','Matrix','Gladiátor','Interstellar','Joker','Avengers','Parasite','Tenet','Dune','Oppenheimer','Barbie','Top Gun','Ratatouille'] },
   ];
-  const [catIdx] = React.useState(() => Math.floor(Math.random() * CATS.length));
-  const cat = CATS[catIdx];
-  const [words, setWords] = React.useState([]); // [{word, pid, name}]
-  const [turnIdx, setTurnIdx] = React.useState(0);
-  const [phase, setPhase] = React.useState('playing'); // 'playing' | 'done'
-  const [timeLeft, setTimeLeft] = React.useState(null);
-  const timerRef = React.useRef(null);
-  const [committed, setCommitted] = React.useState(false);
 
-  React.useEffect(() => { setWords([]); setTurnIdx(0); setPhase('playing'); setTimeLeft(null); setCommitted(false); }, [gameIdx]);
+  const [listIdx] = React.useState(() => Math.floor(Math.random() * LISTS.length));
+  const { cat, words: allWords } = LISTS[listIdx];
 
-  const currentPid = players[turnIdx % players.length]?.id;
-  const currentPlayer = players[turnIdx % players.length];
-
-  const startTimer = () => {
-    setTimeLeft(5 + Math.min(words.length, 10));
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setTimeLeft(t => {
-        if (t <= 1) {
-          clearInterval(timerRef.current);
-          return 0;
-        }
-        return t - 1;
-      });
-    }, 1000);
+  const fresh = (chainLen, turnIdx) => {
+    const chain = allWords.slice(0, chainLen);
+    return { phase:'show', chain, showIdx:0, gridWords:[], tapped:[], turnIdx, wrongIdx:null };
   };
 
-  React.useEffect(() => () => clearInterval(timerRef.current), []);
+  const [S, setS] = React.useState(() => fresh(1, 0));
+  const [done, setDone] = React.useState(null); // { failName, failColor, failPid }
 
-  const markFailed = (pid) => {
-    if (committed) return;
-    setCommitted(true);
-    clearInterval(timerRef.current);
-    const p = players.find(x => x.id === pid);
-    onResult && onResult({ correct: false, playerName: p?.name, drinks: 1, subtitle: `${p?.name} elrontotta — iszik egyet` });
-    onAdvance && onAdvance({ [pid]: 1 });
-    setPhase('done');
-  };
-
-  const addWord = (word) => {
-    if (!word.trim()) return;
-    const newWords = [...words, { word: word.trim(), pid: currentPid, name: currentPlayer?.name }];
-    setWords(newWords);
-    setTurnIdx(t => t + 1);
-    clearInterval(timerRef.current);
-    setTimeLeft(null);
-  };
-
-  const [inputWord, setInputWord] = React.useState('');
-  React.useEffect(() => { setInputWord(''); }, [turnIdx]);
-
-  return (
-    <div style={{ display:'flex', flexDirection:'column', gap:12, width:'100%' }}>
-      {/* Category */}
-      <div style={{ background:T.surface, borderRadius:16, padding:'12px 16px', display:'flex', alignItems:'center', gap:10, boxShadow:T.shadow }}>
-        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', flexShrink:0 }}>KATEGÓRIA</div>
-        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink }}>{cat}</div>
-      </div>
-
-      {/* Word chain list */}
-      <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:260, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
-        {words.map((w, i) => {
-          const p = players.find(x => x.id === w.pid);
-          return (
-            <div key={i} style={{ display:'flex', alignItems:'center', gap:10, background:T.surface, borderRadius:12, padding:'10px 14px', boxShadow:T.shadow }}>
-              <div style={{ width:28, height:28, borderRadius:'50%', background:'rgba(26,42,74,0.10)', display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft, flexShrink:0 }}>{i+1}</div>
-              <div style={{ flex:1, fontFamily:T.font, fontWeight:700, fontSize:16, color:T.ink }}>{w.word}</div>
-              <div style={{ width:28, height:28, borderRadius:'50%', background:p?.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:12, color:'#fff', flexShrink:0 }}>{(p?.name||'?').charAt(0).toUpperCase()}</div>
-            </div>
-          );
-        })}
-
-        {/* Next player row */}
-        {phase === 'playing' && (
-          <div style={{ display:'flex', alignItems:'flex-start', gap:10, borderRadius:12, padding:'10px 14px', border:`2px dashed ${T.mint}`, background:`${T.mint}08` }}>
-            <div style={{ width:28, height:28, borderRadius:'50%', background:T.mint, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:13, color:'#fff', flexShrink:0 }}>{words.length + 1}</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.mint }}>{currentPlayer?.name} jössz…</div>
-              <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>ismételd el a {words.length} szót, majd egy újat{timeLeft !== null ? ` · ${timeLeft} mp` : ''}</div>
-            </div>
-            <div style={{ width:28, height:28, borderRadius:'50%', background:currentPlayer?.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:12, color:'#fff', flexShrink:0 }}>{(currentPlayer?.name||'?').charAt(0).toUpperCase()}</div>
-          </div>
-        )}
-      </div>
-
-      {/* Controls */}
-      {phase === 'playing' && (
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {timeLeft === null ? (
-            <button onClick={startTimer} style={{ width:'100%', padding:'14px', background:T.mint, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:16, cursor:'pointer', boxShadow:T.shadowLift }}>
-              ▶ {currentPlayer?.name} indul
-            </button>
-          ) : (
-            <>
-              <div style={{ display:'flex', gap:8 }}>
-                <div style={{ flex:1, textAlign:'center', fontFamily:T.font, fontWeight:900, fontSize:32, color: timeLeft<=3 ? T.coral : T.mint }}>{timeLeft}</div>
-              </div>
-              <input
-                value={inputWord} onChange={e => setInputWord(e.target.value)}
-                onKeyDown={e => e.key==='Enter' && inputWord.trim() && addWord(inputWord)}
-                placeholder="Új szó a kategóriából…"
-                style={{ width:'100%', padding:'12px 14px', borderRadius:12, border:`2px solid ${T.mint}`, fontFamily:T.font, fontSize:16, boxSizing:'border-box', outline:'none', background:T.surface }}
-                autoFocus
-              />
-              <div style={{ display:'flex', gap:8 }}>
-                <button onClick={() => inputWord.trim() && addWord(inputWord)} disabled={!inputWord.trim()}
-                  style={{ flex:2, padding:'13px', background:T.mint, color:'#fff', border:'none', borderRadius:14, fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer', opacity: inputWord.trim()?1:0.45 }}>
-                  ✓ Helyes
-                </button>
-                <button onClick={() => markFailed(currentPid)}
-                  style={{ flex:1, padding:'13px', background:T.coral, color:'#fff', border:'none', borderRadius:14, fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer' }}>
-                  ✗ Rontott
-                </button>
-              </div>
-            </>
-          )}
-          {words.length > 0 && timeLeft === null && (
-            <button onClick={() => markFailed(currentPid)} style={{ width:'100%', padding:'12px', background:`${T.coral}18`, color:T.coral, border:`1.5px solid ${T.coral}40`, borderRadius:14, fontFamily:T.font, fontWeight:700, fontSize:14, cursor:'pointer' }}>
-              {currentPlayer?.name} rontott — iszik →
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── IDŐPÁRBAJ ───────────────────────────────────────────────────────────────
-function IdoparbajGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
-  const target = React.useRef(+(5 + Math.random() * 25).toFixed(1));
-  const [phase, setPhase] = React.useState('idle'); // 'idle'|'p1running'|'p1done'|'p2running'|'result'
-  const [t1, setT1] = React.useState(null);
-  const [t2, setT2] = React.useState(null);
-  const startRef = React.useRef(null);
-  const advRef = React.useRef(false);
-
-  React.useEffect(() => { target.current = +(5 + Math.random() * 25).toFixed(1); setPhase('idle'); setT1(null); setT2(null); advRef.current = false; }, [gameIdx]);
-
-  const tgt = target.current;
-
-  const startP1 = () => { startRef.current = Date.now(); setPhase('p1running'); };
-  const stopP1  = () => { setT1(+((Date.now() - startRef.current) / 1000).toFixed(1)); setPhase('p1done'); };
-  const startP2 = () => { startRef.current = Date.now(); setPhase('p2running'); };
-  const stopP2  = () => {
-    const tv = +((Date.now() - startRef.current) / 1000).toFixed(1);
-    setT2(tv);
-    setPhase('result');
-    if (!advRef.current) {
-      advRef.current = true;
-      const d1 = Math.abs(t1 - tgt), d2 = Math.abs(tv - tgt);
-      const p1wins = d1 <= d2;
-      const loser = p1wins ? opponent : challenger;
-      const winner = p1wins ? challenger : opponent;
-      setTimeout(() => {
-        onResult && onResult({ correct: false, playerName: loser?.name, drinks: 1, subtitle: `${loser?.name} iszik — ${winner?.name} nyert` });
-        onAdvance && onAdvance({ [loser?.id]: 1 });
-      }, 400);
-    }
-  };
-
-  const d1 = t1 !== null ? Math.abs(t1 - tgt) : null;
-  const d2 = t2 !== null ? Math.abs(t2 - tgt) : null;
-  const p1wins = phase === 'result' ? (d1 <= d2) : null;
-
-  const BigBtn = ({ label, sub, onClick, color }) => (
-    <button onClick={onClick} style={{ width:'100%', padding:'22px 0', background:color||T.mint, color:'#fff', border:'none', borderRadius:20, fontFamily:T.font, fontWeight:900, fontSize:22, cursor:'pointer', boxShadow:T.shadowLift, display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-      <span>{label}</span>
-      {sub && <span style={{ fontSize:13, fontWeight:600, opacity:0.85 }}>{sub}</span>}
-    </button>
-  );
-
-  const PlayerCard = ({ p, time, diff, isWinner, isLoser }) => (
-    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:'14px 10px', borderRadius:16, background: isWinner ? `${T.mint}18` : isLoser ? `${T.coral}18` : T.surface, border:`2px solid ${isWinner?T.mint:isLoser?T.coral:'transparent'}`, boxShadow:T.shadow }}>
-      <div style={{ width:44, height:44, borderRadius:'50%', background:p?.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:18, color:'#fff' }}>{(p?.name||'?').charAt(0).toUpperCase()}</div>
-      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{p?.name}</div>
-      {time !== null ? (
-        <>
-          <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:26, color:isWinner?T.mint:isLoser?T.coral:T.ink }}>{time.toFixed(1)}<span style={{ fontFamily:T.font, fontSize:13, fontWeight:700 }}>mp</span></div>
-          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>{diff===0?'🎯 Pontos!':`${diff>0?'+':''}${(time-tgt).toFixed(1)} mp`}</div>
-          {isWinner && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.mint, background:`${T.mint}22`, borderRadius:999, padding:'2px 10px' }}>NYERT</div>}
-          {isLoser  && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.coral, background:`${T.coral}22`, borderRadius:999, padding:'2px 10px' }}>ISZIK 🍺</div>}
-        </>
-      ) : (
-        <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>vár…</div>
-      )}
-    </div>
-  );
-
-  return (
-    <div style={{ display:'flex', flexDirection:'column', gap:16, alignItems:'center', width:'100%' }}>
-
-      {/* Target time — always visible */}
-      <div style={{ background:'#1B2340', borderRadius:16, padding:'16px 24px', width:'100%', textAlign:'center', boxSizing:'border-box' }}>
-        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:6 }}>CÉL IDŐ</div>
-        <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:52, color:'#fff', lineHeight:1 }}>{tgt.toFixed(1)}<span style={{ fontFamily:T.font, fontSize:22, fontWeight:700, marginLeft:4, color:'rgba(255,255,255,0.7)' }}>mp</span></div>
-      </div>
-
-      {/* Player result cards — always show in any phase */}
-      {(
-        <div style={{ display:'flex', gap:10, width:'100%' }}>
-          <PlayerCard p={challenger} time={t1} diff={d1} isWinner={phase==='result'&&p1wins===true} isLoser={phase==='result'&&p1wins===false} />
-          <PlayerCard p={opponent}   time={t2} diff={d2} isWinner={phase==='result'&&p1wins===false} isLoser={phase==='result'&&p1wins===true} />
-        </div>
-      )}
-
-      {/* Action area */}
-      {phase==='idle'     && <BigBtn label={`▶ ${challenger?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP1} color={challenger?.color} />}
-      {phase==='p1running' && (
-        <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
-          <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, fontWeight:600 }}>{challenger?.name} mér… állítsd meg időben!</div>
-          <BigBtn label="⏹ Stop!" onClick={stopP1} color={T.coral} />
-        </div>
-      )}
-      {phase==='p1done'   && <BigBtn label={`▶ ${opponent?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP2} color={opponent?.color} />}
-      {phase==='p2running' && (
-        <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
-          <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, fontWeight:600 }}>{opponent?.name} mér… állítsd meg időben!</div>
-          <BigBtn label="⏹ Stop!" onClick={stopP2} color={T.coral} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── CSAK EGY SZÓ ────────────────────────────────────────────────────────────
-function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
-  const WORDS = [
-    'Napsütés','Kaland','Barátság','Csend','Öröm','Otthon','Álom','Tenger','Erdő','Boldogság',
-    'Zene','Szerelem','Szabadság','Gőzmozdony','Kísértet','Könyvtár','Homokóra','Csillag','Hullám','Tűz',
-    'Jégkrém','Futball','Hegymászás','Mágnes','Vulkán','Kristály','Vitorla','Kalapács','Pókháló','Robot',
-    'Méz','Villámlás','Hóvihar','Bálna','Sakk','Piramis','Kaktusz','Karate','Asztronauta','Delfin',
-    'Pizza','Lány','Fiú','Cipő','Ital','Étel','Szék','Ablakok','Ajtó','Telefon',
-  ];
-  const [wordIdx] = React.useState(() => Math.floor(Math.random() * WORDS.length));
-  const word = WORDS[(gameIdx * 7 + wordIdx) % WORDS.length];
-  // phase: 'reveal' | 'guessing' | 'decide' | 'guessing2' | 'decide2' | 'done'
-  // guessing/guessing2 — timer fut, nincs gomb
-  // decide/decide2 — timer lejárt, gombok láthatók, szó még rejtve
-  const [phase, setPhase] = React.useState('reveal');
-  const [timeLeft, setTimeLeft] = React.useState(15);
-  const [holding, setHolding] = React.useState(false);
-  const timerRef = React.useRef(null);
-  const advRef = React.useRef(false);
-
-  React.useEffect(() => {
-    setPhase('reveal'); setTimeLeft(15);
-    clearInterval(timerRef.current); advRef.current = false;
-  }, [gameIdx]);
-  React.useEffect(() => () => clearInterval(timerRef.current), []);
-
-  const runTimer = (seconds, onExpire) => {
-    clearInterval(timerRef.current);
-    setTimeLeft(seconds);
-    timerRef.current = setInterval(() => {
-      setTimeLeft(t => {
-        if (t <= 1) { clearInterval(timerRef.current); onExpire(); return 0; }
-        return t - 1;
-      });
-    }, 1000);
-  };
-
-  const startGuessing = () => {
-    setPhase('guessing');
-    runTimer(15, () => setPhase('decide'));
-  };
-
-  const goSecondChance = () => {
-    setPhase('guessing2');
-    runTimer(15, () => setPhase('decide2'));
-  };
-
-  const commitResult = (success, isSecond) => {
-    if (advRef.current) return;
-    advRef.current = true;
-    clearInterval(timerRef.current);
-    setPhase('done');
-    const drinks = (!success && isSecond) ? 2 : 1;
-    if (success) {
-      onResult && onResult({ correct: true, playerName: challenger?.name, drinks: 0, subtitle: `${challenger?.name} & ${opponent?.name} — mindketten +1 pont!` });
-      onAdvance && onAdvance({}, { [challenger?.id]:1,[opponent?.id]:1 });
-    } else {
-      onResult && onResult({ correct: false, playerName: null, drinks, subtitle: isSecond ? `2 szóból sem sikerült — mindketten ${drinks} kortyt isznak 🍺🍺` : `Nem sikerült — mindketten isznak 🍺` });
-      onAdvance && onAdvance({ [challenger?.id]:drinks,[opponent?.id]:drinks }, {});
-    }
-  };
-
-  const pct = (timeLeft / 15) * 100;
-  const circumference = 2 * Math.PI * 44;
-  const timerPhase = phase === 'guessing' || phase === 'guessing2';
-
-  return (
-    <div style={{ display:'flex', flexDirection:'column', gap:16, alignItems:'center', width:'100%' }}>
-
-      {/* Players */}
-      <div style={{ display:'flex', alignItems:'center', gap:8, width:'100%' }}>
-        <div style={{ flex:1, display:'flex', alignItems:'center', gap:8, background:T.surface, borderRadius:12, padding:'8px 12px', boxShadow:T.shadow }}>
-          <div style={{ width:32, height:32, borderRadius:'50%', background:challenger?.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:14, color:'#fff' }}>{(challenger?.name||'?').charAt(0).toUpperCase()}</div>
-          <div style={{ flex:1 }}>
-            <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>MAGYARÁZ</div>
-            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>{challenger?.name}</div>
-          </div>
-        </div>
-        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:16, color:T.inkSoft }}>→</div>
-        <div style={{ flex:1, display:'flex', alignItems:'center', gap:8, background:T.surface, borderRadius:12, padding:'8px 12px', boxShadow:T.shadow }}>
-          <div style={{ width:32, height:32, borderRadius:'50%', background:opponent?.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:14, color:'#fff' }}>{(opponent?.name||'?').charAt(0).toUpperCase()}</div>
-          <div style={{ flex:1 }}>
-            <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>TIPPEL</div>
-            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>{opponent?.name}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Word reveal card — only in reveal phase */}
-      {phase === 'reveal' && (
-        <div style={{ width:'100%', background:'#1B2340', borderRadius:20, padding:'20px 18px 16px', display:'flex', flexDirection:'column', alignItems:'center', gap:14 }}>
-          <div style={{ width:'100%', minHeight:100, borderRadius:18, border:'2px dashed rgba(255,255,255,0.28)', background:'rgba(255,255,255,0.05)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, padding:20 }}>
-            {holding ? (
-              <div style={{ textAlign:'center', animation:'burstPop .25s' }}>
-                <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:8 }}>👁 CSAK {(challenger?.name||'?').toUpperCase()} LÁTJA</div>
-                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:36, color:'#fff', textTransform:'uppercase', letterSpacing:'-0.01em', lineHeight:1.1 }}>{word}</div>
-                <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.5)', marginTop:8 }}>Ezt magyarázd el — egyetlen szóval</div>
-              </div>
-            ) : (
-              <svg width="52" height="52" viewBox="0 0 34 34" fill="none">
-                <ellipse cx="17" cy="17" rx="14" ry="9" stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
-                <circle cx="17" cy="17" r="5" stroke="rgba(255,255,255,0.4)" strokeWidth="2"/>
-              </svg>
-            )}
-          </div>
-          <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.38)', textAlign:'center' }}>Tartsd lenyomva a felfedéshez</div>
-          <button
-            onPointerDown={e=>{e.preventDefault();setHolding(true);}}
-            onPointerUp={()=>setHolding(false)}
-            onPointerLeave={()=>setHolding(false)}
-            onPointerCancel={()=>setHolding(false)}
-            style={{ width:'100%', padding:'14px 0', background: holding ? '#8C7AE6' : '#6C5CE7', border:'none', borderRadius:14, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, cursor:'pointer', userSelect:'none', WebkitUserSelect:'none', display:'flex', alignItems:'center', justifyContent:'center', gap:8, transition:'background .1s' }}>
-            <span style={{ fontSize:14 }}>⬇</span><span>Nyomd &amp; tartsd</span>
-          </button>
-        </div>
-      )}
-
-      {/* Word reveal — only in done phase */}
-      {phase === 'done' && (
-        <div style={{ background:'#1B2340', borderRadius:18, padding:'18px 20px', width:'100%', textAlign:'center' }}>
-          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:8 }}>A szó</div>
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:32, color:'#fff', textTransform:'uppercase' }}>{word}</div>
-        </div>
-      )}
-
-      {/* Timer + always-visible Kitalálta button */}
-      {timerPhase && (
-        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12, width:'100%' }}>
-          <svg width={100} height={100} style={{ flexShrink:0 }}>
-            <circle cx={50} cy={50} r={44} fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth={8} />
-            <circle cx={50} cy={50} r={44} fill="none" stroke={timeLeft<=5?T.coral:T.mint} strokeWidth={8}
-              strokeDasharray={circumference} strokeDashoffset={circumference*(1-pct/100)}
-              strokeLinecap="round" transform="rotate(-90 50 50)" style={{ transition:'stroke-dashoffset .9s linear' }}/>
-            <text x={50} y={55} textAnchor="middle" fontFamily={T.font} fontWeight={900} fontSize={28} fill={timeLeft<=5?T.coral:T.ink}>{timeLeft}</text>
-          </svg>
-          <button onClick={() => commitResult(true, phase === 'guessing2')} style={{ width:'100%', padding:'16px', background:T.mint, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer', boxShadow:T.shadowLift }}>
-            Kitalálta! ✓ — +1 pont mindkettőnek
-          </button>
-        </div>
-      )}
-
-      {/* Rule reminder */}
-      {phase !== 'done' && (
-        <div style={{ background:T.surfaceMuted, borderRadius:14, padding:'12px 16px', width:'100%', display:'flex', alignItems:'center', gap:10, boxSizing:'border-box' }}>
-          <span style={{ fontSize:18 }}>💬</span>
-          <div style={{ fontFamily:T.font, fontSize:13, color:T.ink, fontWeight:600, lineHeight:1.4 }}>
-            {phase === 'guessing2' || phase === 'decide2'
-              ? <span><b>2. szó</b> — ha most sem sikerül: 2× büntetés!</span>
-              : <span>Mondj <b>egyetlen szót</b> — tilos mutogatni!</span>}
-          </div>
-        </div>
-      )}
-
-      {/* Start button */}
-      {phase === 'reveal' && (
-        <button onClick={startGuessing} style={{ width:'100%', padding:'16px', background:T.mint, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:T.shadowLift }}>
-          ▶ Kezdés — 15 mp
-        </button>
-      )}
-
-      {/* Decide phase — 3 buttons, word still hidden */}
-      {phase === 'decide' && (
-        <div style={{ display:'flex', flexDirection:'column', gap:8, width:'100%' }}>
-          <button onClick={() => commitResult(true, false)} style={{ width:'100%', padding:'16px', background:T.mint, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer', boxShadow:T.shadowLift }}>
-            Kitalálta! ✓ — +1 pont mindkettőnek
-          </button>
-          <div style={{ display:'flex', gap:8 }}>
-            <button onClick={goSecondChance} style={{ flex:1, padding:'14px 8px', background:'#F4A04A', color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:14, cursor:'pointer', boxShadow:T.shadowLift, display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-              <span>Második szó →</span><span style={{ fontSize:11, fontWeight:600, opacity:0.9 }}>2× büntetés kockázat</span>
-            </button>
-            <button onClick={() => commitResult(false, false)} style={{ flex:1, padding:'14px 8px', background:T.coral, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:14, cursor:'pointer', boxShadow:T.shadowLift, display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-              <span>Nem sikerült</span><span style={{ fontSize:11, fontWeight:600, opacity:0.9 }}>mindketten isznak 🍺</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Decide2 phase — 2 buttons, word still hidden */}
-      {phase === 'decide2' && (
-        <div style={{ display:'flex', gap:8, width:'100%' }}>
-          <button onClick={() => commitResult(true, true)} style={{ flex:1, padding:'16px 8px', background:T.mint, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer', boxShadow:T.shadowLift }}>
-            Kitalálta! ✓
-          </button>
-          <button onClick={() => commitResult(false, true)} style={{ flex:1, padding:'16px 8px', background:T.coral, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:14, cursor:'pointer', boxShadow:T.shadowLift, display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-            <span>Nem sikerült</span><span style={{ fontSize:11, fontWeight:600, opacity:0.9 }}>mindketten 2× isznak 🍺🍺</span>
-          </button>
-        </div>
-      )}
-
-    </div>
-  );
-}
-
-function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, onSetHideFooter }) {
-  const VALS = [3,4,5,6,7]; // összesen 25
-  const NR = 5;
-
-  const fresh = () => ({
-    phase: 'p1_plan', // p1_plan | handoff | p2_plan | reveal | done
-    p1Plan: Array.from({length:NR},()=>[]),
-    p2Plan: Array.from({length:NR},()=>[]),
-    p1Hand: [...VALS],
-    p2Hand: [...VALS],
-    sel: null,
-    rev: 0,
-  });
-
-  const [S, setS] = React.useState(fresh);
-  React.useEffect(() => { setS(fresh()); }, [gameIdx]);
+  React.useEffect(() => { setS(fresh(1, 0)); setDone(null); }, [gameIdx]);
   React.useEffect(() => {
     if (onSetHideFooter) onSetHideFooter(true);
     return () => { if (onSetHideFooter) onSetHideFooter(false); };
   }, []);
 
-  const isP1 = S.phase === 'p1_plan';
-  const hand = isP1 ? S.p1Hand : S.p2Hand;
-  const plan = isP1 ? S.p1Plan : S.p2Plan;
-  const hk = isP1 ? 'p1Hand' : 'p2Hand';
-  const pk = isP1 ? 'p1Plan' : 'p2Plan';
-  const curPlayer = isP1 ? challenger : opponent;
-  const pName = curPlayer?.name || (isP1 ? '1. játékos' : '2. játékos');
-  const pColor = curPlayer?.color || (isP1 ? T.mint : T.coral);
+  const curPlayer = players[S.turnIdx % players.length];
 
-  const assign = (ri) => {
-    if (S.sel === null) return;
-    const v = hand[S.sel];
-    setS(s => ({...s, [hk]: s[hk].filter((_,i)=>i!==s.sel), [pk]: s[pk].map((r,i)=>i===ri?[...r,v]:r), sel:null}));
-  };
-
-  const remove = (ri, ci) => {
-    const v = plan[ri][ci];
-    setS(s => ({...s, [hk]: [...s[hk],v].sort((a,b)=>a-b), [pk]: s[pk].map((r,i)=>i===ri?r.filter((_,j)=>j!==ci):r)}));
-  };
-
-  const allIn = hand.length === 0;
-
-  // Eredmény számítás
-  const results = React.useMemo(() => {
-    let pot=0, p1W=0, p2W=0;
-    const rounds = S.p1Plan.map((p1c, i) => {
-      const p1s = p1c.reduce((a,b)=>a+b,0);
-      const p2s = (S.p2Plan[i]||[]).reduce((a,b)=>a+b,0);
-      pot++;
-      let w=null, gained=0;
-      if (p1s>p2s) { w='p1'; gained=pot; p1W+=pot; pot=0; }
-      else if (p2s>p1s) { w='p2'; gained=pot; p2W+=pot; pot=0; }
-      return {p1s,p2s,w,gained,p1W,p2W,carry:pot};
-    });
-    return {rounds, p1W, p2W};
-  }, [S.p1Plan, S.p2Plan]);
-
-  // onResult hívás a 'done' fázisban
+  // ── Show fázis: szavak villogása ──────────────────────────────────────────
   React.useEffect(() => {
-    if (S.phase !== 'done') return;
-    const {p1W, p2W} = results;
-    if (onResult) {
-      if (p1W > p2W) onResult({correct: true});
-      else if (p2W > p1W) onResult({correct: false});
+    if (S.phase !== 'show') return;
+    if (S.showIdx < S.chain.length) {
+      const t = setTimeout(() => setS(s => ({...s, showIdx: s.showIdx + 1})), 1300);
+      return () => clearTimeout(t);
     }
-  }, [S.phase]);
+    // Minden szó megjelent → grid
+    const shuffled = [...S.chain].sort(() => Math.random() - 0.5);
+    const t = setTimeout(() => setS(s => ({...s, phase:'recall', gridWords:shuffled, tapped:[]})), 600);
+    return () => clearTimeout(t);
+  }, [S.phase, S.showIdx]);
 
-  // ── Tervezés fázis ──
-  if (S.phase === 'p1_plan' || S.phase === 'p2_plan') {
-    const totalLeft = hand.reduce((a,b)=>a+b,0);
+  // ── Recall fázis: koppintás kezelése ─────────────────────────────────────
+  const tapWord = (word, idx) => {
+    if (S.phase !== 'recall') return;
+    if (S.tapped.includes(idx)) return;
+    const expected = S.chain[S.tapped.length];
+    if (word !== expected) {
+      // HIBÁS
+      setS(s => ({...s, wrongIdx: idx}));
+      setTimeout(() => {
+        const pid = curPlayer?.id;
+        if (onAdvance) onAdvance({[pid]: 1});
+        setDone({ failName: curPlayer?.name, failColor: curPlayer?.color, failPid: pid });
+      }, 700);
+      return;
+    }
+    const newTapped = [...S.tapped, idx];
+    if (newTapped.length === S.chain.length) {
+      // HELYES — következő kör
+      setS(s => ({...s, phase:'correct', tapped: newTapped}));
+      const nextTurnIdx = S.turnIdx + 1;
+      const nextChainLen = S.chain.length + 1;
+      if (nextChainLen > allWords.length) {
+        // Elfogytak a szavak — mindenki nyert
+        setTimeout(() => setDone({ failName: null }), 1200);
+      } else {
+        setTimeout(() => setS(fresh(nextChainLen, nextTurnIdx)), 1200);
+      }
+    } else {
+      setS(s => ({...s, tapped: newTapped}));
+    }
+  };
+
+  // ── DONE képernyő ─────────────────────────────────────────────────────────
+  if (done !== null) {
+    const winMsg = !done.failName;
     return (
-      <div style={{display:'flex',flexDirection:'column',gap:10}}>
-        <div style={{textAlign:'center',padding:'4px 0 6px'}}>
-          <div style={{display:'inline-flex',alignItems:'center',gap:8,padding:'6px 18px',background:pColor+'22',borderRadius:999}}>
-            <div style={{width:10,height:10,borderRadius:'50%',background:pColor,flexShrink:0}} />
-            <span style={{fontFamily:T.font,fontWeight:800,fontSize:15,color:T.ink}}>{pName} tervez</span>
-          </div>
-          <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:4}}>
-            {totalLeft > 0 ? `Még ${totalLeft} pont kiosztható` : '✓ Minden lap kiosztva'}
-          </div>
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16,padding:'24px 0',textAlign:'center',animation:'popIn .4s cubic-bezier(.2,.9,.3,1.2)'}}>
+        <div style={{fontSize:52}}>{winMsg ? '🏆' : '😵'}</div>
+        <div style={{fontFamily:T.font,fontWeight:900,fontSize:22,color:winMsg?T.mint:T.coral}}>
+          {winMsg ? 'Bravo! Elfogytak a szavak!' : `${done.failName} elrontotta!`}
         </div>
-
-        {plan.map((cards, ri) => (
-          <div key={ri} onClick={() => assign(ri)} style={{
-            display:'flex', alignItems:'center', gap:10, padding:'10px 14px',
-            background: S.sel!==null ? pColor+'15' : T.surface,
-            borderRadius:14, border: S.sel!==null ? '2px dashed '+pColor : '2px solid transparent',
-            boxShadow: T.shadow, cursor: S.sel!==null ? 'pointer' : 'default',
-            transition:'background .12s, border .12s', minHeight:52,
-          }}>
-            <div style={{fontFamily:T.font,fontWeight:700,fontSize:12,color:T.inkSoft,minWidth:48}}>{ri+1}. kör</div>
-            <div style={{flex:1,display:'flex',flexWrap:'wrap',gap:6,alignItems:'center'}}>
-              {cards.map((v,ci) => (
-                <div key={ci} onClick={e=>{e.stopPropagation();remove(ri,ci);}} style={{
-                  width:36,height:36,borderRadius:10,background:pColor,color:'#fff',
-                  display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:16,
-                  cursor:'pointer',boxShadow:'0 2px 6px '+pColor+'44',flexShrink:0,
-                }}>{v}</div>
-              ))}
-              {cards.length===0 && <span style={{fontFamily:T.font,fontSize:12,color:T.inkMute}}>Koppints ide</span>}
+        {!winMsg && (
+          <div style={{display:'flex',flexDirection:'column',gap:8,width:'100%'}}>
+            <div style={{padding:'12px 16px',borderRadius:14,background:T.coral+'18',border:'1.5px solid '+T.coral+'44',fontFamily:T.font,fontWeight:700,fontSize:15,color:T.coral}}>
+              🍺 {done.failName} iszik egyet
             </div>
-            <div style={{fontFamily:T.font,fontWeight:800,fontSize:14,color:cards.length?T.ink:T.inkMute,minWidth:24,textAlign:'right'}}>
-              {cards.length ? cards.reduce((a,b)=>a+b,0) : ''}
+            <div style={{padding:'12px 16px',borderRadius:14,background:T.mint+'18',border:'1.5px solid '+T.mint+'44',fontFamily:T.font,fontWeight:700,fontSize:15,color:T.mint}}>
+              ⭐ A többiek pontot kapnak
             </div>
           </div>
-        ))}
-
-        <div style={{marginTop:6}}>
-          <div style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.inkMute,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:8}}>Kézben</div>
-          <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
-            {hand.map((v,i) => (
-              <div key={i} onClick={() => setS(s=>({...s,sel:s.sel===i?null:i}))} style={{
-                width:48,height:64,borderRadius:12,
-                background: S.sel===i ? pColor : T.surface,
-                color: S.sel===i ? '#fff' : T.ink,
-                border: S.sel===i ? '2px solid '+pColor : '2px solid '+T.inkMute+'30',
-                display:'flex',alignItems:'center',justifyContent:'center',
-                fontFamily:T.font,fontWeight:900,fontSize:22,
-                boxShadow: S.sel===i ? '0 4px 14px '+pColor+'55' : T.shadow,
-                cursor:'pointer',transition:'all .15s',
-                transform: S.sel===i ? 'translateY(-8px) scale(1.08)' : 'none',
-              }}>{v}</div>
-            ))}
-            {allIn && <div style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:T.mint,display:'flex',alignItems:'center'}}>✓ Minden lap kiosztva!</div>}
-          </div>
-        </div>
-
-        {allIn && (
-          <button onClick={() => setS(s=>({...s, phase: isP1?'handoff':'reveal', sel:null}))} style={{
-            marginTop:8,padding:'15px',borderRadius:16,border:'none',
-            background:pColor,color:'#fff',fontFamily:T.font,fontWeight:900,fontSize:17,
-            cursor:'pointer',boxShadow:'0 5px 16px -5px '+pColor+'88',
-          }}>Kész →</button>
         )}
+        <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,marginTop:4}}>
+          Elért szint: {S.chain.length} szó · {cat}
+        </div>
       </div>
     );
   }
 
-  // ── Átadás fázis ──
-  if (S.phase === 'handoff') {
-    const p2Name = opponent?.name || '2. játékos';
-    const p2Color = opponent?.color || T.coral;
+  // ── Show fázis UI ─────────────────────────────────────────────────────────
+  if (S.phase === 'show' || S.phase === 'correct') {
+    const currentWord = S.phase === 'show' && S.showIdx < S.chain.length ? S.chain[S.showIdx] : null;
+    const isCorrect = S.phase === 'correct';
     return (
-      <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:20,padding:'32px 20px',minHeight:300,textAlign:'center'}}>
-        <div style={{fontSize:52}}>🔄</div>
-        <div style={{fontFamily:T.font,fontWeight:900,fontSize:22,color:T.ink}}>Add át a telefont!</div>
-        <div style={{fontFamily:T.font,fontSize:15,color:T.inkSoft,maxWidth:260,lineHeight:1.6}}>
-          <span style={{fontWeight:800,color:p2Color}}>{p2Name}</span> most tervezi meg a lapjait.<br/>
-          <span style={{color:challenger?.color||T.mint,fontWeight:700}}>{challenger?.name||'1. játékos'}</span> ne nézze!
-        </div>
-        <button onClick={() => setS(s=>({...s,phase:'p2_plan'}))} style={{
-          padding:'15px 40px',borderRadius:16,border:'none',
-          background:p2Color,color:'#fff',fontFamily:T.font,fontWeight:900,fontSize:16,
-          cursor:'pointer',boxShadow:'0 5px 16px -5px '+p2Color+'88',
-        }}>{p2Name} készen áll →</button>
-      </div>
-    );
-  }
-
-  // ── Felfedés fázis ──
-  if (S.phase === 'reveal') {
-    const {rounds} = results;
-    const p1Name = challenger?.name || '1. játékos';
-    const p2Name = opponent?.name || '2. játékos';
-    const p1Color = challenger?.color || T.mint;
-    const p2Color = opponent?.color || T.coral;
-    const cur = rounds[S.rev] || rounds[rounds.length-1];
-    return (
-      <div style={{display:'flex',flexDirection:'column',gap:12}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:28,padding:'4px 0 8px'}}>
-          <div style={{textAlign:'center'}}>
-            <div style={{fontFamily:T.font,fontWeight:900,fontSize:30,color:p1Color,fontVariantNumeric:'tabular-nums'}}>{cur.p1W}</div>
-            <div style={{fontFamily:T.font,fontSize:11,color:T.inkSoft}}>{p1Name}</div>
+      <div style={{display:'flex',flexDirection:'column',gap:14}}>
+        {/* Fejléc */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'4px 0'}}>
+          <div style={{display:'inline-flex',alignItems:'center',gap:8,padding:'5px 14px',background:curPlayer?.color+'22'||T.mint+'22',borderRadius:999}}>
+            <div style={{width:8,height:8,borderRadius:'50%',background:curPlayer?.color||T.mint}} />
+            <span style={{fontFamily:T.font,fontWeight:800,fontSize:14,color:T.ink}}>{curPlayer?.name}</span>
           </div>
-          <div style={{fontFamily:T.font,fontSize:16,color:T.inkMute,fontWeight:700}}>KÖR</div>
-          <div style={{textAlign:'center'}}>
-            <div style={{fontFamily:T.font,fontWeight:900,fontSize:30,color:p2Color,fontVariantNumeric:'tabular-nums'}}>{cur.p2W}</div>
-            <div style={{fontFamily:T.font,fontSize:11,color:T.inkSoft}}>{p2Name}</div>
-          </div>
+          <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft}}>{cat}</div>
         </div>
 
-        <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {rounds.slice(0,S.rev+1).map((r,i) => {
-            const win1=r.w==='p1', win2=r.w==='p2', tie=!r.w;
-            return (
-              <div key={i} style={{
-                display:'flex',alignItems:'center',gap:8,padding:'10px 12px',
-                background: win1?p1Color+'18':win2?p2Color+'18':T.surfaceMuted,
-                borderRadius:14, border:'1.5px solid '+(win1?p1Color+'44':win2?p2Color+'44':T.inkMute+'20'),
-                animation: i===S.rev ? 'popIn .35s cubic-bezier(.2,.9,.3,1.2)' : 'none',
-              }}>
-                <div style={{fontFamily:T.font,fontWeight:700,fontSize:11,color:T.inkSoft,minWidth:38}}>{i+1}. kör</div>
-                <div style={{flex:1,display:'flex',alignItems:'center',gap:4,flexWrap:'wrap'}}>
-                  {(S.p1Plan[i]||[]).map((v,j)=>(
-                    <span key={j} style={{padding:'2px 7px',background:p1Color,color:'#fff',borderRadius:7,fontFamily:T.font,fontWeight:800,fontSize:13}}>{v}</span>
-                  ))}
-                  <span style={{fontFamily:T.font,fontSize:11,color:p1Color,fontWeight:700}}>({r.p1s})</span>
-                </div>
-                <div style={{fontSize:18,flexShrink:0}}>{win1?'🏆':win2?'🏆':tie&&r.carry>1?'🎯':'🤝'}</div>
-                <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'flex-end',gap:4,flexWrap:'wrap-reverse'}}>
-                  <span style={{fontFamily:T.font,fontSize:11,color:p2Color,fontWeight:700}}>({r.p2s})</span>
-                  {(S.p2Plan[i]||[]).map((v,j)=>(
-                    <span key={j} style={{padding:'2px 7px',background:p2Color,color:'#fff',borderRadius:7,fontFamily:T.font,fontWeight:800,fontSize:13}}>{v}</span>
-                  ))}
-                </div>
+        {/* Szó megjelenítő */}
+        <div style={{
+          minHeight:120, borderRadius:20, background:T.surface, boxShadow:T.shadow,
+          display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+          padding:'24px', gap:12,
+        }}>
+          {isCorrect ? (
+            <div style={{textAlign:'center',animation:'popIn .3s cubic-bezier(.2,.9,.3,1.2)'}}>
+              <div style={{fontSize:36}}>✅</div>
+              <div style={{fontFamily:T.font,fontWeight:900,fontSize:18,color:T.mint,marginTop:8}}>Helyes! Következő…</div>
+            </div>
+          ) : currentWord ? (
+            <div key={S.showIdx} style={{textAlign:'center',animation:'popIn .25s cubic-bezier(.2,.9,.3,1.1)'}}>
+              <div style={{fontFamily:T.font,fontWeight:900,fontSize:32,color:T.ink,letterSpacing:'-0.02em'}}>{currentWord}</div>
+              <div style={{display:'flex',gap:6,marginTop:14,justifyContent:'center'}}>
+                {S.chain.map((_,i) => (
+                  <div key={i} style={{width:8,height:8,borderRadius:'50%',background:i<=S.showIdx?T.mint:T.surfaceMuted,transition:'background .2s'}} />
+                ))}
               </div>
+            </div>
+          ) : (
+            <div style={{textAlign:'center'}}>
+              <div style={{fontFamily:T.font,fontWeight:700,fontSize:16,color:T.inkSoft}}>Felkészülés…</div>
+            </div>
+          )}
+        </div>
+
+        {/* Lánc előnézet */}
+        <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,textAlign:'center'}}>
+          {S.chain.length}. szint — {S.chain.length} szót kell visszamondani
+        </div>
+      </div>
+    );
+  }
+
+  // ── Recall fázis UI ───────────────────────────────────────────────────────
+  if (S.phase === 'recall') {
+    const cols = S.gridWords.length <= 4 ? 2 : S.gridWords.length <= 9 ? 3 : 4;
+    return (
+      <div style={{display:'flex',flexDirection:'column',gap:14}}>
+        {/* Fejléc */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'4px 0'}}>
+          <div style={{display:'inline-flex',alignItems:'center',gap:8,padding:'5px 14px',background:curPlayer?.color+'22'||T.mint+'22',borderRadius:999}}>
+            <div style={{width:8,height:8,borderRadius:'50%',background:curPlayer?.color||T.mint}} />
+            <span style={{fontFamily:T.font,fontWeight:800,fontSize:14,color:T.ink}}>{curPlayer?.name} — sorrendben!</span>
+          </div>
+          <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft}}>{S.tapped.length}/{S.chain.length}</div>
+        </div>
+
+        {/* Haladás */}
+        <div style={{height:4,borderRadius:4,background:T.surfaceMuted,overflow:'hidden'}}>
+          <div style={{height:'100%',borderRadius:4,background:T.mint,width:(S.tapped.length/S.chain.length*100)+'%',transition:'width .2s'}} />
+        </div>
+
+        {/* Grid */}
+        <div style={{display:'grid',gridTemplateColumns:`repeat(${cols},1fr)`,gap:10}}>
+          {S.gridWords.map((word, idx) => {
+            const tappedOrder = S.tapped.indexOf(idx);
+            const isTapped = tappedOrder !== -1;
+            const isWrong = S.wrongIdx === idx;
+            return (
+              <button key={idx} onClick={() => tapWord(word, idx)} disabled={isTapped} style={{
+                padding:'14px 8px', borderRadius:14, border:'none', cursor: isTapped?'default':'pointer',
+                background: isWrong ? T.coral+'33' : isTapped ? T.mint+'22' : T.surface,
+                boxShadow: isTapped||isWrong ? 'none' : T.shadow,
+                fontFamily:T.font, fontWeight:800, fontSize:15, color: isTapped?T.mint:isWrong?T.coral:T.ink,
+                transition:'all .15s',
+                transform: isWrong ? 'scale(0.95)' : 'none',
+                position:'relative',
+                animation: isWrong ? 'shakeDrink .4s ease' : 'none',
+              }}>
+                {isTapped && (
+                  <div style={{position:'absolute',top:4,right:6,fontFamily:T.font,fontSize:10,fontWeight:900,color:T.mint}}>
+                    {tappedOrder+1}
+                  </div>
+                )}
+                {word}
+              </button>
             );
           })}
         </div>
 
-        {cur.carry > 0 && !cur.w && S.rev < NR-1 && (
-          <div style={{textAlign:'center',fontFamily:T.font,fontSize:13,color:T.inkSoft,padding:'2px 0'}}>
-            🎯 Döntetlen — {cur.carry} kör tétje vándorol tovább
-          </div>
-        )}
-
-        {S.rev < NR-1 ? (
-          <button onClick={()=>setS(s=>({...s,rev:s.rev+1}))} style={{
-            padding:'14px',borderRadius:16,border:'none',background:T.surface,color:T.ink,
-            fontFamily:T.font,fontWeight:800,fontSize:15,cursor:'pointer',boxShadow:T.shadow,marginTop:4,
-          }}>Következő kör →</button>
-        ) : (
-          <button onClick={()=>setS(s=>({...s,phase:'done'}))} style={{
-            padding:'14px',borderRadius:16,border:'none',background:T.mint,color:'#fff',
-            fontFamily:T.font,fontWeight:900,fontSize:15,cursor:'pointer',
-            boxShadow:'0 4px 14px rgba(79,194,160,0.5)',marginTop:4,
-          }}>Eredmény →</button>
-        )}
-      </div>
-    );
-  }
-
-  // ── Eredmény fázis ──
-  if (S.phase === 'done') {
-    const {p1W, p2W} = results;
-    const p1Name = challenger?.name || '1. játékos';
-    const p2Name = opponent?.name || '2. játékos';
-    const p1Color = challenger?.color || T.mint;
-    const p2Color = opponent?.color || T.coral;
-    const winName = p1W>p2W ? p1Name : p2W>p1W ? p2Name : null;
-    const winColor = p1W>p2W ? p1Color : p2W>p1W ? p2Color : T.inkSoft;
-    return (
-      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16,padding:'20px 0',textAlign:'center',animation:'popIn .4s cubic-bezier(.2,.9,.3,1.2)'}}>
-        <div style={{fontSize:52}}>{winName?'🏆':'🤝'}</div>
-        <div style={{fontFamily:T.font,fontWeight:900,fontSize:24,color:winColor}}>
-          {winName ? winName+' nyerte!' : 'Döntetlen!'}
-        </div>
-        <div style={{display:'flex',gap:36,marginTop:4}}>
-          <div style={{textAlign:'center'}}>
-            <div style={{fontFamily:T.font,fontWeight:900,fontSize:36,color:p1Color}}>{p1W}</div>
-            <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:2}}>{p1Name}</div>
-          </div>
-          <div style={{fontFamily:T.font,fontSize:28,color:T.inkMute,display:'flex',alignItems:'center'}}>–</div>
-          <div style={{textAlign:'center'}}>
-            <div style={{fontFamily:T.font,fontWeight:900,fontSize:36,color:p2Color}}>{p2W}</div>
-            <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:2}}>{p2Name}</div>
-          </div>
-        </div>
-        <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,marginTop:4}}>
-          {winName ? 'A vesztes iszik 🍺' : 'Mindenki iszik 🍻'}
+        <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,textAlign:'center'}}>
+          Koppints a szavakra sorrendben
         </div>
       </div>
     );
@@ -46437,30 +45954,7 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
   return null;
 }
 
-function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, roomCode, gameMeta, challenger, opponent, onSetHideFooter, onSetBuszSwitch, onCommit }) {
-  if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} onCommit={onCommit} />;
-  if (gameId === 'ritmus')   return <RitmusGame key={gameIdx} gameIdx={gameIdx} players={players} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'mitval')   return <MitValasztanalGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
-  if (gameId === 'meduza')   return <MeduzaGame key={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'farkasos') return <FarkasosGame key={gameIdx} players={players||[]} gameIdx={gameIdx} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'mutasd')   return <MutasdGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'emojikv')  return <EmojiKvizGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'tabu')     return <TabuGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
-  if (gameId === 'matek')    return <MatekGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
-  if (gameId === 'reakcio')  return <ReakcioGame key={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'szamsor')  return <SzamsorGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx + '_' + (gameMeta?.beerpongConfig?.tournamentType||'se')} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} initialBpState={gameMeta?._resumeBpState || null} onSetHideFooter={onSetHideFooter} />;
-  if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onUnready={onUnready} onResult={onResult} />;
-  if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={gameId==='busz'&&typeof roomCode!=='undefined'?roomCode:undefined} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onSetBuszSwitch={onSetBuszSwitch} />;
-  if (gameId === 'ovfj') return <OVFJGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={typeof roomCode!=='undefined'?roomCode:undefined} gameMeta={gameMeta} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} gameMeta={gameMeta} roomCode={roomCode} />;
-  if (gameId === 'szolánc') return <SzolancGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'szolánc') return <SzolancGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} />;
   if (gameId === 'idopárbaj') return <IdoparbajGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'csakegyszó') return <CsakEgySzoGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'uveg') return <UvegGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
