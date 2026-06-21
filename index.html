@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.430';
+const APP_VERSION = 'v9.431';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -47704,7 +47704,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
             {/* Sticky tab bar */}
             <div style={{ position:'sticky', top:0, zIndex:2, background:T.surface, padding:'0 14px 10px' }}>
               <div style={{ display:'flex', background:T.bgSoft, borderRadius:14, padding:5, gap:4 }}>
-                {[['állás',t('score')],['sorrend',t('order')],['vezérlés',t('controls')]].map(([tab,label]) => (
+                {[['állás',t('score')],['szerkesztés','Szerkesztés'],['vezérlés',t('controls')]].map(([tab,label]) => (
                   <button key={tab} onClick={() => setMenuTab(tab)} style={{
                     flex:1, padding:'11px 0', border:'none', borderRadius:10, cursor:'pointer',
                     fontFamily:T.font, fontWeight:800, fontSize:14,
@@ -47728,9 +47728,9 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               </div>
 
               {/* SORREND */}
-              {menuTab==='sorrend' && (
+              {menuTab==='szerkesztés' && (
                 <div style={{ position:'absolute', top:0, left:14, right:14, bottom:0, overflowY:'auto' }}>
-                  <SorrendTab players={players} setPlayers={setPlayers} turn={turn} setTurn={setTurn} pendingCommit={pendingCommit} setPendingCommit={setPendingCommit} />
+                  <SzerkesztesTab players={players} setPlayers={setPlayers} turn={turn} setTurn={setTurn} pendingCommit={pendingCommit} setPendingCommit={setPendingCommit} />
                 </div>
               )}
 
@@ -52046,9 +52046,10 @@ function OnboardingOverlay({ onDone }) {
   );
 }
 
-function SorrendTab({ players, setPlayers, turn, setTurn, pendingCommit, setPendingCommit }) {
+function SzerkesztesTab({ players, setPlayers, turn, setTurn, pendingCommit, setPendingCommit }) {
   const [localOrder, setLocalOrder] = React.useState(players);
   const [saved, setSaved] = React.useState(false);
+  const [editNames, setEditNames] = React.useState({});
 
   // Only sync from parent if the SET of player IDs changed (add/remove), never on reorder
   const prevIdSetRef = React.useRef(new Set(players.map(p=>p.id)));
@@ -52106,7 +52107,26 @@ function SorrendTab({ players, setPlayers, turn, setTurn, pendingCommit, setPend
         <div key={p.id} style={{ background:T.surface, borderRadius:14, boxShadow:T.shadow, padding:'10px 14px', display:'flex', alignItems:'center', gap:12, position:'relative', overflow:'hidden' }}>
           <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.inkSoft, minWidth:22 }}>{i+1}</div>
           <div style={{ width:36, height:36, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', color:'#fff', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-          <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{p.name}</div>
+          {p.profileId ? (
+            <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink, display:'flex', alignItems:'center', gap:6 }}>
+              {p.name}
+              <span style={{ fontSize:10, background:T.bgSoft, borderRadius:6, padding:'2px 6px', color:T.inkMute, fontWeight:700 }}>profil</span>
+            </div>
+          ) : (
+            <input
+              value={editNames[p.id] ?? p.name}
+              onChange={e => setEditNames(prev => ({...prev, [p.id]: e.target.value}))}
+              onBlur={e => {
+                const newName = (editNames[p.id] ?? p.name).trim();
+                if (newName && newName !== p.name) {
+                  applyOrder(localOrder.map(x => x.id===p.id ? {...x, name: newName} : x));
+                }
+              }}
+              style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink,
+                border:'none', borderBottom:'2px solid '+T.mint, background:'transparent',
+                outline:'none', padding:'2px 0', minWidth:0 }}
+            />
+          )}
           <div style={{ display:'flex', gap:4 }}>
             <button
               onPointerDown={e => { e.stopPropagation(); moveUp(i); }}
