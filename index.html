@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.420';
+const APP_VERSION = 'v9.421';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -46582,6 +46582,7 @@ function QuizGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHide
   const [chosen, setChosen] = React.useState(null); // index of chosen answer
   const [correct, setCorrect] = React.useState(false);
   const [distributeTarget, setDistributeTarget] = React.useState(null);
+  const [giftPool, setGiftPool] = React.useState(null); // {pool, assigned:{}}
 
   const currentQ = allQs[qIdx % allQs.length];
 
@@ -46592,7 +46593,7 @@ function QuizGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHide
     setChosen(null); setCorrect(false); setPhase('question');
   }, [qIdx, gameIdx]);
 
-  React.useEffect(() => { setStreak(0); setQIdx(0); }, [gameIdx]);
+  React.useEffect(() => { setStreak(0); setQIdx(0); setGiftPool(null); }, [gameIdx]);
 
   const pName = challenger?.name || 'Játékos';
   const pColor = challenger?.color || T.mint;
@@ -46624,6 +46625,32 @@ function QuizGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHide
 
   const pushLuck = () => {
     setQIdx(i => i + 1);
+  };
+
+  const openGiftPool = () => {
+    const others = players.filter(p => p.id !== challenger?.id);
+    const assigned = {};
+    others.forEach(p => { assigned[p.id] = 0; });
+    setGiftPool({ pool: kortyok, assigned });
+  };
+
+  const giveOneDrink = (pid) => {
+    setGiftPool(g => g.pool <= 0 ? g : { pool: g.pool-1, assigned: {...g.assigned, [pid]: (g.assigned[pid]||0)+1} });
+  };
+  const takeOneDrink = (pid) => {
+    setGiftPool(g => (g.assigned[pid]||0) <= 0 ? g : { pool: g.pool+1, assigned: {...g.assigned, [pid]: g.assigned[pid]-1} });
+  };
+  const confirmGift = () => {
+    if (!giftPool) return;
+    const drinkMap = {};
+    Object.entries(giftPool.assigned).forEach(([pid,n]) => { if(n>0) drinkMap[pid]=n; });
+    if (onAdvance) onAdvance(drinkMap);
+    const names = Object.entries(giftPool.assigned)
+      .filter(([,n])=>n>0)
+      .map(([pid,n]) => { const p=players.find(x=>x.id===pid); return `${p?.name||'?'} iszik ${n} kortyt`; });
+    if (onResult) onResult({ correct: false, playerName: null, drinks: 0, subtitle: names.join(' · ') || 'Kiosztva!' });
+    setGiftPool(null);
+    setPhase('done');
   };
 
   const distribute = (pid) => {
@@ -46729,32 +46756,81 @@ function QuizGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHide
   // ── Korty szétosztás ──
   if (phase === 'distribute') {
     const others = players.filter(p => p.id !== challenger?.id);
+    const gp = giftPool || { pool: kortyok, assigned: {} };
+    const remaining = gp.pool;
     return (
-      <div style={{display:'flex',flexDirection:'column',gap:14}}>
-        <div style={{textAlign:'center'}}>
-          <div style={{fontSize:36}}>🍺</div>
-          <div style={{fontFamily:T.font,fontWeight:900,fontSize:18,color:T.ink,marginTop:8}}>
-            Kinek adod a {kortyok} kortyot?
+      <div style={{display:'flex',flexDirection:'column',gap:12}}>
+        {/* Fejléc */}
+        <div style={{background:`linear-gradient(135deg,${pColor}22,${pColor}08)`,borderRadius:16,padding:'14px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',border:`1px solid ${pColor}25`}}>
+          <div>
+            <div style={{fontFamily:T.font,fontWeight:900,fontSize:28,color:pColor,lineHeight:1}}>
+              {remaining > 0 ? `${remaining} korty` : '✓ Kész!'}
+            </div>
+            <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:4}}>
+              {remaining > 0 ? `${challenger?.name} kiosztja — koppints a névre (+1)` : 'Minden korty ki van osztva'}
+            </div>
           </div>
-          <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,marginTop:4}}>
-            Választhatsz 1 játékost
-          </div>
+          <div style={{fontSize:32}}>🍺</div>
         </div>
+
+        {/* Játékos lista */}
         <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {others.map(p => (
-            <button key={p.id} onClick={()=>distribute(p.id)} style={{
-              display:'flex', alignItems:'center', gap:12, padding:'14px 16px',
-              borderRadius:16, border:'none', background:T.surface, cursor:'pointer',
-              boxShadow:T.shadow, fontFamily:T.font, fontWeight:700, fontSize:15, color:T.ink,
-            }}>
-              <div style={{width:36,height:36,borderRadius:'50%',background:p.color,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:15,color:'#fff',flexShrink:0}}>
-                {(p.name||'?').charAt(0).toUpperCase()}
+          {others.map(p => {
+            const assigned = (giftPool?.assigned[p.id]||0);
+            const hasAny = assigned > 0;
+            return (
+              <div key={p.id} style={{
+                display:'flex',alignItems:'center',gap:10,padding:'12px 14px',
+                background: hasAny ? p.color+'15' : T.surface,
+                border:`1.5px solid ${hasAny ? p.color+'60' : 'transparent'}`,
+                borderRadius:14,transition:'all .15s',
+              }}>
+                {/* Avatar + név — koppintásra +1 */}
+                <div onClick={()=>{ if(!giftPool) openGiftPool(); giveOneDrink(p.id); }}
+                  style={{display:'flex',alignItems:'center',gap:10,flex:1,cursor:remaining>0||!giftPool?'pointer':'default',minWidth:0}}>
+                  <div style={{width:36,height:36,borderRadius:'50%',background:p.color,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:15,color:'#fff',flexShrink:0}}>
+                    {(p.name||'?').charAt(0).toUpperCase()}
+                  </div>
+                  <span style={{fontFamily:T.font,fontWeight:700,fontSize:15,color:T.ink,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</span>
+                  {(remaining>0||(giftPool&&remaining>0)) && <span style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:pColor,flexShrink:0}}>+1</span>}
+                </div>
+                {/* Assigned counter */}
+                {hasAny && (
+                  <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+                    <button onClick={()=>takeOneDrink(p.id)} style={{
+                      width:28,height:28,borderRadius:'50%',background:T.coralSoft||T.coral+'22',
+                      border:`1.5px solid ${T.coral}44`,color:T.coral,
+                      fontFamily:T.font,fontWeight:900,fontSize:16,cursor:'pointer',lineHeight:1,
+                    }}>−</button>
+                    <span style={{fontFamily:T.font,fontWeight:900,fontSize:16,color:p.color,minWidth:20,textAlign:'center'}}>{assigned}</span>
+                  </div>
+                )}
               </div>
-              {p.name}
-              <div style={{marginLeft:'auto',fontFamily:T.font,fontSize:13,color:T.coral,fontWeight:700}}>→ {kortyok} korty 🍺</div>
-            </button>
-          ))}
+            );
+          })}
         </div>
+
+        {/* Megerősítés gomb */}
+        {giftPool && (
+          <button onClick={confirmGift} style={{
+            padding:'15px',borderRadius:14,border:'none',
+            background: giftPool.pool===0 ? pColor : T.surface,
+            color: giftPool.pool===0 ? '#fff' : T.inkSoft,
+            fontFamily:T.font,fontWeight:900,fontSize:16,cursor:'pointer',
+            boxShadow: giftPool.pool===0 ? `0 5px 16px -5px ${pColor}88` : T.shadow,
+            transition:'all .2s',
+          }}>
+            {giftPool.pool===0 ? '✓ Kiosztás megerősítése' : `Még ${giftPool.pool} korty marad`}
+          </button>
+        )}
+        {!giftPool && (
+          <button onClick={openGiftPool} style={{
+            padding:'15px',borderRadius:14,border:'none',
+            background:pColor,color:'#fff',
+            fontFamily:T.font,fontWeight:900,fontSize:16,cursor:'pointer',
+            boxShadow:`0 5px 16px -5px ${pColor}88`,
+          }}>Kiosztás indítása →</button>
+        )}
       </div>
     );
   }
