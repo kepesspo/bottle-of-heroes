@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.445';
+const APP_VERSION = 'v9.446';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -47372,6 +47372,21 @@ function QuizGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHide
 
   React.useEffect(() => { setStreak(0); setQIdx(0); setGiftPool(null); setGifts({}); setDistributeTarget(null); }, [gameIdx]);
 
+  // Auto-confirm distribute when all kortyok assigned (top-level — no conditional hooks)
+  const _distributeTotal = Object.values(gifts).reduce((s,v)=>s+v,0);
+  const _distributeRemaining = kortyok - _distributeTotal;
+  React.useEffect(() => {
+    if (phase !== 'distribute') return;
+    if (_distributeRemaining !== 0) return;
+    const drinkMap = {};
+    Object.entries(gifts).forEach(([pid,n]) => { if(n>0) drinkMap[pid]=n; });
+    const t = setTimeout(() => {
+      if (onAdvance) onAdvance(drinkMap);
+      setPhase('done');
+    }, 800);
+    return () => clearTimeout(t);
+  }, [phase, _distributeRemaining]);
+
   const pName = challenger?.name || 'Játékos';
   const pColor = challenger?.color || T.mint;
   const kortyok = streak; // akkumulált kortyok (= streak - ha már 1+ helyes van)
@@ -47560,13 +47575,7 @@ function QuizGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHide
       if (onAdvance) onAdvance(drinkMap);
       setPhase('done');
     };
-    // auto-confirm when all drinks distributed
-    React.useEffect(() => {
-      if (phase !== 'distribute') return;
-      if (remaining !== 0) return;
-      const t = setTimeout(confirmGifts, 800);
-      return () => clearTimeout(t);
-    }, [remaining, phase]);
+    // auto-confirm: moved to top-level useEffect
     return (
       <div style={{display:'flex',flexDirection:'column',gap:8,overflowY:'auto'}}>
         {/* Fejléc */}
