@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.434';
+const APP_VERSION = 'v9.435';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -46455,7 +46455,7 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
 }
 
 function UtvesztoGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHideFooter }) {
-  const GRID = 7;
+  const GRID = 5;
   const START_IDX = 0;
   const END_IDX = GRID * GRID - 1;
 
@@ -46485,15 +46485,36 @@ function UtvesztoGame({ gameIdx, challenger, players, onAdvance, onResult, onSet
 
   React.useEffect(() => { return () => { if (animRef.current) clearInterval(animRef.current); }; }, []);
 
+  // Auto-transition to done after reveal2 animation finishes
+  React.useEffect(() => {
+    if (phase !== 'reveal2') return;
+    if (!result2?.seq) return;
+    if (animStep < result2.seq.length) return;
+    const t = setTimeout(() => {
+      const r1 = result1 || {steps:999, korty:0};
+      const r2_ = result2 || {steps:999, korty:0};
+      const winnerIsP1 = r1.steps <= r2_.steps;
+      const loserKorty = winnerIsP1 ? (r2_.korty + 2) : (r1.korty + 2);
+      const loserId = winnerIsP1 ? p2?.id : p1?.id;
+      if (onAdvance && loserId) onAdvance({[loserId]: loserKorty});
+      const winnerName = winnerIsP1 ? (p1?.name||'P1') : (p2?.name||'P2');
+      const loserName = winnerIsP1 ? (p2?.name||'P2') : (p1?.name||'P1');
+      if (onResult) onResult({ correct: winnerIsP1, playerName: winnerName, drinks: loserKorty, subtitle: `${loserName} iszik ${loserKorty} kortyot!` });
+      setPhase('done');
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [phase, animStep, result1, result2]);
+
   const cellRC = idx => [Math.floor(idx/GRID), idx%GRID];
   const adjacent = (a, b) => { const [ar,ac]=cellRC(a), [br,bc]=cellRC(b); return Math.abs(ar-br)+Math.abs(ac-bc)===1; };
 
   // Count placed traps on a board
   const trapCount = (board) => TRAP_TYPES.map(t => board.filter(c => c===t.id).length);
 
-  // Setup: place trap
+  // Setup: place trap — START és közvetlen szomszédai védett zóna
+  const startNeighbors = [1, GRID]; // jobb + le START-tól (idx 0)
   const placeOrRemove = (board, setBoard, idx) => {
-    if (idx === START_IDX || idx === END_IDX) return;
+    if (idx === START_IDX || idx === END_IDX || startNeighbors.includes(idx)) return;
     if (!selTrap) return;
     if (board[idx] === selTrap) {
       const nb = [...board]; nb[idx] = null; setBoard(nb); return;
@@ -46632,15 +46653,18 @@ function UtvesztoGame({ gameIdx, challenger, players, onAdvance, onResult, onSet
         <div style={{textAlign:'center',fontSize:36,marginBottom:8}}>🗺️</div>
         <div style={{fontFamily:T.font,fontWeight:900,fontSize:22,color:YELLOW,textAlign:'center',marginBottom:4}}>ÚTVESZTŐ</div>
         <div style={{fontFamily:T.font,fontSize:13,color:'rgba(255,255,255,0.65)',textAlign:'center',marginBottom:16}}>2 fős csapda-pálya verseny</div>
-        <div style={{background:'rgba(255,255,255,0.08)',borderRadius:14,padding:'14px 16px',marginBottom:12}}>
+        <div style={{background:'rgba(255,255,255,0.08)',borderRadius:14,padding:'14px 16px',marginBottom:10}}>
           <div style={{fontFamily:T.font,fontWeight:700,fontSize:13,color:'rgba(255,255,255,0.9)',lineHeight:1.6}}>
-            {'1️⃣ Mindkét játékos elhelyez 5 csapdát a saját 7×7-es pályáján\n2️⃣ Az ellenfél vakon megrajzolja az útvonalát\n3️⃣ Animáció — csapdák feltárulnak\n4️⃣ Aki kevesebb késéssel ér célba, nyer! 🏆'}
+            {'1️⃣ Mindkét játékos elhelyez 5 csapdát a saját 5×5-ös pályáján\n2️⃣ Az ellenfél vakon megrajzolja az útvonalát\n3️⃣ Animáció — csapdák feltárulnak\n4️⃣ Aki kevesebb késéssel ér célba, nyer! 🏆'}
           </div>
         </div>
-        <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
+        <div style={{background:'rgba(255,255,255,0.06)',borderRadius:12,padding:'10px 14px',marginBottom:12}}>
+          <div style={{fontFamily:T.font,fontSize:11,fontWeight:900,color:'rgba(255,255,255,0.4)',letterSpacing:1,marginBottom:8}}>CSAPDÁK</div>
           {TRAP_TYPES.map(t => (
-            <div key={t.id} style={{background:'rgba(255,255,255,0.1)',borderRadius:10,padding:'6px 10px',fontFamily:T.font,fontSize:12,color:'rgba(255,255,255,0.8)'}}>
-              {t.emoji} {t.name}
+            <div key={t.id} style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+              <span style={{fontSize:16,flexShrink:0}}>{t.emoji}</span>
+              <span style={{fontFamily:T.font,fontWeight:700,fontSize:12,color:'rgba(255,255,255,0.85)',minWidth:80}}>{t.name}</span>
+              <span style={{fontFamily:T.font,fontSize:11,color:'rgba(255,255,255,0.45)'}}>{t.desc}</span>
             </div>
           ))}
         </div>
@@ -46683,6 +46707,9 @@ function UtvesztoGame({ gameIdx, challenger, players, onAdvance, onResult, onSet
             );
           })}
         </div>
+        {selTrap && <div style={{fontFamily:T.font,fontSize:11,color:'rgba(255,255,255,0.5)',textAlign:'center',marginTop:4}}>
+          {TRAP_TYPES.find(t=>t.id===selTrap)?.emoji} {TRAP_TYPES.find(t=>t.id===selTrap)?.desc} — koppints a pályára!
+        </div>}
         <button onClick={()=>{setSelTrap(null);setPhase('setup2');}} disabled={placed===0} style={{
           marginTop:10,padding:'13px',borderRadius:14,border:'none',
           background:placed>0?YELLOW:'rgba(255,255,255,0.1)',color:placed>0?'#1a0a3e':'rgba(255,255,255,0.3)',
@@ -46716,6 +46743,9 @@ function UtvesztoGame({ gameIdx, challenger, players, onAdvance, onResult, onSet
             );
           })}
         </div>
+        {selTrap && <div style={{fontFamily:T.font,fontSize:11,color:'rgba(255,255,255,0.5)',textAlign:'center',marginTop:4}}>
+          {TRAP_TYPES.find(t=>t.id===selTrap)?.emoji} {TRAP_TYPES.find(t=>t.id===selTrap)?.desc} — koppints a pályára!
+        </div>}
         <button onClick={()=>{setSelTrap(null);setPhase('path1');}} disabled={placed===0} style={{
           marginTop:10,padding:'13px',borderRadius:14,border:'none',
           background:placed>0?YELLOW:'rgba(255,255,255,0.1)',color:placed>0?'#1a0a3e':'rgba(255,255,255,0.3)',
@@ -46840,10 +46870,9 @@ function UtvesztoGame({ gameIdx, challenger, players, onAdvance, onResult, onSet
           </div>
         )}
         {animDoneHere && (
-          <button onClick={goToResult} style={{
-            marginTop:10,padding:'13px',borderRadius:14,border:'none',background:YELLOW,color:'#1a0a3e',
-            fontFamily:T.font,fontWeight:900,fontSize:15,cursor:'pointer',
-          }}>🏆 Eredmény!</button>
+          <div style={{fontFamily:T.font,fontSize:12,color:'rgba(255,255,255,0.4)',textAlign:'center',marginTop:8}}>
+            Az eredmény kiszámítása...
+          </div>
         )}
       </div>
     );
