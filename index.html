@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.424';
+const APP_VERSION = 'v9.425';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -47350,7 +47350,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       </div>
 
       {/* ── Scrollable content ── */}
-      <div style={{ flex:'1 1 0', minHeight:0, overflowY:'scroll', WebkitOverflowScrolling:'touch', background:'transparent', overflow:'hidden' }}>
+      <div style={{ flex:'1 1 0', minHeight:0, overflowY: currentGameId==='beerpong' ? 'auto' : 'scroll', WebkitOverflowScrolling:'touch', background:'transparent', overflow: currentGameId==='beerpong' ? 'auto' : 'hidden' }}>
         <div key={gameIdx} style={{ display:'flex', flexDirection:'column', padding:'8px 24px 20px', gap:18, maxWidth:960, margin:'0 auto', width:'100%', boxSizing:'border-box', animation: transitioning ? 'gameSlideOut 0.22s ease forwards' : 'gameSlideIn 0.28s cubic-bezier(0.2,0.9,0.3,1)' }}>
         <div style={{ display:'flex', flexDirection:'column', gap:18, width:'100%' }}>
 
@@ -47360,7 +47360,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           </div>
         )}
 
-        <div style={{ display:'flex', flexDirection:'column' }}>
+        <div style={{ display:'flex', flexDirection:'column', flex: currentGameId==='beerpong' ? '1 1 0' : 'unset', minHeight: currentGameId==='beerpong' ? 0 : 'unset' }}>
           <GameContent key={currentGameId + gameIdx + '_' + gameRestartKey} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={selectedOpponent} onSetHideFooter={setHideFooter} onSetBuszSwitch={(fn) => setBuszSwitchFn(fn ? () => fn : null)} onCommit={commitPending} />
         </div>
       </div>
@@ -50658,6 +50658,15 @@ function BeerPongTableau({ champion, players, tournamentName, tournament, seRoun
   const canvasRef = React.useRef(null);
   const [imgUrl, setImgUrl] = React.useState(null);
 
+  // score lehet {p1,p2} objektum vagy "N-N" string
+  const getScore = (sc) => {
+    if (!sc) return [0,0];
+    if (typeof sc === 'object') return [sc.p1||0, sc.p2||0];
+    const parts = String(sc).split('-');
+    return [parseInt(parts[0])||0, parseInt(parts[1])||0];
+  };
+  const scoreStr = (sc) => { const [a,b]=getScore(sc); return a+'-'+b; };
+
   const allMatches = React.useMemo(() => {
     const ms = [];
     if (tournament === 'se') {
@@ -50674,7 +50683,7 @@ function BeerPongTableau({ champion, players, tournamentName, tournament, seRoun
     const st = {};
     players.forEach(p => { st[p.id]={player:p,W:0,D:0,L:0,Pp:0,Pm:0}; });
     allMatches.forEach(m => {
-      const parts=(m.score||'0-0').split('-'); const s1=parseInt(parts[0])||0, s2=parseInt(parts[1])||0;
+      const [s1,s2] = getScore(m.score);
       if(st[m.p1?.id]){st[m.p1.id].Pp+=s1;st[m.p1.id].Pm+=s2;}
       if(st[m.p2?.id]){st[m.p2.id].Pp+=s2;st[m.p2.id].Pm+=s1;}
       if(m.draw){if(st[m.p1?.id])st[m.p1.id].D++;if(st[m.p2?.id])st[m.p2.id].D++;}
@@ -50710,26 +50719,23 @@ function BeerPongTableau({ champion, players, tournamentName, tournament, seRoun
           ctx.closePath();
         }
 
-        // Background
         ctx.fillStyle=BG; ctx.fillRect(0,0,W,H);
 
         // Header
         ctx.fillStyle=SURF; ctx.fillRect(0,0,W,70);
         ctx.fillStyle=GOLD; ctx.font='bold 20px '+F; ctx.textAlign='left';
-        ctx.fillText('🏓 Bottle of Heroes', 20, 40);
+        ctx.fillText('Bottle of Heroes', 20, 44);
         ctx.fillStyle='#fff'; ctx.font='bold 22px '+F; ctx.textAlign='center';
         ctx.fillText((tournamentName||'Beer Pong Torna').toUpperCase(), W/2, 30);
         const now=new Date();
         const dateStr=now.toLocaleDateString('hu-HU',{year:'numeric',month:'long',day:'numeric'});
         ctx.fillStyle='#94A3B8'; ctx.font='13px '+F;
-        ctx.fillText(dateStr+' · '+players.length+' játékos · '+allMatches.length+' meccs', W/2, 52);
-        ctx.fillStyle='#94A3B8'; ctx.font='12px '+F; ctx.textAlign='right';
-        ctx.fillText('v9.424', W-16, 40);
+        ctx.fillText(dateStr+' · '+players.length+' játékos · '+allMatches.length+' meccs', W/2, 54);
 
         const TOP=82, PAD=14, LW=370;
         let cy=TOP;
 
-        // Group tables
+        // Csoport táblák
         if(tsGroups&&tsGroups.length>0){
           tsGroups.forEach(g=>{
             ctx.fillStyle=GOLD+'33'; rrect(PAD,cy,LW,26,7); ctx.fill();
@@ -50743,7 +50749,7 @@ function BeerPongTableau({ champion, players, tournamentName, tournament, seRoun
             (g.players||[]).forEach(p=>{gst[p.id]={p,J:0,Gy:0,D:0,V:0,Pp:0,Pm:0};});
             (g.matches||[]).forEach(m=>{
               if(!m.winner&&!m.draw)return;
-              const pts=(m.score||'0-0').split('-'); const s1=parseInt(pts[0])||0,s2=parseInt(pts[1])||0;
+              const[s1,s2]=getScore(m.score);
               if(gst[m.p1?.id]){gst[m.p1.id].J++;gst[m.p1.id].Pp+=s1;gst[m.p1.id].Pm+=s2;}
               if(gst[m.p2?.id]){gst[m.p2.id].J++;gst[m.p2.id].Pp+=s2;gst[m.p2.id].Pm+=s1;}
               if(m.draw){if(gst[m.p1?.id])gst[m.p1.id].D++;if(gst[m.p2?.id])gst[m.p2.id].D++;}
@@ -50762,14 +50768,15 @@ function BeerPongTableau({ champion, players, tournamentName, tournament, seRoun
           cy+=6;
         }
 
-        // Match list
+        // Meccsek listája
         ctx.fillStyle=GOLD; ctx.font='bold 12px '+F; ctx.textAlign='left';
         ctx.fillText('MECCSEREDMÉNYEK', PAD, cy+13); cy+=20;
         const maxM=Math.floor((H-cy-16)/20);
         allMatches.slice(0,maxM).forEach((m,i)=>{
           const ry=cy+i*20;
           if(i%2===0){ctx.fillStyle='rgba(255,255,255,.04)';rrect(PAD,ry,LW,20,4);ctx.fill();}
-          const p1n=m.p1?.name||'?', p2n=m.p2?.name||'?', sc=m.score||'vs', wid=m.winner?.id;
+          const p1n=m.p1?.name||'?', p2n=m.p2?.name||'?';
+          const sc=scoreStr(m.score); const wid=m.winner?.id;
           ctx.fillStyle=wid===m.p1?.id?GOLD:'#fff'; ctx.font=(wid===m.p1?.id?'bold ':'')+'12px '+F; ctx.textAlign='left';
           ctx.fillText(p1n, PAD+6, ry+14);
           ctx.fillStyle='#94A3B8'; ctx.font='12px '+F; ctx.textAlign='center';
@@ -50778,14 +50785,13 @@ function BeerPongTableau({ champion, players, tournamentName, tournament, seRoun
           ctx.fillText(p2n, PAD+LW-6, ry+14);
         });
 
-        // Right column
+        // Jobb oszlop
         const RX=PAD+LW+16, RW=W-RX-PAD;
         const BRACH=Math.floor(H*0.56);
 
-        // Bracket box
         ctx.fillStyle=SURF; rrect(RX,TOP,RW,BRACH,14); ctx.fill();
         ctx.fillStyle=GOLD; ctx.font='bold 13px '+F; ctx.textAlign='left';
-        ctx.fillText('ÁGRAJZ', RX+14, TOP+20);
+        ctx.fillText('AGRAJZ', RX+14, TOP+20);
 
         const drawSE=(rounds,bx,by,bw,bh)=>{
           if(!rounds||!rounds.length)return;
@@ -50796,20 +50802,20 @@ function BeerPongTableau({ champion, players, tournamentName, tournament, seRoun
               const mx=bx+ri*cw+4, my=by+mi*sh+4, mw=cw-8, mh=sh-8;
               if(mw<10||mh<10)return;
               ctx.fillStyle=m.winner?'#1A3A5C':'#243555'; rrect(mx,my,mw,mh,8); ctx.fill();
-              let lbl=ri===nr-1?'DÖNTŐ':nm===1?'ELŐDÖNTŐ':'Kör '+(ri+1);
+              let lbl=ri===nr-1?'DONTO':nm===1?'ELODONTOS':'Kor '+(ri+1);
               ctx.fillStyle='#94A3B8'; ctx.font='10px '+F; ctx.textAlign='left';
               ctx.fillText(lbl, mx+6, my+13);
               const p1w=m.winner?.id===m.p1?.id;
               ctx.fillStyle=p1w?GOLD:'#fff'; ctx.font=(p1w?'bold ':'')+'13px '+F;
               ctx.fillText(m.p1?.name||'TBD', mx+6, my+mh/2-2);
-              const pts=(m.score||'').split('-');
-              if(pts[0]){ctx.fillStyle='#94A3B8';ctx.font='11px '+F;ctx.textAlign='right';ctx.fillText(pts[0],mx+mw-6,my+mh/2-2);}
+              const [s1,s2]=getScore(m.score);
+              if(m.score){ctx.fillStyle='#94A3B8';ctx.font='11px '+F;ctx.textAlign='right';ctx.fillText(s1,mx+mw-6,my+mh/2-2);}
               ctx.strokeStyle='#2D4A6B';ctx.lineWidth=1;
               ctx.beginPath();ctx.moveTo(mx+4,my+mh/2+4);ctx.lineTo(mx+mw-4,my+mh/2+4);ctx.stroke();
               const p2w=m.winner?.id===m.p2?.id;
               ctx.fillStyle=p2w?GOLD:'#fff'; ctx.font=(p2w?'bold ':'')+'13px '+F; ctx.textAlign='left';
               ctx.fillText(m.p2?.name||'TBD', mx+6, my+mh-8);
-              if(pts[1]){ctx.fillStyle='#94A3B8';ctx.font='11px '+F;ctx.textAlign='right';ctx.fillText(pts[1],mx+mw-6,my+mh-8);}
+              if(m.score){ctx.fillStyle='#94A3B8';ctx.font='11px '+F;ctx.textAlign='right';ctx.fillText(s2,mx+mw-6,my+mh-8);}
               if(ri<nr-1){
                 const rn2=rounds[ri+1]; if(!rn2)return;
                 const nm2=rn2.length, sh2=bh/nm2, mi2=Math.floor(mi/2);
@@ -50823,16 +50829,16 @@ function BeerPongTableau({ champion, players, tournamentName, tournament, seRoun
 
         if((tournament==='se'||tournament?.startsWith('grp_'))&&seRounds&&seRounds.length>0){
           drawSE(seRounds, RX+8, TOP+28, RW-16, BRACH-36);
-        } else if(tournament==='rr'){
+        } else {
           ctx.fillStyle='#94A3B8';ctx.font='14px '+F;ctx.textAlign='center';
-          ctx.fillText('Körmérkőzéses rendszer', RX+RW/2, TOP+BRACH/2);
+          ctx.fillText('Kormerkozes', RX+RW/2, TOP+BRACH/2);
         }
 
-        // Podium
+        // Dobogo
         const PY=TOP+BRACH+12, PH=H-PY-PAD;
         ctx.fillStyle=SURF; rrect(RX,PY,RW,PH,14); ctx.fill();
         ctx.fillStyle=GOLD; ctx.font='bold 13px '+F; ctx.textAlign='left';
-        ctx.fillText('DOBOGÓ', RX+14, PY+20);
+        ctx.fillText('DOBOGO', RX+14, PY+20);
 
         const podData=[standings[1],standings[0],standings[2]];
         const podColors=[SILVER,GOLD,BRONZE], podH=[55,80,40], podLbls=['2.','1.','3.'];
@@ -50854,12 +50860,17 @@ function BeerPongTableau({ champion, players, tournamentName, tournament, seRoun
           ctx.fillText(s.W+'gy '+s.L+'v ('+s.Pp+'-'+s.Pm+')',bx+podW/2,baseY-podH[i]+50);
         });
 
-        // 4th+ place list
         const listX=RX+RW*0.52, listY=PY+36;
         standings.slice(3).forEach((s,i)=>{
           ctx.fillStyle='#94A3B8'; ctx.font='bold 12px '+F; ctx.textAlign='left';
-          ctx.fillText((i+4)+'. '+(s.player?.name||'?')+' — '+s.W+'gy/'+s.L+'v', listX, listY+i*22);
+          ctx.fillText((i+4)+'. '+(s.player?.name||'?')+' - '+s.W+'gy/'+s.L+'v', listX, listY+i*22);
         });
+
+        if(champion){
+          ctx.fillStyle=GOLD+'22'; rrect(RX+14,PY+44,RW-28,32,10); ctx.fill();
+          ctx.fillStyle=GOLD; ctx.font='bold 14px '+F; ctx.textAlign='center';
+          ctx.fillText('Bajnok: '+champion.name+' - Beer Pong Bajnok!', RX+RW/2, PY+65);
+        }
 
         setImgUrl(canvas.toDataURL('image/png'));
       } catch(err) { console.error('Canvas hiba:', err); }
@@ -50876,18 +50887,18 @@ function BeerPongTableau({ champion, players, tournamentName, tournament, seRoun
       <canvas ref={canvasRef} style={{display:'none'}} />
       <div style={{background:'#1A2B4B',borderRadius:20,padding:14,width:'100%',maxWidth:500,display:'flex',flexDirection:'column',gap:10}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <span style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:17,color:'#fff'}}>📊 Tábló</span>
-          <button onClick={onClose} style={{background:'none',border:'none',fontSize:22,cursor:'pointer',color:'#94A3B8',lineHeight:1}}>✕</button>
+          <span style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:17,color:'#fff'}}>Tablo</span>
+          <button onClick={onClose} style={{background:'none',border:'none',fontSize:22,cursor:'pointer',color:'#94A3B8',lineHeight:1}}>X</button>
         </div>
         {imgUrl ? (
           <>
-            <img src={imgUrl} style={{width:'100%',borderRadius:10,border:'1px solid #243555'}} alt="Táb" />
+            <img src={imgUrl} style={{width:'100%',borderRadius:10,border:'1px solid #243555'}} alt="Tabló" />
             <button onClick={handleShare} style={{padding:'12px',borderRadius:13,border:'none',background:'#F59E0B',color:'#fff',fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:15,cursor:'pointer'}}>
-              ⬇️ Letöltés / Megosztás
+              Letoltes / Megosztás
             </button>
           </>
         ) : (
-          <div style={{color:'#94A3B8',textAlign:'center',padding:40,fontFamily:"'Nunito',sans-serif"}}>Tábló generálása...</div>
+          <div style={{color:'#94A3B8',textAlign:'center',padding:40,fontFamily:"'Nunito',sans-serif"}}>Tablo generalása...</div>
         )}
       </div>
     </div>
