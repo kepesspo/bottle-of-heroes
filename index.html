@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.417';
+const APP_VERSION = 'v9.418';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -46099,16 +46099,15 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
 
   const assign = (ri) => {
     if (S.sel === null) return;
-    if (plan[ri].length > 0) return; // már van lap a körben
     const v = hand[S.sel];
-    setS(s => ({...s, [hk]: s[hk].filter((_,i)=>i!==s.sel), [pk]: s[pk].map((r,i)=>i===ri?[v]:r), sel:null}));
+    setS(s => ({...s, [hk]: s[hk].filter((_,i)=>i!==s.sel), [pk]: s[pk].map((r,i)=>i===ri?[...r,v]:r), sel:null}));
   };
 
   const results = React.useMemo(() => {
     let p1W=0, p2W=0;
     const rounds = S.p1Plan.map((p1c, i) => {
-      const p1s = (p1c[0]||0);
-      const p2s = (S.p2Plan[i]?.[0]||0);
+      const p1s = p1c.reduce((a,b)=>a+b,0);
+      const p2s = (S.p2Plan[i]||[]).reduce((a,b)=>a+b,0);
       let w=null;
       if (p1s>p2s)  { w='p1'; p1W++; }
       else if (p2s>p1s) { w='p2'; p2W++; }
@@ -46182,14 +46181,11 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
           setS(s => ({...s, [pk]: s[pk].map((r,i) => {
             if (i===fromRi && i===ri) return r;
             if (i===fromRi) return r.filter((_,j)=>j!==fromCi);
-            if (i===ri && r.length===0) return [value];
+            if (i===ri) return [...r, value];
             return r;
           }), sel:null}));
         } else {
-          setS(s => {
-            if (s[pk][ri].length > 0) return s; // foglalt
-            return {...s, [hk]: s[hk].filter((_,i)=>i!==cardIdx), [pk]: s[pk].map((r,i)=>i===ri?[value]:r), sel:null};
-          });
+          setS(s => ({...s, [hk]: s[hk].filter((_,i)=>i!==cardIdx), [pk]: s[pk].map((r,i)=>i===ri?[...r,value]:r), sel:null}));
         }
       }
       setGhost(null); setDropHover(null);
@@ -46227,29 +46223,29 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
         {/* Körslotok */}
         {plan.map((cards, ri) => {
           const isHov = dropHover === ri;
-          const card = cards[0];
-          const isDraggingCard = ghost && dragRef.current?.fromSlot && dragRef.current?.fromRi===ri;
+          const isDraggingCard = (ci) => ghost && dragRef.current?.fromSlot && dragRef.current?.fromRi===ri && dragRef.current?.fromCi===ci;
           return (
             <div key={ri} data-round-idx={ri} onClick={()=>assign(ri)} style={{
               display:'flex', alignItems:'center', gap:10, padding:'7px 12px',
               background:'#fff',
               borderRadius:13,
-              border: isHov ? '2px solid '+pColor : card ? '2px solid transparent' : '2px dashed rgba(0,0,0,.15)',
+              border: isHov ? '2px solid '+pColor : cards.length>0 ? '2px solid transparent' : '2px dashed rgba(0,0,0,.15)',
               boxShadow:'0 2px 10px rgba(0,0,0,.08)',
               cursor: S.sel!==null ? 'pointer' : 'default',
               transition:'border .1s',
               minHeight:48,
             }}>
               <div style={{fontFamily:T.font,fontWeight:700,fontSize:12,color:T.inkSoft,minWidth:38}}>{ri+1}. kör</div>
-              <div style={{flex:1,display:'flex',alignItems:'center',gap:8,pointerEvents:'none'}}>
-                {card !== undefined ? (
-                  <div onPointerDown={e=>onSlotCardPointerDown(e,ri,0,card)} style={{pointerEvents:'all',touchAction:'none',cursor:'grab'}}>
-                    <CardChip value={card} color={pColor} dim={isDraggingCard} />
+              <div style={{flex:1,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',pointerEvents:'none'}}>
+                {cards.length>0 ? cards.map((v,ci) => (
+                  <div key={ci} onPointerDown={e=>onSlotCardPointerDown(e,ri,ci,v)} style={{pointerEvents:'all',touchAction:'none',cursor:'grab'}}>
+                    <CardChip value={v} color={pColor} dim={isDraggingCard(ci)} />
                   </div>
-                ) : (
-                  <span style={{fontFamily:T.font,fontSize:13,color:T.inkMute,pointerEvents:'none'}}>Húzz ide</span>
+                )) : (
+                  <span style={{fontFamily:T.font,fontSize:12,color:T.inkMute,pointerEvents:'none'}}>Húzz ide</span>
                 )}
               </div>
+              {cards.length>1 && <div style={{fontFamily:T.font,fontWeight:800,fontSize:13,color:pColor,minWidth:20,textAlign:'right',pointerEvents:'none'}}>{cards.reduce((a,b)=>a+b,0)}</div>}
             </div>
           );
         })}
