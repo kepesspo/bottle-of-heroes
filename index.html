@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.425';
+const APP_VERSION = 'v9.426';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -50652,20 +50652,11 @@ function SzamsorGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
 }
 
 function BeerPongTableau({ champion, players, tournamentName, tournament, seRounds, rrMatches, tsGroups, drinkMap, onClose }) {
-  const F = "'Nunito','Inter',sans-serif";
-  const GOLD='#F59E0B', SILVER='#94A3B8', BRONZE='#CD7C3A';
-  const BG='#0F1A30', SURF='#1A2B4B';
-  const canvasRef = React.useRef(null);
-  const [imgUrl, setImgUrl] = React.useState(null);
-
-  // score lehet {p1,p2} objektum vagy "N-N" string
   const getScore = (sc) => {
     if (!sc) return [0,0];
     if (typeof sc === 'object') return [sc.p1||0, sc.p2||0];
-    const parts = String(sc).split('-');
-    return [parseInt(parts[0])||0, parseInt(parts[1])||0];
+    const p = String(sc).split('-'); return [parseInt(p[0])||0, parseInt(p[1])||0];
   };
-  const scoreStr = (sc) => { const [a,b]=getScore(sc); return a+'-'+b; };
 
   const allMatches = React.useMemo(() => {
     const ms = [];
@@ -50699,207 +50690,128 @@ function BeerPongTableau({ champion, players, tournamentName, tournament, seRoun
     return arr;
   }, [players, allMatches, champion]);
 
-  React.useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    setTimeout(() => {
-      try {
-        const W=1400, H=990;
-        canvas.width=W; canvas.height=H;
-        const ctx=canvas.getContext('2d');
-
-        function rrect(x,y,w,h,r){
-          if(w<=0||h<=0)return;
-          r=Math.min(r,w/2,h/2);
-          ctx.beginPath();
-          ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
-          ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
-          ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
-          ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
-          ctx.closePath();
-        }
-
-        ctx.fillStyle=BG; ctx.fillRect(0,0,W,H);
-
-        // Header
-        ctx.fillStyle=SURF; ctx.fillRect(0,0,W,70);
-        ctx.fillStyle=GOLD; ctx.font='bold 20px '+F; ctx.textAlign='left';
-        ctx.fillText('Bottle of Heroes', 20, 44);
-        ctx.fillStyle='#fff'; ctx.font='bold 22px '+F; ctx.textAlign='center';
-        ctx.fillText((tournamentName||'Beer Pong Torna').toUpperCase(), W/2, 30);
-        const now=new Date();
-        const dateStr=now.toLocaleDateString('hu-HU',{year:'numeric',month:'long',day:'numeric'});
-        ctx.fillStyle='#94A3B8'; ctx.font='13px '+F;
-        ctx.fillText(dateStr+' · '+players.length+' játékos · '+allMatches.length+' meccs', W/2, 54);
-
-        const TOP=82, PAD=14, LW=370;
-        let cy=TOP;
-
-        // Csoport táblák
-        if(tsGroups&&tsGroups.length>0){
-          tsGroups.forEach(g=>{
-            ctx.fillStyle=GOLD+'33'; rrect(PAD,cy,LW,26,7); ctx.fill();
-            ctx.fillStyle=GOLD; ctx.font='bold 13px '+F; ctx.textAlign='left';
-            ctx.fillText(g.label||'Csoport', PAD+10, cy+18); cy+=30;
-            const nameW=130, cols=['J','Gy','D','V','P+','P-'], cw=(LW-nameW)/6;
-            ctx.fillStyle='#94A3B8'; ctx.font='bold 11px '+F;
-            cols.forEach((n,i)=>{ ctx.textAlign='center'; ctx.fillText(n,PAD+nameW+i*cw+cw/2,cy+12); });
-            cy+=16;
-            const gst={};
-            (g.players||[]).forEach(p=>{gst[p.id]={p,J:0,Gy:0,D:0,V:0,Pp:0,Pm:0};});
-            (g.matches||[]).forEach(m=>{
-              if(!m.winner&&!m.draw)return;
-              const[s1,s2]=getScore(m.score);
-              if(gst[m.p1?.id]){gst[m.p1.id].J++;gst[m.p1.id].Pp+=s1;gst[m.p1.id].Pm+=s2;}
-              if(gst[m.p2?.id]){gst[m.p2.id].J++;gst[m.p2.id].Pp+=s2;gst[m.p2.id].Pm+=s1;}
-              if(m.draw){if(gst[m.p1?.id])gst[m.p1.id].D++;if(gst[m.p2?.id])gst[m.p2.id].D++;}
-              else if(m.winner){const lid=m.p1?.id===m.winner.id?m.p2?.id:m.p1?.id;if(gst[m.winner.id])gst[m.winner.id].Gy++;if(lid&&gst[lid])gst[lid].V++;}
-            });
-            const rows=Object.values(gst).sort((a,b)=>b.Gy-a.Gy||(b.Pp-b.Pm)-(a.Pp-a.Pm));
-            rows.forEach((r,ri)=>{
-              const ry=cy+ri*20;
-              if(ri%2===0){ctx.fillStyle='rgba(255,255,255,.05)';rrect(PAD,ry,LW,20,4);ctx.fill();}
-              ctx.fillStyle='#fff'; ctx.font='13px '+F; ctx.textAlign='left';
-              ctx.fillText(r.p.name, PAD+8, ry+14);
-              [r.J,r.Gy,r.D,r.V,r.Pp,r.Pm].forEach((v,i)=>{ctx.textAlign='center';ctx.fillText(v,PAD+nameW+i*cw+cw/2,ry+14);});
-            });
-            cy+=rows.length*20+10;
-          });
-          cy+=6;
-        }
-
-        // Meccsek listája
-        ctx.fillStyle=GOLD; ctx.font='bold 12px '+F; ctx.textAlign='left';
-        ctx.fillText('MECCSEREDMÉNYEK', PAD, cy+13); cy+=20;
-        const maxM=Math.floor((H-cy-16)/20);
-        allMatches.slice(0,maxM).forEach((m,i)=>{
-          const ry=cy+i*20;
-          if(i%2===0){ctx.fillStyle='rgba(255,255,255,.04)';rrect(PAD,ry,LW,20,4);ctx.fill();}
-          const p1n=m.p1?.name||'?', p2n=m.p2?.name||'?';
-          const sc=scoreStr(m.score); const wid=m.winner?.id;
-          ctx.fillStyle=wid===m.p1?.id?GOLD:'#fff'; ctx.font=(wid===m.p1?.id?'bold ':'')+'12px '+F; ctx.textAlign='left';
-          ctx.fillText(p1n, PAD+6, ry+14);
-          ctx.fillStyle='#94A3B8'; ctx.font='12px '+F; ctx.textAlign='center';
-          ctx.fillText(sc, PAD+LW/2, ry+14);
-          ctx.fillStyle=wid===m.p2?.id?GOLD:'#fff'; ctx.font=(wid===m.p2?.id?'bold ':'')+'12px '+F; ctx.textAlign='right';
-          ctx.fillText(p2n, PAD+LW-6, ry+14);
-        });
-
-        // Jobb oszlop
-        const RX=PAD+LW+16, RW=W-RX-PAD;
-        const BRACH=Math.floor(H*0.56);
-
-        ctx.fillStyle=SURF; rrect(RX,TOP,RW,BRACH,14); ctx.fill();
-        ctx.fillStyle=GOLD; ctx.font='bold 13px '+F; ctx.textAlign='left';
-        ctx.fillText('AGRAJZ', RX+14, TOP+20);
-
-        const drawSE=(rounds,bx,by,bw,bh)=>{
-          if(!rounds||!rounds.length)return;
-          const nr=rounds.length, cw=bw/nr;
-          rounds.forEach((rnd,ri)=>{
-            const nm=rnd.length, sh=bh/nm;
-            rnd.forEach((m,mi)=>{
-              const mx=bx+ri*cw+4, my=by+mi*sh+4, mw=cw-8, mh=sh-8;
-              if(mw<10||mh<10)return;
-              ctx.fillStyle=m.winner?'#1A3A5C':'#243555'; rrect(mx,my,mw,mh,8); ctx.fill();
-              let lbl=ri===nr-1?'DONTO':nm===1?'ELODONTOS':'Kor '+(ri+1);
-              ctx.fillStyle='#94A3B8'; ctx.font='10px '+F; ctx.textAlign='left';
-              ctx.fillText(lbl, mx+6, my+13);
-              const p1w=m.winner?.id===m.p1?.id;
-              ctx.fillStyle=p1w?GOLD:'#fff'; ctx.font=(p1w?'bold ':'')+'13px '+F;
-              ctx.fillText(m.p1?.name||'TBD', mx+6, my+mh/2-2);
-              const [s1,s2]=getScore(m.score);
-              if(m.score){ctx.fillStyle='#94A3B8';ctx.font='11px '+F;ctx.textAlign='right';ctx.fillText(s1,mx+mw-6,my+mh/2-2);}
-              ctx.strokeStyle='#2D4A6B';ctx.lineWidth=1;
-              ctx.beginPath();ctx.moveTo(mx+4,my+mh/2+4);ctx.lineTo(mx+mw-4,my+mh/2+4);ctx.stroke();
-              const p2w=m.winner?.id===m.p2?.id;
-              ctx.fillStyle=p2w?GOLD:'#fff'; ctx.font=(p2w?'bold ':'')+'13px '+F; ctx.textAlign='left';
-              ctx.fillText(m.p2?.name||'TBD', mx+6, my+mh-8);
-              if(m.score){ctx.fillStyle='#94A3B8';ctx.font='11px '+F;ctx.textAlign='right';ctx.fillText(s2,mx+mw-6,my+mh-8);}
-              if(ri<nr-1){
-                const rn2=rounds[ri+1]; if(!rn2)return;
-                const nm2=rn2.length, sh2=bh/nm2, mi2=Math.floor(mi/2);
-                const ty=by+mi2*sh2+4+(sh2-8)/2;
-                ctx.strokeStyle='#2D4A6B';ctx.lineWidth=1.5;
-                ctx.beginPath();ctx.moveTo(mx+mw,my+mh/2);ctx.lineTo(mx+mw+cw/2,my+mh/2);ctx.lineTo(mx+mw+cw/2,ty);ctx.lineTo(mx+cw,ty);ctx.stroke();
-              }
-            });
-          });
-        };
-
-        if((tournament==='se'||tournament?.startsWith('grp_'))&&seRounds&&seRounds.length>0){
-          drawSE(seRounds, RX+8, TOP+28, RW-16, BRACH-36);
-        } else {
-          ctx.fillStyle='#94A3B8';ctx.font='14px '+F;ctx.textAlign='center';
-          ctx.fillText('Kormerkozes', RX+RW/2, TOP+BRACH/2);
-        }
-
-        // Dobogo
-        const PY=TOP+BRACH+12, PH=H-PY-PAD;
-        ctx.fillStyle=SURF; rrect(RX,PY,RW,PH,14); ctx.fill();
-        ctx.fillStyle=GOLD; ctx.font='bold 13px '+F; ctx.textAlign='left';
-        ctx.fillText('DOBOGO', RX+14, PY+20);
-
-        const podData=[standings[1],standings[0],standings[2]];
-        const podColors=[SILVER,GOLD,BRONZE], podH=[55,80,40], podLbls=['2.','1.','3.'];
-        const podW=Math.min(110,(RW*0.42)/3);
-        const podStartX=RX+RW*0.06, baseY=PY+PH-16;
-        podData.forEach((s,i)=>{
-          if(!s)return;
-          const bx=podStartX+i*(podW+14);
-          ctx.fillStyle=podColors[i]+'44'; rrect(bx,baseY-podH[i],podW,podH[i],6); ctx.fill();
-          ctx.fillStyle=podColors[i]; ctx.font='bold 14px '+F; ctx.textAlign='center';
-          ctx.fillText(podLbls[i], bx+podW/2, baseY-podH[i]+18);
-          ctx.fillStyle=s.player?.color||'#6366F1';
-          ctx.beginPath();ctx.arc(bx+podW/2,baseY-podH[i]-24,22,0,Math.PI*2);ctx.fill();
-          ctx.fillStyle='#fff';ctx.font='bold 18px '+F;
-          ctx.fillText((s.player?.name||'?').charAt(0).toUpperCase(),bx+podW/2,baseY-podH[i]-17);
-          ctx.fillStyle='#fff';ctx.font='12px '+F;
-          ctx.fillText(s.player?.name||'?',bx+podW/2,baseY-podH[i]+36);
-          ctx.fillStyle='#94A3B8';ctx.font='11px '+F;
-          ctx.fillText(s.W+'gy '+s.L+'v ('+s.Pp+'-'+s.Pm+')',bx+podW/2,baseY-podH[i]+50);
-        });
-
-        const listX=RX+RW*0.52, listY=PY+36;
-        standings.slice(3).forEach((s,i)=>{
-          ctx.fillStyle='#94A3B8'; ctx.font='bold 12px '+F; ctx.textAlign='left';
-          ctx.fillText((i+4)+'. '+(s.player?.name||'?')+' - '+s.W+'gy/'+s.L+'v', listX, listY+i*22);
-        });
-
-        if(champion){
-          ctx.fillStyle=GOLD+'22'; rrect(RX+14,PY+44,RW-28,32,10); ctx.fill();
-          ctx.fillStyle=GOLD; ctx.font='bold 14px '+F; ctx.textAlign='center';
-          ctx.fillText('Bajnok: '+champion.name+' - Beer Pong Bajnok!', RX+RW/2, PY+65);
-        }
-
-        setImgUrl(canvas.toDataURL('image/png'));
-      } catch(err) { console.error('Canvas hiba:', err); }
-    }, 80);
-  }, []);
-
-  const handleShare = () => {
-    if(!imgUrl)return;
-    const a=document.createElement('a'); a.href=imgUrl; a.download='beerpong_tabló.png'; a.click();
+  const GroupTable = ({ g }) => {
+    const gst={};
+    (g.players||[]).forEach(p=>{gst[p.id]={p,J:0,Gy:0,D:0,V:0,Pp:0,Pm:0};});
+    (g.matches||[]).forEach(m=>{
+      if(!m.winner&&!m.draw)return;
+      const[s1,s2]=getScore(m.score);
+      if(gst[m.p1?.id]){gst[m.p1.id].J++;gst[m.p1.id].Pp+=s1;gst[m.p1.id].Pm+=s2;}
+      if(gst[m.p2?.id]){gst[m.p2.id].J++;gst[m.p2.id].Pp+=s2;gst[m.p2.id].Pm+=s1;}
+      if(m.draw){if(gst[m.p1?.id])gst[m.p1.id].D++;if(gst[m.p2?.id])gst[m.p2.id].D++;}
+      else if(m.winner){const lid=m.p1?.id===m.winner.id?m.p2?.id:m.p1?.id;if(gst[m.winner.id])gst[m.winner.id].Gy++;if(lid&&gst[lid])gst[lid].V++;}
+    });
+    const rows=Object.values(gst).sort((a,b)=>b.Gy-a.Gy||(b.Pp-b.Pm)-(a.Pp-a.Pm));
+    const cols=['J','Gy','D','V','P+','P-'];
+    return (
+      <div style={{marginBottom:10}}>
+        <div style={{background:T.mint,borderRadius:'8px 8px 0 0',padding:'5px 10px',fontFamily:T.font,fontWeight:800,fontSize:12,color:'#fff'}}>{g.label||'Csoport'}</div>
+        <div style={{background:T.surface,borderRadius:'0 0 8px 8px',overflow:'hidden',boxShadow:T.shadow}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr repeat(6,28px)',padding:'3px 8px',background:T.bgSoft}}>
+            <div style={{fontFamily:T.font,fontSize:10,fontWeight:700,color:T.inkMute}}></div>
+            {cols.map(c=><div key={c} style={{fontFamily:T.font,fontSize:10,fontWeight:700,color:T.inkMute,textAlign:'center'}}>{c}</div>)}
+          </div>
+          {rows.map((r,ri)=>(
+            <div key={r.p.id} style={{display:'grid',gridTemplateColumns:'1fr repeat(6,28px)',padding:'4px 8px',background:ri%2===0?'transparent':T.bgSoft,borderTop:`1px solid ${T.bgSoft}`}}>
+              <div style={{display:'flex',alignItems:'center',gap:5}}>
+                <div style={{width:14,height:14,borderRadius:'50%',background:r.p.color||T.mint,flexShrink:0}}/>
+                <div style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.ink,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.p.name}</div>
+              </div>
+              {[r.J,r.Gy,r.D,r.V,r.Pp,r.Pm].map((v,i)=>(
+                <div key={i} style={{fontFamily:T.font,fontSize:11,fontWeight:i===1?800:600,color:i===1&&v>0?T.mint:T.inkSoft,textAlign:'center'}}>{v}</div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
+  const podOrder = [standings[1],standings[0],standings[2]];
+  const podColors = ['#94A3B8','#F59E0B','#CD7C3A'];
+  const podH = [60,80,48];
+  const podLabels = ['2.','1.','3.'];
+  const now = new Date().toLocaleDateString('hu-HU',{year:'numeric',month:'long',day:'numeric'});
+
   return (
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.88)',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:12,overflowY:'auto'}}>
-      <canvas ref={canvasRef} style={{display:'none'}} />
-      <div style={{background:'#1A2B4B',borderRadius:20,padding:14,width:'100%',maxWidth:500,display:'flex',flexDirection:'column',gap:10}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <span style={{fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:17,color:'#fff'}}>Tablo</span>
-          <button onClick={onClose} style={{background:'none',border:'none',fontSize:22,cursor:'pointer',color:'#94A3B8',lineHeight:1}}>X</button>
+    <div style={{position:'fixed',inset:0,background:T.bgOverlay||'rgba(0,0,0,.88)',zIndex:9999,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
+      <div style={{maxWidth:900,margin:'0 auto',padding:'12px 10px 32px'}}>
+
+        {/* Header */}
+        <div style={{background:T.surface,borderRadius:18,padding:'12px 16px',marginBottom:10,boxShadow:T.shadow,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div>
+            <div style={{fontFamily:T.font,fontWeight:900,fontSize:18,color:T.ink}}>🏓 {tournamentName||'Beer Pong Torna'}</div>
+            <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:2}}>{now} · {players.length} játékos · {allMatches.length} meccs</div>
+          </div>
+          <button onClick={onClose} style={{background:T.bgSoft,border:'none',borderRadius:10,width:36,height:36,cursor:'pointer',fontFamily:T.font,fontWeight:900,fontSize:18,color:T.inkSoft}}>✕</button>
         </div>
-        {imgUrl ? (
-          <>
-            <img src={imgUrl} style={{width:'100%',borderRadius:10,border:'1px solid #243555'}} alt="Tabló" />
-            <button onClick={handleShare} style={{padding:'12px',borderRadius:13,border:'none',background:'#F59E0B',color:'#fff',fontFamily:"'Nunito',sans-serif",fontWeight:900,fontSize:15,cursor:'pointer'}}>
-              Letoltes / Megosztás
-            </button>
-          </>
-        ) : (
-          <div style={{color:'#94A3B8',textAlign:'center',padding:40,fontFamily:"'Nunito',sans-serif"}}>Tablo generalása...</div>
-        )}
+
+        <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+
+          {/* Bal: csoportok + meccsek */}
+          <div style={{width:220,flexShrink:0,display:'flex',flexDirection:'column',gap:8}}>
+            {tsGroups&&tsGroups.length>0 && tsGroups.map((g,i)=><GroupTable key={i} g={g}/>)}
+            {allMatches.length>0 && (
+              <div style={{background:T.surface,borderRadius:12,overflow:'hidden',boxShadow:T.shadow}}>
+                <div style={{background:T.mint,padding:'5px 10px',fontFamily:T.font,fontWeight:800,fontSize:12,color:'#fff'}}>Meccseredmények</div>
+                {allMatches.map((m,i)=>{
+                  const [s1,s2]=getScore(m.score); const wid=m.winner?.id;
+                  return (
+                    <div key={i} style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',background:i%2===0?'transparent':T.bgSoft,borderTop:i>0?`1px solid ${T.bgSoft}`:'none'}}>
+                      <div style={{flex:1,fontFamily:T.font,fontSize:10,fontWeight:wid===m.p1?.id?800:600,color:wid===m.p1?.id?T.mint:T.ink,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.p1?.name||'?'}</div>
+                      <div style={{fontFamily:'monospace',fontSize:10,fontWeight:700,color:T.inkSoft,flexShrink:0}}>{m.score?s1+'-'+s2:'vs'}</div>
+                      <div style={{flex:1,fontFamily:T.font,fontSize:10,fontWeight:wid===m.p2?.id?800:600,color:wid===m.p2?.id?T.mint:T.ink,textAlign:'right',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.p2?.name||'?'}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Jobb: ágrajz + dobogó */}
+          <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',gap:10}}>
+
+            {/* Ágrajz */}
+            {(seRounds&&seRounds.length>0) && (
+              <div style={{background:T.surface,borderRadius:12,padding:'10px 12px',boxShadow:T.shadow}}>
+                <div style={{fontFamily:T.font,fontWeight:800,fontSize:13,color:T.inkMute,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:8}}>Ágrajz</div>
+                <BracketView seRoundsArr={seRounds} seCurRound={seRounds.length} seCurMatch={-1} />
+              </div>
+            )}
+
+            {/* Dobogó */}
+            <div style={{background:T.surface,borderRadius:12,padding:'12px',boxShadow:T.shadow}}>
+              <div style={{fontFamily:T.font,fontWeight:800,fontSize:13,color:T.inkMute,textTransform:'uppercase',letterSpacing:'.06em',marginBottom:12}}>Dobogó</div>
+              <div style={{display:'flex',alignItems:'flex-end',justifyContent:'center',gap:12,marginBottom:12}}>
+                {podOrder.map((s,i)=>{
+                  if(!s)return <div key={i} style={{width:72}}/>;
+                  return (
+                    <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+                      <div style={{width:36,height:36,borderRadius:'50%',background:s.player?.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:16,color:'#fff',boxShadow:`0 4px 12px ${s.player?.color||T.mint}55`}}>
+                        {(s.player?.name||'?').charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{fontFamily:T.font,fontWeight:800,fontSize:11,color:T.ink}}>{s.player?.name}</div>
+                      <div style={{fontFamily:T.font,fontSize:10,color:T.inkSoft}}>{s.W}gy/{s.L}v</div>
+                      <div style={{width:72,height:podH[i],background:podColors[i]+'33',border:`2px solid ${podColors[i]}`,borderRadius:'6px 6px 0 0',display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:6}}>
+                        <span style={{fontFamily:T.font,fontWeight:900,fontSize:18,color:podColors[i]}}>{podLabels[i]}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {standings.slice(3).map((s,i)=>(
+                <div key={i} style={{display:'flex',alignItems:'center',gap:8,padding:'5px 0',borderTop:`1px solid ${T.bgSoft}`}}>
+                  <div style={{fontFamily:T.font,fontWeight:700,fontSize:13,color:T.inkMute,width:20,textAlign:'right'}}>{i+4}.</div>
+                  <div style={{width:20,height:20,borderRadius:'50%',background:s.player?.color||T.inkMute,flexShrink:0}}/>
+                  <div style={{fontFamily:T.font,fontWeight:700,fontSize:13,color:T.ink,flex:1}}>{s.player?.name}</div>
+                  <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft}}>{s.W}gy/{s.L}v ({s.Pp}-{s.Pm})</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,textAlign:'center',padding:'4px 0'}}>📸 Képernyőképpel tudod megosztani</div>
+          </div>
+        </div>
       </div>
     </div>
   );
