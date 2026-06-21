@@ -52235,6 +52235,39 @@ class ErrorBoundary extends React.Component {
 
 // ─── ROOT ─────────────────────────────────────────────────────
 
+function Root() {
+  return <ErrorBoundary><BottleApp /></ErrorBoundary>;
+}
+
+// Splash: animáció React mount után indul, elrejtés 3s-al később
+window._splashTimerDone  = false;
+window._splashReactReady = false;
+window._hideSplash = function() {
+  if (!window._splashReactReady || !window._splashTimerDone) return;
+  const splash = document.getElementById('splash');
+  if (splash) {
+    splash.classList.add('hidden');
+    setTimeout(() => { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 300);
+  }
+};
+const _origRender = ReactDOM.createRoot;
+ReactDOM.createRoot = function(container, opts) {
+  const root = _origRender.call(this, container, opts);
+  const _origRootRender = root.render.bind(root);
+  root.render = function(element) {
+    _origRootRender(element);
+    requestAnimationFrame(() => {
+      if (typeof window._startSplashAnim === 'function') window._startSplashAnim();
+      window._splashReactReady = true;
+      setTimeout(function() {
+        window._splashTimerDone = true;
+        window._hideSplash();
+      }, 3000);
+    });
+  };
+  return root;
+};
+
 ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
 </script>
 
