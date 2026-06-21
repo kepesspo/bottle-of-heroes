@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.435';
+const APP_VERSION = 'v9.436';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -46485,6 +46485,12 @@ function UtvesztoGame({ gameIdx, challenger, players, onAdvance, onResult, onSet
 
   React.useEffect(() => { return () => { if (animRef.current) clearInterval(animRef.current); }; }, []);
 
+  // Hide PlayScreen paired result buttons — this game handles results internally
+  React.useEffect(() => {
+    if (onSetHideFooter) onSetHideFooter(true);
+    return () => { if (onSetHideFooter) onSetHideFooter(false); };
+  }, []);
+
   // Auto-transition to done after reveal2 animation finishes
   React.useEffect(() => {
     if (phase !== 'reveal2') return;
@@ -46644,38 +46650,42 @@ function UtvesztoGame({ gameIdx, challenger, players, onAdvance, onResult, onSet
 
   const BG = '#1e0a4e';
   const YELLOW = '#F5C518';
-  const wrapStyle = {margin:'-16px',background:BG,minHeight:'100%',display:'flex',flexDirection:'column',padding:'12px 12px 16px',boxSizing:'border-box',color:'#fff'};
+  const wrapStyle = {margin:'-16px',background:BG,minHeight:'100%',display:'flex',flexDirection:'column',padding:'10px 12px 14px',boxSizing:'border-box',color:'#fff',overflowY:'auto'};
 
   // ── INTRO ──
   if (phase === 'intro') {
     return (
       <div style={wrapStyle}>
-        <div style={{textAlign:'center',fontSize:36,marginBottom:8}}>🗺️</div>
-        <div style={{fontFamily:T.font,fontWeight:900,fontSize:22,color:YELLOW,textAlign:'center',marginBottom:4}}>ÚTVESZTŐ</div>
-        <div style={{fontFamily:T.font,fontSize:13,color:'rgba(255,255,255,0.65)',textAlign:'center',marginBottom:16}}>2 fős csapda-pálya verseny</div>
-        <div style={{background:'rgba(255,255,255,0.08)',borderRadius:14,padding:'14px 16px',marginBottom:10}}>
-          <div style={{fontFamily:T.font,fontWeight:700,fontSize:13,color:'rgba(255,255,255,0.9)',lineHeight:1.6}}>
-            {'1️⃣ Mindkét játékos elhelyez 5 csapdát a saját 5×5-ös pályáján\n2️⃣ Az ellenfél vakon megrajzolja az útvonalát\n3️⃣ Animáció — csapdák feltárulnak\n4️⃣ Aki kevesebb késéssel ér célba, nyer! 🏆'}
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+          <span style={{fontSize:22}}>🗺️</span>
+          <div>
+            <div style={{fontFamily:T.font,fontWeight:900,fontSize:18,color:YELLOW,lineHeight:1}}>ÚTVESZTŐ</div>
+            <div style={{fontFamily:T.font,fontSize:11,color:'rgba(255,255,255,0.5)'}}>2 fős csapda-pálya verseny</div>
           </div>
         </div>
-        <div style={{background:'rgba(255,255,255,0.06)',borderRadius:12,padding:'10px 14px',marginBottom:12}}>
-          <div style={{fontFamily:T.font,fontSize:11,fontWeight:900,color:'rgba(255,255,255,0.4)',letterSpacing:1,marginBottom:8}}>CSAPDÁK</div>
+        <div style={{background:'rgba(255,255,255,0.08)',borderRadius:12,padding:'10px 12px',marginBottom:8}}>
+          <div style={{fontFamily:T.font,fontSize:12,color:'rgba(255,255,255,0.85)',lineHeight:1.55}}>
+            {'1️⃣ Helyezz el 5 csapdát a saját 5×5-ös pályádon\n2️⃣ Az ellenfél vakon rajzolja az útját\n3️⃣ Animáció — csapdák feltárulnak\n4️⃣ Kevesebb késés = győzelem 🏆'}
+          </div>
+        </div>
+        <div style={{background:'rgba(255,255,255,0.05)',borderRadius:10,padding:'8px 12px',marginBottom:8}}>
+          <div style={{fontFamily:T.font,fontSize:10,fontWeight:900,color:'rgba(255,255,255,0.35)',letterSpacing:1,marginBottom:6}}>CSAPDÁK</div>
           {TRAP_TYPES.map(t => (
-            <div key={t.id} style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
-              <span style={{fontSize:16,flexShrink:0}}>{t.emoji}</span>
-              <span style={{fontFamily:T.font,fontWeight:700,fontSize:12,color:'rgba(255,255,255,0.85)',minWidth:80}}>{t.name}</span>
-              <span style={{fontFamily:T.font,fontSize:11,color:'rgba(255,255,255,0.45)'}}>{t.desc}</span>
+            <div key={t.id} style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
+              <span style={{fontSize:14,flexShrink:0}}>{t.emoji}</span>
+              <span style={{fontFamily:T.font,fontWeight:700,fontSize:11,color:'rgba(255,255,255,0.8)',minWidth:72}}>{t.name}</span>
+              <span style={{fontFamily:T.font,fontSize:10,color:'rgba(255,255,255,0.4)'}}>{t.desc}</span>
             </div>
           ))}
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:10,background:'rgba(124,58,237,0.2)',borderRadius:12,padding:'10px 14px',marginBottom:16,border:'1px solid rgba(124,58,237,0.4)'}}>
-          <div style={{width:36,height:36,borderRadius:'50%',background:p1?.color||'#7c3aed',display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:15,color:'#fff',flexShrink:0}}>{(p1?.name||'P1').charAt(0).toUpperCase()}</div>
-          <div style={{fontFamily:T.font,fontWeight:700,fontSize:14,color:'#fff'}}>{p1?.name||'Játékos 1'}</div>
-          <div style={{fontFamily:T.font,fontSize:12,color:'rgba(255,255,255,0.5)',marginLeft:'auto'}}>vs</div>
-          <div style={{fontFamily:T.font,fontWeight:700,fontSize:14,color:'#fff'}}>{p2?.name||'Játékos 2'}</div>
-          <div style={{width:36,height:36,borderRadius:'50%',background:p2?.color||'#0ea5e9',display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:15,color:'#fff',flexShrink:0}}>{(p2?.name||'P2').charAt(0).toUpperCase()}</div>
+        <div style={{display:'flex',alignItems:'center',gap:8,background:'rgba(124,58,237,0.2)',borderRadius:10,padding:'8px 12px',marginBottom:10,border:'1px solid rgba(124,58,237,0.35)'}}>
+          <div style={{width:30,height:30,borderRadius:'50%',background:p1?.color||'#7c3aed',display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:13,color:'#fff',flexShrink:0}}>{(p1?.name||'P1').charAt(0).toUpperCase()}</div>
+          <div style={{fontFamily:T.font,fontWeight:700,fontSize:13,color:'#fff',flex:1}}>{p1?.name||'Játékos 1'}</div>
+          <div style={{fontFamily:T.font,fontSize:11,color:'rgba(255,255,255,0.4)'}}>vs</div>
+          <div style={{fontFamily:T.font,fontWeight:700,fontSize:13,color:'#fff',flex:1,textAlign:'right'}}>{p2?.name||'Játékos 2'}</div>
+          <div style={{width:30,height:30,borderRadius:'50%',background:p2?.color||'#0ea5e9',display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:13,color:'#fff',flexShrink:0}}>{(p2?.name||'P2').charAt(0).toUpperCase()}</div>
         </div>
-        <button onClick={()=>setPhase('setup1')} style={{padding:'15px',borderRadius:14,border:'none',background:YELLOW,color:'#1a0a3e',fontFamily:T.font,fontWeight:900,fontSize:16,cursor:'pointer',marginTop:'auto'}}>
+        <button onClick={()=>setPhase('setup1')} style={{padding:'13px',borderRadius:14,border:'none',background:YELLOW,color:'#1a0a3e',fontFamily:T.font,fontWeight:900,fontSize:15,cursor:'pointer'}}>
           Kezdés → {p1?.name||'Játékos 1'} elhelyezi a csapdákat
         </button>
       </div>
