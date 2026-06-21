@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.427';
+const APP_VERSION = 'v9.428';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -38567,7 +38567,7 @@ function QRModal({ url, onClose }) {
   );
 }
 
-function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCode, initialBpState, onSetHideFooter }) {
+function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCode, initialBpState, onSetHideFooter, onCommit }) {
   const bpCfg = gameMeta?.beerpongConfig || {};
   const [showQR, setShowQR] = React.useState(false);
   const joinUrl = roomCode ? (window.location.origin + window.location.pathname + '?room=' + roomCode) : '';
@@ -39442,9 +39442,14 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           <div style={{ fontFamily:T.font, fontWeight:900, fontSize:24, color:T.ink }}>{champion.name}</div>
           <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>Beer Pong Bajnok! 🍺</div>
           {TOURNAMENT_NAME ? <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkMute, marginTop:-4 }}>{TOURNAMENT_NAME}</div> : null}
-          <button onClick={() => setShowTableau(true)} style={{ marginTop:4, padding:'10px 28px', borderRadius:14, border:'none', background:'#F59E0B', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer', display:'flex', alignItems:'center', gap:8 }}>
-            <span>📊</span> Tábló megosztása
-          </button>
+          <div style={{ display:'flex', gap:10, marginTop:4, width:'100%' }}>
+            <button onClick={() => setShowTableau(true)} style={{ flex:1, padding:'10px 0', borderRadius:14, border:'none', background:'#F59E0B', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+              <span>📊</span> Tábló
+            </button>
+            {onCommit && <button onClick={onCommit} style={{ flex:1, padding:'10px 0', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+              <span>🏁</span> Kilépés
+            </button>}
+          </div>
         </div>
       );
     }
@@ -46078,7 +46083,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'fingerit') return <FingeritGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'cardbattle') return <CardBattleGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} />;
   if (gameId === 'quiz') return <QuizGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} gameMeta={gameMeta} />;
-  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} initialBpState={null} onSetHideFooter={onSetHideFooter} />;
+  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} initialBpState={null} onSetHideFooter={onSetHideFooter} onCommit={onCommit} />;
   return null;
 }
 
@@ -50753,7 +50758,8 @@ function BeerPongTableau({ champion, players, tournamentName, tournament, seRoun
         const now=new Date().toLocaleDateString('hu-HU',{year:'numeric',month:'long',day:'numeric'});
         ctx.fillStyle=SOFT;ctx.font='14px '+F;ctx.textAlign='right';
         ctx.fillText(now,W-16,30);
-        ctx.fillText(players.length+' játékos · '+(maxCups||10)+' pohár · '+(matchMinutes||5)+' perc/meccs · '+allMatches.length+' meccs lejátszva',W-16,50);
+        const tTypeLabel = tournament==='se'?'Kieséses':tournament==='rr'?'Körmérkőzéses':tournament==='grp_rr_se'?'Csoport + Kieséses':tournament==='grp_rr_rr'?'Csoport + Körmérkőzéses':(tournament||'');
+        ctx.fillText(players.length+' játékos · '+(maxCups||10)+' pohár · '+(matchMinutes||5)+' perc/meccs · '+tTypeLabel,W-16,50);
 
         const PAD=14, TOP=84;
         const LW=340; // bal oszlop szélessége
@@ -50898,9 +50904,40 @@ function BeerPongTableau({ champion, players, tournamentName, tournament, seRoun
         const seR=seRounds&&seRounds.length>0?seRounds:null;
         if(seR){
           drawBracket(seR,RX+8,TOP+30,RW-16,BRACH-44);
-        } else if(tournament==='rr'){
-          ctx.fillStyle=SOFT;ctx.font='14px '+F;ctx.textAlign='center';
-          ctx.fillText('Körmérkőzéses rendszer',RX+RW/2,TOP+BRACH/2);
+        }
+        // RR standings always shown
+        if(tournament==='rr'||(tournament&&tournament.startsWith('grp_')&&!seR)){
+          const rrSt={};
+          players.forEach(p=>{rrSt[p.id]={player:p,W:0,D:0,L:0,Pp:0,Pm:0};});
+          (rrMatches||[]).forEach(m=>{
+            if(!m.winner&&!m.draw)return;
+            const[s1,s2]=getScore(m.score);
+            if(rrSt[m.p1?.id]){rrSt[m.p1.id].Pp+=s1;rrSt[m.p1.id].Pm+=s2;}
+            if(rrSt[m.p2?.id]){rrSt[m.p2.id].Pp+=s2;rrSt[m.p2.id].Pm+=s1;}
+            if(m.draw){if(rrSt[m.p1?.id])rrSt[m.p1.id].D++;if(rrSt[m.p2?.id])rrSt[m.p2.id].D++;}
+            else if(m.winner){const lid=m.p1?.id===m.winner.id?m.p2?.id:m.p1?.id;if(rrSt[m.winner.id])rrSt[m.winner.id].W++;if(lid&&rrSt[lid])rrSt[lid].L++;}
+          });
+          const rrRows=Object.values(rrSt).sort((a,b)=>b.W-a.W||(b.Pp-b.Pm)-(a.Pp-a.Pm));
+          const NW2=140,COLS2=['J','Gy','D','V','P+','P-'],CW2=(RW-28-NW2)/6,ROW2=22;
+          let ry2=TOP+28;
+          // header
+          ctx.fillStyle=MINT;rrect(RX+8,ry2,RW-16,26,8);ctx.fill();
+          ctx.fillStyle='#fff';ctx.font='bold 13px '+F;ctx.textAlign='left';
+          ctx.fillText('KÖRMÉRKŐZÉSES ÁLLÁS',RX+18,ry2+18);ry2+=26;
+          ctx.fillStyle=BSOFT;ctx.fillRect(RX+8,ry2,RW-16,18);
+          ctx.fillStyle=MUTE;ctx.font='bold 10px '+F;
+          COLS2.forEach((c,i)=>{ctx.textAlign='center';ctx.fillText(c,RX+8+NW2+i*CW2+CW2/2,ry2+13);});ry2+=18;
+          rrRows.forEach((r,ri)=>{
+            if(ri%2===1){ctx.fillStyle=BSOFT;ctx.fillRect(RX+8,ry2+ri*ROW2,RW-16,ROW2);}
+            ctx.fillStyle=r.player?.color||MINT;ctx.beginPath();ctx.arc(RX+18,ry2+ri*ROW2+11,7,0,Math.PI*2);ctx.fill();
+            ctx.fillStyle='#fff';ctx.font='bold 7px '+F;ctx.textAlign='center';ctx.fillText((r.player?.name||'?').charAt(0).toUpperCase(),RX+18,ry2+ri*ROW2+14);
+            ctx.fillStyle=ri===0?MINT:INK;ctx.font=(ri===0?'bold ':'')+'12px '+F;ctx.textAlign='left';
+            ctx.fillText(r.player?.name||'?',RX+28,ry2+ri*ROW2+15);
+            [r.W+r.D+r.L,r.W,r.D,r.L,r.Pp,r.Pm].forEach((v,i)=>{
+              ctx.fillStyle=i===1&&v>0?MINT:SOFT;ctx.font=(i===1&&v>0?'bold ':'')+'12px '+F;
+              ctx.textAlign='center';ctx.fillText(v,RX+8+NW2+i*CW2+CW2/2,ry2+ri*ROW2+15);
+            });
+          });
         }
 
         // ── DOBOGÓ ────────────────────────────────────────────────────────
