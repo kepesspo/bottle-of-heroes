@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.409';
+const APP_VERSION = 'v9.410';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -46061,23 +46061,33 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
     };
     const onCardPointerUp = (e) => {
       if (!dragRef.current) { setGhost(null); return; }
-      const { cardIdx, value } = dragRef.current;
+      const { cardIdx, value, fromSlot, fromRi, fromCi } = dragRef.current;
       dragRef.current = null;
       const els = document.elementsFromPoint(e.clientX, e.clientY);
       const slot = els.find(el => el.dataset && el.dataset.roundIdx !== undefined);
       if (slot) {
         const ri = parseInt(slot.dataset.roundIdx);
-        setS(s => ({...s, [hk]: s[hk].filter((_,i)=>i!==cardIdx), [pk]: s[pk].map((r,i)=>i===ri?[...r,value]:r), sel:null}));
+        if (fromSlot) {
+          // move from one slot to another (or same slot)
+          setS(s => ({...s, [pk]: s[pk].map((r,i) => {
+            if (i === fromRi && i === ri) return r; // same slot, no change
+            if (i === fromRi) return r.filter((_,j)=>j!==fromCi);
+            if (i === ri) return [...r, value];
+            return r;
+          }), sel:null}));
+        } else {
+          setS(s => ({...s, [hk]: s[hk].filter((_,i)=>i!==cardIdx), [pk]: s[pk].map((r,i)=>i===ri?[...r,value]:r), sel:null}));
+        }
       }
+      // if fromSlot and no target, card stays in original slot (no state change needed)
       setGhost(null); setDropHover(null);
     };
 
     const onSlotCardPointerDown = (e, ri, ci, v) => {
       e.preventDefault(); e.stopPropagation();
       e.currentTarget.setPointerCapture(e.pointerId);
-      // remove from slot, treat as new drag from hand-ghost
-      setS(s => ({...s, [pk]: s[pk].map((r,i)=>i===ri?r.filter((_,j)=>j!==ci):r)}));
-      dragRef.current = { cardIdx: -1, value: v, fromSlot: true };
+      // do NOT remove from state yet — keep card visible (dimmed) until drop
+      dragRef.current = { cardIdx: -1, value: v, fromSlot: true, fromRi: ri, fromCi: ci };
       setGhost({ x: e.clientX, y: e.clientY, value: v });
       setDropHover(null);
     };
@@ -46123,7 +46133,9 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
             }}>
               <div style={{fontFamily:T.font,fontWeight:700,fontSize:12,color:T.inkSoft,minWidth:48,pointerEvents:'none'}}>{ri+1}. kör</div>
               <div style={{flex:1,display:'flex',flexWrap:'wrap',gap:6,alignItems:'center',pointerEvents:'none'}}>
-                {cards.map((v,ci) => (
+                {cards.map((v,ci) => {
+                  const isDraggingThis = ghost && dragRef.current && dragRef.current.fromSlot && dragRef.current.fromRi===ri && dragRef.current.fromCi===ci;
+                  return (
                   <div key={ci}
                     onPointerDown={e=>onSlotCardPointerDown(e,ri,ci,v)}
                     onClick={e=>{e.stopPropagation();}}
@@ -46131,9 +46143,10 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
                       width:36,height:36,borderRadius:10,background:pColor,color:'#fff',
                       display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:16,
                       cursor:'grab',boxShadow:'0 2px 6px '+pColor+'44',flexShrink:0,
-                      touchAction:'none',
+                      touchAction:'none', opacity: isDraggingThis ? 0.3 : 1,
                     }}>{v}</div>
-                ))}
+                  );
+                })}
                 {cards.length===0 && <span style={{fontFamily:T.font,fontSize:12,color:T.inkMute,pointerEvents:'none'}}>Húzz ide</span>}
               </div>
               <div style={{fontFamily:T.font,fontWeight:800,fontSize:14,color:cards.length?T.ink:T.inkMute,minWidth:24,textAlign:'right',pointerEvents:'none'}}>
