@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.403';
+const APP_VERSION = 'v9.404';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -46039,8 +46039,65 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
 
   if (S.phase === 'p1_plan' || S.phase === 'p2_plan') {
     const totalLeft = hand.reduce((a,b)=>a+b,0);
+    const dragRef = React.useRef(null);
+    const [ghost, setGhost] = React.useState(null); // {x,y,value}
+    const [dropHover, setDropHover] = React.useState(null); // round index being hovered
+
+    const onCardPointerDown = (e, i, v) => {
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      dragRef.current = { cardIdx: i, value: v };
+      setGhost({ x: e.clientX, y: e.clientY, value: v });
+      setDropHover(null);
+    };
+    const onCardPointerMove = (e) => {
+      if (!dragRef.current) return;
+      setGhost(g => g ? { ...g, x: e.clientX, y: e.clientY } : null);
+      // find slot under pointer (ghost has pointer-events:none)
+      const els = document.elementsFromPoint(e.clientX, e.clientY);
+      const slot = els.find(el => el.dataset && el.dataset.roundIdx !== undefined);
+      setDropHover(slot ? parseInt(slot.dataset.roundIdx) : null);
+    };
+    const onCardPointerUp = (e) => {
+      if (!dragRef.current) { setGhost(null); return; }
+      const { cardIdx, value } = dragRef.current;
+      dragRef.current = null;
+      const els = document.elementsFromPoint(e.clientX, e.clientY);
+      const slot = els.find(el => el.dataset && el.dataset.roundIdx !== undefined);
+      if (slot) {
+        const ri = parseInt(slot.dataset.roundIdx);
+        setS(s => ({...s, [hk]: s[hk].filter((_,i)=>i!==cardIdx), [pk]: s[pk].map((r,i)=>i===ri?[...r,value]:r), sel:null}));
+      }
+      setGhost(null); setDropHover(null);
+    };
+
+    const onSlotCardPointerDown = (e, ri, ci, v) => {
+      e.preventDefault(); e.stopPropagation();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      // remove from slot, treat as new drag from hand-ghost
+      setS(s => ({...s, [pk]: s[pk].map((r,i)=>i===ri?r.filter((_,j)=>j!==ci):r)}));
+      dragRef.current = { cardIdx: -1, value: v, fromSlot: true };
+      setGhost({ x: e.clientX, y: e.clientY, value: v });
+      setDropHover(null);
+    };
+
     return (
-      <div style={{display:'flex',flexDirection:'column',gap:10,overflowY:'auto'}}>
+      <div style={{display:'flex',flexDirection:'column',gap:10,overflowY:'auto',touchAction:'none'}}
+           onPointerMove={onCardPointerMove} onPointerUp={onCardPointerUp}>
+
+        {/* Ghost kártya — lebeg az ujj alatt */}
+        {ghost && (
+          <div style={{
+            position:'fixed', left:ghost.x-24, top:ghost.y-32, width:48, height:64,
+            borderRadius:12, background:pColor, color:'#fff',
+            display:'flex',alignItems:'center',justifyContent:'center',
+            fontFamily:T.font,fontWeight:900,fontSize:22,
+            boxShadow:'0 8px 24px '+pColor+'66',
+            pointerEvents:'none', zIndex:9999,
+            transform:'scale(1.15)',transition:'none',
+          }}>{ghost.value}</div>
+        )}
+
         <div style={{textAlign:'center',padding:'4px 0 6px'}}>
           <div style={{display:'inline-flex',alignItems:'center',gap:8,padding:'6px 18px',background:pColor+'22',borderRadius:999}}>
             <div style={{width:10,height:10,borderRadius:'50%',background:pColor,flexShrink:0}} />
@@ -46050,49 +46107,66 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
             {totalLeft > 0 ? `Még ${totalLeft} pont kiosztható` : '✓ Minden lap kiosztva'}
           </div>
         </div>
-        {plan.map((cards, ri) => (
-          <div key={ri} onClick={() => assign(ri)} style={{
-            display:'flex', alignItems:'center', gap:10, padding:'10px 14px',
-            background: S.sel!==null ? pColor+'15' : T.surface,
-            borderRadius:14, border: S.sel!==null ? '2px dashed '+pColor : '2px solid transparent',
-            boxShadow: T.shadow, cursor: S.sel!==null ? 'pointer' : 'default',
-            transition:'background .12s, border .12s', minHeight:52,
-          }}>
-            <div style={{fontFamily:T.font,fontWeight:700,fontSize:12,color:T.inkSoft,minWidth:48}}>{ri+1}. kör</div>
-            <div style={{flex:1,display:'flex',flexWrap:'wrap',gap:6,alignItems:'center'}}>
-              {cards.map((v,ci) => (
-                <div key={ci} onClick={e=>{e.stopPropagation();remove(ri,ci);}} style={{
-                  width:36,height:36,borderRadius:10,background:pColor,color:'#fff',
-                  display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:16,
-                  cursor:'pointer',boxShadow:'0 2px 6px '+pColor+'44',flexShrink:0,
-                }}>{v}</div>
-              ))}
-              {cards.length===0 && <span style={{fontFamily:T.font,fontSize:12,color:T.inkMute}}>Koppints ide</span>}
+
+        {/* Körslotok */}
+        {plan.map((cards, ri) => {
+          const isHovered = dropHover === ri;
+          return (
+            <div key={ri} data-round-idx={ri} onClick={() => assign(ri)} style={{
+              display:'flex', alignItems:'center', gap:10, padding:'10px 14px',
+              background: isHovered ? pColor+'28' : S.sel!==null||ghost ? pColor+'12' : T.surface,
+              borderRadius:14,
+              border: isHovered ? '2px solid '+pColor : S.sel!==null||ghost ? '2px dashed '+pColor+'88' : '2px solid transparent',
+              boxShadow: T.shadow, cursor: S.sel!==null ? 'pointer' : 'default',
+              transition:'background .1s, border .1s', minHeight:52,
+            }}>
+              <div style={{fontFamily:T.font,fontWeight:700,fontSize:12,color:T.inkSoft,minWidth:48,pointerEvents:'none'}}>{ri+1}. kör</div>
+              <div style={{flex:1,display:'flex',flexWrap:'wrap',gap:6,alignItems:'center',pointerEvents:'none'}}>
+                {cards.map((v,ci) => (
+                  <div key={ci}
+                    onPointerDown={e=>onSlotCardPointerDown(e,ri,ci,v)}
+                    onClick={e=>{e.stopPropagation();}}
+                    style={{
+                      width:36,height:36,borderRadius:10,background:pColor,color:'#fff',
+                      display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:16,
+                      cursor:'grab',boxShadow:'0 2px 6px '+pColor+'44',flexShrink:0,
+                      touchAction:'none',
+                    }}>{v}</div>
+                ))}
+                {cards.length===0 && <span style={{fontFamily:T.font,fontSize:12,color:T.inkMute,pointerEvents:'none'}}>Húzz ide</span>}
+              </div>
+              <div style={{fontFamily:T.font,fontWeight:800,fontSize:14,color:cards.length?T.ink:T.inkMute,minWidth:24,textAlign:'right',pointerEvents:'none'}}>
+                {cards.length ? cards.reduce((a,b)=>a+b,0) : ''}
+              </div>
             </div>
-            <div style={{fontFamily:T.font,fontWeight:800,fontSize:14,color:cards.length?T.ink:T.inkMute,minWidth:24,textAlign:'right'}}>
-              {cards.length ? cards.reduce((a,b)=>a+b,0) : ''}
-            </div>
-          </div>
-        ))}
+          );
+        })}
+
+        {/* Kézben lévő kártyák */}
         <div style={{marginTop:6}}>
           <div style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.inkMute,textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:8}}>Kézben</div>
           <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
             {hand.map((v,i) => (
-              <div key={i} onClick={() => setS(s=>({...s,sel:s.sel===i?null:i}))} style={{
-                width:48,height:64,borderRadius:12,
-                background: S.sel===i ? pColor : T.surface,
-                color: S.sel===i ? '#fff' : T.ink,
-                border: S.sel===i ? '2px solid '+pColor : '2px solid '+T.inkMute+'30',
-                display:'flex',alignItems:'center',justifyContent:'center',
-                fontFamily:T.font,fontWeight:900,fontSize:22,
-                boxShadow: S.sel===i ? '0 4px 14px '+pColor+'55' : T.shadow,
-                cursor:'pointer',transition:'all .15s',
-                transform: S.sel===i ? 'translateY(-8px) scale(1.08)' : 'none',
-              }}>{v}</div>
+              <div key={i}
+                onPointerDown={e=>onCardPointerDown(e,i,v)}
+                onClick={() => setS(s=>({...s,sel:s.sel===i?null:i}))}
+                style={{
+                  width:48,height:64,borderRadius:12,
+                  background: S.sel===i ? pColor : T.surface,
+                  color: S.sel===i ? '#fff' : T.ink,
+                  border: S.sel===i ? '2px solid '+pColor : '2px solid '+T.inkMute+'30',
+                  display:'flex',alignItems:'center',justifyContent:'center',
+                  fontFamily:T.font,fontWeight:900,fontSize:22,
+                  boxShadow: S.sel===i ? '0 4px 14px '+pColor+'55' : T.shadow,
+                  cursor:'grab',transition:'background .15s,border .15s,box-shadow .15s',
+                  touchAction:'none',
+                  opacity: ghost ? 0.5 : 1,
+                }}>{v}</div>
             ))}
             {allIn && <div style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:T.mint,display:'flex',alignItems:'center'}}>✓ Minden lap kiosztva!</div>}
           </div>
         </div>
+
         {allIn && (
           <button onClick={() => setS(s=>({...s, phase: isP1?'handoff':'reveal', sel:null}))} style={{
             marginTop:8,padding:'15px',borderRadius:16,border:'none',
