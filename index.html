@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.483';
+const APP_VERSION = 'v9.484';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -50368,10 +50368,10 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
   const DURATION = 30;
   const EMOJIS = ['🎯','⭐','🔥','💎','🎵','🍀','⚡','🎪','🦋','🎸','🎲','🚀'];
   const TRAP_EMOJI = '💀';
-  const TRAP_CHANCE = 0.2; // 20% chance
+  const TRAP_CHANCE = 0.2;
   const [phase, setPhase] = useState('intro');
   const [timeLeft, setTimeLeft] = useState(DURATION);
-  const [activeBtn, setActiveBtn] = useState(null);  // {pos, emoji}
+  const [activeBtn, setActiveBtn] = useState(null);
   const [score1, setScore1] = useState(0);
   const [score2, setScore2] = useState(0);
   const [currentScore, setCurrentScore] = useState(0);
@@ -50383,6 +50383,8 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
   const endTimeRef = useRef(0);
   const startTimeRef = useRef(0);
   const isP2Ref = useRef(false);
+  const score1Ref = useRef(0);
+  const score2Ref = useRef(0);
 
   const p1 = challenger;
   const p2 = opponent || (players && players.find(p => p.id !== challenger?.id)) || null;
@@ -50399,13 +50401,11 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
     const isTrap = Math.random() < TRAP_CHANCE;
     const emoji = isTrap ? TRAP_EMOJI : EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
     setActiveBtn({ pos, emoji, isTrap });
-    // Progress 0→1 over DURATION seconds — button gets faster as time passes
     const elapsed = Date.now() - startTimeRef.current;
     const progress = Math.min(1, elapsed / (DURATION * 1000));
-    // visible: 750ms at start → 200ms at end
-    const visibleMs = Math.max(200, 750 - progress * 550) + Math.random() * 80;
-    // gap: 120ms at start → 40ms at end
-    const gapMs = Math.max(40, 120 - progress * 80);
+    // FIX: min visible 380ms so it stays tappable at the end
+    const visibleMs = Math.max(380, 900 - progress * 520) + Math.random() * 80;
+    const gapMs = Math.max(60, 150 - progress * 90);
     btnTimerRef.current = setTimeout(() => {
       setActiveBtn(null);
       spawnTimerRef.current = setTimeout(spawnNext, gapMs);
@@ -50431,23 +50431,31 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
         clearTimeout(btnTimerRef.current);
         clearTimeout(spawnTimerRef.current);
         setActiveBtn(null);
-        if (!isP2) { setScore1(scoreRef.current); setPhase('p1done'); }
-        else { setScore2(scoreRef.current); setPhase('done'); }
+        if (!isP2) {
+          score1Ref.current = scoreRef.current;
+          setScore1(scoreRef.current);
+          setPhase('p1done');
+        } else {
+          score2Ref.current = scoreRef.current;
+          setScore2(scoreRef.current);
+          setPhase('done');
+        }
       }
     }, 100);
-    // Start spawning after 300ms
     spawnTimerRef.current = setTimeout(spawnNext, 300);
   };
 
   useEffect(() => {
     if (phase === 'done') {
-      const s1 = score1, s2 = score2;
+      const s1 = score1Ref.current, s2 = score2Ref.current;
       const diff = Math.abs(s1 - s2);
       const loser = s1 < s2 ? p1 : s2 < s1 ? p2 : null;
       const drinks = diff > 0 ? diff : 1;
       const dm = {};
       if (loser) dm[loser.id] = drinks;
-      const subtitle = loser ? `${loser.name} iszik ${drinks} kortyt (${s1} vs ${s2})` : `Döntetlen! (${s1} vs ${s2}) — mindenki iszik 1-et`;
+      const subtitle = loser
+        ? `${loser.name} iszik ${drinks} kortyt (${s1} vs ${s2})`
+        : `Döntetlen! (${s1} vs ${s2}) — mindenki iszik 1-et`;
       if (!loser) { players?.forEach(p => { dm[p.id] = 1; }); }
       if (!advancedRef.current) {
         advancedRef.current = true;
@@ -50465,7 +50473,6 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
     if (wasTrap) {
       scoreRef.current = Math.max(0, scoreRef.current - 1);
       setCurrentScore(scoreRef.current);
-      // brief flash then clear
       spawnTimerRef.current = setTimeout(() => { setActiveBtn(null); setTimeout(spawnNext, 80); }, 300);
     } else {
       setActiveBtn(null);
@@ -50515,16 +50522,26 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
           </svg>
           <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>✓ {currentScore}</div>
         </div>
+        {/* FIX: entire cell is a <button> for full touch area */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10, width:'100%' }}>
           {gridPositions.map((_, i) => {
             const isActive = activeBtn && activeBtn.pos === i;
             const isTrap = isActive && activeBtn.isTrap;
             const cellBg = isActive ? (isTrap ? '#EF4444' : '#34D399') : PASTEL_COLORS[i % PASTEL_COLORS.length];
             return (
-              <div key={i} onClick={() => handleTap(i)}
-                style={{ height:76, borderRadius:18, background: cellBg, display:'grid', placeItems:'center', cursor:'pointer', transition:'background .08s', boxShadow: isActive ? `0 0 20px ${isTrap ? '#EF444488' : '#34D39988'}` : '0 2px 6px rgba(0,0,0,0.08)' }}>
-                {isActive && <span style={{ fontSize:32 }}>{activeBtn.emoji}</span>}
-              </div>
+              <button key={i} onClick={() => handleTap(i)}
+                style={{
+                  height:76, borderRadius:18, background: cellBg,
+                  border:'none', padding:0,
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  cursor:'pointer', transition:'background .08s, transform .08s',
+                  boxShadow: isActive ? `0 0 20px ${isTrap ? '#EF444488' : '#34D39988'}` : '0 2px 6px rgba(0,0,0,0.08)',
+                  transform: isActive ? 'scale(0.96)' : 'scale(1)',
+                  WebkitTapHighlightColor: 'transparent',
+                  touchAction: 'manipulation',
+                }}>
+                {isActive && <span style={{ fontSize:32, pointerEvents:'none' }}>{activeBtn.emoji}</span>}
+              </button>
             );
           })}
         </div>
@@ -50543,6 +50560,65 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
       </button>
     </div>
   );
+
+  // FIX: 'done' phase — show result inline, no empty screen
+  if (phase === 'done') {
+    const s1 = score1Ref.current, s2 = score2Ref.current;
+    const diff = Math.abs(s1 - s2);
+    const loser = s1 < s2 ? p1 : s2 < s1 ? p2 : null;
+    const drinks = diff > 0 ? diff : 1;
+    const winner = loser ? (loser.id === p1?.id ? p2 : p1) : null;
+    return (
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:18 }}>
+        {/* Score comparison */}
+        <div style={{ display:'flex', gap:14, width:'100%' }}>
+          {[{p: p1, s: s1}, {p: p2, s: s2}].map(({p, s}, i) => {
+            const isLoser = loser && loser.id === p?.id;
+            return (
+              <div key={i} style={{
+                flex:1, borderRadius:18, padding:'16px 12px',
+                background: isLoser ? `${T.coral}18` : `${T.mint}18`,
+                border: `2.5px solid ${isLoser ? T.coral : T.mint}`,
+                display:'flex', flexDirection:'column', alignItems:'center', gap:6,
+                animation:'popIn .4s',
+              }}>
+                <div style={{ width:38, height:38, borderRadius:'50%', background: p?.color||T.mint,
+                  display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff' }}>
+                  {(p?.name||'?').charAt(0).toUpperCase()}
+                </div>
+                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink }}>{p?.name}</div>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color: isLoser ? T.coral : T.mint }}>{s}</div>
+                <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>találat</div>
+              </div>
+            );
+          })}
+        </div>
+        {/* Result banner */}
+        <div style={{
+          width:'100%', borderRadius:20, padding:'16px',
+          background: loser ? `${T.coral}18` : `${T.yellow}22`,
+          border: `2.5px solid ${loser ? T.coral : T.yellow}`,
+          textAlign:'center', animation:'eremWin .5s cubic-bezier(0.34,1.56,0.64,1)',
+        }}>
+          {loser ? (
+            <>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.coral }}>😬 {loser.name} veszített</div>
+              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink, marginTop:4 }}>
+                Iszik <span style={{color:T.coral}}>{drinks} kortyt</span> ({s1} vs {s2})
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.yellow }}>🤝 Döntetlen!</div>
+              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink, marginTop:4 }}>
+                Mindenki iszik <span style={{color:T.coral}}>1-et</span> ({s1} vs {s2})
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return null;
 }
