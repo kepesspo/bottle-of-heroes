@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.526';
+const APP_VERSION = 'v9.527';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -53640,9 +53640,23 @@ function SzerkesztesTab({ players, setPlayers, turn, setTurn, pendingCommit, set
   };
 
   const removePlayer = (id) => {
+    if (localOrder.length <= 1) return;
     const arr = localOrder.filter(x => x.id !== id);
-    if (arr.length === 0) return;
-    applyOrder(arr);
+    // Update local state and parent directly — skip applyOrder to avoid useEffect race
+    prevIdSetRef.current = new Set(arr.map(p => p.id));
+    setLocalOrder(arr);
+    setPlayers(arr);
+    const curId = players[turn % Math.max(players.length,1)]?.id;
+    const newTurnIdx = arr.findIndex(p => p.id === curId);
+    if (newTurnIdx >= 0) setTurn(newTurnIdx);
+    else if (arr.length > 0) setTurn(0);
+    setPendingCommit(pc => {
+      if (!pc) return pc;
+      const newPl = pc.newPlayers.filter(p => p.id !== id);
+      const curIdInNew = pc.newPlayers[pc.newTurn % Math.max(pc.newPlayers.length,1)]?.id;
+      const newPcTurn = newPl.findIndex(p => p.id === curIdInNew);
+      return { ...pc, newPlayers: newPl, newTurn: newPcTurn >= 0 ? newPcTurn : Math.min(pc.newTurn, Math.max(0, newPl.length-1)) };
+    });
   };
 
   const moveUp = (i) => {
