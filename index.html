@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.516';
+const APP_VERSION = 'v9.517';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -53476,7 +53476,7 @@ function OnboardingOverlay({ onDone }) {
 function SzerkesztesTab({ players, setPlayers, turn, setTurn, pendingCommit, setPendingCommit }) {
   const [localOrder, setLocalOrder] = React.useState(players);
   const [saved, setSaved] = React.useState(false);
-  const [editNames, setEditNames] = React.useState({});
+  const nameInputRefs = React.useRef({});
 
   // Only sync from parent if the SET of player IDs changed (add/remove), never on reorder
   const prevIdSetRef = React.useRef(new Set(players.map(p=>p.id)));
@@ -53487,6 +53487,14 @@ function SzerkesztesTab({ players, setPlayers, turn, setTurn, pendingCommit, set
     prevIdSetRef.current = newSet;
     if (changed) setLocalOrder(players);
   }, [players]);
+
+  // Sync uncontrolled input values when order changes (but not while that input is focused)
+  React.useEffect(() => {
+    localOrder.forEach(p => {
+      const el = nameInputRefs.current[p.id];
+      if (el && el !== document.activeElement) el.value = p.name;
+    });
+  }, [localOrder]);
 
   const applyOrder = (arr) => {
     setLocalOrder(arr);
@@ -53545,13 +53553,14 @@ function SzerkesztesTab({ players, setPlayers, turn, setTurn, pendingCommit, set
             </div>
           ) : (
             <input
-              value={editNames[p.id] ?? p.name}
-              onChange={e => setEditNames(prev => ({...prev, [p.id]: e.target.value}))}
+              ref={el => { if (el) nameInputRefs.current[p.id] = el; }}
+              defaultValue={p.name}
+              onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
               onBlur={e => {
                 const newName = e.target.value.trim();
-                if (newName && newName !== p.name) {
+                if (!newName) { e.target.value = p.name; return; }
+                if (newName !== p.name) {
                   applyOrder(localOrder.map(x => x.id===p.id ? {...x, name: newName} : x));
-                  setEditNames(prev => ({...prev, [p.id]: newName}));
                 }
               }}
               style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink,
