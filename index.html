@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.466';
+const APP_VERSION = 'v9.467';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -43640,28 +43640,72 @@ function TicktakGame({ gameIdx, players, onAdvance, onResult }) {
     return () => clearTimeout(timerRef.current);
   }, [gameIdx]);
 
+  const tickIntervalRef = React.useRef(null);
+  const audioCtxRef = React.useRef(null);
+
+  const getAudioCtx = () => {
+    if (!audioCtxRef.current) {
+      try { audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+    }
+    return audioCtxRef.current;
+  };
+
+  const playTick = (high = false) => {
+    try {
+      const ctx = getAudioCtx();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = high ? 1200 : 900;
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.09);
+    } catch(e) {}
+  };
+
   const playBuzz = () => {
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      [0, 0.15, 0.3].forEach(offset => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.value = 880;
-        gain.gain.setValueAtTime(0, ctx.currentTime + offset);
-        gain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + offset + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + offset + 0.25);
-        osc.start(ctx.currentTime + offset);
-        osc.stop(ctx.currentTime + offset + 0.3);
-      });
+      const ctx = getAudioCtx();
+      if (ctx) {
+        [0, 0.18, 0.36, 0.54].forEach(offset => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.frequency.value = 880;
+          gain.gain.setValueAtTime(0, ctx.currentTime + offset);
+          gain.gain.linearRampToValueAtTime(0.5, ctx.currentTime + offset + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + offset + 0.3);
+          osc.start(ctx.currentTime + offset);
+          osc.stop(ctx.currentTime + offset + 0.35);
+        });
+      }
     } catch(e) {}
+    try { if ('vibrate' in navigator) navigator.vibrate([200, 100, 200, 100, 400]); } catch(e) {}
   };
 
   const start = () => {
     setPhase('running');
+    // start tick-tack — alternating high/low every 600ms
+    let tickHigh = false;
+    playTick(false);
+    tickIntervalRef.current = setInterval(() => {
+      tickHigh = !tickHigh;
+      playTick(tickHigh);
+    }, 600);
     const delay = 15000 + Math.floor(Math.random() * 30000);
-    timerRef.current = setTimeout(() => { setPhase('buzz'); playBuzz(); }, delay);
+    timerRef.current = setTimeout(() => {
+      clearInterval(tickIntervalRef.current);
+      setPhase('buzz');
+      playBuzz();
+    }, delay);
   };
+
+  React.useEffect(() => {
+    return () => { clearInterval(tickIntervalRef.current); };
+  }, []);
 
   const selectLoser = (pid) => {
     if (loserPid || advancedRef.current) return;
@@ -43673,24 +43717,45 @@ function TicktakGame({ gameIdx, players, onAdvance, onResult }) {
     onAdvance && onAdvance(dm);
   };
 
+  const ClockSVG = ({ size=110, animate=false, buzz=false }) => {
+    const c = size/2, r = size*0.42, stroke = size*0.07;
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ animation: animate ? 'pulse 0.6s infinite' : buzz ? 'shakeDrink 0.5s infinite' : 'none' }}>
+        <circle cx={c} cy={c} r={r} fill={buzz ? T.coral+'22' : T.surface} stroke={buzz ? T.coral : T.mint} strokeWidth={stroke}/>
+        {/* Hour hand */}
+        <line x1={c} y1={c} x2={c} y2={c - r*0.5} stroke={buzz ? T.coral : T.ink} strokeWidth={stroke*0.9} strokeLinecap="round"/>
+        {/* Minute hand */}
+        <line x1={c} y1={c} x2={c + r*0.55} y2={c - r*0.18} stroke={buzz ? T.coral : T.ink} strokeWidth={stroke*0.6} strokeLinecap="round"/>
+        {/* Center dot */}
+        <circle cx={c} cy={c} r={stroke*0.7} fill={buzz ? T.coral : T.mint}/>
+        {/* Bell bumps on top */}
+        {buzz && <>
+          <circle cx={c - r*0.28} cy={c - r*0.88} r={r*0.13} fill={T.coral}/>
+          <circle cx={c + r*0.28} cy={c - r*0.88} r={r*0.13} fill={T.coral}/>
+          <line x1={c - r*0.18} y1={c - r*0.78} x2={c + r*0.18} y2={c - r*0.78} stroke={T.coral} strokeWidth={stroke*0.6} strokeLinecap="round"/>
+        </>}
+      </svg>
+    );
+  };
+
   if (phase === 'ready') return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
-      <div style={{ width:120, height:120, borderRadius:'50%', background:'rgba(255,255,255,0.85)', boxShadow:'0 4px 18px rgba(0,0,0,0.10)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:56 }}>
-        ⏰
+      <div style={{ width:120, height:120, borderRadius:'50%', background:T.surface, boxShadow:T.shadow, display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <ClockSVG size={90} />
       </div>
       <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', lineHeight:1.5, maxWidth:260 }}>
         Körbeadjátok a tárgyat! Az időzítő titokban indul — mikor cseng, annál a játékosnál aki épp tartja.
       </div>
       <button onClick={start} style={{ width:'100%', padding:'15px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow }}>
-        ⏰ Időzítő indítása!
+        Időzítő indítása!
       </button>
     </div>
   );
 
   if (phase === 'running') return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
-      <div style={{ width:120, height:120, borderRadius:'50%', background:'rgba(255,255,255,0.85)', boxShadow:'0 4px 18px rgba(0,0,0,0.10)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:60, animation:'pulse 0.7s infinite' }}>
-        ⏰
+      <div style={{ width:120, height:120, borderRadius:'50%', background:T.surface, boxShadow:T.shadow, display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <ClockSVG size={90} animate />
       </div>
       <div style={{ fontFamily:T.font, fontWeight:800, fontSize:24, color:T.mint, textTransform:'uppercase', letterSpacing:'0.1em' }}>{t('ticktakRunning')}</div>
       <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>{t('ticktakPass')}</div>
@@ -43699,8 +43764,8 @@ function TicktakGame({ gameIdx, players, onAdvance, onResult }) {
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, width:'100%' }}>
-      <div style={{ width:130, height:130, borderRadius:'50%', background:'#fff', boxShadow:'0 4px 18px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:64, animation:!loserPid?'pulse 0.4s infinite':'none' }}>
-        ⏰
+      <div style={{ width:130, height:130, borderRadius:'50%', background:T.surface, boxShadow:'0 4px 18px rgba(0,0,0,0.12)', display:'flex', alignItems:'center', justifyContent:'center', animation:!loserPid?'shakeDrink 0.4s infinite':'none' }}>
+        <ClockSVG size={100} buzz />
       </div>
       <div style={{ fontFamily:T.font, fontWeight:800, fontSize:26, color:T.coral, textTransform:'uppercase', letterSpacing:'0.08em' }}>
         CSÖRÖG! 🔔
