@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.538';
+const APP_VERSION = 'v9.539';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -45291,6 +45291,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
   const cdStartedRef = React.useRef(false);
   const [hostLocalAns, setHostLocalAns] = React.useState({});
   const hostSubmittedRef = React.useRef(false);
+  const [hostPlayerId, setHostPlayerId] = React.useState(null);
 
   const playerMap = React.useMemo(() => Object.fromEntries((players||[]).map(p=>[p.id,p])), [players]);
 
@@ -45422,6 +45423,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
   };
 
   const pl = players||[];
+  const hostPlayer = hostIsPlayer ? (pl.find(p => p.id === hostPlayerId) || null) : null;
 
   if (phase === 'done') return (
     <div style={{display:'flex',flexDirection:'column',gap:10,width:'100%'}}>
@@ -45522,11 +45524,11 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
           </div>
         </div>
         {/* Host writing form */}
-        {hostIsPlayer && pl[0] && !answers[pl[0].id]?.done && (
+        {hostPlayer && !answers[hostPlayer.id]?.done && (
           <div style={{background:T.surface,borderRadius:18,padding:'14px 16px',boxShadow:T.shadow,border:`2px solid ${T.mint}40`}}>
             <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
-              <div style={{width:28,height:28,borderRadius:'50%',background:pl[0].color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:12,color:'#fff',flexShrink:0}}>{pl[0].name?.[0]||'?'}</div>
-              <span style={{fontFamily:T.font,fontWeight:700,fontSize:14,color:T.ink,flex:1}}>{pl[0].name} (Te)</span>
+              <div style={{width:28,height:28,borderRadius:'50%',background:hostPlayer.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:12,color:'#fff',flexShrink:0}}>{hostPlayer.name?.[0]||'?'}</div>
+              <span style={{fontFamily:T.font,fontWeight:700,fontSize:14,color:T.ink,flex:1}}>{hostPlayer.name} (Te)</span>
               <span style={{fontFamily:T.font,fontSize:11,color:T.mint,fontWeight:700}}>HOST</span>
             </div>
             {OVFJ_CATS.map((cat,ci) => (
@@ -45545,7 +45547,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
               onClick={() => {
                 if (hostSubmittedRef.current) return;
                 hostSubmittedRef.current = true;
-                setAnswers(prev => ({...prev, [pl[0].id]: {...hostLocalAns, done: true, pid: pl[0].id}}));
+                setAnswers(prev => ({...prev, [hostPlayer.id]: {...hostLocalAns, done: true, pid: hostPlayer.id}}));
               }}
               style={{width:'100%',padding:'11px',borderRadius:12,border:'none',background:T.mint,color:'#fff',fontFamily:T.font,fontWeight:700,fontSize:14,cursor:'pointer',marginTop:4}}>
               ✓ Kész
@@ -45604,7 +45606,24 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
           </span>
         ))}
       </div>
-      <PrimaryButton onClick={startWriting} style={{maxWidth:300}}>✏️ Kör kezdése!</PrimaryButton>
+      {hostIsPlayer && pl.length > 0 && (
+        <div style={{width:'100%',maxWidth:340,background:T.surface,borderRadius:18,padding:'14px 16px',boxShadow:T.shadow}}>
+          <div style={{fontFamily:T.font,fontSize:12,fontWeight:700,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:10}}>👤 Ki vagy te?</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+            {pl.map(p => {
+              const sel = hostPlayerId === p.id;
+              return (
+                <button key={p.id} onClick={() => setHostPlayerId(p.id)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 14px',borderRadius:12,border: sel ? `2px solid ${T.mint}` : `1.5px solid ${T.surfaceMuted}`,background: sel ? T.mintSoft : T.bgSoft,cursor:'pointer',fontFamily:T.font,fontWeight: sel ? 700 : 400,fontSize:14,color: sel ? T.mint : T.ink,transition:'all .15s'}}>
+                  <div style={{width:24,height:24,borderRadius:'50%',background:p.color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:11,color:'#fff',flexShrink:0}}>{p.name?.[0]||'?'}</div>
+                  {p.name}
+                  {sel && <span style={{fontSize:14}}>✓</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <PrimaryButton onClick={startWriting} style={{maxWidth:300}} disabled={hostIsPlayer && !hostPlayerId}>✏️ Kör kezdése!</PrimaryButton>
     </div>
   );
 }
