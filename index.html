@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.522';
+const APP_VERSION = 'v9.523';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -53606,7 +53606,6 @@ function OnboardingOverlay({ onDone }) {
 function SzerkesztesTab({ players, setPlayers, turn, setTurn, pendingCommit, setPendingCommit }) {
   const [localOrder, setLocalOrder] = React.useState(players);
   const [saved, setSaved] = React.useState(false);
-  const nameInputRefs = React.useRef({});
 
   // Only sync from parent if the SET of player IDs changed (add/remove), never on reorder
   const prevIdSetRef = React.useRef(new Set(players.map(p=>p.id)));
@@ -53618,26 +53617,16 @@ function SzerkesztesTab({ players, setPlayers, turn, setTurn, pendingCommit, set
     if (changed) setLocalOrder(players);
   }, [players]);
 
-  // Sync uncontrolled input values when order changes (but not while that input is focused)
-  React.useEffect(() => {
-    localOrder.forEach(p => {
-      const el = nameInputRefs.current[p.id];
-      if (el && el !== document.activeElement) el.value = p.name;
-    });
-  }, [localOrder]);
-
   const applyOrder = (arr) => {
     setLocalOrder(arr);
     setSaved(true);
     setTimeout(() => setSaved(false), 1200);
-    // Find current player in new order
     const curId = players[turn % Math.max(players.length,1)]?.id;
     const newTurnIdx = arr.findIndex(p => p.id === curId);
     setPlayers(arr);
     if (newTurnIdx >= 0) setTurn(newTurnIdx);
     setPendingCommit(pc => {
       if (!pc) return pc;
-      // Keep stats (points/drinks) from pendingCommit but take name/color from arr
       const reorderedNew = arr.map(p => {
         const pcP = pc.newPlayers.find(np => np.id === p.id);
         return pcP ? { ...pcP, name: p.name, color: p.color } : p;
@@ -53646,6 +53635,12 @@ function SzerkesztesTab({ players, setPlayers, turn, setTurn, pendingCommit, set
       const newPcTurn = reorderedNew.findIndex(p => p.id === curIdInNew);
       return { ...pc, newPlayers: reorderedNew, newTurn: newPcTurn >= 0 ? newPcTurn : pc.newTurn };
     });
+  };
+
+  const removePlayer = (id) => {
+    const arr = localOrder.filter(x => x.id !== id);
+    if (arr.length === 0) return;
+    applyOrder(arr);
   };
 
   const moveUp = (i) => {
@@ -53673,37 +53668,26 @@ function SzerkesztesTab({ players, setPlayers, turn, setTurn, pendingCommit, set
       </button>
       {saved && <div style={{ textAlign:'center', fontFamily:T.font, fontSize:13, fontWeight:700, color:T.mint, padding:'4px 0' }}>✓ {LANG==='en'?'Order updated':'Sorrend frissítve'}</div>}
       {localOrder.map((p,i) => (
-        <div key={p.id} style={{ background:T.surface, borderRadius:14, boxShadow:T.shadow, padding:'10px 14px', display:'flex', alignItems:'center', gap:12, position:'relative', overflow:'hidden', opacity: p.disabled ? 0.45 : 1 }}>
+        <div key={p.id} style={{ background:T.surface, borderRadius:14, boxShadow:T.shadow, padding:'10px 14px', display:'flex', alignItems:'center', gap:10, position:'relative', overflow:'hidden', opacity: p.disabled ? 0.45 : 1 }}>
           <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.inkSoft, minWidth:22 }}>{i+1}</div>
           <div style={{ width:36, height:36, borderRadius:'50%', background: p.disabled ? T.inkMute : p.color, display:'grid', placeItems:'center', color:'#fff', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
-          {p.profileId ? (
-            <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink, display:'flex', alignItems:'center', gap:6 }}>
-              {p.name}
-              <span style={{ fontSize:10, background:T.bgSoft, borderRadius:6, padding:'2px 6px', color:T.inkMute, fontWeight:700 }}>profil</span>
-            </div>
-          ) : (
-            <input
-              ref={el => { if (el) nameInputRefs.current[p.id] = el; }}
-              defaultValue={p.name}
-              onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
-              onBlur={e => {
-                const newName = e.target.value.trim();
-                if (!newName) { e.target.value = p.name; return; }
-                if (newName !== p.name) {
-                  applyOrder(localOrder.map(x => x.id===p.id ? {...x, name: newName} : x));
-                }
-              }}
-              style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink,
-                border:'none', borderBottom:'2px solid '+T.mint, background:'transparent',
-                outline:'none', padding:'2px 0', minWidth:0 }}
-            />
-          )}
+          <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:6 }}>
+            {p.name}
+            {p.profileId && <span style={{ fontSize:10, background:T.bgSoft, borderRadius:6, padding:'2px 6px', color:T.inkMute, fontWeight:700, flexShrink:0 }}>profil</span>}
+          </div>
           <div style={{ display:'flex', gap:4 }}>
             <button
               onPointerDown={e => { e.stopPropagation(); applyOrder(localOrder.map(x => x.id===p.id ? {...x, disabled: !p.disabled} : x)); }}
               title={p.disabled ? 'Visszakapcsol' : 'Kikapcsol'}
-              style={{ width:34, height:34, border:'none', borderRadius:8, background: p.disabled ? '#ff444422' : T.bgSoft, color: p.disabled ? '#ff4444' : T.inkSoft, fontSize:16, cursor:'pointer', display:'grid', placeItems:'center', WebkitTapHighlightColor:'transparent' }}>
+              style={{ width:34, height:34, border:'none', borderRadius:8, background: p.disabled ? '#ff444422' : T.bgSoft, color: p.disabled ? '#ff4444' : T.inkSoft, fontSize:14, cursor:'pointer', display:'grid', placeItems:'center', WebkitTapHighlightColor:'transparent' }}>
               {p.disabled ? '✓' : '✕'}
+            </button>
+            <button
+              onPointerDown={e => { e.stopPropagation(); removePlayer(p.id); }}
+              disabled={localOrder.length <= 1}
+              title="Törlés"
+              style={{ width:34, height:34, border:'none', borderRadius:8, background: localOrder.length <= 1 ? T.surfaceMuted : '#ff444415', color: localOrder.length <= 1 ? T.inkMute : '#ff4444', fontSize:15, cursor: localOrder.length <= 1 ? 'default' : 'pointer', display:'grid', placeItems:'center', WebkitTapHighlightColor:'transparent' }}>
+              🗑️
             </button>
             <button
               onPointerDown={e => { e.stopPropagation(); moveUp(i); }}
