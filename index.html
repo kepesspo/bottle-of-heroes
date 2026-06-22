@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.501';
+const APP_VERSION = 'v9.502';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -51574,19 +51574,33 @@ const MATEK_BTN_COLORS = ['#4A8FD4','#E05555','#7B68EE','#3DAA6D'];
 
 function MatekGame({ gameIdx, challenger, onAdvance, onResult, difficulty }) {
   const genQuestion = (idx) => {
-    const ops = ['+','-','×'];
+    const ops = ['+','-','×','÷'];
     const s = (idx * 1234567 + 7654321) >>> 0;
     const rng = (n, extra) => { let x = (s ^ (idx * 31337 + (extra||0) * 997)) >>> 0; x ^= x<<13; x ^= x>>17; x ^= x<<5; return (x >>> 0) % n; };
-    const op = ops[rng(3, 0)];
+    const op = ops[rng(4, 0)];
     let a, b, answer;
-    if (op === '+') { a = rng(20, 1)+10; b = rng(20, 2)+10; answer = a+b; }
-    else if (op === '-') { a = rng(30, 1)+20; b = rng(20, 2)+5; answer = a-b; }
-    else { a = rng(11, 1)+3; b = rng(11, 2)+3; answer = a*b; }
+    if (op === '+') {
+      // two-digit + two-digit, larger range
+      a = rng(65, 1)+35; b = rng(65, 2)+35; answer = a+b;
+    } else if (op === '-') {
+      // three-digit minus two-digit
+      a = rng(120, 1)+80; b = rng(60, 2)+20; if (b >= a) b = a - rng(20,3) - 5;
+      answer = a - b;
+    } else if (op === '×') {
+      // two-digit × one-digit, harder
+      a = rng(15, 1)+8; b = rng(9, 2)+4; answer = a*b;
+    } else {
+      // clean division: pick quotient and divisor, compute dividend
+      const divisor = rng(8, 1)+4;   // 4–11
+      const quotient = rng(10, 2)+6; // 6–15
+      a = divisor * quotient; b = divisor; answer = quotient;
+    }
     const wrongs = new Set();
     let attempt = 0;
+    const spread = answer > 50 ? 8 : 5;
     while (wrongs.size < 3) {
       attempt++;
-      const d = (rng(7, attempt*10)+1) * (rng(2, attempt*10+1)===0?1:-1);
+      const d = (rng(spread, attempt*10)+1) * (rng(2, attempt*10+1)===0?1:-1);
       if (answer+d !== answer && answer+d > 0) wrongs.add(answer+d);
     }
     const opts = [answer, ...[...wrongs]];
