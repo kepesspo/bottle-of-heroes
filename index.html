@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.482';
+const APP_VERSION = 'v9.483';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -43809,6 +43809,7 @@ function EremGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
   const [squish, setSquish] = React.useState(false);
   const advancedRef = React.useRef(false);
   const flipTimerRef = React.useRef(null);
+  const squishDurRef = React.useRef(60);
 
   React.useEffect(() => {
     if (flipTimerRef.current) clearTimeout(flipTimerRef.current);
@@ -43825,20 +43826,22 @@ function EremGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
 
     // JS-driven flip simulation: starts fast, decelerates, lands on correct face
     let elapsed = 0;
-    let interval = 70;
+    let interval = 80;
     let current = 'fej';
     const TOTAL = 2600;
-    const SQUISH_MS = 60;
 
     const step = () => {
       current = current === 'fej' ? 'iras' : 'fej';
+      // squish duration = 42% of current interval, so in/out always fit cleanly
+      const squishDur = Math.round(interval * 0.42);
+      squishDurRef.current = squishDur;
       setSquish(true);
       setDisplaySide(current);
-      setTimeout(() => setSquish(false), SQUISH_MS);
+      setTimeout(() => setSquish(false), squishDur);
 
       elapsed += interval;
       // Ease out: interval grows as elapsed increases
-      interval = Math.min(75 + elapsed * 0.75, 550);
+      interval = Math.min(80 + elapsed * 0.72, 580);
 
       if (elapsed < TOTAL) {
         flipTimerRef.current = setTimeout(step, interval);
@@ -43864,7 +43867,7 @@ function EremGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
             onResult && onResult({ correct: isCorrect, playerName: isCorrect ? opponent?.name : challenger?.name, drinks: 1, subtitle: sub });
             onAdvance && onAdvance(dm, pm);
           }
-        }, SQUISH_MS + 80);
+        }, squishDurRef.current + 80);
       }
     };
 
@@ -43932,8 +43935,10 @@ function EremGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
     <div style={{
       width: size, height: size,
       filter: 'drop-shadow(0 6px 20px rgba(0,0,0,0.22))',
-      transform: squish ? 'scaleX(0.08)' : 'scaleX(1)',
-      transition: squish ? 'transform 0.06s ease-in' : 'transform 0.06s ease-out',
+      transform: squish ? 'scaleX(0.12)' : 'scaleX(1)',
+      transition: squish
+        ? `transform ${squishDurRef.current * 0.5}ms ease-in`
+        : `transform ${squishDurRef.current * 0.5}ms ease-out`,
       animation: phase === 'result' ? 'popIn 0.4s cubic-bezier(0.34,1.56,0.64,1)' : 'none',
     }}>
       <CoinFaceSVG side={displaySide} size={size}/>
