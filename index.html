@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.498';
+const APP_VERSION = 'v9.499';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -41032,6 +41032,7 @@ function KivagyokGame({ gameIdx, challenger, onAdvance, onResult }) {
   const [revealed, setRevealed] = useState(false);
   const [decided, setDecided] = useState(null);
   const [imgState, setImgState] = useState('loading'); // 'loading' | 'ok' | 'err'
+  const [imgZoomed, setImgZoomed] = useState(false);
   const advancedRef = React.useRef(false);
 
   React.useEffect(() => {
@@ -41067,6 +41068,25 @@ function KivagyokGame({ gameIdx, challenger, onAdvance, onResult }) {
 
   return (
     <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+
+      {/* Zoomed image overlay */}
+      {imgZoomed && imgState === 'ok' && (
+        <div onClick={() => setImgZoomed(false)} style={{
+          position:'fixed', inset:0, zIndex:9999,
+          background:'rgba(0,0,0,0.82)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          animation:'fadeIn .18s ease',
+        }}>
+          <img
+            src={celeb.img}
+            alt="celeb"
+            style={{ maxWidth:'88vw', maxHeight:'78vh', borderRadius:18, boxShadow:'0 12px 48px rgba(0,0,0,0.5)', objectFit:'contain' }}
+            onClick={e => e.stopPropagation()}
+          />
+          <div style={{ position:'absolute', top:20, right:20, width:36, height:36, borderRadius:'50%', background:'rgba(255,255,255,0.18)', display:'grid', placeItems:'center', fontSize:18, color:'#fff', cursor:'pointer' }}>✕</div>
+        </div>
+      )}
+
       <div style={{ width:'100%', background:T.bgSoft, borderRadius:20, border:'2.5px solid '+T.ink, overflow:'visible', position:'relative' }}>
 
         <div style={{ display:'flex', gap:12, padding:'14px 14px 12px', position:'relative' }}>
@@ -41076,7 +41096,7 @@ function KivagyokGame({ gameIdx, challenger, onAdvance, onResult }) {
           </div>
 
           {/* Photo with spinner/fallback */}
-          <div style={{ width:100, height:118, background:'#C4CDD8', borderRadius:10, overflow:'hidden', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', border:'1.5px solid #9aabb8', position:'relative' }}>
+          <div onClick={() => imgState === 'ok' && setImgZoomed(true)} style={{ width:100, height:118, background:'#C4CDD8', borderRadius:10, overflow:'hidden', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', border:'1.5px solid #9aabb8', position:'relative', cursor: imgState === 'ok' ? 'zoom-in' : 'default' }}>
             {imgState === 'loading' && (
               <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:'#C4CDD8' }}>
                 <div style={{ width:28, height:28, border:'3px solid '+T.inkMute, borderTopColor:T.ink, borderRadius:'50%', animation:'spin 0.8s linear infinite' }}/>
@@ -41090,6 +41110,9 @@ function KivagyokGame({ gameIdx, challenger, onAdvance, onResult }) {
               onLoad={() => setImgState('ok')}
               onError={() => { setCelebIdx(pickIdx()); setImgState('loading'); }}
             />
+            {imgState === 'ok' && (
+              <div style={{ position:'absolute', bottom:4, right:4, background:'rgba(0,0,0,0.45)', borderRadius:6, padding:'2px 5px', fontSize:11, color:'#fff', pointerEvents:'none' }}>🔍</div>
+            )}
           </div>
 
           {/* Fields */}
