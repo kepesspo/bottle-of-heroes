@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.502';
+const APP_VERSION = 'v9.503';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35098,8 +35098,20 @@ function BottomBar({ children, anchored, extra }) {
 function SheetOverlay({ onClose, children }) {
   const [dragY, setDragY] = React.useState(0);
   const [closing, setClosing] = React.useState(false);
+  const [vvTop, setVvTop] = React.useState(0);
+  const [vvHeight, setVvHeight] = React.useState(window.innerHeight);
   const startYRef = React.useRef(null);
   const sheetRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const upd = () => { setVvTop(vv.offsetTop); setVvHeight(vv.height); };
+    vv.addEventListener('resize', upd);
+    vv.addEventListener('scroll', upd);
+    upd();
+    return () => { vv.removeEventListener('resize', upd); vv.removeEventListener('scroll', upd); };
+  }, []);
 
   const dismiss = React.useCallback(() => {
     setClosing(true);
@@ -35107,7 +35119,6 @@ function SheetOverlay({ onClose, children }) {
   }, [onClose]);
 
   const onTouchStart = (e) => {
-    // Only start drag from the handle area or when sheet is scrolled to top
     const sheet = sheetRef.current;
     if (sheet && sheet.scrollTop > 0) return;
     startYRef.current = e.touches[0].clientY;
@@ -35115,16 +35126,11 @@ function SheetOverlay({ onClose, children }) {
   const onTouchMove = (e) => {
     if (startYRef.current === null) return;
     const dy = e.touches[0].clientY - startYRef.current;
-    if (dy > 0) {
-      setDragY(dy);
-    }
+    if (dy > 0) setDragY(dy);
   };
   const onTouchEnd = () => {
-    if (dragY > 80) {
-      dismiss();
-    } else {
-      setDragY(0);
-    }
+    if (dragY > 80) dismiss();
+    else setDragY(0);
     startYRef.current = null;
   };
 
@@ -35133,10 +35139,11 @@ function SheetOverlay({ onClose, children }) {
 
   return (
     <div onClick={dismiss} style={{
-      position:'fixed', inset:0, background:'rgba(14,14,24,0.45)',
+      position:'fixed', top:vvTop, left:0, right:0, height:vvHeight,
+      background:'rgba(14,14,24,0.45)',
       zIndex:60, display:'flex', alignItems:'flex-end',
       animation:'fadeIn .2s',
-      opacity, transition: dragY === 0 ? 'opacity .22s' : 'none',
+      opacity, transition: dragY === 0 ? 'opacity .22s, top 0.2s ease, height 0.2s ease' : 'none',
     }}>
       <div
         ref={sheetRef}
@@ -36006,14 +36013,15 @@ function PlayerProfileStats({ profileId }) {
 }
 
 function PlayerEditSheet({ player, onClose, onChange, usedColors, usedProfileIds = new Set() }) {
-  const [kbH, setKbH] = useState(0);
+  const [vvTop, setVvTop] = useState(0);
+  const [vvHeight, setVvHeight] = useState(window.innerHeight);
   const [profiles, setProfiles] = React.useState([]);
   const [showDropdown, setShowDropdown] = React.useState(false);
 
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const upd = () => setKbH(Math.max(0, window.innerHeight - vv.height));
+    const upd = () => { setVvTop(vv.offsetTop); setVvHeight(vv.height); };
     vv.addEventListener('resize', upd);
     vv.addEventListener('scroll', upd);
     upd();
@@ -36034,16 +36042,13 @@ function PlayerEditSheet({ player, onClose, onChange, usedColors, usedProfileIds
     onChange({ profileId: null });
   };
 
-  const shiftY = kbH > 0 ? -(kbH / 2) : 0;
   return ReactDOM.createPortal(
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.45)', zIndex:400, animation:'fadeIn .2s', display:'flex', alignItems:'center', justifyContent:'center', padding:'0 20px' }}>
+    <div onClick={onClose} style={{ position:'fixed', top:vvTop, left:0, right:0, height:vvHeight, background:'rgba(14,14,24,0.45)', zIndex:400, animation:'fadeIn .2s', display:'flex', alignItems:'center', justifyContent:'center', padding:'0 20px', transition:'top 0.2s ease, height 0.2s ease' }}>
       <div onClick={e => e.stopPropagation()} style={{
         width:'100%', maxWidth:340,
         background:T.surface, borderRadius:24,
         boxShadow:'0 12px 48px rgba(0,0,0,0.22)', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.4)',
         padding:'24px 22px 22px',
-        transform: `translateY(${shiftY}px)`,
-        transition: 'transform 0.25s ease',
       }}>
         <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
 
