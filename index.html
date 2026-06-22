@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.512';
+const APP_VERSION = 'v9.513';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35098,17 +35098,17 @@ function BottomBar({ children, anchored, extra }) {
 function SheetOverlay({ onClose, children }) {
   const [dragY, setDragY] = React.useState(0);
   const [closing, setClosing] = React.useState(false);
-  const [vvHeight, setVvHeight] = React.useState(window.visualViewport?.height || window.innerHeight);
+  const [kbHeight, setKbHeight] = React.useState(0);
   const startYRef = React.useRef(null);
   const sheetRef = React.useRef(null);
 
   React.useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    // Only track height (keyboard shrinks it). offsetTop is scroll-based and
-    // must NOT be used as `top` on a position:fixed element — it would shift
-    // the overlay down by the page scroll amount.
-    const upd = () => { setVvHeight(vv.height); };
+    // Track only keyboard height (visualViewport shrinks when keyboard opens).
+    // Do NOT use as overlay height — in browser vvHeight excludes chrome bars,
+    // making the overlay too small. Use inset:0 for backdrop, push sheet up.
+    const upd = () => { setKbHeight(Math.max(0, window.innerHeight - vv.height - vv.offsetTop)); };
     vv.addEventListener('resize', upd);
     upd();
     return () => { vv.removeEventListener('resize', upd); };
@@ -35140,11 +35140,11 @@ function SheetOverlay({ onClose, children }) {
 
   return (
     <div onClick={dismiss} style={{
-      position:'fixed', top:0, left:0, right:0, height:vvHeight,
+      position:'fixed', inset:0,
       background:'rgba(14,14,24,0.45)',
       zIndex:60, display:'flex', alignItems:'flex-end',
       animation:'fadeIn .2s',
-      opacity, transition: dragY === 0 ? 'opacity .22s, height 0.2s ease' : 'none',
+      opacity, transition: dragY === 0 ? 'opacity .22s' : 'none',
     }}>
       <div
         ref={sheetRef}
@@ -35158,7 +35158,7 @@ function SheetOverlay({ onClose, children }) {
           boxShadow:'0 -10px 40px rgba(0,0,0,0.2)',
           animation: closing ? 'none' : 'slideUp .3s cubic-bezier(.2,.9,.3,1)',
           maxHeight:'85%', overflowY:'auto',
-          transform: `translateY(${translateY})`,
+          transform: `translateY(calc(${translateY} - ${kbHeight}px))`,
           transition: dragY === 0 && !closing ? 'transform .22s cubic-bezier(.2,.9,.3,1)' : closing ? 'transform .22s ease-in' : 'none',
           willChange:'transform',
         }}>
@@ -36014,18 +36014,8 @@ function PlayerProfileStats({ profileId }) {
 }
 
 function PlayerEditSheet({ player, onClose, onChange, usedColors, usedProfileIds = new Set() }) {
-  const [vvHeight, setVvHeight] = useState(window.visualViewport?.height || window.innerHeight);
   const [profiles, setProfiles] = React.useState([]);
   const [showDropdown, setShowDropdown] = React.useState(false);
-
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const upd = () => { setVvHeight(vv.height); };
-    vv.addEventListener('resize', upd);
-    upd();
-    return () => { vv.removeEventListener('resize', upd); };
-  }, []);
 
   useEffect(() => {
     if (typeof window.getProfiles === 'function') {
@@ -36042,7 +36032,7 @@ function PlayerEditSheet({ player, onClose, onChange, usedColors, usedProfileIds
   };
 
   return ReactDOM.createPortal(
-    <div onClick={onClose} style={{ position:'fixed', top:0, left:0, right:0, height:vvHeight, background:'rgba(14,14,24,0.45)', zIndex:400, animation:'fadeIn .2s', display:'flex', alignItems:'center', justifyContent:'center', padding:'0 20px', transition:'height 0.2s ease' }}>
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.45)', zIndex:400, animation:'fadeIn .2s', display:'flex', alignItems:'center', justifyContent:'center', padding:'0 20px' }}>
       <div onClick={e => e.stopPropagation()} style={{
         width:'100%', maxWidth:340,
         background:T.surface, borderRadius:24,
