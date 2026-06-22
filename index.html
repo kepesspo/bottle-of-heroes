@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.452';
+const APP_VERSION = 'v9.453';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -41605,14 +41605,16 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
   const [phase, setPhase] = React.useState('ready'); // ready | spinning | result
   const [currentIdx, setCurrentIdx] = React.useState(0);
   const [winner, setWinner] = React.useState(null);
+  const advancedRef = React.useRef(false);
 
   React.useEffect(() => {
     setPhase('ready');
     setCurrentIdx(gameIdx % Math.max(players.length,1));
     setWinner(null);
+    advancedRef.current = false;
   }, [gameIdx]);
 
-  // Reset to ready after result so user can spin again
+  // Reset to ready after result so user can spin again (visual only)
   React.useEffect(() => {
     if (phase === 'result') {
       const t = setTimeout(() => setPhase('ready'), 2200);
@@ -41639,27 +41641,22 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
         const delay = 55 + Math.pow(progress, 2.2) * 560;
         setTimeout(next, delay);
       } else {
-        setWinner(players[winnerIdx]);
+        const w = players[winnerIdx];
+        setWinner(w);
         setPhase('result');
-        // Auto-show drink result via onResult after short delay
-        setTimeout(() => {
-          const w = players[winnerIdx];
-          if (w) {
-            onResult && onResult({ correct: false, playerName: w.name, drinks: 1, subtitle: w.name + ' iszik egyet!' });
-            const dm = { [w.id]: 1 };
-            onAdvance && onAdvance(dm);
-          }
-        }, 600);
+        // Fire onAdvance only once per game turn
+        if (!advancedRef.current) {
+          advancedRef.current = true;
+          setTimeout(() => {
+            if (w) {
+              onResult && onResult({ correct: false, playerName: w.name, drinks: 1, subtitle: w.name + ' iszik egyet!' });
+              onAdvance && onAdvance({ [w.id]: 1 });
+            }
+          }, 600);
+        }
       }
     };
     setTimeout(next, 55);
-  };
-
-  const proceed = () => {
-    if (!winner) return;
-    onResult && onResult({ correct: false, playerName: winner.name, drinks: 1, subtitle: winner.name + ' iszik egyet!' });
-    const dm = { [winner.id]: 1 };
-    onAdvance && onAdvance(dm);
   };
 
   const n = Math.max(players.length, 1);
@@ -43730,7 +43727,7 @@ function EremGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
         <g>
           <path d="M -28,-18 C -14,-30 14,-6 28,-18" fill="none" stroke={T.ink} strokeWidth="3.5" strokeLinecap="round"/>
           <path d="M -28,-2 C -14,-14 14,10 28,-2" fill="none" stroke={T.ink} strokeWidth="3.5" strokeLinecap="round"/>
-          <path d="M -28,14 C -14,2 14,26 28,14" fill="none" stroke="#1B2340" strokeWidth="3.5" strokeLinecap="round"/>
+          <path d="M -28,14 C -14,2 14,26 28,14" fill="none" stroke={T.ink} strokeWidth="3.5" strokeLinecap="round"/>
         </g>
       )}
     </svg>
@@ -43806,6 +43803,7 @@ function TapperGame({ gameIdx, challenger, opponent, onAdvance, onResult, roomCo
   const p2TimeRef = React.useRef(null);
   const startRef = React.useRef(null);
   const ivRef = React.useRef(null);
+  const advancedRef = React.useRef(false);
 
   React.useEffect(() => {
     setPhase('idle'); setP1Hold(false); setP2Hold(false);
@@ -43813,6 +43811,7 @@ function TapperGame({ gameIdx, challenger, opponent, onAdvance, onResult, roomCo
     phaseRef.current = 'idle';
     p1HoldRef.current = false; p2HoldRef.current = false;
     p1TimeRef.current = null; p2TimeRef.current = null;
+    advancedRef.current = false;
     clearInterval(ivRef.current);
     // Clear tapper input in Firestore when game resets
     if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { tapperInput: null });
@@ -43861,8 +43860,11 @@ function TapperGame({ gameIdx, challenger, opponent, onAdvance, onResult, roomCo
     const subtitle = r === 'both-lose' ? 'Mindkettő túlment — mindkettő iszik!'
       : r === 'draw' ? 'Döntetlen!'
       : `${winner?.name} nyert — ${loser?.name} iszik`;
-    onResult && onResult({ correct: r !== 'both-lose' && r !== 'draw', playerName: winner?.name, drinks: r === 'both-lose' ? 1 : loser ? 1 : 0, subtitle });
-    onAdvance && onAdvance(dm, pm);
+    if (!advancedRef.current) {
+      advancedRef.current = true;
+      onResult && onResult({ correct: r !== 'both-lose' && r !== 'draw', playerName: winner?.name, drinks: r === 'both-lose' ? 1 : loser ? 1 : 0, subtitle });
+      onAdvance && onAdvance(dm, pm);
+    }
   }, [p1Time, p2Time]);
 
   const tryStart = () => {
