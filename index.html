@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.495';
+const APP_VERSION = 'v9.496';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -43233,6 +43233,7 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
   const handleGuessRef = React.useRef(null);
   const [guessRes, setGuessRes] = React.useState(null);
   const [gameOver, setGameOver] = React.useState(false);
+  const advancedRef = React.useRef(false);
 
   // Card numeric value: 2-9 face, 10/J/Q/K=10, A=11
   const cardVal = (v) => {
@@ -43246,9 +43247,11 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
     const numDecks = cfg.decks ?? 1;
     const liveCount = cfg.lives ? (cfg.lifeCount ?? 3) : 1;
     const d = shuffleDeck(generateDeck(numDecks));
-    const st = { deck:d, deckPos:0, activePids:players.map(p=>p.id), turnPos:0, drinkMap:{}, playerLives:{}, pot:1 };
-    players.forEach(p=>{ st.playerLives[p.id]=liveCount; });
-    gsRef.current=st; setGs({...st}); setGuessRes(null); setGameOver(false); pendRef.current=false;
+    // failCount: number of wrong guesses per player
+    // maxFailPot: highest pot at time of failure per player
+    const st = { deck:d, deckPos:0, activePids:players.map(p=>p.id), turnPos:0, failCount:{}, maxFailPot:{}, playerLives:{}, pot:1 };
+    players.forEach(p=>{ st.playerLives[p.id]=liveCount; st.failCount[p.id]=0; st.maxFailPot[p.id]=0; });
+    gsRef.current=st; setGs({...st}); setGuessRes(null); setGameOver(false); pendRef.current=false; advancedRef.current=false;
   },[gameIdx]);
 
   // Sync current turn to Firestore for observer screens
@@ -43258,6 +43261,25 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
     const pid = st.activePids[st.turnPos % Math.max(st.activePids.length, 1)];
     syncRoom(roomCode, { kisebbTurn: { pid, pot: st.pot, deckPos: st.deckPos, gameIdx } });
   }, [gs?.turnPos, gs?.deckPos, gs?.pot, gameIdx, roomCode]);
+
+  const finishGame = (st) => {
+    if (advancedRef.current) return;
+    advancedRef.current = true;
+    // Winner = fewest failures; tie → earliest in players list
+    const sorted = [...players].sort((a,b) => (st.failCount[a.id]||0) - (st.failCount[b.id]||0));
+    const winner = sorted[0];
+    const dm = {};
+    const pm = {};
+    pm[winner.id] = 1;
+    players.forEach(p => {
+      if (p.id === winner.id) return;
+      const maxPot = st.maxFailPot[p.id] || 0;
+      dm[p.id] = maxPot > 1 ? maxPot : 1;
+    });
+    const loserNames = players.filter(p=>p.id!==winner.id).map(p=>`${p.name} ${dm[p.id]}🍺`).join(', ');
+    onResult && onResult({ correct: true, playerName: winner.name, drinks: 0, subtitle: `${winner.name} nyert · ${loserNames}` });
+    onAdvance && onAdvance(dm, pm);
+  };
 
   // Listen for observer guess
   React.useEffect(() => {
@@ -43276,7 +43298,7 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
   }, [roomCode, gameIdx]);
 
   if (!gs) return null;
-  const { deck, deckPos, activePids, turnPos, drinkMap, playerLives } = gs;
+  const { deck, deckPos, activePids, turnPos, failCount, maxFailPot, playerLives } = gs;
   const pot = gs.pot || 1;
   const currentCard = deck[deckPos];
   const nextCard = deck[deckPos+1];
@@ -43291,21 +43313,11 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
     const cv = cardVal(currentCard.value);
     const nv = cardVal(nextCard.value);
     const same = cv === nv;
-    // Ace: always wins regardless of direction (current or next card)
     const aceWin = currentCard.value === 'A' || nextCard.value === 'A';
     const ok = same ? null : aceWin ? true : (guess==='K' && nv<cv) || (guess==='N' && nv>cv);
 
     pendRef.current = true;
     setGuessRes({ correct:ok, same, pid:currentPid, card:nextCard, pot });
-
-    // Immediate onResult feedback
-    if (same) {
-      onResult && onResult(null);
-    } else if (!ok) {
-      onResult && onResult({ correct: false, playerName: currentPlayer?.name, drinks: pot||1, subtitle: `${currentPlayer?.name||'Játékos'} iszik ${pot||1} kortyt` });
-    } else {
-      onResult && onResult({ correct: true, playerName: currentPlayer?.name, drinks: 0, subtitle: `${currentPlayer?.name||'Játékos'} helyesen tippelt!` });
-    }
 
     setTimeout(()=>{
       const st = gsRef.current;
@@ -43316,24 +43328,23 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
         const sm = cfg2.stackMode??'plus1';
         nst = { ...nst, pot: sm==='times2' ? (st.pot||1)*2 : (st.pot||1)+1 };
       } else if (!ok) {
+        const failedPot = st.pot || 1;
+        const newFail = { ...st.failCount, [pid]:(st.failCount[pid]||0)+1 };
+        const newMaxPot = { ...st.maxFailPot, [pid]: Math.max(st.maxFailPot[pid]||0, failedPot) };
         const newLives = { ...st.playerLives, [pid]:(st.playerLives[pid]||1)-1 };
-        const drinkDelta = st.pot || 1;
-        const dm = { ...st.drinkMap, [pid]:(st.drinkMap[pid]||0)+drinkDelta };
-        nst = { ...nst, drinkMap:dm, playerLives:newLives, pot:1 };
-        onLiveDrinkUpdate && onLiveDrinkUpdate({ [pid]: drinkDelta });
-        // hibázó játékos marad soron — turnPos nem változik
+        nst = { ...nst, failCount:newFail, maxFailPot:newMaxPot, playerLives:newLives, pot:1 };
         if (!noElim && (newLives[pid]||0)<=0) {
           const newActive = st.activePids.filter(p=>p!==pid);
           nst = { ...nst, activePids:newActive, turnPos:st.turnPos%Math.max(newActive.length,1) };
-          if (newActive.length<=1) { setGameOver(true); onAdvance&&onAdvance({}); }
+          if (newActive.length<=1) { gsRef.current=nst; setGs({...nst}); setGuessRes(null); pendRef.current=false; setGameOver(true); finishGame(nst); return; }
         }
       } else {
         nst = { ...nst, turnPos:(st.turnPos+1)%st.activePids.length };
       }
 
-      // No-elim mode: end game when deck runs out
+      // End when deck runs out
       const atEnd = nst.deckPos >= nst.deck.length - 1;
-      if (noElim && atEnd && !gameOver) { setGameOver(true); onAdvance&&onAdvance({}); }
+      if (atEnd && !gameOver) { gsRef.current=nst; setGs({...nst}); setGuessRes(null); pendRef.current=false; setGameOver(true); finishGame(nst); return; }
 
       gsRef.current=nst; setGs({...nst}); setGuessRes(null); pendRef.current=false;
     }, 900);
@@ -43341,38 +43352,34 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
   handleGuessRef.current = handleGuess;
 
   if(gameOver) {
-    // Legjobb: legkevesebb hibázás (legkevesebb drink)
-    const sorted = [...players].sort((a,b) => (drinkMap[a.id]||0) - (drinkMap[b.id]||0));
+    const sorted = [...players].sort((a,b) => (failCount[a.id]||0) - (failCount[b.id]||0));
     if (!sorted.length) return null;
-    const best = sorted[0];
-    // Legrosszabb: legtöbb drink
-    const worst = sorted[sorted.length - 1];
-    const samePlayer = best.id === worst.id;
+    const winner = sorted[0];
+    const losers = players.filter(p => p.id !== winner.id).map(p => ({
+      ...p,
+      drinks: (maxFailPot[p.id]||0) > 1 ? maxFailPot[p.id] : 1,
+      fails: failCount[p.id]||0,
+    }));
     return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12, width:'100%' }}>
-      <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.mint }}>{t('gameOver').replace(' 🎉','')}</div>
-      <div style={{ display:'flex', flexDirection:'column', gap:10, width:'100%' }}>
-        {/* Legjobb játékos */}
-        <div style={{ borderRadius:16, padding:'14px 16px', display:'flex', alignItems:'center', gap:12, background:`${T.mint}18`, border:`2px solid ${T.mint}` }}>
-          <div style={{ width:42, height:42, borderRadius:'50%', background:best.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:17, color:'#fff', flexShrink:0 }}>{best.name.charAt(0).toUpperCase()}</div>
-          <div style={{ flex:1 }}>
-            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.mint }}>🏆 Legjobb</div>
-            <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft }}>{best.name} — legkevesebb hiba</div>
-          </div>
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.mint }}>{drinkMap[best.id]||0}🍺</div>
+      <div style={{ borderRadius:16, padding:'14px 16px', display:'flex', alignItems:'center', gap:12, background:`${T.mint}18`, border:`2px solid ${T.mint}`, width:'100%' }}>
+        <div style={{ width:42, height:42, borderRadius:'50%', background:winner.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:17, color:'#fff', flexShrink:0 }}>{winner.name.charAt(0).toUpperCase()}</div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.mint }}>🏆 Nyertes</div>
+          <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft }}>{winner.name} — legkevesebb hiba</div>
         </div>
-        {/* Legtöbbet ivó — csak ha más mint a legjobb */}
-        {!samePlayer && (
-          <div style={{ borderRadius:16, padding:'14px 16px', display:'flex', alignItems:'center', gap:12, background:`${T.coral}18`, border:`2px solid ${T.coral}` }}>
-            <div style={{ width:42, height:42, borderRadius:'50%', background:worst.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:17, color:'#fff', flexShrink:0 }}>{worst.name.charAt(0).toUpperCase()}</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.coral }}>🍺 Legtöbbet ivott</div>
-              <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft }}>{worst.name}</div>
-            </div>
-            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.coral }}>{drinkMap[worst.id]||0}🍺</div>
-          </div>
-        )}
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.mint }}>0🍺</div>
       </div>
+      {losers.map(p => (
+        <div key={p.id} style={{ borderRadius:16, padding:'14px 16px', display:'flex', alignItems:'center', gap:12, background:`${T.coral}18`, border:`2px solid ${T.coral}`, width:'100%' }}>
+          <div style={{ width:42, height:42, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:700, fontSize:17, color:'#fff', flexShrink:0 }}>{p.name.charAt(0).toUpperCase()}</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.coral }}>{p.name} iszik</div>
+            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>{p.fails} hiba{p.drinks > 1 ? ` · stack: ${p.drinks}` : ''}</div>
+          </div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.coral }}>{p.drinks}🍺</div>
+        </div>
+      ))}
     </div>
   );}
 
