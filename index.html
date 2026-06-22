@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.537';
+const APP_VERSION = 'v9.538';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -45252,6 +45252,13 @@ function OVFJConfigSheet({ config, setConfig, onClose }) {
             ))}
           </div>
         </div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 0',borderTop:`1px solid ${T.surfaceMuted}`}}>
+          <div>
+            <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.ink}}>Host is játékos</div>
+            <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:2}}>A host telefonon is lehessen írni</div>
+          </div>
+          <Toggle on={config.hostIsPlayer ?? false} onChange={() => setConfig(c => ({...c, hostIsPlayer: !(c.hostIsPlayer ?? false)}))} />
+        </div>
       </div>
     </SheetOverlay>
   );
@@ -45262,6 +45269,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
   const [showQR, setShowQR] = React.useState(false);
   const STOP_EXTRA = 10;
   const TIME_LIMIT = (gameMeta?.ovfjConfig?.timeLimit ?? 1.5) * 60;
+  const hostIsPlayer = gameMeta?.ovfjConfig?.hostIsPlayer ?? false;
   const usedLettersRef = React.useRef([]);
   const drawLetter = () => {
     const available = OVFJ_LETTERS.filter(l => !usedLettersRef.current.includes(l));
@@ -45281,6 +45289,8 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
   const [countdown, setCountdown] = React.useState(null);
   const [maxTimer, setMaxTimer] = React.useState(null);
   const cdStartedRef = React.useRef(false);
+  const [hostLocalAns, setHostLocalAns] = React.useState({});
+  const hostSubmittedRef = React.useRef(false);
 
   const playerMap = React.useMemo(() => Object.fromEntries((players||[]).map(p=>[p.id,p])), [players]);
 
@@ -45329,7 +45339,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
     return () => clearTimeout(id);
   }, [countdown]);
 
-  const resetRound = () => { cdStartedRef.current = false; setAnswers({}); setVotes({}); setRoundScores({}); setCountdown(null); setMaxTimer(null); calcCalledRef.current = false; };
+  const resetRound = () => { cdStartedRef.current = false; setAnswers({}); setVotes({}); setRoundScores({}); setCountdown(null); setMaxTimer(null); calcCalledRef.current = false; setHostLocalAns({}); hostSubmittedRef.current = false; };
   const startWriting = () => { setPhase('writing'); setMaxTimer(TIME_LIMIT); };
   const forceStop = () => { if (!cdStartedRef.current) cdStartedRef.current = true; setCountdown(0); };
 
@@ -45511,6 +45521,37 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
             <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:2}}>{doneCount}/{pl.length} játékos kész</div>
           </div>
         </div>
+        {/* Host writing form */}
+        {hostIsPlayer && pl[0] && !answers[pl[0].id]?.done && (
+          <div style={{background:T.surface,borderRadius:18,padding:'14px 16px',boxShadow:T.shadow,border:`2px solid ${T.mint}40`}}>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
+              <div style={{width:28,height:28,borderRadius:'50%',background:pl[0].color||T.mint,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:900,fontSize:12,color:'#fff',flexShrink:0}}>{pl[0].name?.[0]||'?'}</div>
+              <span style={{fontFamily:T.font,fontWeight:700,fontSize:14,color:T.ink,flex:1}}>{pl[0].name} (Te)</span>
+              <span style={{fontFamily:T.font,fontSize:11,color:T.mint,fontWeight:700}}>HOST</span>
+            </div>
+            {OVFJ_CATS.map((cat,ci) => (
+              <div key={cat.key} style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                <span style={{fontSize:14,flexShrink:0,width:22,textAlign:'center'}}>{cat.emoji}</span>
+                <span style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.inkSoft,width:64,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
+                <input
+                  value={hostLocalAns[cat.key]||''}
+                  onChange={e => setHostLocalAns(prev => ({...prev, [cat.key]: e.target.value}))}
+                  placeholder={`${cat.label}...`}
+                  style={{flex:1,padding:'7px 10px',borderRadius:10,border:`1px solid ${T.surfaceMuted}`,background:T.bgSoft,fontFamily:T.font,fontSize:13,color:T.ink,outline:'none'}}
+                />
+              </div>
+            ))}
+            <button
+              onClick={() => {
+                if (hostSubmittedRef.current) return;
+                hostSubmittedRef.current = true;
+                setAnswers(prev => ({...prev, [pl[0].id]: {...hostLocalAns, done: true, pid: pl[0].id}}));
+              }}
+              style={{width:'100%',padding:'11px',borderRadius:12,border:'none',background:T.mint,color:'#fff',fontFamily:T.font,fontWeight:700,fontSize:14,cursor:'pointer',marginTop:4}}>
+              ✓ Kész
+            </button>
+          </div>
+        )}
         {/* Player status cards */}
         {pl.map(p=>{
           const ans=answers[p.id]||{};
