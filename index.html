@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.470';
+const APP_VERSION = 'v9.471';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -44035,54 +44035,49 @@ function TapperGame({ gameIdx, challenger, opponent, onAdvance, onResult, roomCo
   const Btn = ({ pNum, player, holding, timeVal }) => {
     const released = timeVal !== null;
     return (
-      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
-        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>
-          {pNum === 1 ? 'KIHÍVÓ' : 'ELLENFÉL'}
+      <div
+        onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); pressDown(pNum); writeTapperState(player?.name, true); }}
+        onPointerUp={() => { pressUp(pNum); writeTapperState(player?.name, false); }}
+        onPointerCancel={() => { pressUp(pNum); writeTapperState(player?.name, false); }}
+        style={{
+          width:'100%', height:110, borderRadius:18,
+          background: released ? `${player.color}66` : player.color,
+          boxShadow: holding && !released
+            ? `0 0 0 10px ${player.color}44, 0 0 0 20px ${player.color}18`
+            : `0 0 0 10px rgba(255,255,255,0.85)`,
+          display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4,
+          cursor:'pointer', userSelect:'none', WebkitUserSelect:'none', touchAction:'none',
+          transition:'box-shadow 0.15s, background 0.15s',
+          transform: holding && !released ? 'scale(0.97)' : 'scale(1)',
+        }}
+      >
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:'#fff', lineHeight:1.1, textAlign:'center', padding:'0 12px', wordBreak:'break-word' }}>
+          {player.name}
         </div>
-        <div
-          onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); pressDown(pNum); writeTapperState(player?.name, true); }}
-          onPointerUp={() => { pressUp(pNum); writeTapperState(player?.name, false); }}
-          onPointerCancel={() => { pressUp(pNum); writeTapperState(player?.name, false); }}
-          style={{
-            width:130, height:130, borderRadius:18,
-            background: released ? `${player.color}66` : player.color,
-            boxShadow: holding && !released
-              ? `0 0 0 10px ${player.color}44, 0 0 0 20px ${player.color}18`
-              : `0 0 0 10px rgba(255,255,255,0.85)`,
-            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2,
-            cursor:'pointer', userSelect:'none', WebkitUserSelect:'none', touchAction:'none',
-            transition:'box-shadow 0.15s, background 0.15s',
-            transform: holding && !released ? 'scale(0.96)' : 'scale(1)',
-          }}
-        >
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:'#fff', lineHeight:1.1, textAlign:'center', padding:'0 8px', wordBreak:'break-word', maxWidth:110 }}>
-            {player.name}
+        {!released && (
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.85)', letterSpacing:'0.06em' }}>
+            {phase === 'idle' ? 'TARTSD' : 'TARTSD!'}
           </div>
-          {!released && (
-            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:'rgba(255,255,255,0.85)', letterSpacing:'0.04em' }}>
-              {phase === 'idle' ? 'TARTSD' : 'TARTSD!'}
-            </div>
-          )}
-          {released && (
-            <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:11, color:'rgba(255,255,255,0.9)' }}>
-              {timeVal === -1 ? '✗ KÉSŐ' : `${(timeVal * 1000).toFixed(0)}ms`}
-            </div>
-          )}
-        </div>
+        )}
+        {released && (
+          <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.9)' }}>
+            {timeVal === -1 ? '✗ KÉSŐ' : `${(timeVal * 1000).toFixed(0)}ms`}
+          </div>
+        )}
       </div>
     );
   };
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14 }}>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10, width:'100%' }}>
 
       <Btn pNum={2} player={p2} holding={p2Hold} timeVal={p2Time} />
 
-      {/* VS / timer bubble */}
-      <div style={{ width:80, height:80, borderRadius:'50%', background:T.surface, boxShadow:T.shadow, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      {/* VS / timer — téglalap */}
+      <div style={{ width:'100%', height:64, borderRadius:14, background:T.surface, boxShadow:T.shadow, display:'flex', alignItems:'center', justifyContent:'center' }}>
         {phase === 'counting'
-          ? <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:30, color:timerColor, lineHeight:1 }}>{Math.ceil(countdown)}</span>
-          : <span style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft }}>VS</span>
+          ? <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:44, color:timerColor, lineHeight:1 }}>{countdown.toFixed(1)}</span>
+          : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.inkSoft, letterSpacing:'0.12em' }}>VS</span>
         }
       </div>
 
