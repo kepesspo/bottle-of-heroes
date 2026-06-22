@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.458';
+const APP_VERSION = 'v9.459';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -46194,6 +46194,39 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
     </div>
   );
 
+  // ── Reveal animation effects (top-level, must not be inside conditional) ─
+  const _revealResults = S.phase === 'reveal' ? results : null;
+  const _revealNR = NR;
+  React.useEffect(() => {
+    if (S.phase !== 'reveal') return;
+    if (animStep >= _revealNR) return;
+    animTimer.current = setTimeout(() => setAnimStep(s => s+1), 800);
+    return () => clearTimeout(animTimer.current);
+  }, [S.phase, animStep]);
+
+  React.useEffect(() => {
+    if (S.phase !== 'reveal') return;
+    if (animStep < _revealNR) return;
+    const {p1W, p2W} = results;
+    const t = setTimeout(() => {
+      const p1id = challenger?.id;
+      const p2id = opponent?.id;
+      const diff = Math.abs(p1W - p2W);
+      if (p1W > p2W) {
+        if (onAdvance) onAdvance({[p2id]: diff}, {[p1id]: 1});
+        if (onResult) onResult({ correct: true, playerName: p1Name, drinks: 0, subtitle: p1Name + ' nyerte a meccset!' });
+      } else if (p2W > p1W) {
+        if (onAdvance) onAdvance({[p1id]: diff}, {[p2id]: 1});
+        if (onResult) onResult({ correct: false, playerName: p2Name, drinks: 0, subtitle: p2Name + ' nyerte a meccset!' });
+      } else {
+        if (onAdvance) onAdvance({[p1id]: 1, [p2id]: 1}, {});
+        if (onResult) onResult({ correct: false, playerName: null, drinks: 1, subtitle: 'Döntetlen — mindenki iszik!' });
+      }
+      setS(s=>({...s,phase:'done'}));
+    }, 1600);
+    return () => clearTimeout(t);
+  }, [S.phase, animStep]);
+
   // ── PLAN fázis ────────────────────────────────────────────────────────────
   if (S.phase === 'p1_plan' || S.phase === 'p2_plan') {
     const allIn = hand.length === 0;
@@ -46341,39 +46374,6 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
       </div>
     );
   }
-
-  // ── Reveal animation effects (top-level, must not be inside conditional) ─
-  const _revealResults = S.phase === 'reveal' ? results : null;
-  const _revealNR = NR;
-  React.useEffect(() => {
-    if (S.phase !== 'reveal') return;
-    if (animStep >= _revealNR) return;
-    animTimer.current = setTimeout(() => setAnimStep(s => s+1), 800);
-    return () => clearTimeout(animTimer.current);
-  }, [S.phase, animStep]);
-
-  React.useEffect(() => {
-    if (S.phase !== 'reveal') return;
-    if (animStep < _revealNR) return;
-    const {p1W, p2W} = results;
-    const t = setTimeout(() => {
-      const p1id = challenger?.id;
-      const p2id = opponent?.id;
-      const diff = Math.abs(p1W - p2W);
-      if (p1W > p2W) {
-        if (onAdvance) onAdvance({[p2id]: diff}, {[p1id]: 1});
-        if (onResult) onResult({ correct: true, playerName: p1Name, drinks: 0, subtitle: p1Name + ' nyerte a meccset!' });
-      } else if (p2W > p1W) {
-        if (onAdvance) onAdvance({[p1id]: diff}, {[p2id]: 1});
-        if (onResult) onResult({ correct: false, playerName: p2Name, drinks: 0, subtitle: p2Name + ' nyerte a meccset!' });
-      } else {
-        if (onAdvance) onAdvance({[p1id]: 1, [p2id]: 1}, {});
-        if (onResult) onResult({ correct: false, playerName: null, drinks: 1, subtitle: 'Döntetlen — mindenki iszik!' });
-      }
-      setS(s=>({...s,phase:'done'}));
-    }, 1600);
-    return () => clearTimeout(t);
-  }, [S.phase, animStep]);
 
   // ── REVEAL (animated, merged result) ────────────────────────────────────
   if (S.phase === 'reveal') {
