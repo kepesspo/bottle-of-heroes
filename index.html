@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.487';
+const APP_VERSION = 'v9.488';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -49230,8 +49230,10 @@ function EndScreen({ players, go, resetGame, lastRound, scoreHistory }) {
           const maxPt = Math.max(1, ...allPts);
           const px = i => PAD + (i / (steps - 1)) * (W - PAD * 2);
           const py = v => H - PAD - ((v - minPt) / (maxPt - minPt)) * (H - PAD * 2);
-          // Collect all unique players across all snapshots (handles mid-game additions)
+          // Build player list from final `players` prop — always shows who actually played.
+          // Also include anyone who appeared in snapshots but left before the end.
           const allPlayerMap = {};
+          players.forEach(p => { allPlayerMap[p.id] = { id:p.id, name:p.name, color:p.color }; });
           scoreHistory.forEach(snap => snap.forEach(p => { if (!allPlayerMap[p.id]) allPlayerMap[p.id] = { id:p.id, name:p.name, color:p.color }; }));
           const allPlayers = Object.values(allPlayerMap);
           return (
@@ -53419,6 +53421,7 @@ function BottleApp() {
 
   const go = (next) => {
     if (next === 'play') {
+      setScoreHistory([]);
       const code = generateRoomCode();
       setCreatingRoom(true);
       if ((selectedGames || []).includes('beerpong')) {
