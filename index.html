@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.513';
+const APP_VERSION = 'v9.514';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35095,7 +35095,7 @@ function BottomBar({ children, anchored, extra }) {
   );
 }
 
-function SheetOverlay({ onClose, children }) {
+function SheetOverlay({ onClose, children, footer }) {
   const [dragY, setDragY] = React.useState(0);
   const [closing, setClosing] = React.useState(false);
   const [kbHeight, setKbHeight] = React.useState(0);
@@ -35157,7 +35157,8 @@ function SheetOverlay({ onClose, children }) {
           borderTopLeftRadius:20, borderTopRightRadius:20,
           boxShadow:'0 -10px 40px rgba(0,0,0,0.2)',
           animation: closing ? 'none' : 'slideUp .3s cubic-bezier(.2,.9,.3,1)',
-          maxHeight:'85%', overflowY:'auto',
+          height:'55vh',
+          display:'flex', flexDirection:'column',
           transform: `translateY(calc(${translateY} - ${kbHeight}px))`,
           transition: dragY === 0 && !closing ? 'transform .22s cubic-bezier(.2,.9,.3,1)' : closing ? 'transform .22s ease-in' : 'none',
           willChange:'transform',
@@ -35168,7 +35169,14 @@ function SheetOverlay({ onClose, children }) {
         >
           <div style={{ width:44, height:5, borderRadius:3, background:T.inkMute, opacity: 0.35 + Math.min(dragY/200, 0.3) }} />
         </div>
-        {children}
+        <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
+          {children}
+        </div>
+        {footer && (
+          <div style={{ flexShrink:0, padding:'0 16px 12px', paddingBottom:'max(12px, env(safe-area-inset-bottom))' }}>
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -36802,8 +36810,15 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
       {zeneSheet && <ZeneConfigSheet config={zeneConfig} setConfig={setZeneConfig} onClose={() => setZeneSheet(false)} />}
       {beerpongSheet && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setBeerpongSheet(false)} playerCount={99} />}
       {filterSheet && (
-        <SheetOverlay onClose={() => setFilterSheet(false)}>
-          <div style={{ padding:'0 16px 16px', display:'flex', flexDirection:'column', gap:16 }}>
+        <SheetOverlay onClose={() => setFilterSheet(false)} footer={
+          <div style={{ display:'flex', gap:8 }}>
+            {activeFilters.length > 0 && (
+              <button onClick={() => setActiveFilters([])} style={{ flex:1, padding:'12px', borderRadius:14, border:`1.5px solid ${T.inkMute}28`, background:'transparent', fontFamily:T.font, fontWeight:700, fontSize:15, color:T.inkSoft, cursor:'pointer' }}>Törlés</button>
+            )}
+            <button onClick={() => setFilterSheet(false)} style={{ flex:2, padding:'12px', borderRadius:14, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer', boxShadow:'0 4px 12px -4px '+T.mint+'88' }}>Kész</button>
+          </div>
+        }>
+          <div style={{ padding:'0 16px 8px', display:'flex', flexDirection:'column', gap:16 }}>
             <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink, padding:'10px 0 0' }}>Szűrés</div>
             {/* Kategória */}
             <div>
@@ -36840,12 +36855,6 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
                   );
                 })}
               </div>
-            </div>
-            <div style={{ display:'flex', gap:8 }}>
-              {activeFilters.length > 0 && (
-                <button onClick={() => setActiveFilters([])} style={{ flex:1, padding:'12px', borderRadius:14, border:`1.5px solid ${T.inkMute}28`, background:'transparent', fontFamily:T.font, fontWeight:700, fontSize:15, color:T.inkSoft, cursor:'pointer' }}>Törlés</button>
-              )}
-              <button onClick={() => setFilterSheet(false)} style={{ flex:2, padding:'12px', borderRadius:14, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer', boxShadow:'0 4px 12px -4px '+T.mint+'88' }}>Kész</button>
             </div>
           </div>
         </SheetOverlay>
@@ -40809,8 +40818,10 @@ function ZeneConfigSheet({ config, setConfig, onClose }) {
   };
 
   return (
-    <SheetOverlay onClose={onClose}>
-      <div style={{padding:'4px 16px 24px'}}>
+    <SheetOverlay onClose={onClose} footer={
+      <button onClick={onClose} style={{ width:'100%', padding:'13px', borderRadius:14, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)' }}>Kész</button>
+    }>
+      <div style={{padding:'4px 16px 8px'}}>
         <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:18,color:T.ink,marginBottom:2,letterSpacing:T.letterDisplay}}>🎵 Zenefelismerés beállítások</div>
         <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginBottom:14}}>Szűrd a zenéket korszak és stílus szerint</div>
 
@@ -40823,8 +40834,6 @@ function ZeneConfigSheet({ config, setConfig, onClose }) {
           <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:14,color:T.ink,marginBottom:8}}>Stílus</div>
           {renderOptions(GENRE_OPTIONS, genres, 'genres')}
         </div>
-
-        <button onClick={onClose} style={{ width:'100%', padding:'13px', borderRadius:14, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)', marginTop:12 }}>Kész</button>
       </div>
     </SheetOverlay>
   );
@@ -45096,8 +45105,10 @@ function OVFJConfigSheet({ config, setConfig, onClose }) {
   const rounds = config.rounds ?? 5;
   const timeLimit = config.timeLimit ?? 1.5;
   return (
-    <SheetOverlay onClose={onClose}>
-      <div style={{padding:'4px 20px 32px'}}>
+    <SheetOverlay onClose={onClose} footer={
+      <button onClick={onClose} style={{ width:'100%', padding:'15px', borderRadius:16, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)' }}>Kész</button>
+    }>
+      <div style={{padding:'4px 20px 16px'}}>
         <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:18,color:T.ink,marginBottom:4,letterSpacing:T.letterDisplay}}>🌍 Ország-Város beállítások</div>
         <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,marginBottom:18}}>Ország · Város · Fiú · Lány · Növény · Állat · Tárgy · Híresség</div>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 0',borderTop:`1px solid ${T.surfaceMuted}`}}>
@@ -45124,7 +45135,6 @@ function OVFJConfigSheet({ config, setConfig, onClose }) {
             ))}
           </div>
         </div>
-        <button onClick={onClose} style={{ width:'100%', padding:'15px', borderRadius:16, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)', marginTop:16 }}>Kész</button>
       </div>
     </SheetOverlay>
   );
