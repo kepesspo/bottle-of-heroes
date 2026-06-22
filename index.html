@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.496';
+const APP_VERSION = 'v9.497';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -40523,15 +40523,162 @@ function MindenkiGame({ gameIdx, players, onAdvance, onResult }) {
   );
 }
 
-function FingeritGame({ onAdvance }) {
-  React.useEffect(() => { onAdvance && onAdvance({}); }, []);
-  return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, padding:'32px 16px', textAlign:'center' }}>
-      <div style={{ fontSize:56 }}>👆</div>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink }}>Hamarosan!</div>
-      <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, lineHeight:1.6, maxWidth:260 }}>Ez a játék még fejlesztés alatt áll. Nemsokára elérhető lesz!</div>
+function FingeritGame({ gameIdx, players, onAdvance, onResult }) {
+  const [phase, setPhase] = React.useState('intro'); // intro | playing | result
+  const [target, setTarget] = React.useState(0);
+  const [countdown, setCountdown] = React.useState(3);
+  const [fingerCount, setFingerCount] = React.useState(0);
+  const [matchResult, setMatchResult] = React.useState(null);
+  const ivRef = React.useRef(null);
+  const advancedRef = React.useRef(false);
+  const touchesRef = React.useRef(0);
+  const phaseRef = React.useRef('intro');
+
+  React.useEffect(() => () => clearInterval(ivRef.current), []);
+  React.useEffect(() => { phaseRef.current = phase; }, [phase]);
+
+  const startGame = () => {
+    const maxTarget = Math.min(Math.max(players.length, 2), 8);
+    const t = Math.floor(Math.random() * maxTarget) + 1;
+    setTarget(t);
+    setCountdown(3);
+    setFingerCount(0);
+    touchesRef.current = 0;
+    setPhase('playing');
+    phaseRef.current = 'playing';
+
+    let cd = 3;
+    ivRef.current = setInterval(() => {
+      cd--;
+      setCountdown(cd);
+      if (cd <= 0) {
+        clearInterval(ivRef.current);
+        const fingers = touchesRef.current;
+        const match = fingers === t;
+        setMatchResult({ fingers, target: t, match });
+        setPhase('result');
+        if (!advancedRef.current) {
+          advancedRef.current = true;
+          const sub = match
+            ? `${fingers} ujj maradt — egyezik! Emelők isznak 1-et`
+            : `${fingers} ujj maradt, cél: ${t} — Tartók isznak 1-et`;
+          onResult && onResult({ correct: match, playerName: '', drinks: 1, subtitle: sub });
+          onAdvance && onAdvance({});
+        }
+      }
+    }, 1000);
+  };
+
+  const onTouch = (e) => {
+    e.preventDefault();
+    if (phaseRef.current !== 'playing') return;
+    touchesRef.current = e.touches.length;
+    setFingerCount(e.touches.length);
+  };
+
+  if (phase === 'intro') return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, padding:'8px 0', textAlign:'center' }}>
+      <div style={{ fontSize:52 }}>👆</div>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink }}>Finger IT</div>
+      <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, lineHeight:1.6, maxWidth:280 }}>
+        Mindenki tegye az ujját a nagy területre.<br/>
+        A játék kisorsol egy számot — ha pontosan annyi ujj marad amennyi a cél, az <strong style={{color:T.ink}}>emelők isznak</strong>.<br/>
+        Ha nem, a <strong style={{color:T.ink}}>tartók isznak</strong>.
+      </div>
+      <button onClick={startGame} style={{ width:'100%', padding:'16px 0', background:T.mint, border:'none', borderRadius:16, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer' }}>
+        Start!
+      </button>
     </div>
   );
+
+  if (phase === 'playing') {
+    const rT = 22, circT = 2 * Math.PI * rT;
+    const pct = countdown / 3;
+    return (
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12, width:'100%' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', width:'100%' }}>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft }}>
+            Cél: <span style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink }}>{target}</span> ujj
+          </div>
+          <svg width={52} height={52} viewBox="0 0 52 52">
+            <circle cx={26} cy={26} r={rT} fill="none" stroke="rgba(20,30,50,0.1)" strokeWidth={3.5}/>
+            <circle cx={26} cy={26} r={rT} fill="none" stroke={countdown <= 1 ? T.coral : T.mint} strokeWidth={3.5}
+              strokeDasharray={circT} strokeDashoffset={circT*(1-pct)}
+              strokeLinecap="round" transform="rotate(-90 26 26)" style={{transition:'stroke-dashoffset 0.9s linear, stroke 0.3s'}}/>
+            <text x={26} y={31} textAnchor="middle" fontFamily={T.font} fontWeight={900} fontSize={16} fill={countdown<=1?T.coral:T.ink}>{countdown}</text>
+          </svg>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft }}>
+            <span style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.mint }}>{fingerCount}</span> ujj
+          </div>
+        </div>
+
+        {/* Touch area */}
+        <div
+          onTouchStart={onTouch} onTouchEnd={onTouch} onTouchMove={onTouch} onTouchCancel={onTouch}
+          style={{
+            width:'100%', height:220, borderRadius:24,
+            background: fingerCount > 0 ? `${T.mint}18` : T.ink,
+            border: `3px solid ${fingerCount > 0 ? T.mint : 'transparent'}`,
+            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12,
+            touchAction:'none', userSelect:'none', WebkitUserSelect:'none',
+            transition:'background .15s, border .15s',
+            position:'relative', overflow:'hidden',
+          }}>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:42, color: fingerCount>0 ? T.mint : 'rgba(255,255,255,0.25)', transition:'color .15s' }}>
+            {'👆'.repeat(Math.min(fingerCount, 8)) || ''}
+          </div>
+          {fingerCount === 0 && (
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.35)', letterSpacing:'0.1em', textTransform:'uppercase' }}>
+              Tedd ide az ujjad
+            </div>
+          )}
+          {fingerCount > 0 && (
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color: T.ink }}>{fingerCount} ujj</div>
+          )}
+        </div>
+        <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, textAlign:'center' }}>
+          Tartsd lenyomva amíg a számláló le nem jár!
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'result' && matchResult) {
+    const { fingers, target: t, match } = matchResult;
+    return (
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, textAlign:'center' }}>
+        <div style={{ fontSize:52 }}>{match ? '🎯' : '😬'}</div>
+        <div style={{ display:'flex', gap:20, alignItems:'center', justifyContent:'center' }}>
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Cél</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:44, color:T.ink }}>{t}</div>
+          </div>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:20, color:T.inkSoft }}>vs</div>
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Maradt</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:44, color: match ? T.mint : T.coral }}>{fingers}</div>
+          </div>
+        </div>
+        <div style={{
+          width:'100%', borderRadius:20, padding:'16px',
+          background: match ? `${T.mint}18` : `${T.coral}18`,
+          border: `2.5px solid ${match ? T.mint : T.coral}`,
+        }}>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color: match ? T.mint : T.coral }}>
+            {match ? '🎉 Egyezik!' : '❌ Nem egyezik!'}
+          </div>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink, marginTop:6 }}>
+            {match
+              ? <span>Az <span style={{color:T.coral}}>emelők</span> isznak 1-et</span>
+              : <span>A <span style={{color:T.coral}}>tartók</span> isznak 1-et</span>
+            }
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function SohanemGame({ gameIdx, onAdvance }) {
@@ -46368,7 +46515,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'kezcsere') return <KezCsereGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'otdolog') return <OtdologGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
   if (gameId === 'sohanem') return <SohanemGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
-  if (gameId === 'fingerit') return <FingeritGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} />;
+  if (gameId === 'fingerit') return <FingeritGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'cardbattle') return <CardBattleGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} />;
   if (gameId === 'quiz') return <QuizGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} gameMeta={gameMeta} />;
   if (gameId === 'utveszto') return <UtvesztoGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} />;
