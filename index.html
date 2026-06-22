@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.505';
+const APP_VERSION = 'v9.506';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -38696,10 +38696,17 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       else { const off = i - byes; r1slot = byes + Math.floor(off/2); r1side = off%2===0?'p1':'p2'; }
       round0.push({ p1, p2, winner: null, loser: null, score: null, r1slot, r1side });
     }
-    // Build round1: byes players each vs TBD, then remaining prelim winners pair up
+    // Build round1: first min(byes,prelimCount) bye slots await prelim winners in p2,
+    // remaining bye players (when byes > prelimCount) are paired against each other,
+    // remaining prelim winners (when prelimCount > byes) are paired all-TBD.
     const round1 = [];
-    for (let i = 0; i < byes; i++) {
+    const byeVsPrelim = Math.min(byes, prelimCount);
+    for (let i = 0; i < byeVsPrelim; i++) {
       round1.push({ p1: byePlayers[i], p2: null, winner: null, loser: null, score: null, tbd: true });
+    }
+    for (let i = byeVsPrelim; i < byes; i += 2) {
+      const pa = byePlayers[i], pb = byePlayers[i + 1] || null;
+      round1.push({ p1: pa, p2: pb, winner: pb ? null : pa, loser: null, score: null, tbd: false });
     }
     for (let i = 0; i < prelimCount - byes; i += 2) {
       round1.push({ p1: null, p2: null, winner: null, loser: null, score: null, tbd: true });
@@ -39209,8 +39216,13 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       round0.push({ p1, p2, winner: null, loser: null, score: null, r1slot, r1side });
     }
     const round1 = [];
-    for (let i = 0; i < byes; i++) {
+    const byeVsPrelim2 = Math.min(byes, prelimCount);
+    for (let i = 0; i < byeVsPrelim2; i++) {
       round1.push({ p1: byePlayers[i], p2: null, winner: null, loser: null, score: null, tbd: true });
+    }
+    for (let i = byeVsPrelim2; i < byes; i += 2) {
+      const pa = byePlayers[i], pb = byePlayers[i + 1] || null;
+      round1.push({ p1: pa, p2: pb, winner: pb ? null : pa, loser: null, score: null, tbd: false });
     }
     for (let i = 0; i < prelimCount - byes; i += 2) {
       round1.push({ p1: null, p2: null, winner: null, loser: null, score: null, tbd: true });
