@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.504';
+const APP_VERSION = 'v9.505';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -48314,7 +48314,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const recentOpponentRef = React.useRef(null);
   useEffect(() => {
     if (currentGame.category !== 'Páros') { setSelectedOpponent(null); return; }
-    const others = players.filter((_,i) => i !== turn);
+    const others = activePlayers.filter(p => p.id !== currentPlayer?.id);
     if (others.length === 0) return;
     const pool = others.length > 1 ? others.filter(p => p.id !== recentOpponentRef.current) : others;
     const pick = pool[Math.floor(Math.random() * pool.length)];
@@ -48341,7 +48341,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     : games.map((_,i)=>i);
   const currentGameId = games[effectiveOrder[gameIdx % games.length]];
   const currentGame = GAMES.find(g=>g.id===currentGameId) || GAMES[0];
-  const currentPlayer = players[turn];
+  const activePlayers = players.filter(p => !p.disabled);
+  const currentPlayer = activePlayers[turn % Math.max(activePlayers.length, 1)];
   const scenario = SCENARIOS[currentGameId] || SCENARIO_DEFAULTS[currentGame.category] || SCENARIO_DEFAULTS['Egyéni'];
   const totalDrinks = players.reduce((s,p) => s+p.drinks, 0);
 
@@ -48537,9 +48538,9 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const advance = success => {
     if (transitioning) return;
     const newPlayers = trackScores
-      ? players.map((p,i) => i===turn ? {...p, [success?'points':'drinks']: p[success?'points':'drinks']+(success?1:diffDrinks)} : p)
+      ? players.map(p => p.id===currentPlayer?.id ? {...p, [success?'points':'drinks']: p[success?'points':'drinks']+(success?1:diffDrinks)} : p)
       : players;
-    setPendingCommit({ newPlayers, fb:success?'win':'lose', newTurn:(turn+1)%Math.max(players.length,1), newGameIdx:gameIdx+1, newRound:round+1 });
+    setPendingCommit({ newPlayers, fb:success?'win':'lose', newTurn:(turn+1)%Math.max(activePlayers.length,1), newGameIdx:gameIdx+1, newRound:round+1 });
   };
 
   // Csapat: winner gets +1 point, everyone else drinks based on difficulty
@@ -48548,7 +48549,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     const newPlayers = trackScores
       ? players.map((p,i) => i===winnerIdx ? {...p,points:p.points+1} : {...p,drinks:p.drinks+1})
       : players;
-    commitRound(newPlayers, 'win', (turn+1)%Math.max(players.length,1), gameIdx+1, round+1);
+    commitRound(newPlayers, 'win', (turn+1)%Math.max(activePlayers.length,1), gameIdx+1, round+1);
   };
 
   // Páros: challenger vs picked opponent
@@ -48556,14 +48557,14 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     if (transitioning || !selectedOpponent) return;
     const opIdx = players.findIndex(p => p.id===selectedOpponent.id);
     const newPlayers = trackScores
-      ? players.map((p,i) => {
-          if (i===turn) return {...p, ...(currentPlayerWon ? {points:p.points+1} : {drinks:p.drinks+diffDrinks})};
-          if (i===opIdx) return {...p, ...(currentPlayerWon ? {drinks:p.drinks+diffDrinks} : {points:p.points+1})};
+      ? players.map(p => {
+          if (p.id===currentPlayer?.id) return {...p, ...(currentPlayerWon ? {points:p.points+1} : {drinks:p.drinks+diffDrinks})};
+          if (p.id===selectedOpponent.id) return {...p, ...(currentPlayerWon ? {drinks:p.drinks+diffDrinks} : {points:p.points+1})};
           return p;
         })
       : players;
     setSelectedOpponent(null);
-    setPendingCommit({ newPlayers, fb:currentPlayerWon?'win':'lose', newTurn:(turn+1)%Math.max(players.length,1), newGameIdx:gameIdx+1, newRound:round+1 });
+    setPendingCommit({ newPlayers, fb:currentPlayerWon?'win':'lose', newTurn:(turn+1)%Math.max(activePlayers.length,1), newGameIdx:gameIdx+1, newRound:round+1 });
   };
 
   const onLiveDrinkUpdate = (deltaMap) => {
@@ -48587,7 +48588,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     const hasPoints = Object.values(pm).some(v => v > 0);
     const hasDrinks = Object.values(dm).some(v => v > 0);
     const fb = hasPoints ? 'win' : hasDrinks ? 'lose' : null;
-    setPendingCommit({ newPlayers, fb, newTurn:(turn+1)%Math.max(players.length,1), newGameIdx:gameIdx+1, newRound:round+1 });
+    setPendingCommit({ newPlayers, fb, newTurn:(turn+1)%Math.max(activePlayers.length,1), newGameIdx:gameIdx+1, newRound:round+1 });
   };
 
   return (
@@ -48678,7 +48679,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         )}
 
         <div style={{ display:'flex', flexDirection:'column', flex: currentGameId==='beerpong' ? '1 1 0' : 'unset', minHeight: currentGameId==='beerpong' ? 0 : 'unset' }}>
-          <GameContent key={currentGameId + gameIdx + '_' + gameRestartKey} gameId={currentGameId} gameIdx={gameIdx} players={players} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={selectedOpponent} onSetHideFooter={setHideFooter} onSetBuszSwitch={(fn) => setBuszSwitchFn(fn ? () => fn : null)} onCommit={commitPending} />
+          <GameContent key={currentGameId + gameIdx + '_' + gameRestartKey} gameId={currentGameId} gameIdx={gameIdx} players={activePlayers} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={selectedOpponent} onSetHideFooter={setHideFooter} onSetBuszSwitch={(fn) => setBuszSwitchFn(fn ? () => fn : null)} onCommit={commitPending} />
         </div>
       </div>
         </div>
@@ -48889,8 +48890,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         {/* Player pill — flex:3 */}
         <div style={{ flex:3, minWidth:0, overflow:'hidden', display:'flex', alignItems:'stretch', animation: undoAnimating ? 'pillRewind .48s cubic-bezier(.2,.9,.3,1)' : undefined }}>
         {currentGame.category === 'Csapat' ? (() => {
-          const vis = players.slice(0,2);
-          const extra = players.length - vis.length;
+          const vis = activePlayers.slice(0,2);
+          const extra = activePlayers.length - vis.length;
           const aw = 32 + (vis.length - 1 + (extra>0?1:0)) * 18;
           return (
             <div style={{ flex:1, display:'flex', alignItems:'center', gap:8, background:`${T.mint}12`, borderRadius:999, padding:'6px 12px', border:`1.5px solid ${T.mint}25` }}>
@@ -53504,9 +53505,9 @@ function SzerkesztesTab({ players, setPlayers, turn, setTurn, pendingCommit, set
       </button>
       {saved && <div style={{ textAlign:'center', fontFamily:T.font, fontSize:13, fontWeight:700, color:T.mint, padding:'4px 0' }}>✓ {LANG==='en'?'Order updated':'Sorrend frissítve'}</div>}
       {localOrder.map((p,i) => (
-        <div key={p.id} style={{ background:T.surface, borderRadius:14, boxShadow:T.shadow, padding:'10px 14px', display:'flex', alignItems:'center', gap:12, position:'relative', overflow:'hidden' }}>
+        <div key={p.id} style={{ background:T.surface, borderRadius:14, boxShadow:T.shadow, padding:'10px 14px', display:'flex', alignItems:'center', gap:12, position:'relative', overflow:'hidden', opacity: p.disabled ? 0.45 : 1 }}>
           <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.inkSoft, minWidth:22 }}>{i+1}</div>
-          <div style={{ width:36, height:36, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', color:'#fff', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
+          <div style={{ width:36, height:36, borderRadius:'50%', background: p.disabled ? T.inkMute : p.color, display:'grid', placeItems:'center', color:'#fff', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, flexShrink:0 }}>{(p.name||'?').charAt(0).toUpperCase()}</div>
           {p.profileId ? (
             <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink, display:'flex', alignItems:'center', gap:6 }}>
               {p.name}
@@ -53517,9 +53518,10 @@ function SzerkesztesTab({ players, setPlayers, turn, setTurn, pendingCommit, set
               value={editNames[p.id] ?? p.name}
               onChange={e => setEditNames(prev => ({...prev, [p.id]: e.target.value}))}
               onBlur={e => {
-                const newName = (editNames[p.id] ?? p.name).trim();
+                const newName = e.target.value.trim();
                 if (newName && newName !== p.name) {
                   applyOrder(localOrder.map(x => x.id===p.id ? {...x, name: newName} : x));
+                  setEditNames(prev => ({...prev, [p.id]: newName}));
                 }
               }}
               style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink,
@@ -53529,13 +53531,19 @@ function SzerkesztesTab({ players, setPlayers, turn, setTurn, pendingCommit, set
           )}
           <div style={{ display:'flex', gap:4 }}>
             <button
+              onPointerDown={e => { e.stopPropagation(); applyOrder(localOrder.map(x => x.id===p.id ? {...x, disabled: !p.disabled} : x)); }}
+              title={p.disabled ? 'Visszakapcsol' : 'Kikapcsol'}
+              style={{ width:34, height:34, border:'none', borderRadius:8, background: p.disabled ? '#ff444422' : T.bgSoft, color: p.disabled ? '#ff4444' : T.inkSoft, fontSize:16, cursor:'pointer', display:'grid', placeItems:'center', WebkitTapHighlightColor:'transparent' }}>
+              {p.disabled ? '✓' : '✕'}
+            </button>
+            <button
               onPointerDown={e => { e.stopPropagation(); moveUp(i); }}
-              disabled={i===0}
-              style={{ width:34, height:34, border:'none', borderRadius:8, background: i===0 ? T.surfaceMuted : T.bgSoft, color: i===0 ? T.inkMute : T.ink, fontSize:16, cursor: i===0 ? 'default' : 'pointer', display:'grid', placeItems:'center', WebkitTapHighlightColor:'transparent' }}>▲</button>
+              disabled={i===0 || p.disabled}
+              style={{ width:34, height:34, border:'none', borderRadius:8, background: (i===0||p.disabled) ? T.surfaceMuted : T.bgSoft, color: (i===0||p.disabled) ? T.inkMute : T.ink, fontSize:16, cursor: (i===0||p.disabled) ? 'default' : 'pointer', display:'grid', placeItems:'center', WebkitTapHighlightColor:'transparent' }}>▲</button>
             <button
               onPointerDown={e => { e.stopPropagation(); moveDown(i); }}
-              disabled={i===localOrder.length-1}
-              style={{ width:34, height:34, border:'none', borderRadius:8, background: i===localOrder.length-1 ? T.surfaceMuted : T.bgSoft, color: i===localOrder.length-1 ? T.inkMute : T.ink, fontSize:16, cursor: i===localOrder.length-1 ? 'default' : 'pointer', display:'grid', placeItems:'center', WebkitTapHighlightColor:'transparent' }}>▼</button>
+              disabled={i===localOrder.length-1 || p.disabled}
+              style={{ width:34, height:34, border:'none', borderRadius:8, background: (i===localOrder.length-1||p.disabled) ? T.surfaceMuted : T.bgSoft, color: (i===localOrder.length-1||p.disabled) ? T.inkMute : T.ink, fontSize:16, cursor: (i===localOrder.length-1||p.disabled) ? 'default' : 'pointer', display:'grid', placeItems:'center', WebkitTapHighlightColor:'transparent' }}>▼</button>
           </div>
         </div>
       ))}
