@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.509';
+const APP_VERSION = 'v9.510';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -39343,12 +39343,14 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         return { ...g, matches: nm, curIdx: done ? g.curIdx : nextIdx, done };
       });
 
-      // Auto-switch to next incomplete group
-      const thisGroupDone = ng[viewGroup]?.done;
-      if (thisGroupDone) {
-        const nextGroup = ng.findIndex((g, gi) => gi > viewGroup && !g.done);
-        if (nextGroup !== -1) setViewGroup(nextGroup);
+      // After each match, rotate to next incomplete group (interleave groups for rest time)
+      const numG = ng.length;
+      let nextGroup = -1;
+      for (let step = 1; step < numG; step++) {
+        const gi = (viewGroup + step) % numG;
+        if (!ng[gi].done) { nextGroup = gi; break; }
       }
+      if (nextGroup !== -1) setViewGroup(nextGroup);
 
       // Check if ALL groups are done → start finals
       const allDone = ng.every(g => g.done);
