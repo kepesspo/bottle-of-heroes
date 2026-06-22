@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.528';
+const APP_VERSION = 'v9.529';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -52594,23 +52594,23 @@ function BeerPongObserverView({ room, code, onLeave }) {
   const getRRSt = (parts, matches) => {
     if (!parts || !matches) return [];
     const st = {};
-    parts.forEach(p => { if (p) st[p.id] = { player:p, wins:0, losses:0, draws:0, pts:0, diff:0 }; });
+    parts.forEach(p => { if (p) st[p.id] = { player:p, wins:0, losses:0, draws:0, pts:0, diff:0, setWins:0 }; });
     (Array.isArray(matches) ? matches : Object.values(matches)).forEach(m => {
       if (!m || !m.score) return;
       const MAX = 10;
       const p1pot = MAX - m.score.p1, p2pot = MAX - m.score.p2;
       if (m.draw) {
-        if (st[m.p1?.id]) { st[m.p1.id].draws++; st[m.p1.id].pts++; }
-        if (st[m.p2?.id]) { st[m.p2.id].draws++; st[m.p2.id].pts++; }
+        if (st[m.p1?.id]) { st[m.p1.id].draws++; st[m.p1.id].pts++; st[m.p1.id].setWins += m.score.p1; }
+        if (st[m.p2?.id]) { st[m.p2.id].draws++; st[m.p2.id].pts++; st[m.p2.id].setWins += m.score.p2; }
       } else if (m.winner) {
         if (st[m.winner.id]) { st[m.winner.id].wins++; st[m.winner.id].pts += 3; }
         if (m.loser && st[m.loser.id]) st[m.loser.id].losses++;
         const d = p1pot - p2pot;
-        if (st[m.p1?.id]) st[m.p1.id].diff += d;
-        if (st[m.p2?.id]) st[m.p2.id].diff -= d;
+        if (st[m.p1?.id]) { st[m.p1.id].diff += d; st[m.p1.id].setWins += m.score.p1; }
+        if (st[m.p2?.id]) { st[m.p2.id].diff -= d; st[m.p2.id].setWins += m.score.p2; }
       }
     });
-    return Object.values(st).sort((a,b) => b.pts - a.pts || b.diff - a.diff);
+    return Object.values(st).sort((a,b) => b.pts - a.pts || b.diff - a.diff || b.setWins - a.setWins);
   };
 
   const seRoundsArr = bp.seRounds ? (Array.isArray(bp.seRounds) ? bp.seRounds : Object.values(bp.seRounds)) : [];
@@ -53301,23 +53301,23 @@ function ObserverWatching({ code, observerName, onLeave }) {
           const getRRSt = (parts, matches) => {
             if (!parts || !matches) return [];
             const st = {};
-            parts.forEach(p => { if (p) st[p.id] = { player:p, wins:0, losses:0, draws:0, pts:0, diff:0 }; });
+            parts.forEach(p => { if (p) st[p.id] = { player:p, wins:0, losses:0, draws:0, pts:0, diff:0, setWins:0 }; });
             matches.forEach(m => {
               if (!m || !m.score) return;
               const MAX = 10;
               const p1pot = MAX - m.score.p1, p2pot = MAX - m.score.p2;
               if (m.draw) {
-                if (st[m.p1?.id]) { st[m.p1.id].draws++; st[m.p1.id].pts++; }
-                if (st[m.p2?.id]) { st[m.p2.id].draws++; st[m.p2.id].pts++; }
+                if (st[m.p1?.id]) { st[m.p1.id].draws++; st[m.p1.id].pts++; st[m.p1.id].setWins += m.score.p1; }
+                if (st[m.p2?.id]) { st[m.p2.id].draws++; st[m.p2.id].pts++; st[m.p2.id].setWins += m.score.p2; }
               } else if (m.winner) {
                 if (st[m.winner.id]) { st[m.winner.id].wins++; st[m.winner.id].pts += 3; }
                 if (m.loser && st[m.loser.id]) st[m.loser.id].losses++;
                 const d = p1pot - p2pot;
-                if (st[m.p1?.id]) st[m.p1.id].diff += d;
-                if (st[m.p2?.id]) st[m.p2.id].diff -= d;
+                if (st[m.p1?.id]) { st[m.p1.id].diff += d; st[m.p1.id].setWins += m.score.p1; }
+                if (st[m.p2?.id]) { st[m.p2.id].diff -= d; st[m.p2.id].setWins += m.score.p2; }
               }
             });
-            return Object.values(st).sort((a,b) => b.pts - a.pts || b.diff - a.diff);
+            return Object.values(st).sort((a,b) => b.pts - a.pts || b.diff - a.diff || b.setWins - a.setWins);
           };
           return (
             <div style={{ gridColumn: _bpIsWide ? 2 : undefined, gridRow: _bpIsWide ? '1 / span 3' : undefined, background:T.surface, borderRadius:18, boxShadow:T.shadow, padding:'14px 14px', display:'flex', flexDirection:'column', gap:10 }}>
