@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.500';
+const APP_VERSION = 'v9.501';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -50651,9 +50651,24 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
   const isP2Ref = useRef(false);
   const score1Ref = useRef(0);
   const score2Ref = useRef(0);
+  const seqRef = useRef([]); // pre-generated trap sequence, same for both players
+  const seqIdxRef = useRef(0);
 
   const p1 = challenger;
   const p2 = opponent || (players && players.find(p => p.id !== challenger?.id)) || null;
+
+  const genSeq = () => {
+    const seq = [];
+    for (let i = 0; i < 120; i++) {
+      const isTrap = Math.random() < TRAP_CHANCE;
+      seq.push({
+        pos: Math.floor(Math.random() * GRID),
+        isTrap,
+        emoji: isTrap ? TRAP_EMOJI : EMOJIS[Math.floor(Math.random() * EMOJIS.length)],
+      });
+    }
+    seqRef.current = seq;
+  };
 
   useEffect(() => () => {
     clearInterval(ivRef.current);
@@ -50663,9 +50678,9 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
 
   const spawnNext = () => {
     if (Date.now() >= endTimeRef.current) return;
-    const pos = Math.floor(Math.random() * GRID);
-    const isTrap = Math.random() < TRAP_CHANCE;
-    const emoji = isTrap ? TRAP_EMOJI : EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+    const item = seqRef.current[seqIdxRef.current % seqRef.current.length];
+    seqIdxRef.current++;
+    const { pos, isTrap, emoji } = item;
     setActiveBtn({ pos, emoji, isTrap });
     const elapsed = Date.now() - startTimeRef.current;
     const progress = Math.min(1, elapsed / (DURATION * 1000));
@@ -50681,6 +50696,8 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
   const startRound = (isP2) => {
     scoreRef.current = 0;
     isP2Ref.current = isP2;
+    seqIdxRef.current = 0;
+    if (!isP2) genSeq(); // generate once for P1; P2 reuses same sequence
     setCurrentScore(0);
     setActiveBtn(null);
     setTimeLeft(DURATION);
