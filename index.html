@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.507';
+const APP_VERSION = 'v9.508';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35098,19 +35098,20 @@ function BottomBar({ children, anchored, extra }) {
 function SheetOverlay({ onClose, children }) {
   const [dragY, setDragY] = React.useState(0);
   const [closing, setClosing] = React.useState(false);
-  const [vvTop, setVvTop] = React.useState(0);
-  const [vvHeight, setVvHeight] = React.useState(window.innerHeight);
+  const [vvHeight, setVvHeight] = React.useState(window.visualViewport?.height || window.innerHeight);
   const startYRef = React.useRef(null);
   const sheetRef = React.useRef(null);
 
   React.useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const upd = () => { setVvTop(vv.offsetTop); setVvHeight(vv.height); };
+    // Only track height (keyboard shrinks it). offsetTop is scroll-based and
+    // must NOT be used as `top` on a position:fixed element — it would shift
+    // the overlay down by the page scroll amount.
+    const upd = () => { setVvHeight(vv.height); };
     vv.addEventListener('resize', upd);
-    vv.addEventListener('scroll', upd);
     upd();
-    return () => { vv.removeEventListener('resize', upd); vv.removeEventListener('scroll', upd); };
+    return () => { vv.removeEventListener('resize', upd); };
   }, []);
 
   const dismiss = React.useCallback(() => {
@@ -35139,11 +35140,11 @@ function SheetOverlay({ onClose, children }) {
 
   return (
     <div onClick={dismiss} style={{
-      position:'fixed', top:vvTop, left:0, right:0, height:vvHeight,
+      position:'fixed', top:0, left:0, right:0, height:vvHeight,
       background:'rgba(14,14,24,0.45)',
       zIndex:60, display:'flex', alignItems:'flex-end',
       animation:'fadeIn .2s',
-      opacity, transition: dragY === 0 ? 'opacity .22s, top 0.2s ease, height 0.2s ease' : 'none',
+      opacity, transition: dragY === 0 ? 'opacity .22s, height 0.2s ease' : 'none',
     }}>
       <div
         ref={sheetRef}
