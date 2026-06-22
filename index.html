@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.467';
+const APP_VERSION = 'v9.468';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -43643,32 +43643,37 @@ function TicktakGame({ gameIdx, players, onAdvance, onResult }) {
   const tickIntervalRef = React.useRef(null);
   const audioCtxRef = React.useRef(null);
 
-  const getAudioCtx = () => {
+  const getAudioCtx = async () => {
     if (!audioCtxRef.current) {
       try { audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
     }
+    try {
+      if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+        await audioCtxRef.current.resume();
+      }
+    } catch(e) {}
     return audioCtxRef.current;
   };
 
-  const playTick = (high = false) => {
+  const playTick = async (high = false) => {
     try {
-      const ctx = getAudioCtx();
+      const ctx = await getAudioCtx();
       if (!ctx) return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain); gain.connect(ctx.destination);
       osc.frequency.value = high ? 1200 : 900;
       gain.gain.setValueAtTime(0, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.005);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      gain.gain.linearRampToValueAtTime(0.22, ctx.currentTime + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
       osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.09);
+      osc.stop(ctx.currentTime + 0.1);
     } catch(e) {}
   };
 
-  const playBuzz = () => {
+  const playBuzz = async () => {
     try {
-      const ctx = getAudioCtx();
+      const ctx = await getAudioCtx();
       if (ctx) {
         [0, 0.18, 0.36, 0.54].forEach(offset => {
           const osc = ctx.createOscillator();
@@ -43686,9 +43691,10 @@ function TicktakGame({ gameIdx, players, onAdvance, onResult }) {
     try { if ('vibrate' in navigator) navigator.vibrate([200, 100, 200, 100, 400]); } catch(e) {}
   };
 
-  const start = () => {
+  const start = async () => {
     setPhase('running');
-    // start tick-tack — alternating high/low every 600ms
+    // Resume AudioContext inside user gesture, then start ticking
+    const ctx = await getAudioCtx();
     let tickHigh = false;
     playTick(false);
     tickIntervalRef.current = setInterval(() => {
