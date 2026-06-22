@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.531';
+const APP_VERSION = 'v9.532';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -38868,14 +38868,14 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       const p1cups = m.score.p1, p2cups = m.score.p2;
       const p1pot = MAX_CUPS - p1cups, p2pot = MAX_CUPS - p2cups;
       if (m.draw) {
-        if (st[m.p1.id]) { st[m.p1.id].draws++; st[m.p1.id].pts += 1; st[m.p1.id].setWins += p2pot; }
-        if (st[m.p2.id]) { st[m.p2.id].draws++; st[m.p2.id].pts += 1; st[m.p2.id].setWins += p1pot; }
+        if (st[m.p1.id]) { st[m.p1.id].draws++; st[m.p1.id].pts += 1; st[m.p1.id].setWins += p1cups; }
+        if (st[m.p2.id]) { st[m.p2.id].draws++; st[m.p2.id].pts += 1; st[m.p2.id].setWins += p2cups; }
       } else if (m.winner) {
         if (m.winner && st[m.winner.id]) { st[m.winner.id].wins++; st[m.winner.id].pts += 3; }
         if (m.loser && st[m.loser.id]) st[m.loser.id].losses++;
-        const p1diff = p2pot - p1pot;
-        if (st[m.p1.id]) { st[m.p1.id].setWins += p2pot; st[m.p1.id].diff += p1diff; }
-        if (st[m.p2.id]) { st[m.p2.id].setWins += p1pot; st[m.p2.id].diff -= p1diff; }
+        const p1diff = p2pot - p1pot; // p1cups - p2cups: pozitív ha p1 több poharat lőtt
+        if (st[m.p1.id]) { st[m.p1.id].setWins += p1cups; st[m.p1.id].diff += p1diff; }
+        if (st[m.p2.id]) { st[m.p2.id].setWins += p2cups; st[m.p2.id].diff -= p1diff; }
       }
     });
     return Object.values(st).sort((a, b) => b.pts - a.pts || b.diff - a.diff || b.setWins - a.setWins);
@@ -52598,17 +52598,17 @@ function BeerPongObserverView({ room, code, onLeave }) {
     (Array.isArray(matches) ? matches : Object.values(matches)).forEach(m => {
       if (!m || !m.score) return;
       const MAX = 10;
-      // score.p1 = megmaradt poharak p1 oldalán; p1 által kilőtt = MAX - score.p2 = p2pot
-      const p1pot = MAX - m.score.p1, p2pot = MAX - m.score.p2;
+      const p1cups = m.score.p1, p2cups = m.score.p2; // score = kilőtt poharak száma
+      const p1pot = MAX - p1cups, p2pot = MAX - p2cups;
       if (m.draw) {
-        if (st[m.p1?.id]) { st[m.p1.id].draws++; st[m.p1.id].pts++; st[m.p1.id].setWins += p2pot; }
-        if (st[m.p2?.id]) { st[m.p2.id].draws++; st[m.p2.id].pts++; st[m.p2.id].setWins += p1pot; }
+        if (st[m.p1?.id]) { st[m.p1.id].draws++; st[m.p1.id].pts++; st[m.p1.id].setWins += p1cups; }
+        if (st[m.p2?.id]) { st[m.p2.id].draws++; st[m.p2.id].pts++; st[m.p2.id].setWins += p2cups; }
       } else if (m.winner) {
         if (st[m.winner.id]) { st[m.winner.id].wins++; st[m.winner.id].pts += 3; }
         if (m.loser && st[m.loser.id]) st[m.loser.id].losses++;
-        const d = p2pot - p1pot; // p1 kilőtte − p2 kilőtte → pozitív ha p1 jobb
-        if (st[m.p1?.id]) { st[m.p1.id].diff += d; st[m.p1.id].setWins += p2pot; }
-        if (st[m.p2?.id]) { st[m.p2.id].diff -= d; st[m.p2.id].setWins += p1pot; }
+        const d = p2pot - p1pot; // = p1cups - p2cups: pozitív ha p1 több poharat lőtt
+        if (st[m.p1?.id]) { st[m.p1.id].diff += d; st[m.p1.id].setWins += p1cups; }
+        if (st[m.p2?.id]) { st[m.p2.id].diff -= d; st[m.p2.id].setWins += p2cups; }
       }
     });
     return Object.values(st).sort((a,b) => b.pts - a.pts || b.diff - a.diff || b.setWins - a.setWins);
@@ -53306,16 +53306,17 @@ function ObserverWatching({ code, observerName, onLeave }) {
             matches.forEach(m => {
               if (!m || !m.score) return;
               const MAX = 10;
-              const p1pot = MAX - m.score.p1, p2pot = MAX - m.score.p2;
+              const p1cups = m.score.p1, p2cups = m.score.p2;
+              const p1pot = MAX - p1cups, p2pot = MAX - p2cups;
               if (m.draw) {
-                if (st[m.p1?.id]) { st[m.p1.id].draws++; st[m.p1.id].pts++; st[m.p1.id].setWins += p2pot; }
-                if (st[m.p2?.id]) { st[m.p2.id].draws++; st[m.p2.id].pts++; st[m.p2.id].setWins += p1pot; }
+                if (st[m.p1?.id]) { st[m.p1.id].draws++; st[m.p1.id].pts++; st[m.p1.id].setWins += p1cups; }
+                if (st[m.p2?.id]) { st[m.p2.id].draws++; st[m.p2.id].pts++; st[m.p2.id].setWins += p2cups; }
               } else if (m.winner) {
                 if (st[m.winner.id]) { st[m.winner.id].wins++; st[m.winner.id].pts += 3; }
                 if (m.loser && st[m.loser.id]) st[m.loser.id].losses++;
                 const d = p2pot - p1pot;
-                if (st[m.p1?.id]) { st[m.p1.id].diff += d; st[m.p1.id].setWins += p2pot; }
-                if (st[m.p2?.id]) { st[m.p2.id].diff -= d; st[m.p2.id].setWins += p1pot; }
+                if (st[m.p1?.id]) { st[m.p1.id].diff += d; st[m.p1.id].setWins += p1cups; }
+                if (st[m.p2?.id]) { st[m.p2.id].diff -= d; st[m.p2.id].setWins += p2cups; }
               }
             });
             return Object.values(st).sort((a,b) => b.pts - a.pts || b.diff - a.diff || b.setWins - a.setWins);
