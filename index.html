@@ -33966,7 +33966,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.460';
+const APP_VERSION = 'v9.461';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -36579,6 +36579,7 @@ function CollectBoomConfigSheet({ config, setConfig, onClose }) {
 function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, go }) {
   const [info, setInfo] = useState(null);
   const [sheet, setSheet] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState({});
   const [buszSheet, setBuszSheet] = useState(false);
   const [beerpongSheet, setBeerpongSheet] = useState(false);
   const [kisebbSheet, setKisebbSheet] = useState(false);
@@ -36722,22 +36723,51 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
           );
         })()}
 
-        {/* ── Összes játék ── */}
-        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
-          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.12em' }}>Összes játék</span>
-        </div>
-        <div className="grid-games">
-          {visibleGames.map(g => {
-            const isSelected = selectedGames.includes(g.id);
-            const locked = isLocked(g.id);
-            const dim = locked || g.comingSoon || (anySelected && !isSelected);
-            return (
-              <GameTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked || !!g.comingSoon}
-                onClick={() => { if (!g.comingSoon) toggle(g.id); }} onInfo={() => setInfo(g.id)}
-                onLongPress={g.id==='busz' ? ()=>{ if(!selectedGames.includes('busz')) toggle('busz'); setBuszSheet(true); } : g.id==='beerpong' ? ()=>{ if(!selectedGames.includes('beerpong')) toggle('beerpong'); setBeerpongSheet(true); } : g.id==='kisebb' ? ()=>{ if(!selectedGames.includes('kisebb')) toggle('kisebb'); setKisebbSheet(true); } : g.id==='collect' ? ()=>{ if(!selectedGames.includes('collect')) toggle('collect'); setCollectSheet(true); } : g.id==='ovfj' ? ()=>{ if(!selectedGames.includes('ovfj')) toggle('ovfj'); setOvfjSheet(true); } : g.id==='zene' ? ()=>{ if(!selectedGames.includes('zene')) toggle('zene'); setZeneSheet(true); } : undefined} />
-            );
-          })}
-        </div>
+        {/* ── Csoportosított játékok ── */}
+        {[
+          { key:'Egyéni', label:'Egyéni', emoji:'🎮', desc:'1 játékos játszik' },
+          { key:'Páros',  label:'Páros',  emoji:'⚔️',  desc:'2 játékos egymás ellen' },
+          { key:'Csapat', label:'Csapat', emoji:'🍺', desc:'Mindenki játszik' },
+        ].map(({ key, label, emoji, desc }) => {
+          const sectionGames = visibleGames.filter(g => g.category === key);
+          if (sectionGames.length === 0) return null;
+          const isCollapsed = !!collapsedSections[key];
+          const selectedCount = sectionGames.filter(g => selectedGames.includes(g.id)).length;
+          return (
+            <div key={key} style={{ marginBottom: 8 }}>
+              {/* Szekció fejléc */}
+              <button onClick={() => setCollapsedSections(s => ({...s, [key]: !s[key]}))} style={{
+                width:'100%', display:'flex', alignItems:'center', gap:8,
+                background:'transparent', border:'none', cursor:'pointer',
+                padding:'4px 2px 8px', marginBottom: isCollapsed ? 0 : 4,
+              }}>
+                <span style={{ fontSize:15 }}>{emoji}</span>
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.12em', flex:1, textAlign:'left' }}>{label}</span>
+                {selectedCount > 0 && (
+                  <span style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.mint, background:T.mintSoft, borderRadius:999, padding:'2px 8px' }}>{selectedCount} kiválasztva</span>
+                )}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition:'transform .2s', flexShrink:0 }}>
+                  <path d="M6 9l6 6 6-6" stroke={T.inkMute} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+              {/* Játékok grid */}
+              {!isCollapsed && (
+                <div className="grid-games">
+                  {sectionGames.map(g => {
+                    const isSelected = selectedGames.includes(g.id);
+                    const locked = isLocked(g.id);
+                    const dim = locked || g.comingSoon || (anySelected && !isSelected);
+                    return (
+                      <GameTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked || !!g.comingSoon}
+                        onClick={() => { if (!g.comingSoon) toggle(g.id); }} onInfo={() => setInfo(g.id)}
+                        onLongPress={g.id==='busz' ? ()=>{ if(!selectedGames.includes('busz')) toggle('busz'); setBuszSheet(true); } : g.id==='beerpong' ? ()=>{ if(!selectedGames.includes('beerpong')) toggle('beerpong'); setBeerpongSheet(true); } : g.id==='kisebb' ? ()=>{ if(!selectedGames.includes('kisebb')) toggle('kisebb'); setKisebbSheet(true); } : g.id==='collect' ? ()=>{ if(!selectedGames.includes('collect')) toggle('collect'); setCollectSheet(true); } : g.id==='ovfj' ? ()=>{ if(!selectedGames.includes('ovfj')) toggle('ovfj'); setOvfjSheet(true); } : g.id==='zene' ? ()=>{ if(!selectedGames.includes('zene')) toggle('zene'); setZeneSheet(true); } : undefined} />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
         </div>
         </div>
         <div style={{ position:'absolute', bottom:0, left:0, right:0, height:80, background:`linear-gradient(to bottom, transparent, ${T.bg})`, pointerEvents:'none' }} />
