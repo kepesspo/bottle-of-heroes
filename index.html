@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.508';
+const APP_VERSION = 'v9.509';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -39355,12 +39355,33 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       if (allDone) {
           // All groups done — start finals
           const finalsType = TOURNAMENT.endsWith('_se') ? 'se' : 'rr';
-          const allAdvanced = ng.flatMap(g => {
+          // Build per-group ranked advancers: advByGroup[gi][pos] = player
+          const advByGroup = ng.map(g => {
             const standings = getRRStandings(g.players, g.matches);
             return standings.slice(0, GROUP_ADVANCE).map(s => s.player);
           });
+          const numGroups = advByGroup.length;
+          // Interleave by position: seed1=A1, seed2=B1, seed3=A2, seed4=B2, ...
+          const allSeeded = [];
+          for (let pos = 0; pos < GROUP_ADVANCE; pos++) {
+            for (let gi = 0; gi < numGroups; gi++) {
+              if (advByGroup[gi][pos]) allSeeded.push(advByGroup[gi][pos]);
+            }
+          }
+          const allAdvanced = allSeeded; // for RR (no seeding needed)
           if (finalsType === 'se') {
-            const br = buildSEBracket(allAdvanced);
+            // Cross-pair seeding: top seeds get byes, weakest seeds cross-pair in prelim
+            // (A2 vs B3, B2 vs A3 etc.) so no same-group early meetings
+            const N = allSeeded.length;
+            let nextPow2 = 1;
+            while (nextPow2 < N) nextPow2 *= 2;
+            const byes = nextPow2 - N;
+            const parts = allSeeded.slice(0, byes);
+            const rem = allSeeded.slice(byes);
+            for (let i = 0; i < rem.length / 2; i++) {
+              parts.push(rem[i], rem[rem.length - 1 - i]);
+            }
+            const br = buildSEBracketOrdered(parts);
             setSeRounds(br); setSeCurRound(0);
             const fp = br.length > 0 ? br[0].findIndex(mm => mm.winner === null) : -1;
             setSeCurMatch(fp >= 0 ? fp : 0);
