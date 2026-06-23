@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.545';
+const APP_VERSION = 'v9.546';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -46446,6 +46446,137 @@ function KezCsereGame({ gameIdx, players, onAdvance, onResult }) {
   );
 }
 
+// ─── HAJIME ─────────────────────────────────────────────────────────────────
+function HajimeGame({ gameIdx, players, onAdvance, onResult }) {
+  const TOTAL_ROUNDS = 5;
+  const TOTAL_MISTAKES = 5;
+  const [mistakes, setMistakes] = React.useState({});
+  const [round, setRound] = React.useState(1);
+  const [done, setDone] = React.useState(false);
+  const [checkVal, setCheckVal] = React.useState('');
+  React.useEffect(() => { setMistakes({}); setRound(1); setDone(false); setCheckVal(''); }, [gameIdx]);
+
+  const isHajime = (n) => {
+    const s = String(n);
+    return n % 5 === 0 || n % 7 === 0 || s.includes('5') || s.includes('7');
+  };
+
+  const checkNum = parseInt(checkVal, 10);
+  const checkValid = checkVal !== '' && !isNaN(checkNum) && checkNum > 0;
+  const checkResult = checkValid ? isHajime(checkNum) : null;
+
+  const totalMistakes = Object.values(mistakes).reduce((s, v) => s + v, 0);
+  const canFinish = round > TOTAL_ROUNDS || totalMistakes >= TOTAL_MISTAKES;
+
+  const addMistake = (pid) => { if (done) return; setMistakes(m => ({ ...m, [pid]: (m[pid] || 0) + 1 })); };
+  const removeMistake = (pid) => {
+    if (done) return;
+    setMistakes(m => {
+      const cur = m[pid] || 0; if (cur <= 0) return m;
+      const next = { ...m }; if (cur === 1) delete next[pid]; else next[pid] = cur - 1; return next;
+    });
+  };
+
+  const nextRound = () => { if (canFinish) return finish(); setRound(r => r + 1); };
+
+  const finish = () => {
+    if (done) return; setDone(true);
+    const dm = { ...mistakes };
+    const losers = players.filter(p => dm[p.id]);
+    const subtitle = losers.length === 0 ? 'Mindenki hibátlan!' : losers.map(p => `${p.name}: ${dm[p.id]} hiba`).join(', ');
+    const pm = {}; players.forEach(p => { if (!(dm[p.id] > 0)) pm[p.id] = 1; });
+    onResult && onResult({ correct: losers.length === 0, playerName: losers[0]?.name || null, drinks: losers.length > 0 ? 1 : 0, subtitle });
+    onAdvance && onAdvance(dm, pm);
+  };
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, width:'100%' }}>
+      {/* Kör + hibák */}
+      <div style={{ display:'flex', gap:10, width:'100%' }}>
+        <div style={{ flex:1, background:T.surface, borderRadius:14, padding:'10px 14px', textAlign:'center', boxShadow:T.shadow }}>
+          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Kör</div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink }}>{Math.min(round, TOTAL_ROUNDS)}<span style={{ fontSize:13, color:T.inkSoft, fontWeight:600 }}>/{TOTAL_ROUNDS}</span></div>
+        </div>
+        <div style={{ flex:1, background:T.surface, borderRadius:14, padding:'10px 14px', textAlign:'center', boxShadow:T.shadow }}>
+          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Hibák</div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color: totalMistakes >= TOTAL_MISTAKES ? T.coral : T.ink }}>{totalMistakes}<span style={{ fontSize:13, color:T.inkSoft, fontWeight:600 }}>/{TOTAL_MISTAKES}</span></div>
+        </div>
+      </div>
+
+      {/* Hiba progress bar */}
+      <div style={{ width:'100%', height:6, background:T.bgSoft, borderRadius:6, overflow:'hidden' }}>
+        <div style={{ width:`${Math.min(totalMistakes / TOTAL_MISTAKES * 100, 100)}%`, height:'100%', background:T.coral, borderRadius:6, transition:'width .25s' }} />
+      </div>
+
+      {/* Szám ellenőrző */}
+      <div style={{ width:'100%', background:T.surface, borderRadius:16, padding:'14px 16px', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>🔢 Szám ellenőrzés</div>
+        <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+          <input
+            type='number' inputMode='numeric' value={checkVal}
+            onChange={e => setCheckVal(e.target.value)}
+            placeholder='Írd be a számot…'
+            style={{ flex:1, padding:'10px 14px', borderRadius:12, border:`1.5px solid ${T.inkMute}40`, background:T.bgSoft, fontFamily:T.font, fontWeight:700, fontSize:18, color:T.ink, outline:'none', MozAppearance:'textfield' }}
+          />
+          {checkValid && (
+            <div style={{ flexShrink:0, padding:'10px 16px', borderRadius:12, background: checkResult ? '#FFF0C0' : T.mintSoft, fontFamily:T.font, fontWeight:900, fontSize:15, color: checkResult ? '#C08000' : T.mintDeep, whiteSpace:'nowrap' }}>
+              {checkResult ? '😆 HAJIME!' : '✅ Számolj'}
+            </div>
+          )}
+        </div>
+        {checkValid && (
+          <div style={{ marginTop:8, fontFamily:T.font, fontSize:12, color:T.inkSoft }}>
+            {checkResult
+              ? (() => {
+                  const n = checkNum; const s = String(n); const reasons = [];
+                  if (n % 5 === 0) reasons.push('osztható 5-tel');
+                  if (n % 7 === 0) reasons.push('osztható 7-tel');
+                  if (s.includes('5')) reasons.push('tartalmaz 5-öst');
+                  if (s.includes('7')) reasons.push('tartalmaz 7-est');
+                  return reasons.join(', ');
+                })()
+              : `${checkNum} — normálisan kell mondani`
+            }
+          </div>
+        )}
+      </div>
+
+      {/* Játékos kártyák */}
+      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, alignSelf:'flex-start' }}>Ki rontott el?</div>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center', width:'100%' }}>
+        {players.map(p => {
+          const cnt = mistakes[p.id] || 0; const selected = cnt > 0;
+          return (
+            <div key={p.id} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:'10px 10px', borderRadius:14, background: selected ? `${T.coral}18` : T.surface, border:`2px solid ${selected ? T.coral : 'transparent'}`, boxShadow:T.shadow, minWidth:76, position:'relative' }}>
+              <div style={{ width:44, height:44, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:17, color:'#fff' }}>
+                {p.name.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ fontFamily:T.font, fontWeight:600, fontSize:12, color: selected ? T.coral : T.ink }}>{p.name}</div>
+              <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                <button onClick={() => removeMistake(p.id)} disabled={cnt === 0}
+                  style={{ width:26, height:26, borderRadius:8, border:'none', background: cnt > 0 ? T.coral : T.bgSoft, color: cnt > 0 ? '#fff' : T.inkMute, fontWeight:900, fontSize:16, cursor: cnt > 0 ? 'pointer' : 'default', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>−</button>
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color: cnt > 0 ? T.coral : T.inkMute, minWidth:16, textAlign:'center' }}>{cnt}</span>
+                <button onClick={() => addMistake(p.id)}
+                  style={{ width:26, height:26, borderRadius:8, border:'none', background:T.mint, color:'#fff', fontWeight:900, fontSize:16, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>+</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {!done && (canFinish ? (
+        <button onClick={finish} style={{ width:'100%', padding:'15px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:16, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow, animation:'popIn .2s' }}>
+          🏁 Befejezés
+        </button>
+      ) : (
+        <button onClick={nextRound} style={{ width:'100%', padding:'15px', background:T.bgSoft, color:T.ink, fontFamily:T.font, fontWeight:700, fontSize:15, borderRadius:16, border:'none', cursor:'pointer' }}>
+          Következő kör ({round}/{TOTAL_ROUNDS}) →
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── SZÓLÁNC ────────────────────────────────────────────────────────────────
 function SzolancGame({ gameIdx, players, onAdvance, onResult, onSetHideFooter }) {
   const LISTS = [
@@ -46753,6 +46884,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'kategoria') return <KategoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'memoria') return <MemoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kezcsere') return <KezCsereGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'hajime') return <HajimeGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'otdolog') return <OtdologGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
   if (gameId === 'sohanem') return <SohanemGame key={gameIdx} gameIdx={gameIdx} onAdvance={onAdvance} />;
   if (gameId === 'fingerit') return <FingeritGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
@@ -48925,7 +49057,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           <button onClick={() => advancePaired(true)} disabled={transitioning} style={{ flex:1, minHeight:60, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>{LANG==='en'?'I won! 🎉':'Nyertem! 🎉'}</button>
         </div>
       )}
-      {currentGame.category === 'Csapat' && !sohanemResult && currentGameId !== 'loverseny' && currentGameId !== 'imposztor' && currentGameId !== 'busz' && currentGameId !== 'kisebb' && currentGameId !== 'ticktak' && currentGameId !== 'szerencse' && currentGameId !== 'kategoria' && currentGameId !== 'collect' && currentGameId !== 'kopapir' && currentGameId !== 'memoria' && currentGameId !== 'kezcsere' && currentGameId !== 'mindenki' && currentGameId !== 'beerpong' && currentGameId !== 'uveg' && currentGameId !== 'powerhour' && currentGameId !== 'ovfj' && currentGameId !== 'mutasd' && currentGameId !== 'farkasos' && currentGameId !== 'szolánc' && currentGameId !== 'ringfire' && (
+      {currentGame.category === 'Csapat' && !sohanemResult && currentGameId !== 'loverseny' && currentGameId !== 'imposztor' && currentGameId !== 'busz' && currentGameId !== 'kisebb' && currentGameId !== 'ticktak' && currentGameId !== 'szerencse' && currentGameId !== 'kategoria' && currentGameId !== 'collect' && currentGameId !== 'kopapir' && currentGameId !== 'memoria' && currentGameId !== 'kezcsere' && currentGameId !== 'hajime' && currentGameId !== 'mindenki' && currentGameId !== 'beerpong' && currentGameId !== 'uveg' && currentGameId !== 'powerhour' && currentGameId !== 'ovfj' && currentGameId !== 'mutasd' && currentGameId !== 'farkasos' && currentGameId !== 'szolánc' && currentGameId !== 'ringfire' && (
         <div style={{ padding:'0 18px 14px', display:'flex', flexDirection:'column', gap:10 }}>
           <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', textAlign:'center' }}>{currentGameId === 'sohanem' ? 'Kire igaz?' : 'Ki rontott?'}</div>
           <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:4, WebkitOverflowScrolling:'touch' }}>
