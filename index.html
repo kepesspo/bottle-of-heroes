@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.552';
+const APP_VERSION = 'v9.553';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -40695,11 +40695,14 @@ function MindenkiGame({ gameIdx, players, onAdvance, onResult }) {
 }
 
 function FingeritGame({ gameIdx, players, onAdvance, onResult }) {
-  const [phase, setPhase] = React.useState('intro'); // intro | playing | result
+  const TOTAL_ROUNDS = 5;
+  const [phase, setPhase] = React.useState('intro'); // intro | playing | result | distribute
+  const [round, setRound] = React.useState(1);
   const [target, setTarget] = React.useState(0);
   const [countdown, setCountdown] = React.useState(3);
   const [fingerCount, setFingerCount] = React.useState(0);
   const [matchResult, setMatchResult] = React.useState(null);
+  const [totalDrinks, setTotalDrinks] = React.useState({});
   const ivRef = React.useRef(null);
   const advancedRef = React.useRef(false);
   const touchesRef = React.useRef(0);
@@ -40727,17 +40730,31 @@ function FingeritGame({ gameIdx, players, onAdvance, onResult }) {
         const fingers = touchesRef.current;
         const match = fingers === t;
         setMatchResult({ fingers, target: t, match });
-        setPhase('result');
-        if (!advancedRef.current) {
-          advancedRef.current = true;
-          const sub = match
-            ? `${fingers} ujj maradt — egyezik! Emelők isznak 1-et`
-            : `${fingers} ujj maradt, cél: ${t} — Tartók isznak 1-et`;
-          onResult && onResult({ correct: match, playerName: '', drinks: 1, subtitle: sub });
-          onAdvance && onAdvance({});
-        }
+        setPhase('distribute');
       }
     }, 1000);
+  };
+
+  const confirmRound = (roundDrinks) => {
+    const newTotal = { ...totalDrinks };
+    Object.entries(roundDrinks).forEach(([pid, amt]) => { newTotal[pid] = (newTotal[pid]||0) + amt; });
+    setTotalDrinks(newTotal);
+
+    if (round >= TOTAL_ROUNDS) {
+      if (!advancedRef.current) {
+        advancedRef.current = true;
+        const drinkers = players.filter(p => newTotal[p.id]>0);
+        const subtitle = drinkers.length>0
+          ? drinkers.map(p=>`${p.name}: ${newTotal[p.id]}🍺`).join(', ')
+          : 'Mindenki hibátlan!';
+        onResult && onResult({ correct: drinkers.length===0, playerName: drinkers[0]?.name||null, drinks: drinkers.length, subtitle });
+        onAdvance && onAdvance(newTotal, {});
+      }
+      return;
+    }
+    setRound(r => r+1);
+    setMatchResult(null);
+    setPhase('intro');
   };
 
   const onTouch = (e) => {
@@ -40747,10 +40764,25 @@ function FingeritGame({ gameIdx, players, onAdvance, onResult }) {
     setFingerCount(e.touches.length);
   };
 
+  const statsRow = (
+    <div style={{ display:'flex', gap:10, width:'100%' }}>
+      <div style={{ flex:1, background:T.surface, borderRadius:14, padding:'10px 14px', textAlign:'center', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Kör</div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink }}>{round}<span style={{ fontSize:13, color:T.inkSoft, fontWeight:600 }}>/{TOTAL_ROUNDS}</span></div>
+      </div>
+      <div style={{ flex:1, background:T.surface, borderRadius:14, padding:'10px 14px', textAlign:'center', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Össz korty</div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color: Object.values(totalDrinks).reduce((s,v)=>s+v,0)>0 ? T.coral : T.inkMute }}>
+          {Object.values(totalDrinks).reduce((s,v)=>s+v,0)}
+        </div>
+      </div>
+    </div>
+  );
+
   if (phase === 'intro') return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, padding:'8px 0', textAlign:'center' }}>
+      {statsRow}
       <div style={{ fontSize:52 }}>👆</div>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink }}>Finger IT</div>
       <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, lineHeight:1.6, maxWidth:280 }}>
         Mindenki tegye az ujját a nagy területre.<br/>
         A játék kisorsol egy számot — ha pontosan annyi ujj marad amennyi a cél, az <strong style={{color:T.ink}}>emelők isznak</strong>.<br/>
@@ -40814,12 +40846,13 @@ function FingeritGame({ gameIdx, players, onAdvance, onResult }) {
     );
   }
 
-  if (phase === 'result' && matchResult) {
+  if (phase === 'distribute' && matchResult) {
     const { fingers, target: t, match } = matchResult;
     return (
-      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, textAlign:'center' }}>
-        <div style={{ fontSize:52 }}>{match ? '🎯' : '😬'}</div>
-        <div style={{ display:'flex', gap:20, alignItems:'center', justifyContent:'center' }}>
+      <div style={{ display:'flex', flexDirection:'column', gap:12, width:'100%' }}>
+        {statsRow}
+        {/* Eredmény összefoglaló */}
+        <div style={{ display:'flex', gap:20, alignItems:'center', justifyContent:'center', padding:'12px 0' }}>
           <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
             <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Cél</div>
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:44, color:T.ink }}>{t}</div>
@@ -40830,21 +40863,16 @@ function FingeritGame({ gameIdx, players, onAdvance, onResult }) {
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:44, color: match ? T.mint : T.coral }}>{fingers}</div>
           </div>
         </div>
-        <div style={{
-          width:'100%', borderRadius:20, padding:'16px',
-          background: match ? `${T.mint}18` : `${T.coral}18`,
-          border: `2.5px solid ${match ? T.mint : T.coral}`,
-        }}>
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color: match ? T.mint : T.coral }}>
-            {match ? '🎉 Egyezik!' : '❌ Nem egyezik!'}
-          </div>
-          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink, marginTop:6 }}>
-            {match
-              ? <span>Az <span style={{color:T.coral}}>emelők</span> isznak 1-et</span>
-              : <span>A <span style={{color:T.coral}}>tartók</span> isznak 1-et</span>
-            }
+        <div style={{ width:'100%', borderRadius:16, padding:'12px 16px', background: match ? `${T.mint}18` : `${T.coral}18`, border:`2px solid ${match ? T.mint : T.coral}`, textAlign:'center', marginBottom:4 }}>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color: match ? T.mint : T.coral }}>
+            {match ? '🎯 Egyezik!' : '😬 Nem egyezik!'}
           </div>
         </div>
+        <DrinkDistributor
+          players={players}
+          onFinish={confirmRound}
+          title={round >= TOTAL_ROUNDS ? 'Utolsó kör — ki iszik?' : `${round}. kör — ki iszik?`}
+        />
       </div>
     );
   }
