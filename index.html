@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.551';
+const APP_VERSION = 'v9.552';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -51445,7 +51445,6 @@ function MeduzaGame({ players, onAdvance, onResult }) {
   const [phase, setPhase] = useState('intro');
   const [count, setCount] = useState(3);
   const [round, setRound] = useState(1);
-  const [roundSelected, setRoundSelected] = useState(new Set());
   const [totalDrinks, setTotalDrinks] = useState({});
   const ivRef = useRef(null);
   const advancedRef = useRef(false);
@@ -51463,15 +51462,10 @@ function MeduzaGame({ players, onAdvance, onResult }) {
     }, 80);
   };
 
-  const toggleEyeContact = (pid) => {
-    setRoundSelected(prev => { const s = new Set(prev); s.has(pid)?s.delete(pid):s.add(pid); return s; });
-  };
-
-  const confirmRound = () => {
+  const confirmRound = (roundDrinks) => {
     const newTotal = { ...totalDrinks };
-    roundSelected.forEach(pid => { newTotal[pid] = (newTotal[pid]||0)+1; });
+    Object.entries(roundDrinks).forEach(([pid, amt]) => { newTotal[pid] = (newTotal[pid]||0) + amt; });
     setTotalDrinks(newTotal);
-    setRoundSelected(new Set());
 
     if (round >= TOTAL_ROUNDS) {
       if (!advancedRef.current) {
@@ -51489,21 +51483,24 @@ function MeduzaGame({ players, onAdvance, onResult }) {
     setPhase('intro');
   };
 
-  if (phase === 'intro') return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, width:'100%' }}>
-      {/* Körszámláló */}
-      <div style={{ display:'flex', gap:10, width:'100%' }}>
-        <div style={{ flex:1, background:T.surface, borderRadius:14, padding:'10px 14px', textAlign:'center', boxShadow:T.shadow }}>
-          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Kör</div>
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink }}>{round}<span style={{ fontSize:13, color:T.inkSoft, fontWeight:600 }}>/{TOTAL_ROUNDS}</span></div>
-        </div>
-        <div style={{ flex:1, background:T.surface, borderRadius:14, padding:'10px 14px', textAlign:'center', boxShadow:T.shadow }}>
-          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Össz korty</div>
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.coral }}>
-            {Object.values(totalDrinks).reduce((s,v)=>s+v,0)||<span style={{color:T.inkMute}}>0</span>}
-          </div>
+  const statsRow = (
+    <div style={{ display:'flex', gap:10, width:'100%' }}>
+      <div style={{ flex:1, background:T.surface, borderRadius:14, padding:'10px 14px', textAlign:'center', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Kör</div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink }}>{round}<span style={{ fontSize:13, color:T.inkSoft, fontWeight:600 }}>/{TOTAL_ROUNDS}</span></div>
+      </div>
+      <div style={{ flex:1, background:T.surface, borderRadius:14, padding:'10px 14px', textAlign:'center', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Össz korty</div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color: Object.values(totalDrinks).reduce((s,v)=>s+v,0)>0 ? T.coral : T.inkMute }}>
+          {Object.values(totalDrinks).reduce((s,v)=>s+v,0)}
         </div>
       </div>
+    </div>
+  );
+
+  if (phase === 'intro') return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, width:'100%' }}>
+      {statsRow}
       <div style={{ fontSize:52 }}>🎯</div>
       <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', lineHeight:1.7 }}>
         Mindenki <strong>hajtsa le a fejét</strong> és nézzen valakire.<br/>
@@ -51524,26 +51521,17 @@ function MeduzaGame({ players, onAdvance, onResult }) {
   );
 
   if (phase === 'reveal') return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12, width:'100%' }}>
-      <div style={{ fontSize:48 }}>👀</div>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink }}>Ki nézett össze?</div>
-      <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center' }}>Koppints azokra akikkel <strong>szemkontaktus</strong> volt.</div>
-      <div style={{ display:'flex', flexDirection:'column', gap:8, width:'100%' }}>
-        {players.map(p => {
-          const sel = roundSelected.has(p.id);
-          return (
-            <button key={p.id} onClick={() => toggleEyeContact(p.id)}
-              style={{ padding:'14px 16px', borderRadius:14, border:`2px solid ${sel?T.coral:p.color+'44'}`, background:sel?T.coral+'20':p.color+'12', fontFamily:T.font, fontWeight:700, fontSize:15, color: sel?T.coral:T.ink, cursor:'pointer', display:'flex', alignItems:'center', gap:10, transition:'all .15s' }}>
-              <div style={{ width:14, height:14, borderRadius:'50%', background:sel?T.coral:p.color, flexShrink:0 }} />
-              {p.name}
-              {sel && <span style={{ marginLeft:'auto', fontSize:18 }}>👁️ +1🍺</span>}
-            </button>
-          );
-        })}
+    <div style={{ display:'flex', flexDirection:'column', gap:12, width:'100%' }}>
+      {statsRow}
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:4 }}>
+        <span style={{ fontSize:28 }}>👀</span>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink }}>Ki nézett össze?</div>
       </div>
-      <button onClick={confirmRound} style={{ width:'100%', padding:'14px 0', background:T.mint, border:'none', borderRadius:16, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:16, cursor:'pointer', boxShadow:T.shadow }}>
-        {round >= TOTAL_ROUNDS ? '🏁 Befejezés' : `Következő kör (${round}/${TOTAL_ROUNDS})`}
-      </button>
+      <DrinkDistributor
+        players={players}
+        onFinish={confirmRound}
+        title={round >= TOTAL_ROUNDS ? 'Utolsó kör — ki iszik?' : `${round}. kör — ki nézett össze?`}
+      />
     </div>
   );
 
