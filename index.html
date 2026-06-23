@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.544';
+const APP_VERSION = 'v9.545';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -48533,6 +48533,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const [selectedOpponent, setSelectedOpponent] = useState(null);
   const [csapatLosers, setCsapatLosers] = useState(new Set());
   const [gameResult, setGameResult] = useState(null); // { correct, playerName }
+  const [sohanemResult, setSohanemResult] = React.useState(null); // players who drink
   const transRef = React.useRef(false);
   useEffect(() => { setCsapatLosers(new Set()); setPendingCommit(null); setGameResult(null); }, [gameIdx]);
 
@@ -48924,7 +48925,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           <button onClick={() => advancePaired(true)} disabled={transitioning} style={{ flex:1, minHeight:60, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:17, borderRadius:16, cursor:'pointer', boxShadow:T.shadow }}>{LANG==='en'?'I won! 🎉':'Nyertem! 🎉'}</button>
         </div>
       )}
-      {currentGame.category === 'Csapat' && currentGameId !== 'loverseny' && currentGameId !== 'imposztor' && currentGameId !== 'busz' && currentGameId !== 'kisebb' && currentGameId !== 'ticktak' && currentGameId !== 'szerencse' && currentGameId !== 'kategoria' && currentGameId !== 'collect' && currentGameId !== 'kopapir' && currentGameId !== 'memoria' && currentGameId !== 'kezcsere' && currentGameId !== 'mindenki' && currentGameId !== 'beerpong' && currentGameId !== 'uveg' && currentGameId !== 'powerhour' && currentGameId !== 'ovfj' && currentGameId !== 'mutasd' && currentGameId !== 'farkasos' && currentGameId !== 'szolánc' && currentGameId !== 'ringfire' && (
+      {currentGame.category === 'Csapat' && !sohanemResult && currentGameId !== 'loverseny' && currentGameId !== 'imposztor' && currentGameId !== 'busz' && currentGameId !== 'kisebb' && currentGameId !== 'ticktak' && currentGameId !== 'szerencse' && currentGameId !== 'kategoria' && currentGameId !== 'collect' && currentGameId !== 'kopapir' && currentGameId !== 'memoria' && currentGameId !== 'kezcsere' && currentGameId !== 'mindenki' && currentGameId !== 'beerpong' && currentGameId !== 'uveg' && currentGameId !== 'powerhour' && currentGameId !== 'ovfj' && currentGameId !== 'mutasd' && currentGameId !== 'farkasos' && currentGameId !== 'szolánc' && currentGameId !== 'ringfire' && (
         <div style={{ padding:'0 18px 14px', display:'flex', flexDirection:'column', gap:10 }}>
           <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', textAlign:'center' }}>{currentGameId === 'sohanem' ? 'Kire igaz?' : 'Ki rontott?'}</div>
           <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:4, WebkitOverflowScrolling:'touch' }}>
@@ -48949,7 +48950,17 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
             })}
           </div>
           {csapatLosers.size > 0 ? (
-            <button onClick={() => { if(transitioning) return; const dm={}; csapatLosers.forEach(pid=>{dm[pid]=1;}); setCsapatLosers(new Set()); advanceLoverseny(dm); }} style={{ width:'100%', padding:'14px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow, animation:'popIn .2s' }}>
+            <button onClick={() => {
+              if(transitioning) return;
+              const dm={}; csapatLosers.forEach(pid=>{dm[pid]=1;});
+              if (currentGameId === 'sohanem') {
+                const drinkers = players.filter(p => csapatLosers.has(p.id));
+                setCsapatLosers(new Set());
+                setSohanemResult({ dm, drinkers });
+              } else {
+                setCsapatLosers(new Set()); advanceLoverseny(dm);
+              }
+            }} style={{ width:'100%', padding:'14px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, borderRadius:16, border:'none', cursor:'pointer', boxShadow:T.shadow, animation:'popIn .2s' }}>
               {csapatLosers.size===1 ? `${players.find(p=>csapatLosers.has(p.id))?.name} iszik ✔` : `${csapatLosers.size} ember iszik ✔`}
             </button>
           ) : (
@@ -48957,6 +48968,29 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               {currentGameId === 'sohanem' ? 'Senki sem igaz rá ✔' : 'Senki nem rontott ✔'}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Sohanem drink result banner */}
+      {sohanemResult && (
+        <div onClick={() => { const r = sohanemResult; setSohanemResult(null); advanceLoverseny(r.dm); }} style={{ position:'fixed', inset:0, zIndex:9997, background:`linear-gradient(160deg, ${T.bgOverlay} 0%, rgba(0,0,0,0.92) 100%)`, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:24, padding:32 }}>
+          <div style={{ fontSize:72, lineHeight:1 }}>🍺</div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:32, color:'#fff', textAlign:'center', lineHeight:1.2, textShadow:'0 4px 24px rgba(0,0,0,0.4)', letterSpacing:'-0.02em' }}>
+            {sohanemResult.drinkers.length === 1
+              ? `${sohanemResult.drinkers[0].name} iszik!`
+              : sohanemResult.drinkers.map(p => p.name).join(', ') + ' isznak!'}
+          </div>
+          <div style={{ display:'flex', gap:12, flexWrap:'wrap', justifyContent:'center', marginTop:8 }}>
+            {sohanemResult.drinkers.map(p => (
+              <div key={p.id} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+                <div style={{ width:56, height:56, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', boxShadow:'0 4px 16px rgba(0,0,0,0.4)', fontSize:22, fontFamily:T.font, fontWeight:900, color:'#fff' }}>
+                  {p.img ? <img src={p.img} style={{ width:56, height:56, objectFit:'cover', borderRadius:'50%' }} /> : p.name.charAt(0).toUpperCase()}
+                </div>
+                <span style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:'rgba(255,255,255,0.85)' }}>{p.name}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop:16, fontFamily:T.font, fontWeight:600, fontSize:14, color:'rgba(255,255,255,0.5)' }}>Koppints a folytatáshoz</div>
         </div>
       )}
 
