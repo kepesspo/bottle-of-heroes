@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.579';
+const APP_VERSION = 'v9.580';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35016,7 +35016,7 @@ function AppBar({ title, onBack, right, bg }) {
           : <div style={{ width:44, flexShrink:0 }} />
         }
         <div style={{ flex:1, textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, letterSpacing:'-0.01em', color:T.ink }}>{title}</div>
-        <div style={{ minWidth:38, display:'flex', justifyContent:'flex-end', flexShrink:0 }}>{right}</div>
+        <div style={{ width:44, display:'flex', justifyContent:'flex-end', flexShrink:0 }}>{right}</div>
       </div>
     </div>
   );
@@ -49388,7 +49388,10 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       <div className="play-footer-inner" style={{ background:T.surface, borderRadius:999, boxShadow:'0 4px 24px rgba(20,30,50,0.13)', padding:6, gap:6 }}>
         {/* Menu btn — flex:1 */}
         <button onClick={() => { setShowMenu(true); setMenuTab('vezérlés'); }} style={{ flex:1, borderRadius:999, border:'none', background:'transparent', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, padding:'8px 0', minWidth:0 }}>
-          <div style={{ width:32, height:32, display:'grid', placeItems:'center' }}>{Icon.menu(T.inkSoft)}</div>
+          <div style={{ position:'relative', width:32, height:32, display:'grid', placeItems:'center' }}>
+            {Icon.menu(T.inkSoft)}
+            {canUndo && <div style={{ position:'absolute', top:2, right:2, width:8, height:8, borderRadius:'50%', background:T.coral, border:`1.5px solid ${T.surface}` }} />}
+          </div>
           <span style={{ color:T.inkMute, fontSize:11, fontFamily:T.font, fontWeight:700, letterSpacing:'0.06em', lineHeight:1 }}>{t('menu')}</span>
         </button>
         {/* Player pill — flex:3 */}
@@ -49592,49 +49595,57 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                   </div>
                 )}
 
-                {/* Add player — input always visible, profile button opens chip picker */}
+                {/* Add player — collapsed by default, expands on tap */}
                 <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                  {/* Row: input + optional add btn + profile toggle btn */}
-                  <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                    <input
-                      value={menuAddName}
-                      onChange={e => setMenuAddName(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key==='Enter' && menuAddName.trim()) {
-                          const newP = { id:Date.now().toString(), name:menuAddName.trim(), drinks:0, points:0, color:PLAYER_COLORS[players.length%PLAYER_COLORS.length] };
-                          setPlayers(prev => { const next=[...prev,newP]; if (roomCode && typeof syncRoom==='function') syncRoom(roomCode,{players:next}); return next; });
-                          setPendingCommit(null); setMenuAddName(''); setMenuTab('állás');
-                        }
-                      }}
-                      placeholder="+ Név beírása"
-                      style={{ flex:1, padding:'13px 16px', border:'none', borderRadius:14, fontFamily:T.font, fontSize:14, color:T.ink, background:T.bgSoft, outline:'none' }}
-                    />
-                    {menuAddName.trim() ? (
-                      <button onClick={() => {
-                        const newP = { id:Date.now().toString(), name:menuAddName.trim(), drinks:0, points:0, color:PLAYER_COLORS[players.length%PLAYER_COLORS.length] };
-                        setPlayers(prev => { const next=[...prev,newP]; if (roomCode && typeof syncRoom==='function') syncRoom(roomCode,{players:next}); return next; });
-                        setPendingCommit(null); setMenuAddName(''); setMenuTab('állás');
-                      }} style={{ flexShrink:0, padding:'0 18px', height:46, borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:14, cursor:'pointer' }}>➕</button>
-                    ) : menuProfiles.filter(pr => !players.some(p => p.profileId === pr.id)).length > 0 && (
-                      <button onClick={() => setMenuAddOpen(o => !o)} style={{ flexShrink:0, width:46, height:46, borderRadius:14, border:'none', background:menuAddOpen ? T.mint : T.bgSoft, color: menuAddOpen ? '#fff' : T.ink, fontSize:20, display:'grid', placeItems:'center', cursor:'pointer' }}>👤</button>
-                    )}
-                  </div>
-                  {/* Profile chip picker — slides open */}
-                  {menuAddOpen && !menuAddName.trim() && (
-                    <div style={{ display:'flex', gap:6, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
-                      {menuProfiles.filter(pr => !players.some(p => p.profileId === pr.id)).map(pr => (
-                        <button key={pr.id} onClick={() => {
-                          const newP = { id:Date.now().toString(), name:pr.nickname||pr.name, drinks:0, points:0, color:pr.color||PLAYER_COLORS[players.length%PLAYER_COLORS.length], profileId:pr.id, img:pr.img||null };
-                          setPlayers(prev => { const next=[...prev,newP]; if (roomCode && typeof syncRoom==='function') syncRoom(roomCode,{players:next}); return next; });
-                          setPendingCommit(null); setMenuTab('állás');
-                        }} style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px 7px 7px', borderRadius:20, border:'none', background:T.bgSoft, cursor:'pointer', flexShrink:0 }}>
-                          <div style={{ width:26, height:26, borderRadius:'50%', background:pr.color||T.mint, display:'grid', placeItems:'center', overflow:'hidden', flexShrink:0 }}>
-                            {pr.img ? <img src={pr.img} style={{ width:26, height:26, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:'#fff' }}>{(pr.name||'?').charAt(0).toUpperCase()}</span>}
-                          </div>
-                          <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, whiteSpace:'nowrap' }}>{pr.name}</span>
-                        </button>
-                      ))}
-                    </div>
+                  {!menuAddOpen ? (
+                    <button onClick={() => setMenuAddOpen(true)} style={{ display:'flex', alignItems:'center', gap:10, padding:'13px 16px', borderRadius:14, border:`1.5px dashed ${T.mint}`, background:'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:14, color:T.mint }}>
+                      <span style={{ fontSize:18, lineHeight:1 }}>＋</span>
+                      <span>Játékos hozzáadása</span>
+                    </button>
+                  ) : (
+                    <>
+                      <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                        <input
+                          autoFocus
+                          value={menuAddName}
+                          onChange={e => setMenuAddName(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key==='Enter' && menuAddName.trim()) {
+                              const newP = { id:Date.now().toString(), name:menuAddName.trim(), drinks:0, points:0, color:PLAYER_COLORS[players.length%PLAYER_COLORS.length] };
+                              setPlayers(prev => { const next=[...prev,newP]; if (roomCode && typeof syncRoom==='function') syncRoom(roomCode,{players:next}); return next; });
+                              setPendingCommit(null); setMenuAddName(''); setMenuAddOpen(false); setMenuTab('állás');
+                            }
+                          }}
+                          placeholder="Játékos neve…"
+                          style={{ flex:1, padding:'13px 16px', border:'none', borderRadius:14, fontFamily:T.font, fontSize:14, color:T.ink, background:T.bgSoft, outline:'none' }}
+                        />
+                        {menuAddName.trim() ? (
+                          <button onClick={() => {
+                            const newP = { id:Date.now().toString(), name:menuAddName.trim(), drinks:0, points:0, color:PLAYER_COLORS[players.length%PLAYER_COLORS.length] };
+                            setPlayers(prev => { const next=[...prev,newP]; if (roomCode && typeof syncRoom==='function') syncRoom(roomCode,{players:next}); return next; });
+                            setPendingCommit(null); setMenuAddName(''); setMenuAddOpen(false); setMenuTab('állás');
+                          }} style={{ flexShrink:0, padding:'0 18px', height:46, borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:14, cursor:'pointer' }}>Kész</button>
+                        ) : (
+                          <button onClick={() => { setMenuAddOpen(false); setMenuAddName(''); }} style={{ flexShrink:0, width:46, height:46, borderRadius:14, border:'none', background:T.bgSoft, color:T.inkSoft, fontFamily:T.font, fontWeight:700, fontSize:18, display:'grid', placeItems:'center', cursor:'pointer' }}>✕</button>
+                        )}
+                      </div>
+                      {menuProfiles.filter(pr => !players.some(p => p.profileId === pr.id)).length > 0 && !menuAddName.trim() && (
+                        <div style={{ display:'flex', gap:6, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
+                          {menuProfiles.filter(pr => !players.some(p => p.profileId === pr.id)).map(pr => (
+                            <button key={pr.id} onClick={() => {
+                              const newP = { id:Date.now().toString(), name:pr.nickname||pr.name, drinks:0, points:0, color:pr.color||PLAYER_COLORS[players.length%PLAYER_COLORS.length], profileId:pr.id, img:pr.img||null };
+                              setPlayers(prev => { const next=[...prev,newP]; if (roomCode && typeof syncRoom==='function') syncRoom(roomCode,{players:next}); return next; });
+                              setPendingCommit(null); setMenuAddOpen(false); setMenuTab('állás');
+                            }} style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px 7px 7px', borderRadius:20, border:'none', background:T.bgSoft, cursor:'pointer', flexShrink:0 }}>
+                              <div style={{ width:26, height:26, borderRadius:'50%', background:pr.color||T.mint, display:'grid', placeItems:'center', overflow:'hidden', flexShrink:0 }}>
+                                {pr.img ? <img src={pr.img} style={{ width:26, height:26, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:'#fff' }}>{(pr.name||'?').charAt(0).toUpperCase()}</span>}
+                              </div>
+                              <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, whiteSpace:'nowrap' }}>{pr.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 
