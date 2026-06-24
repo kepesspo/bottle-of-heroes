@@ -33983,7 +33983,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.577';
+const APP_VERSION = 'v9.578';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -45077,33 +45077,11 @@ function RingFireGame({ gameIdx, players, onAdvance }) {
 
 function KoPapirGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
   const TOTAL_ROUNDS = 5;
-  const CHOICES = [
-    { id:'kő',    label:'KŐ',    icon:'🗿', beats:'olló' },
-    { id:'papír', label:'PAPÍR', icon:'📄', beats:'kő' },
-    { id:'olló',  label:'OLLÓ',  icon:'✂️', beats:'papír' },
-  ];
-
   const [round, setRound] = React.useState(1);
-  const [choices, setChoices] = React.useState(null);
-  const [phase, setPhase] = React.useState('reveal'); // reveal | distribute
   const [totalDrinks, setTotalDrinks] = React.useState({});
   const [done, setDone] = React.useState(false);
 
-  const roll = () => {
-    setChoices({
-      p1: CHOICES[Math.floor(Math.random() * 3)],
-      p2: CHOICES[Math.floor(Math.random() * 3)],
-    });
-    setPhase('reveal');
-  };
-
-  React.useEffect(() => { setRound(1); setTotalDrinks({}); setDone(false); roll(); }, [gameIdx]);
-
-  const result = React.useMemo(() => {
-    if (!choices) return null;
-    if (choices.p1.id === choices.p2.id) return 'draw';
-    return choices.p1.beats === choices.p2.id ? 'p1wins' : 'p2wins';
-  }, [choices]);
+  React.useEffect(() => { setRound(1); setTotalDrinks({}); setDone(false); }, [gameIdx]);
 
   const roundPlayers = [challenger, opponent].filter(Boolean);
 
@@ -45128,7 +45106,6 @@ function KoPapirGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
       onAdvance && onAdvance(newTotal, pm);
     } else {
       setRound(r => r + 1);
-      roll();
     }
   };
 
@@ -45138,74 +45115,38 @@ function KoPapirGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, width:'100%' }}>
 
       {/* Kör számláló */}
-      <div style={{ display:'flex', gap:10, width:'100%' }}>
-        <div style={{ flex:1, background:T.surface, borderRadius:14, padding:'10px 14px', textAlign:'center', boxShadow:T.shadow }}>
-          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Kör</div>
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink }}>{Math.min(round, TOTAL_ROUNDS)}<span style={{ fontSize:13, color:T.inkSoft, fontWeight:600 }}>/{TOTAL_ROUNDS}</span></div>
-        </div>
-        <div style={{ flex:1, background:T.surface, borderRadius:14, padding:'10px 14px', textAlign:'center', boxShadow:T.shadow }}>
-          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Összes korty</div>
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.mint }}>
-            {Object.values(totalDrinks).reduce((s,v)=>s+v,0)} 🍺
-          </div>
-        </div>
+      <div style={{ display:'flex', gap:8, width:'100%' }}>
+        {Array.from({ length: TOTAL_ROUNDS }, (_, i) => (
+          <div key={i} style={{ flex:1, height:6, borderRadius:3, background: i < round ? T.mint : T.inkMute+'30', transition:'background .3s' }} />
+        ))}
+      </div>
+      <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft, alignSelf:'flex-start', marginTop:-8 }}>
+        {round}. kör / {TOTAL_ROUNDS}
       </div>
 
       {/* VS sor */}
-      <div style={{ display:'flex', alignItems:'center', gap:16, width:'100%' }}>
-        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-          <div style={{ width:40, height:40, borderRadius:'50%', background:challenger?.color||T.coral, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:12, width:'100%' }}>
+        <div style={{ flex:1, background:T.surface, borderRadius:16, padding:'16px 10px', display:'flex', flexDirection:'column', alignItems:'center', gap:6, boxShadow:T.shadow }}>
+          <div style={{ width:44, height:44, borderRadius:'50%', background:challenger?.color||T.coral, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:18, color:'#fff' }}>
             {(challenger?.name||'?').charAt(0).toUpperCase()}
           </div>
-          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.ink, textAlign:'center' }}>{challenger?.name||'?'}</div>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, textAlign:'center' }}>{challenger?.name||'?'}</div>
         </div>
-        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color:T.inkSoft }}>VS</div>
-        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-          <div style={{ width:40, height:40, borderRadius:'50%', background:opponent?.color||T.mint, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff' }}>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.inkSoft }}>VS</div>
+        <div style={{ flex:1, background:T.surface, borderRadius:16, padding:'16px 10px', display:'flex', flexDirection:'column', alignItems:'center', gap:6, boxShadow:T.shadow }}>
+          <div style={{ width:44, height:44, borderRadius:'50%', background:opponent?.color||T.mint, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:18, color:'#fff' }}>
             {(opponent?.name||'?').charAt(0).toUpperCase()}
           </div>
-          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.ink, textAlign:'center' }}>{opponent?.name||'?'}</div>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, textAlign:'center' }}>{opponent?.name||'?'}</div>
         </div>
       </div>
 
-      {choices && (
-        <>
-          {/* Választások */}
-          <div style={{ display:'flex', alignItems:'center', gap:12, width:'100%' }}>
-            <div style={{ flex:1, background:T.surface, borderRadius:16, padding:'16px 0', display:'flex', flexDirection:'column', alignItems:'center', gap:4, boxShadow:T.shadow,
-              border: result==='p1wins' ? `2px solid ${T.mint}` : result==='p2wins' ? `2px solid ${T.coral}` : `2px solid ${T.yellow}` }}>
-              <span style={{ fontSize:38 }}>{choices.p1.icon}</span>
-              <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink }}>{choices.p1.label}</span>
-            </div>
-            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.inkSoft }}>🆚</div>
-            <div style={{ flex:1, background:T.surface, borderRadius:16, padding:'16px 0', display:'flex', flexDirection:'column', alignItems:'center', gap:4, boxShadow:T.shadow,
-              border: result==='p2wins' ? `2px solid ${T.mint}` : result==='p1wins' ? `2px solid ${T.coral}` : `2px solid ${T.yellow}` }}>
-              <span style={{ fontSize:38 }}>{choices.p2.icon}</span>
-              <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink }}>{choices.p2.label}</span>
-            </div>
-          </div>
-
-          {/* Eredmény banner */}
-          <div style={{ width:'100%', padding:'10px 16px', borderRadius:14, textAlign:'center', animation:'popIn .25s',
-            background: result==='draw' ? `${T.yellow}18` : result==='p1wins' ? `${T.mint}18` : `${T.coral}18`,
-            border: `2px solid ${result==='draw' ? T.yellow : result==='p1wins' ? T.mint : T.coral}` }}>
-            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>
-              {result === 'draw'
-                ? `🤝 Döntetlen! Mindkettő iszik.`
-                : result === 'p1wins'
-                  ? `🏆 ${challenger?.name} nyert!`
-                  : `🏆 ${opponent?.name} nyert!`}
-            </div>
-          </div>
-
-          {/* DrinkDistributor */}
-          <DrinkDistributor
-            players={roundPlayers}
-            title="Kortyok kiosztása"
-            onFinish={confirmRound}
-          />
-        </>
-      )}
+      {/* DrinkDistributor */}
+      <DrinkDistributor
+        players={roundPlayers}
+        title="Kortyok kiosztása"
+        onFinish={confirmRound}
+      />
     </div>
   );
 }
