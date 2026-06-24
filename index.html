@@ -179,6 +179,7 @@
     @keyframes floatBob   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
     @keyframes waveHand   { 0%,100%{transform:rotate(0deg)} 20%{transform:rotate(-20deg)} 40%{transform:rotate(20deg)} 60%{transform:rotate(-15deg)} 80%{transform:rotate(15deg)} }
     @keyframes tooltipIn  { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
     @keyframes nextBounce  { 0%,100%{transform:translateY(0) scale(1)} 40%{transform:translateY(-3px) scale(1.04)} 70%{transform:translateY(-1px) scale(1.01)} }
     @keyframes shakeDrink  { 0%{transform:rotate(0) scale(1)} 15%{transform:rotate(-20deg) scale(1.25)} 35%{transform:rotate(15deg) scale(1.18)} 55%{transform:rotate(-10deg) scale(1.1)} 75%{transform:rotate(8deg)} 90%{transform:rotate(-3deg)} 100%{transform:rotate(0) scale(1)} }
     @keyframes confettiUp  { 0%{transform:translateY(0) rotate(0deg) scale(1);opacity:1} 100%{transform:translateY(-130px) rotate(540deg) scale(0.4);opacity:0} }
@@ -33983,7 +33984,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.582';
+const APP_VERSION = 'v9.583';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -36613,6 +36614,8 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   const [ovfjSheet, setOvfjSheet] = useState(false);
   const [zeneSheet, setZeneSheet] = useState(false);
   const [filterSheet, setFilterSheet] = useState(false);
+  const [lockToast, setLockToast] = React.useState(null);
+  const lockToastRef = React.useRef(null);
   const [activeFilters, setActiveFilters] = useState([]); // [] = show all
   const buszConfig = gameMeta?.buszConfig || {};
   const setBuszConfig = cfg => setGameMeta(m => ({...m, buszConfig: typeof cfg === 'function' ? cfg(m?.buszConfig||{}) : cfg}));
@@ -36644,8 +36647,28 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
     return buszSelected || beerpongSelected;
   };
 
+  const showLockToast = id => {
+    const g = GAMES.find(x=>x.id===id);
+    if (g?.comingSoon) return;
+    let msg = '';
+    const soloG = selectedGames.find(sid => ['powerhour','ovfj','farkasos'].includes(sid));
+    if (soloG) {
+      const soloName = GAMES.find(x=>x.id===soloG)?.name || soloG;
+      msg = `A ${soloName} csak egyedül játszható`;
+    } else if (buszSelected) {
+      msg = 'A Busz nem kombinálható más játékokkal';
+    } else if (beerpongSelected) {
+      msg = 'A Beer Pong nem kombinálható más játékokkal';
+    } else if (soloSelected) {
+      msg = 'Ez a játék csak egyedül játszható';
+    }
+    if (!msg) return;
+    if (lockToastRef.current) clearTimeout(lockToastRef.current);
+    setLockToast(msg);
+    lockToastRef.current = setTimeout(() => setLockToast(null), 2500);
+  };
   const toggle = id => {
-    if (isLocked(id)) return;
+    if (isLocked(id)) { showLockToast(id); return; }
     if (selectedGames.includes(id)) {
       setSelectedGames(selectedGames.filter(x=>x!==id));
     } else if (id === 'powerhour' || id === 'ovfj' || id === 'farkasos') {
@@ -36793,6 +36816,17 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
         <div style={{ position:'absolute', bottom:0, left:0, right:0, height:80, background:`linear-gradient(to bottom, transparent, ${T.bg})`, pointerEvents:'none' }} />
       </div>
 
+      {lockToast && (
+        <div style={{ position:'fixed', bottom:90, left:'50%', transform:'translateX(-50%)', zIndex:200, pointerEvents:'none',
+          background:'rgba(26,42,74,0.88)', backdropFilter:'blur(8px)',
+          borderRadius:14, padding:'11px 20px', maxWidth:'calc(100% - 48px)',
+          fontFamily:T.font, fontWeight:700, fontSize:13, color:'#fff', textAlign:'center',
+          boxShadow:'0 4px 18px rgba(0,0,0,0.22)', whiteSpace:'nowrap',
+          animation:'toastIn .18s ease-out',
+        }}>
+          🔒 {lockToast}
+        </div>
+      )}
       <BottomBar extra={
         <button onClick={() => setSheet(true)} style={{
           width:60, height:60, minHeight:60, flexShrink:0,
@@ -44696,6 +44730,7 @@ function TapperGame({ gameIdx, challenger, opponent, onAdvance, onResult, roomCo
         style={{
           width:'100%', height:110, borderRadius:18,
           background: released ? `${player.color}66` : player.color,
+          filter: holding && !released ? 'brightness(1.12)' : 'brightness(1)',
           boxShadow: holding && !released
             ? `0 0 0 10px ${player.color}44, 0 0 0 20px ${player.color}18`
             : `0 0 0 10px rgba(255,255,255,0.85)`,
@@ -46307,7 +46342,8 @@ function KategoriaGame({ gameIdx, players, onAdvance, onResult }) {
       <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.12em' }}>
         Ki nem tudott szót mondani?
       </div>
-      <div style={{ display:'flex', gap:8, overflowX:'auto', WebkitOverflowScrolling:'touch', width:'100%', paddingBottom:4 }}>
+      <div style={{ position:'relative', width:'100%' }}>
+        <div style={{ display:'flex', gap:8, overflowX:'auto', WebkitOverflowScrolling:'touch', width:'100%', paddingBottom:4 }}>
         {players.map(p => {
           const selected = loserPid === p.id;
           return (
@@ -46327,6 +46363,8 @@ function KategoriaGame({ gameIdx, players, onAdvance, onResult }) {
             </div>
           );
         })}
+        </div>
+        <div style={{ position:'absolute', top:0, right:0, bottom:4, width:48, background:`linear-gradient(to right, transparent, ${T.bg})`, pointerEvents:'none', borderRadius:'0 12px 12px 0' }} />
       </div>
 
       {/* Confirm loser or nobody */}
@@ -46442,7 +46480,7 @@ function MemoriaGame({ gameIdx, players, onAdvance, onResult }) {
       </div>
 
       {/* Card grid */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:7, width:'100%', maxWidth:520, margin:'0 auto' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(68px, 1fr))', gap:7, width:'100%', maxWidth:520, margin:'0 auto' }}>
         {cards.map((emoji, i) => {
           const isMatched = matched.has(i);
           const isFaceUp  = isMatched || flipped.includes(i);
