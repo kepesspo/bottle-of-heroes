@@ -134,6 +134,8 @@
     @keyframes starPop { 0%{transform:scale(0) rotate(-20deg);opacity:0} 55%{transform:scale(1.25) rotate(12deg);opacity:1} 100%{transform:scale(1) rotate(0deg)} }
     @keyframes resultFadeOut { from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(0.88)} }
     @keyframes miniPillIn { from{transform:translateY(60px) scale(0.7);opacity:0} to{transform:translateY(0) scale(1);opacity:1} }
+    @keyframes resultShrinkOut { 0%{transform:scale(1) translateY(0);opacity:1;border-radius:32px} 100%{transform:scale(0.18) translateY(38vh);opacity:0;border-radius:50px} }
+    @keyframes backdropFadeOut { from{opacity:1} to{opacity:0} }
     @keyframes podiumAvatar { from{transform:translateY(24px) scale(0.5);opacity:0} to{transform:translateY(0) scale(1);opacity:1} }
     @keyframes slideInLeft  { from{transform:translateX(-100%)} to{transform:translateX(0)} }
     @keyframes spin      { to { transform: rotate(360deg); } }
@@ -33996,7 +33998,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.642';
+const APP_VERSION = 'v9.643';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35211,14 +35213,13 @@ function SheetOverlay({ onClose, children, footer, title }) {
           animation: closing ? 'none' : 'slideUp .3s cubic-bezier(.2,.9,.3,1)',
           maxHeight:'82vh',
           display:'flex', flexDirection:'column',
+          overflow:'hidden',
           transform: `translateY(${translateY})`,
           transition: dragY === 0 && !closing ? 'transform .22s cubic-bezier(.2,.9,.3,1)' : closing ? 'transform .22s ease-in' : 'none',
           willChange:'transform',
         }}>
         {/* Accent gradient strip */}
-        <div style={{ overflow:'hidden', borderTopLeftRadius:28, borderTopRightRadius:28, flexShrink:0 }}>
-          <div style={{ height:3, background:`linear-gradient(90deg, ${T.mint}, ${T.coral})` }} />
-        </div>
+        <div style={{ height:3, background:`linear-gradient(90deg, ${T.mint}, ${T.coral})`, flexShrink:0 }} />
 
         {/* Drag handle */}
         <div
@@ -35246,7 +35247,7 @@ function SheetOverlay({ onClose, children, footer, title }) {
         </div>
 
         {footer && (
-          <div style={{ flexShrink:0, padding:'8px 16px', paddingBottom:'max(20px, env(safe-area-inset-bottom))' }}>
+          <div style={{ flexShrink:0, padding:'8px 16px 20px' }}>
             {footer}
           </div>
         )}
@@ -49198,7 +49199,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   useEffect(() => {
     if (!gameResult) return;
     setResultMinimized(false);
-    const t = setTimeout(() => setResultMinimized(true), 2600);
+    const t = setTimeout(() => setResultMinimized('shrinking'), 2600);
     return () => clearTimeout(t);
   }, [gameResult && gameResult.ts]);
 
@@ -49780,41 +49781,69 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           : 'linear-gradient(160deg, #c02828f0 0%, #e84040f0 100%)';
         const glow = isCorrect ? '#25b572' : '#e84040';
 
-        if (resultMinimized) {
-          // ── Mini pill ──────────────────────────────────────────────────────
+        if (resultMinimized === 'shrinking' || resultMinimized === true) {
+          // ── Mini pill (vagy shrinking state előtte) ────────────────────────
+          const showPill = resultMinimized === true;
           return (
-            <div key={'mini-' + gameResult.ts} onClick={() => setResultMinimized(false)} style={{
-              position:'fixed', bottom:90, left:'50%', transform:'translateX(-50%)',
-              zIndex:200, animation:'miniPillIn .35s cubic-bezier(.2,.9,.3,1.2)',
-              pointerEvents:'auto',
-            }}>
-              <div style={{
-                background: bgGrad,
-                borderRadius:50, padding:'8px 16px 8px 10px',
-                display:'flex', alignItems:'center', gap:10,
-                boxShadow:`0 4px 20px ${glow}66`,
-              }}>
-                {/* Small avatar */}
-                {rp ? (
-                  <div style={{ width:32, height:32, borderRadius:'50%', background:rp.color, display:'grid', placeItems:'center', overflow:'hidden', flexShrink:0, boxShadow:'0 0 0 2px rgba(255,255,255,0.5)' }}>
-                    {rp.img ? <img src={rp.img} style={{ width:32, height:32, objectFit:'cover' }} />
-                      : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff' }}>{(rp.name||'?').charAt(0).toUpperCase()}</span>}
+            <>
+              {/* Shrinking overlay — csak animáció közben látszik */}
+              {resultMinimized === 'shrinking' && (
+                <div style={{
+                  position:'fixed', inset:0, zIndex:250,
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  animation:'backdropFadeOut .35s ease forwards',
+                  pointerEvents:'none',
+                }}>
+                  <div style={{
+                    background: bgGrad,
+                    borderRadius:32, padding:'32px 36px',
+                    display:'flex', flexDirection:'column', alignItems:'center', gap:14,
+                    minWidth:260, maxWidth:340, width:'80vw',
+                    animation:'resultShrinkOut .35s cubic-bezier(.4,0,.6,1) forwards',
+                    boxShadow:`0 20px 70px ${glow}99`,
+                  }} onAnimationEnd={() => setResultMinimized(true)}>
+                    {rp ? (
+                      <div style={{ width:80, height:80, borderRadius:'50%', background:rp.color, display:'grid', placeItems:'center', overflow:'hidden', boxShadow:'0 0 0 5px rgba(255,255,255,0.45)' }}>
+                        {rp.img ? <img src={rp.img} style={{ width:80, height:80, objectFit:'cover' }} />
+                          : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:34, color:'#fff' }}>{(rp.name||'?').charAt(0).toUpperCase()}</span>}
+                      </div>
+                    ) : <div style={{ fontSize:64 }}>{isCorrect ? '🌟' : '🍺'}</div>}
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color:'#fff' }}>{isCorrect ? 'Helyes! 🌟' : 'Inni kell!'}</div>
+                    {!isCorrect && gameResult.drinks > 0 && (
+                      <div style={{ display:'flex', alignItems:'baseline', gap:6 }}>
+                        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:64, color:'#fff', lineHeight:1 }}>{gameResult.drinks}</span>
+                        <span style={{ fontFamily:T.font, fontWeight:700, fontSize:22, color:'rgba(255,255,255,0.85)' }}>korty</span>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <span style={{ fontSize:22 }}>{isCorrect ? '🌟' : '🍺'}</span>
-                )}
-                {/* Text */}
-                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:'#fff', whiteSpace:'nowrap' }}>
-                  {isCorrect ? 'Helyes! +1 🌟' : `Inni kell!${gameResult.drinks > 0 ? ` ${gameResult.drinks} 🍺` : ''}`}
                 </div>
-                {/* Player name */}
-                {gameResult.playerName && (
-                  <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.75)', whiteSpace:'nowrap' }}>
-                    — {gameResult.playerName}
+              )}
+              {/* Mini pill */}
+              {showPill && (
+                <div key={'mini-' + gameResult.ts} onClick={() => setResultMinimized(false)} style={{
+                  position:'fixed', bottom:96, left:'50%', transform:'translateX(-50%)',
+                  zIndex:200, animation:'miniPillIn .3s cubic-bezier(.2,.9,.3,1.2)',
+                  pointerEvents:'auto',
+                }}>
+                  <div style={{
+                    background: bgGrad,
+                    borderRadius:50, padding:'8px 14px 8px 10px',
+                    display:'flex', alignItems:'center', gap:9,
+                    boxShadow:`0 4px 20px ${glow}66`,
+                  }}>
+                    {rp ? (
+                      <div style={{ width:30, height:30, borderRadius:'50%', background:rp.color, display:'grid', placeItems:'center', overflow:'hidden', flexShrink:0, boxShadow:'0 0 0 2px rgba(255,255,255,0.5)' }}>
+                        {rp.img ? <img src={rp.img} style={{ width:30, height:30, objectFit:'cover' }} />
+                          : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:'#fff' }}>{(rp.name||'?').charAt(0).toUpperCase()}</span>}
+                      </div>
+                    ) : <span style={{ fontSize:20 }}>{isCorrect ? '🌟' : '🍺'}</span>}
+                    <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:'#fff', whiteSpace:'nowrap' }}>
+                      {isCorrect ? 'Helyes! +1 🌟' : `Inni kell!${gameResult.drinks > 0 ? ` ${gameResult.drinks} 🍺` : ''}`}
+                    </div>
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
+              )}
+            </>
           );
         }
 
