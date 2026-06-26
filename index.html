@@ -33998,7 +33998,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.647';
+const APP_VERSION = 'v9.648';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -49876,6 +49876,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         }
 
         // ── Full overlay ───────────────────────────────────────────────────
+        const isMulti = multiPlayers.length > 1;
         const anim = isCorrect
           ? 'resultBounceIn .45s cubic-bezier(.2,.9,.3,1.3) forwards'
           : 'resultShakeIn .5s ease-out forwards';
@@ -49885,38 +49886,76 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
             display:'flex', alignItems:'center', justifyContent:'center',
             background:'rgba(0,0,0,0.35)', backdropFilter:'blur(3px)', WebkitBackdropFilter:'blur(3px)',
           }}>
-            <div style={{
-              background: bgGrad,
-              borderRadius:32, padding:'32px 36px',
-              display:'flex', flexDirection:'column', alignItems:'center', gap:14,
-              animation: anim,
-              boxShadow: `0 20px 70px ${glow}99, 0 0 0 1.5px rgba(255,255,255,0.18)`,
-              minWidth:260, maxWidth:340, width:'80vw',
-            }}>
-              <div style={{ animation: !isCorrect && multiPlayers.length <= 1 ? 'shakeDrink .7s ease-in-out' : undefined }}>
-                <AvatarPile size={72} overlap={22} borderW={3} />
+            {isMulti ? (
+              /* ── Kompakt multi-player layout ── */
+              <div style={{
+                background: bgGrad,
+                borderRadius:28, padding:'20px 24px',
+                display:'flex', flexDirection:'column', alignItems:'center', gap:10,
+                animation: anim,
+                boxShadow: `0 20px 70px ${glow}99, 0 0 0 1.5px rgba(255,255,255,0.18)`,
+                minWidth:260, maxWidth:340, width:'80vw',
+              }}>
+                {/* Avatar sor + headline vízszintesen */}
+                <div style={{ display:'flex', alignItems:'center', gap:14, width:'100%' }}>
+                  <AvatarPile size={48} overlap={14} borderW={2} />
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:'#fff', lineHeight:1.1 }}>
+                      {isCorrect ? 'Helyes! 🌟' : 'Inni kell!'}
+                    </div>
+                    {!isCorrect && gameResult.drinks > 0 && (
+                      <div style={{ display:'flex', alignItems:'baseline', gap:4, marginTop:2 }}>
+                        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:36, color:'#fff', lineHeight:1 }}>{gameResult.drinks}</span>
+                        <span style={{ fontFamily:T.font, fontWeight:700, fontSize:16, color:'rgba(255,255,255,0.85)' }}>korty/fő</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {/* Játékos lista */}
+                {gameResult.subtitle && (
+                  <div style={{ width:'100%', background:'rgba(0,0,0,0.15)', borderRadius:14, padding:'8px 12px' }}>
+                    <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.85)', lineHeight:1.6 }}>
+                      {gameResult.subtitle}
+                    </div>
+                  </div>
+                )}
+                <div style={{ fontFamily:T.font, fontSize:10, color:'rgba(255,255,255,0.4)' }}>koppints a kicsinyítéshez</div>
               </div>
-              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color:'#fff', textAlign:'center', lineHeight:1.1, textShadow:'0 2px 10px rgba(0,0,0,0.2)' }}>
-                {isCorrect ? 'Helyes! 🌟' : 'Inni kell!'}
+            ) : (
+              /* ── Szimpla layout (1 játékos) ── */
+              <div style={{
+                background: bgGrad,
+                borderRadius:32, padding:'32px 36px',
+                display:'flex', flexDirection:'column', alignItems:'center', gap:14,
+                animation: anim,
+                boxShadow: `0 20px 70px ${glow}99, 0 0 0 1.5px rgba(255,255,255,0.18)`,
+                minWidth:260, maxWidth:340, width:'80vw',
+              }}>
+                <div style={{ animation: !isCorrect ? 'shakeDrink .7s ease-in-out' : undefined }}>
+                  <AvatarPile size={72} overlap={22} borderW={3} />
+                </div>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color:'#fff', textAlign:'center', lineHeight:1.1, textShadow:'0 2px 10px rgba(0,0,0,0.2)' }}>
+                  {isCorrect ? 'Helyes! 🌟' : 'Inni kell!'}
+                </div>
+                {!isCorrect && gameResult.drinks > 0 && (
+                  <div style={{ display:'flex', alignItems:'baseline', gap:6, animation:'drinkNumPop .5s cubic-bezier(.2,.9,.3,1.4)' }}>
+                    <span style={{ fontFamily:T.font, fontWeight:900, fontSize:64, color:'#fff', lineHeight:1, textShadow:'0 4px 20px rgba(0,0,0,0.25)' }}>{gameResult.drinks}</span>
+                    <span style={{ fontFamily:T.font, fontWeight:700, fontSize:22, color:'rgba(255,255,255,0.85)' }}>korty</span>
+                  </div>
+                )}
+                {gameResult.playerName && (
+                  <div style={{ fontFamily:T.font, fontWeight:700, fontSize:15, color:'rgba(255,255,255,0.9)', textAlign:'center' }}>
+                    {isCorrect ? `${gameResult.playerName} — +1 pont` : gameResult.playerName}
+                  </div>
+                )}
+                {gameResult.subtitle && (
+                  <div style={{ fontFamily:T.font, fontSize:13, color:'rgba(255,255,255,0.78)', textAlign:'center', lineHeight:1.4 }}>
+                    {gameResult.subtitle}
+                  </div>
+                )}
+                <div style={{ fontFamily:T.font, fontSize:11, color:'rgba(255,255,255,0.45)', marginTop:4 }}>koppints a kicsinyítéshez</div>
               </div>
-              {!isCorrect && gameResult.drinks > 0 && (
-                <div style={{ display:'flex', alignItems:'baseline', gap:6, animation:'drinkNumPop .5s cubic-bezier(.2,.9,.3,1.4)' }}>
-                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:64, color:'#fff', lineHeight:1, textShadow:'0 4px 20px rgba(0,0,0,0.25)' }}>{gameResult.drinks}</span>
-                  <span style={{ fontFamily:T.font, fontWeight:700, fontSize:22, color:'rgba(255,255,255,0.85)' }}>korty</span>
-                </div>
-              )}
-              {gameResult.playerName && multiPlayers.length <= 1 && (
-                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:15, color:'rgba(255,255,255,0.9)', textAlign:'center' }}>
-                  {isCorrect ? `${gameResult.playerName} — +1 pont` : gameResult.playerName}
-                </div>
-              )}
-              {gameResult.subtitle && (
-                <div style={{ fontFamily:T.font, fontSize:13, color:'rgba(255,255,255,0.78)', textAlign:'center', lineHeight:1.4 }}>
-                  {gameResult.subtitle}
-                </div>
-              )}
-              <div style={{ fontFamily:T.font, fontSize:11, color:'rgba(255,255,255,0.45)', marginTop:4 }}>koppints a kicsinyítéshez</div>
-            </div>
+            )}
           </div>
         );
       })()}
