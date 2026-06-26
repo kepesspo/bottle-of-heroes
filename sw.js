@@ -1,8 +1,12 @@
-const CACHE = 'boh-v9.600';
+// Cache name automatikusan frissül — a html injektálja a verziót query paramként
+// sw.js?v=9.625 → CACHE = 'boh-9.625'
+const params = new URLSearchParams(self.location.search);
+const ver = params.get('v') || 'dev';
+const CACHE = `boh-${ver}`;
+
 const ASSETS = [
   '/bottle-of-heroes/',
   '/bottle-of-heroes/index.html',
-  '/bottle-of-heroes/sw.js',
 ];
 
 self.addEventListener('install', e => {
@@ -20,7 +24,6 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Only cache same-origin GET requests
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin) return;
