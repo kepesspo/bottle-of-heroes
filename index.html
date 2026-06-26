@@ -33988,7 +33988,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.631';
+const APP_VERSION = 'v9.632';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35063,7 +35063,7 @@ const Icon = {
 
 function AppBar({ title, onBack, right, bg }) {
   return (
-    <div className="appbar-shell" style={{ background: bg || T.surface }}>
+    <div className="appbar-shell" style={{ background: bg || T.surface, overflow:'hidden' }}>
       <div className="appbar-inner">
         {onBack
           ? <button onClick={onBack} style={{ width:44, height:44, border:'none', background:'transparent', color:T.ink, cursor:'pointer', display:'grid', placeItems:'center', borderRadius:14, flexShrink:0 }}>{Icon.back(T.ink)}</button>
@@ -35072,6 +35072,7 @@ function AppBar({ title, onBack, right, bg }) {
         <div style={{ flex:1, textAlign:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, letterSpacing:'-0.01em', color:T.ink }}>{title}</div>
         <div style={{ width:44, display:'flex', justifyContent:'flex-end', flexShrink:0 }}>{right}</div>
       </div>
+      <div style={{ height:2, background:`linear-gradient(90deg, ${T.mint}, ${T.coral})`, opacity:0.7 }} />
     </div>
   );
 }
@@ -35081,9 +35082,10 @@ function BubbleBackground() {
 }
 
 function PrimaryButton({ children, onClick, disabled, tone='mint', big=true, style:sx }) {
+  const baseColor = tone==='mint' ? T.mint : tone==='coral' ? T.coral : tone;
   const bg = disabled
     ? (tone==='mint' ? T.mintSoft : T.coralSoft)
-    : (tone==='mint' ? T.mint : tone==='coral' ? T.coral : tone);
+    : `linear-gradient(160deg, ${baseColor}ee 0%, ${baseColor} 60%, ${baseColor}cc 100%)`;
   const fg = disabled ? T.inkMute : '#fff';
   return (
     <button onClick={disabled ? undefined : onClick} style={{
@@ -35091,13 +35093,16 @@ function PrimaryButton({ children, onClick, disabled, tone='mint', big=true, sty
       background:bg, color:fg,
       fontFamily:T.font, fontWeight:T.weightTitle,
       fontSize: big ? 20 : 16, letterSpacing:T.letterDisplay,
-      borderRadius: 16,
-      boxShadow: disabled ? 'none' : T.shadow,
+      borderRadius: 16, position:'relative', overflow:'hidden',
+      boxShadow: disabled ? 'none' : `0 4px 18px ${baseColor}55`,
       cursor: disabled ? 'default' : 'pointer',
       transition:'transform .08s, box-shadow .08s',
       padding:'8px 18px', whiteSpace:'nowrap',
       ...sx
-    }}>{children}</button>
+    }}>
+      {!disabled && <div style={{ position:'absolute', top:0, left:0, right:0, height:'45%', background:'rgba(255,255,255,0.12)', borderRadius:'16px 16px 50% 50%', pointerEvents:'none' }} />}
+      {children}
+    </button>
   );
 }
 
@@ -35900,6 +35905,9 @@ function PlayersScreen({ players, setPlayers, go }) {
     setTimeout(() => { window.getAllStats().then(st => setAllTimeStats(st || {})); }, 0);
   }, []);
   const getBadge = (p) => {
+    // Session leader crown
+    const maxPts = Math.max(...players.map(x => x.points || 0));
+    if (maxPts > 0 && p.points === maxPts) return '👑';
     if (!p.profileId) return null;
     const profileIds = players.filter(x => x.profileId).map(x => x.profileId);
     const ranked = [...profileIds].sort((a,b) => (allTimeStats[b]?.totalPoints||0) - (allTimeStats[a]?.totalPoints||0));
@@ -36057,7 +36065,7 @@ function PlayerCard({ p, onEdit, onRemove, index, badge }) {
       cursor:'pointer', aspectRatio:'1/1.18', minHeight:120,
       animation:'fadeInUp 0.32s ease both', animationDelay:`${(index||0)*0.06}s`,
     }}>
-      {badge && <div style={{ position:'absolute', bottom:6, right:6, fontSize:16, lineHeight:1 }}>{badge}</div>}
+      {badge && <div style={{ position:'absolute', top:-8, left:'50%', transform:'translateX(-50%)', fontSize:20, lineHeight:1, filter:'drop-shadow(0 2px 4px rgba(0,0,0,0.2))', animation:'nextBounce 2s ease-in-out infinite' }}>{badge}</div>}
       <button onClick={e => { e.stopPropagation(); onRemove(); }} style={{
         position:'absolute', top:-5, right:-5, width:28, height:28,
         borderRadius:'50%', background:T.surface, color:T.inkSoft,
@@ -49811,7 +49819,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           const extra = activePlayers.length - vis.length;
           const aw = 32 + (vis.length - 1 + (extra>0?1:0)) * 18;
           return (
-            <div style={{ flex:1, display:'flex', alignItems:'center', gap:8, background:`${T.mint}12`, borderRadius:999, padding:'6px 12px', border:`1.5px solid ${T.mint}25` }}>
+            <div style={{ flex:1, display:'flex', alignItems:'center', gap:8, background:`linear-gradient(135deg,${T.mint}28,${T.mint}18)`, borderRadius:999, padding:'6px 12px', border:`1.5px solid ${T.mint}50` }}>
               <div style={{ position:'relative', width:aw, height:32, flexShrink:0 }}>
                 {vis.map((p,i) => (
                   <div key={p.id} style={{ position:'absolute', left:i*18, top:0, width:32, height:32, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', color:'#fff', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:12, border:`2px solid ${T.surface}`, zIndex:i, overflow:'hidden' }}>{p.img ? <img src={p.img} style={{width:32,height:32,objectFit:'cover'}} /> : p.name.charAt(0).toUpperCase()}</div>
@@ -49825,7 +49833,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
             </div>
           );
         })() : currentGame.category === 'Páros' && selectedOpponent ? (
-          <div key={currentPlayer.id + (selectedOpponent?.id||'')} style={{ flex:1, display:'flex', alignItems:'center', gap:8, background:`${currentPlayer.color}14`, borderRadius:999, padding:'6px 12px', border:`1.5px solid ${currentPlayer.color}30`, animation:'popIn .35s cubic-bezier(.2,.9,.3,1.4)', overflow:'hidden' }}>
+          <div key={currentPlayer.id + (selectedOpponent?.id||'')} style={{ flex:1, display:'flex', alignItems:'center', gap:8, background:`linear-gradient(135deg,${currentPlayer.color}30,${currentPlayer.color}18)`, borderRadius:999, padding:'6px 12px', border:`1.5px solid ${currentPlayer.color}55`, animation:'popIn .35s cubic-bezier(.2,.9,.3,1.4)', overflow:'hidden' }}>
             <div style={{ position:'relative', width:46, height:32, flexShrink:0 }}>
               <div style={{ position:'absolute', left:0, top:0, width:32, height:32, borderRadius:'50%', background:currentPlayer.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:13, color:'#fff', border:`2px solid ${T.surface}`, zIndex:2, overflow:'hidden' }}>{currentPlayer.img ? <img src={currentPlayer.img} style={{width:32,height:32,objectFit:'cover'}} /> : currentPlayer.name.charAt(0).toUpperCase()}</div>
               <div style={{ position:'absolute', left:16, top:4, width:24, height:24, borderRadius:'50%', background:selectedOpponent.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:12, color:'#fff', opacity:0.85, border:`2px solid ${T.surface}`, zIndex:1, overflow:'hidden' }}>{selectedOpponent.img ? <img src={selectedOpponent.img} style={{width:24,height:24,objectFit:'cover'}} /> : selectedOpponent.name.charAt(0).toUpperCase()}</div>
@@ -49836,7 +49844,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
             </div>
           </div>
         ) : (
-          <div key={currentPlayer.id} style={{ flex:1, display:'flex', alignItems:'center', gap:8, background:`${currentPlayer.color}18`, borderRadius:999, padding:'6px 12px', border:`1.5px solid ${currentPlayer.color}35`, animation:'popIn .35s cubic-bezier(.2,.9,.3,1.4)' }}>
+          <div key={currentPlayer.id} style={{ flex:1, display:'flex', alignItems:'center', gap:8, background:`linear-gradient(135deg,${currentPlayer.color}30,${currentPlayer.color}18)`, borderRadius:999, padding:'6px 12px', border:`1.5px solid ${currentPlayer.color}55`, animation:'popIn .35s cubic-bezier(.2,.9,.3,1.4)' }}>
             <div style={{ width:32, height:32, borderRadius:'50%', background:currentPlayer.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:14, color:'#fff', boxShadow: scorePulse ? `0 0 0 4px ${currentPlayer.color}44` : `0 0 0 2px ${currentPlayer.color}30`, transition:'box-shadow .3s', flexShrink:0, overflow:'hidden' }}>{currentPlayer.img ? <img src={currentPlayer.img} style={{width:32,height:32,objectFit:'cover'}} /> : currentPlayer.name.charAt(0).toUpperCase()}</div>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:`${currentPlayer.color}cc`, letterSpacing:'0.06em', textTransform:'uppercase', lineHeight:1 }}>{t('nowPlaying')}</div>
@@ -50456,10 +50464,12 @@ function Stat({ value, label, tone }) {
 
 function LeaderRow({ p, rank, maxScore, showScores=true }) {
   const pct = showScores ? (p.points/maxScore)*100 : 0;
+  const medalColor = rank===1 ? '#F4C95A' : rank===2 ? '#C0C0C0' : rank===3 ? '#CD7F32' : null;
   return (
     <div style={{ background:T.surface, borderRadius:14, boxShadow:T.shadow, padding:'10px 14px', display:'flex', alignItems:'center', gap:12, position:'relative', overflow:'hidden' }}>
-      <div style={{ position:'absolute', left:0, top:0, bottom:0, width:`${pct}%`, background:`${p.color}1A`, transition:'width .5s' }}/>
-      <div style={{ position:'relative', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.inkSoft, minWidth:22 }}>{rank}</div>
+      {medalColor && <div style={{ position:'absolute', left:0, top:0, bottom:0, width:4, background:medalColor, borderRadius:'14px 0 0 14px' }} />}
+      <div style={{ position:'absolute', left:medalColor?4:0, top:0, bottom:0, width:`${pct}%`, background:`${p.color}18`, transition:'width .5s' }}/>
+      <div style={{ position:'relative', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color: medalColor || T.inkSoft, minWidth:22, marginLeft: medalColor ? 8 : 0 }}>{rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank}</div>
       <div style={{ position:'relative', width:36, height:36, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', color:'#fff', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, overflow:'hidden' }}>{p.img ? <img src={p.img} style={{width:36,height:36,objectFit:'cover'}} /> : p.name.charAt(0).toUpperCase()||'?'}</div>
       <div style={{ position:'relative', flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{p.name}</div>
       {showScores && <div style={{ position:'relative', display:'flex', alignItems:'center', gap:4 }}>{Icon.star(T.yellow)}<div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, fontVariantNumeric:'tabular-nums', color:T.ink }}>{p.points}</div></div>}
