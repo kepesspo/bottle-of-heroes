@@ -34001,7 +34001,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.701';
+const APP_VERSION = 'v9.702';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -35866,7 +35866,7 @@ function EventCalendarView({ events, calMonth, setCalMonth, setDetail }) {
 // ── AdminScreen ────────────────────────────────────────────────────────────────
 function AdminScreen({ go }) {
   const [tab, setTab] = React.useState('profiles');
-  const TABS = [['profiles','👤','Profilok'],['events','📅','Események'],['db','🗄️','Adatbázis']];
+  const TABS = [['profiles','👤','Profilok'],['events','📅','Események'],['db','🗄️','Adatbázis'],['games','🎮','Játékok']];
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
@@ -35885,6 +35885,7 @@ function AdminScreen({ go }) {
         {tab === 'profiles' && <AdminProfiles />}
         {tab === 'events'   && <AdminEvents go={go} />}
         {tab === 'db'       && <AdminDatabase />}
+        {tab === 'games'    && <AdminGames />}
       </div>
     </div>
   );
@@ -36053,6 +36054,67 @@ function AdminEvents({ go }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Admin: Games tab ──────────────────────────────────────────────────────────
+const HIDDEN_GAMES_KEY = 'hiddenGames';
+function getHiddenGames() {
+  try { return JSON.parse(localStorage.getItem(HIDDEN_GAMES_KEY) || '[]'); } catch(e) { return []; }
+}
+function setHiddenGames(list) {
+  localStorage.setItem(HIDDEN_GAMES_KEY, JSON.stringify(list));
+}
+function AdminGames() {
+  const [hidden, setHidden] = React.useState(() => getHiddenGames());
+
+  function toggle(id) {
+    const next = hidden.includes(id) ? hidden.filter(x => x !== id) : [...hidden, id];
+    setHiddenGames(next);
+    setHidden(next);
+  }
+
+  function showAll() {
+    setHiddenGames([]);
+    setHidden([]);
+  }
+
+  return (
+    <div style={{ padding:'16px' }}>
+      {hidden.length > 0 && (
+        <button onClick={showAll} style={{ width:'100%', padding:'11px', borderRadius:12, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer', marginBottom:14, WebkitTapHighlightColor:'transparent' }}>
+          Összes megjelenítése
+        </button>
+      )}
+      <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>
+        Rejtett: {hidden.length} / {GAMES.length}
+      </div>
+      {GAMES.map(g => {
+        const isHidden = hidden.includes(g.id);
+        return (
+          <div key={g.id} onClick={() => toggle(g.id)} style={{ display:'flex', alignItems:'center', gap:12, background:T.surface, borderRadius:14, padding:'10px 14px', marginBottom:8, boxShadow:T.shadow, cursor:'pointer', opacity: isHidden ? 0.45 : 1, WebkitTapHighlightColor:'transparent' }}>
+            {g.img ? (
+              <img src={g.img} style={{ width:40, height:40, borderRadius:10, objectFit:'cover', flexShrink:0 }} />
+            ) : (
+              <div style={{ width:40, height:40, borderRadius:10, background:g.color||'#888', flexShrink:0, display:'grid', placeItems:'center' }}>
+                <span style={{ fontSize:20 }}>{g.emoji}</span>
+              </div>
+            )}
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{g.name}</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, marginTop:1 }}>{g.category} · {g.difficulty}</div>
+            </div>
+            <div style={{ width:36, height:36, borderRadius:10, border:`2px solid ${isHidden ? '#ef4444' : T.mint}`, background: isHidden ? '#fef2f2' : 'rgba(37,181,114,0.08)', display:'grid', placeItems:'center', flexShrink:0 }}>
+              {isHidden ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.mint} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -37883,7 +37945,8 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
     return catOk && diffOk;
   };
 
-  const visibleGames = GAMES.filter(gameMatchesFilter).sort((a,b) => (a.comingSoon?1:0) - (b.comingSoon?1:0));
+  const _hiddenGames = getHiddenGames();
+  const visibleGames = GAMES.filter(g => !_hiddenGames.includes(g.id)).filter(gameMatchesFilter).sort((a,b) => (a.comingSoon?1:0) - (b.comingSoon?1:0));
   const hasFilter = activeFilters.length > 0;
 
   return (
