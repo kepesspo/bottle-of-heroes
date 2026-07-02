@@ -33862,6 +33862,20 @@ window.triggerHaptic = function() {
     }).catch(function() { return {}; });
   };
 
+  window.getHiddenProfiles = function() {
+    return db.collection('config').doc('hiddenProfiles').get().then(function(d) {
+      return d.exists ? (d.data().ids || []) : [];
+    }).catch(function() { return []; });
+  };
+  window.setHiddenProfiles = function(ids) {
+    return db.collection('config').doc('hiddenProfiles').set({ ids: ids }).catch(function(e) { console.warn('setHiddenProfiles', e); });
+  };
+  window.onHiddenProfiles = function(cb) {
+    return db.collection('config').doc('hiddenProfiles').onSnapshot(function(d) {
+      cb(d.exists ? (d.data().ids || []) : []);
+    });
+  };
+
   window.getHiddenGames = function() {
     return db.collection('config').doc('hiddenGames').get().then(function(d) {
       return d.exists ? (d.data().ids || []) : [];
@@ -34017,7 +34031,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.703';
+const APP_VERSION = 'v9.704';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -35799,14 +35813,14 @@ function EventCalendarView({ events, calMonth, setCalMonth, setDetail }) {
     else setCalMonth(new Date(year, month-1, 1));
   }
   return (
-    <div style={{ flex:1, overflowY:'auto', padding:'6px 6px 24px' }} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
-        <button onClick={() => setCalMonth(new Date(year, month-1, 1))} style={{ width:26, height:26, borderRadius:7, border:'none', background:T.surface, cursor:'pointer', display:'grid', placeItems:'center', boxShadow:T.shadow }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    <div style={{ flex:1, overflowY:'auto', padding:'8px 12px 24px' }} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+        <button onClick={() => setCalMonth(new Date(year, month-1, 1))} style={{ width:34, height:34, borderRadius:10, border:'none', background:T.surface, cursor:'pointer', display:'grid', placeItems:'center', boxShadow:T.shadow }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:T.ink }}>{HU_MONTHS[month]} {year}</div>
-        <button onClick={() => setCalMonth(new Date(year, month+1, 1))} style={{ width:26, height:26, borderRadius:7, border:'none', background:T.surface, cursor:'pointer', display:'grid', placeItems:'center', boxShadow:T.shadow }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink }}>{HU_MONTHS[month]} {year}</div>
+        <button onClick={() => setCalMonth(new Date(year, month+1, 1))} style={{ width:34, height:34, borderRadius:10, border:'none', background:T.surface, cursor:'pointer', display:'grid', placeItems:'center', boxShadow:T.shadow }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', marginBottom:1 }}>
@@ -35882,7 +35896,7 @@ function EventCalendarView({ events, calMonth, setCalMonth, setDetail }) {
 // ── AdminScreen ────────────────────────────────────────────────────────────────
 function AdminScreen({ go }) {
   const [tab, setTab] = React.useState('profiles');
-  const TABS = [['profiles','👤','Profilok'],['events','📅','Események'],['db','🗄️','Adatbázis'],['games','🎮','Játékok']];
+  const TABS = [['profiles','Profilok'],['events','Események'],['db','Adatbázis'],['games','Játékok']];
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
@@ -35890,9 +35904,9 @@ function AdminScreen({ go }) {
       {/* Tab switcher */}
       <div style={{ padding:'10px 16px 0' }}>
         <div style={{ display:'flex', background:T.surface, borderRadius:18, padding:4, boxShadow:T.shadow }}>
-          {TABS.map(([k,icon,label]) => (
-            <button key={k} onClick={() => setTab(k)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:5, padding:'10px 0', borderRadius:14, border:'none', fontFamily:T.font, fontWeight:900, fontSize:12, cursor:'pointer', background: tab===k ? T.mint : 'transparent', color: tab===k ? '#fff' : T.inkSoft, transition:'all .2s', WebkitTapHighlightColor:'transparent' }}>
-              <span>{icon}</span>{label}
+          {TABS.map(([k,label]) => (
+            <button key={k} onClick={() => setTab(k)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'10px 0', borderRadius:14, border:'none', fontFamily:T.font, fontWeight:900, fontSize:12, cursor:'pointer', background: tab===k ? T.mint : 'transparent', color: tab===k ? '#fff' : T.inkSoft, transition:'all .2s', WebkitTapHighlightColor:'transparent' }}>
+              {label}
             </button>
           ))}
         </div>
@@ -35917,6 +35931,7 @@ function AdminProfiles() {
   const [color, setColor] = React.useState('#E8631A');
   const [saving, setSaving] = React.useState(false);
   const [deleting, setDeleting] = React.useState(null);
+  const [hiddenProfs, setHiddenProfs] = React.useState([]);
 
   function load() {
     setLoading(true);
@@ -35925,6 +35940,17 @@ function AdminProfiles() {
     } else { setLoading(false); }
   }
   React.useEffect(() => { load(); }, []);
+  React.useEffect(() => {
+    if (typeof window.onHiddenProfiles === 'function') {
+      const unsub = window.onHiddenProfiles(ids => setHiddenProfs(ids));
+      return () => unsub();
+    }
+  }, []);
+
+  function toggleHideProfile(id) {
+    const next = hiddenProfs.includes(id) ? hiddenProfs.filter(x => x !== id) : [...hiddenProfs, id];
+    window.setHiddenProfiles && window.setHiddenProfiles(next);
+  }
 
   function save() {
     if (!name.trim() || saving) return;
@@ -35976,6 +36002,13 @@ function AdminProfiles() {
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>{p.name}</div>
             {p.nickname && <div style={{ fontFamily:T.font, fontSize:12, color:T.sub }}>{p.nickname}</div>}
           </div>
+          <button onClick={() => toggleHideProfile(p.id)} style={{ width:36, height:36, borderRadius:10, border:`1.5px solid ${hiddenProfs.includes(p.id) ? '#ef4444' : T.mint}`, background: hiddenProfs.includes(p.id) ? '#fef2f2' : 'rgba(37,181,114,0.08)', display:'grid', placeItems:'center', cursor:'pointer' }}>
+            {hiddenProfs.includes(p.id) ? (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.mint} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            )}
+          </button>
           <button onClick={() => deleteProfile(p.id)} disabled={deleting===p.id} style={{ width:36, height:36, borderRadius:10, border:'none', background:'#fef2f2', display:'grid', placeItems:'center', cursor:'pointer', opacity:deleting===p.id?0.5:1 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
           </button>
