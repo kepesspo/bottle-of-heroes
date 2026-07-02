@@ -33861,6 +33861,22 @@ window.triggerHaptic = function() {
       return result;
     }).catch(function() { return {}; });
   };
+
+  window.getHiddenGames = function() {
+    return db.collection('config').doc('hiddenGames').get().then(function(d) {
+      return d.exists ? (d.data().ids || []) : [];
+    }).catch(function() { return []; });
+  };
+
+  window.setHiddenGames = function(ids) {
+    return db.collection('config').doc('hiddenGames').set({ ids: ids }).catch(function(e) { console.warn('setHiddenGames', e); });
+  };
+
+  window.onHiddenGames = function(cb) {
+    return db.collection('config').doc('hiddenGames').onSnapshot(function(d) {
+      cb(d.exists ? (d.data().ids || []) : []);
+    });
+  };
 })();
 </script>
 
@@ -34001,7 +34017,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.702';
+const APP_VERSION = 'v9.703';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -36059,25 +36075,28 @@ function AdminEvents({ go }) {
 }
 
 // ── Admin: Games tab ──────────────────────────────────────────────────────────
-const HIDDEN_GAMES_KEY = 'hiddenGames';
-function getHiddenGames() {
-  try { return JSON.parse(localStorage.getItem(HIDDEN_GAMES_KEY) || '[]'); } catch(e) { return []; }
-}
-function setHiddenGames(list) {
-  localStorage.setItem(HIDDEN_GAMES_KEY, JSON.stringify(list));
-}
 function AdminGames() {
-  const [hidden, setHidden] = React.useState(() => getHiddenGames());
+  const [hidden, setHidden] = React.useState([]);
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    if (typeof window.onHiddenGames === 'function') {
+      const unsub = window.onHiddenGames(ids => setHidden(ids));
+      return () => unsub();
+    } else {
+      window.getHiddenGames && window.getHiddenGames().then(ids => setHidden(ids));
+    }
+  }, []);
 
   function toggle(id) {
     const next = hidden.includes(id) ? hidden.filter(x => x !== id) : [...hidden, id];
-    setHiddenGames(next);
-    setHidden(next);
+    setSaving(true);
+    window.setHiddenGames(next).finally(() => setSaving(false));
   }
 
   function showAll() {
-    setHiddenGames([]);
-    setHidden([]);
+    setSaving(true);
+    window.setHiddenGames([]).finally(() => setSaving(false));
   }
 
   return (
@@ -37945,7 +37964,15 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
     return catOk && diffOk;
   };
 
-  const _hiddenGames = getHiddenGames();
+  const [_hiddenGames, _setHiddenGames] = React.useState([]);
+  React.useEffect(() => {
+    if (typeof window.onHiddenGames === 'function') {
+      const unsub = window.onHiddenGames(ids => _setHiddenGames(ids));
+      return () => unsub();
+    } else {
+      window.getHiddenGames && window.getHiddenGames().then(ids => _setHiddenGames(ids));
+    }
+  }, []);
   const visibleGames = GAMES.filter(g => !_hiddenGames.includes(g.id)).filter(gameMatchesFilter).sort((a,b) => (a.comingSoon?1:0) - (b.comingSoon?1:0));
   const hasFilter = activeFilters.length > 0;
 
