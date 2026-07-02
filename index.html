@@ -34001,7 +34001,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.668';
+const APP_VERSION = 'v9.669';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35885,8 +35885,25 @@ function EventLogScreen({ go, goEdit }) {
                     {profiles.map(p => {
                       const alreadyVoted = rsvp[p.name];
                       const statusLabel = alreadyVoted === 'yes' ? '✅' : alreadyVoted === 'maybe' ? '🤔' : alreadyVoted === 'no' ? '❌' : null;
+                      let _lpTimer = null;
+                      function _clearRsvp() {
+                        const col = evDb();
+                        if (col) {
+                          col.doc(String(detail)).update({ [`rsvp.${p.name}`]: firebase.firestore.FieldValue.delete() }).catch(() => {
+                            setEvents(ev => ev.map(e => e.id===detail ? { ...e, rsvp: Object.fromEntries(Object.entries(e.rsvp||{}).filter(([k])=>k!==p.name)) } : e));
+                          });
+                        } else {
+                          setEvents(ev => ev.map(e => e.id===detail ? { ...e, rsvp: Object.fromEntries(Object.entries(e.rsvp||{}).filter(([k])=>k!==p.name)) } : e));
+                        }
+                      }
                       return (
-                        <button key={p.name} onClick={() => { if (!alreadyVoted) { setRsvpProfile(p); setRsvpStep('status'); } }} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, padding:'14px 8px', borderRadius:16, border:`2px solid ${alreadyVoted ? T.border : T.border}`, background: alreadyVoted ? T.border : T.bg, cursor: alreadyVoted ? 'default' : 'pointer', WebkitTapHighlightColor:'transparent', opacity: alreadyVoted ? 0.5 : 1, position:'relative' }}>
+                        <button key={p.name}
+                          onClick={() => { if (!alreadyVoted) { setRsvpProfile(p); setRsvpStep('status'); } }}
+                          onMouseDown={() => { if (alreadyVoted) { _lpTimer = setTimeout(_clearRsvp, 600); } }}
+                          onMouseUp={() => clearTimeout(_lpTimer)} onMouseLeave={() => clearTimeout(_lpTimer)}
+                          onTouchStart={e => { if (alreadyVoted) { e.preventDefault(); _lpTimer = setTimeout(_clearRsvp, 600); } }}
+                          onTouchEnd={() => clearTimeout(_lpTimer)} onTouchCancel={() => clearTimeout(_lpTimer)}
+                          style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, padding:'14px 8px', borderRadius:16, border:`2px solid ${T.border}`, background: alreadyVoted ? T.border : T.bg, cursor: alreadyVoted ? 'default' : 'pointer', WebkitTapHighlightColor:'transparent', opacity: alreadyVoted ? 0.5 : 1, position:'relative' }}>
                           <div style={{ width:52, height:52, borderRadius:'50%', background:p.color||'#888', overflow:'hidden', display:'grid', placeItems:'center' }}>
                             {p.img ? <img src={p.img} style={{ width:52, height:52, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:'#fff' }}>{(p.name||'?').charAt(0).toUpperCase()}</span>}
                           </div>
