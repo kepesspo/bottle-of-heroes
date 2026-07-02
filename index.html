@@ -33998,7 +33998,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.660';
+const APP_VERSION = 'v9.661';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35960,6 +35960,32 @@ function EventCreateScreen({ go, editId }) {
   const [date, setDate] = React.useState(existing?.date ? existing.date.slice(0,16) : '');
   const [locationUnknown, setLocationUnknown] = React.useState(existing ? !existing.location : false);
   const [location, setLocation] = React.useState(existing?.location || '');
+  const [locationQuery, setLocationQuery] = React.useState(existing?.location || '');
+  const [locationSuggestions, setLocationSuggestions] = React.useState([]);
+  const [locationSearching, setLocationSearching] = React.useState(false);
+  const locationDebounce = React.useRef(null);
+
+  function searchLocation(q) {
+    setLocationQuery(q);
+    setLocation(q);
+    clearTimeout(locationDebounce.current);
+    if (!q.trim() || q.length < 3) { setLocationSuggestions([]); return; }
+    locationDebounce.current = setTimeout(async () => {
+      setLocationSearching(true);
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&accept-language=hu`, { headers: { 'Accept-Language': 'hu' } });
+        const data = await res.json();
+        setLocationSuggestions(data.map(r => ({ label: r.display_name, short: r.name || r.display_name.split(',')[0] })));
+      } catch(e) { setLocationSuggestions([]); }
+      setLocationSearching(false);
+    }, 500);
+  }
+
+  function pickLocation(s) {
+    setLocation(s.label);
+    setLocationQuery(s.short);
+    setLocationSuggestions([]);
+  }
   const [saving, setSaving] = React.useState(false);
 
   function save() {
@@ -36011,18 +36037,42 @@ function EventCreateScreen({ go, editId }) {
           <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Leírás</div>
           <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Mit kell tudni az eseményről?" rows={3} style={{ width:'100%', boxSizing:'border-box', padding:'13px 14px', borderRadius:14, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none', resize:'none' }} />
         </div>
-        {/* Date */}
+        {/* Date — compact two-column */}
         <div style={{ marginBottom:12 }}>
           <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>📅 Időpont</div>
-          <input type="datetime-local" value={date} onChange={e => setDate(e.target.value)} style={{ width:'100%', boxSizing:'border-box', padding:'13px 14px', borderRadius:14, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none' }} />
+          <div style={{ display:'flex', gap:8 }}>
+            <input type="date" value={date ? date.slice(0,10) : ''} onChange={e => setDate(prev => e.target.value + (prev && prev.length>10 ? prev.slice(10) : 'T00:00'))} style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'11px 10px', borderRadius:14, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+            <input type="time" value={date ? date.slice(11,16) : ''} onChange={e => setDate(prev => (prev ? prev.slice(0,10) : new Date().toISOString().slice(0,10)) + 'T' + e.target.value)} style={{ width:100, boxSizing:'border-box', padding:'11px 10px', borderRadius:14, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+          </div>
         </div>
-        {/* Location */}
+        {/* Location with OSM search */}
         <div style={{ marginBottom:12 }}>
           <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>📍 Helyszín</div>
           {!locationUnknown && (
-            <input value={location} onChange={e => setLocation(e.target.value)} placeholder="pl. Jani háza" style={{ width:'100%', boxSizing:'border-box', padding:'13px 14px', borderRadius:14, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none', marginBottom:8 }} />
+            <div style={{ position:'relative', marginBottom:8 }}>
+              <div style={{ display:'flex', alignItems:'center', background:T.surface, borderRadius:14, border:`1.5px solid ${T.border}`, overflow:'hidden' }}>
+                <span style={{ padding:'0 10px', fontSize:16, flexShrink:0 }}>🔍</span>
+                <input
+                  value={locationQuery}
+                  onChange={e => searchLocation(e.target.value)}
+                  placeholder="Keress helyszínt…"
+                  style={{ flex:1, padding:'12px 12px 12px 0', border:'none', background:'transparent', fontFamily:T.font, fontSize:15, color:T.ink, outline:'none' }}
+                />
+                {locationSearching && <span style={{ padding:'0 12px', fontSize:13, color:T.sub }}>…</span>}
+              </div>
+              {locationSuggestions.length > 0 && (
+                <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:50, background:T.surface, borderRadius:14, boxShadow:'0 8px 24px rgba(0,0,0,0.18)', marginTop:4, overflow:'hidden' }}>
+                  {locationSuggestions.map((s, i) => (
+                    <div key={i} onClick={() => pickLocation(s)} style={{ padding:'12px 14px', borderBottom: i < locationSuggestions.length-1 ? `1px solid ${T.border}` : 'none', cursor:'pointer', fontFamily:T.font, fontSize:14, color:T.ink, lineHeight:1.3 }}>
+                      <div style={{ fontWeight:700 }}>{s.short}</div>
+                      <div style={{ fontSize:12, color:T.sub, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
-          <button onClick={() => setLocationUnknown(u => !u)} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 14px', borderRadius:12, border:`1.5px solid ${locationUnknown ? '#E8631A' : T.border}`, background: locationUnknown ? '#E8631A18' : 'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:14, color: locationUnknown ? '#E8631A' : T.sub }}>
+          <button onClick={() => { setLocationUnknown(u => !u); setLocationSuggestions([]); }} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 14px', borderRadius:12, border:`1.5px solid ${locationUnknown ? '#E8631A' : T.border}`, background: locationUnknown ? '#E8631A18' : 'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:14, color: locationUnknown ? '#E8631A' : T.sub }}>
             <div style={{ width:18, height:18, borderRadius:4, border:`2px solid ${locationUnknown ? '#E8631A' : T.sub}`, background: locationUnknown ? '#E8631A' : 'transparent', display:'grid', placeItems:'center', flexShrink:0 }}>
               {locationUnknown && <svg width="11" height="11" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
             </div>
