@@ -34001,7 +34001,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.681';
+const APP_VERSION = 'v9.682';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35897,7 +35897,7 @@ function EventLogScreen({ go, goEdit }) {
               <span style={{ fontSize:18, flexShrink:0 }}>📅</span>
               <div>
                 <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em' }}>Időpont</div>
-                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>{ev.date ? formatDate(ev.date) : '—'}</div>
+                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>{ev.date ? formatDate(ev.date) : '—'}{ev.dateTo ? <span style={{ color:T.sub }}> – {formatDate(ev.dateTo)}</span> : ''}</div>
               </div>
             </div>
             <div style={{ height:1, background:T.border }} />
@@ -36072,7 +36072,7 @@ function EventLogScreen({ go, goEdit }) {
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, lineHeight:1.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ev.title}</div>
                   <div style={{ display:'flex', gap:8, marginTop:4, flexWrap:'wrap', alignItems:'center' }}>
-                    {timeStr && <span style={{ fontFamily:T.font, fontSize:13, color:T.sub, display:'flex', alignItems:'center', gap:3 }}>🕐 {timeStr}</span>}
+                    {timeStr && <span style={{ fontFamily:T.font, fontSize:13, color:T.sub, display:'flex', alignItems:'center', gap:3 }}>🕐 {timeStr}{ev.dateTo ? (() => { const te=new Date(ev.dateTo); return '–'+te.toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit'}); })() : ''}</span>}
                     {ev.location
                       ? <span style={{ fontFamily:T.font, fontSize:13, color:T.sub, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>📍 {ev.location.split(',')[0]}</span>
                       : <span style={{ fontFamily:T.font, fontSize:13, color:T.sub, fontStyle:'italic' }}>📍 Még nem tudjuk</span>}
@@ -36124,6 +36124,7 @@ function EventForm({ initial, onSave, onCancel }) {
   const [title, setTitle] = React.useState(initial?.title || '');
   const [desc, setDesc] = React.useState(initial?.desc || '');
   const [date, setDate] = React.useState(initial?.date ? initial.date.slice(0,16) : '');
+  const [dateTo, setDateTo] = React.useState(initial?.dateTo ? initial.dateTo.slice(0,16) : '');
   const [locationUnknown, setLocationUnknown] = React.useState(initial ? !initial.location : false);
   const [location, setLocation] = React.useState(initial?.location || '');
   const [locationQuery, setLocationQuery] = React.useState(initial?.location || '');
@@ -36152,7 +36153,7 @@ function EventForm({ initial, onSave, onCancel }) {
   function submit() {
     if (!title.trim() || saving) return;
     setSaving(true);
-    onSave({ title: title.trim(), desc: desc.trim(), date: date || null, location: locationUnknown ? '' : location.trim() }, () => setSaving(false));
+    onSave({ title: title.trim(), desc: desc.trim(), date: date || null, dateTo: dateTo || null, location: locationUnknown ? '' : location.trim() }, () => setSaving(false));
   }
 
   return (
@@ -36167,9 +36168,15 @@ function EventForm({ initial, onSave, onCancel }) {
       </div>
       <div style={{ marginBottom:10 }}>
         <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:5 }}>📅 Időpont</div>
-        <div style={{ display:'flex', gap:8 }}>
+        <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
+          <span style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, flexShrink:0, width:28 }}>Től</span>
           <input type="date" value={date ? date.slice(0,10) : ''} onChange={e => setDate(prev => e.target.value + (prev && prev.length>10 ? prev.slice(10) : 'T00:00'))} style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'10px 10px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
-          <input type="time" value={date ? date.slice(11,16) : ''} onChange={e => setDate(prev => (prev ? prev.slice(0,10) : new Date().toISOString().slice(0,10)) + 'T' + e.target.value)} style={{ width:96, boxSizing:'border-box', padding:'10px 10px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+          <input type="time" value={date ? date.slice(11,16) : ''} onChange={e => setDate(prev => (prev ? prev.slice(0,10) : new Date().toISOString().slice(0,10)) + 'T' + e.target.value)} style={{ width:90, boxSizing:'border-box', padding:'10px 10px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+        </div>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <span style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, flexShrink:0, width:28 }}>Ig</span>
+          <input type="date" value={dateTo ? dateTo.slice(0,10) : ''} onChange={e => setDateTo(prev => e.target.value + (prev && prev.length>10 ? prev.slice(10) : 'T00:00'))} style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'10px 10px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+          <input type="time" value={dateTo ? dateTo.slice(11,16) : ''} onChange={e => setDateTo(prev => (prev ? prev.slice(0,10) : (date ? date.slice(0,10) : new Date().toISOString().slice(0,10))) + 'T' + e.target.value)} style={{ width:90, boxSizing:'border-box', padding:'10px 10px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
         </div>
       </div>
       <div style={{ marginBottom:14 }}>
