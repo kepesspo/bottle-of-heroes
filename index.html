@@ -33998,7 +33998,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.661';
+const APP_VERSION = 'v9.662';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35870,14 +35870,19 @@ function EventLogScreen({ go, goEdit }) {
                   <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink, marginBottom:4, textAlign:'center' }}>Ki vagy?</div>
                   <div style={{ fontFamily:T.font, fontSize:13, color:T.sub, marginBottom:20, textAlign:'center' }}>Válaszd ki a profilod</div>
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:12 }}>
-                    {profiles.map(p => (
-                      <button key={p.name} onClick={() => { setRsvpProfile(p); setRsvpStep('status'); }} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, padding:'14px 8px', borderRadius:16, border:`2px solid ${T.border}`, background:T.bg, cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
-                        <div style={{ width:52, height:52, borderRadius:'50%', background:p.color||'#888', overflow:'hidden', display:'grid', placeItems:'center' }}>
-                          {p.img ? <img src={p.img} style={{ width:52, height:52, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:'#fff' }}>{(p.name||'?').charAt(0).toUpperCase()}</span>}
-                        </div>
-                        <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, textAlign:'center', lineHeight:1.2 }}>{p.name}</span>
-                      </button>
-                    ))}
+                    {profiles.map(p => {
+                      const alreadyVoted = rsvp[p.name];
+                      const statusLabel = alreadyVoted === 'yes' ? '✅' : alreadyVoted === 'maybe' ? '🤔' : alreadyVoted === 'no' ? '❌' : null;
+                      return (
+                        <button key={p.name} onClick={() => { if (!alreadyVoted) { setRsvpProfile(p); setRsvpStep('status'); } }} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, padding:'14px 8px', borderRadius:16, border:`2px solid ${alreadyVoted ? T.border : T.border}`, background: alreadyVoted ? T.border : T.bg, cursor: alreadyVoted ? 'default' : 'pointer', WebkitTapHighlightColor:'transparent', opacity: alreadyVoted ? 0.5 : 1, position:'relative' }}>
+                          <div style={{ width:52, height:52, borderRadius:'50%', background:p.color||'#888', overflow:'hidden', display:'grid', placeItems:'center' }}>
+                            {p.img ? <img src={p.img} style={{ width:52, height:52, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:'#fff' }}>{(p.name||'?').charAt(0).toUpperCase()}</span>}
+                          </div>
+                          <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, textAlign:'center', lineHeight:1.2 }}>{p.name}</span>
+                          {statusLabel && <div style={{ position:'absolute', top:8, right:8, fontSize:16 }}>{statusLabel}</div>}
+                        </button>
+                      );
+                    })}
                   </div>
                 </>
               ) : (
@@ -35931,49 +35936,71 @@ function EventLogScreen({ go, goEdit }) {
             <span style={{ fontSize:13 }}>Tartsd nyomva 5 másodpercig a főoldalon<br/>a napló ikont új esemény létrehozásához.</span>
           </div>
         )}
-        {events.map((ev) => (
-          <div key={ev.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 16px', background:T.surface, borderRadius:16, marginBottom:10, boxShadow:T.shadow }}>
-            <div onClick={() => setDetail(ev.id)} style={{ width:42, height:42, borderRadius:12, background:'#E8631A18', display:'grid', placeItems:'center', flexShrink:0, cursor:'pointer' }}>
-              <span style={{ fontSize:20 }}>📅</span>
-            </div>
-            <div onClick={() => setDetail(ev.id)} style={{ flex:1, minWidth:0, cursor:'pointer' }}>
-              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, lineHeight:1.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ev.title}</div>
-              <div style={{ display:'flex', gap:10, marginTop:3 }}>
-                {ev.date && <span style={{ fontFamily:T.font, fontSize:12, color:T.sub }}>{new Date(ev.date).toLocaleDateString('hu-HU',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>}
-                {ev.location ? <span style={{ fontFamily:T.font, fontSize:12, color:T.sub }}>📍 {ev.location}</span> : <span style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontStyle:'italic' }}>📍 Még nem tudjuk</span>}
+        {events.map((ev) => {
+          const rsvpEntries = Object.entries(ev.rsvp || {});
+          const yesNames = rsvpEntries.filter(([,s])=>s==='yes').map(([n])=>n);
+          const maybeCount = rsvpEntries.filter(([,s])=>s==='maybe').length;
+          const noCount = rsvpEntries.filter(([,s])=>s==='no').length;
+          const yesAvatars = yesNames.slice(0,3).map(name => profiles.find(p=>p.name===name)).filter(Boolean);
+          const extraYes = Math.max(0, yesNames.length - 3);
+          return (
+            <div key={ev.id} onClick={() => setDetail(ev.id)} style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 14px', background:T.surface, borderRadius:16, marginBottom:10, boxShadow:T.shadow, cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
+              <div style={{ width:40, height:40, borderRadius:11, background:'#E8631A18', display:'grid', placeItems:'center', flexShrink:0 }}>
+                <span style={{ fontSize:19 }}>📅</span>
               </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, lineHeight:1.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ev.title}</div>
+                <div style={{ display:'flex', gap:8, marginTop:3, flexWrap:'wrap' }}>
+                  {ev.date && <span style={{ fontFamily:T.font, fontSize:12, color:T.sub }}>{new Date(ev.date).toLocaleDateString('hu-HU',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>}
+                  {ev.location ? <span style={{ fontFamily:T.font, fontSize:12, color:T.sub }}>📍 {ev.location.split(',')[0]}</span> : <span style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontStyle:'italic' }}>📍 Még nem tudjuk</span>}
+                </div>
+                {rsvpEntries.length > 0 && (
+                  <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:7 }}>
+                    {/* Avatar pile for yes */}
+                    <div style={{ display:'flex' }}>
+                      {yesAvatars.map((p, i) => (
+                        <div key={p.name} style={{ width:22, height:22, borderRadius:'50%', background:p.color||'#888', overflow:'hidden', display:'grid', placeItems:'center', border:`2px solid ${T.surface}`, marginLeft: i===0?0:-6, flexShrink:0 }}>
+                          {p.img ? <img src={p.img} style={{ width:22, height:22, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:9, color:'#fff' }}>{(p.name||'?').charAt(0).toUpperCase()}</span>}
+                        </div>
+                      ))}
+                      {extraYes > 0 && <div style={{ width:22, height:22, borderRadius:'50%', background:'#25b57244', display:'grid', placeItems:'center', border:`2px solid ${T.surface}`, marginLeft:-6, fontFamily:T.font, fontWeight:900, fontSize:9, color:'#25b572' }}>+{extraYes}</div>}
+                    </div>
+                    {yesNames.length > 0 && <span style={{ fontFamily:T.font, fontSize:11, color:'#25b572', fontWeight:700 }}>{yesNames.length} jön</span>}
+                    {maybeCount > 0 && <span style={{ fontFamily:T.font, fontSize:11, color:'#c07a10', fontWeight:700 }}>· {maybeCount} talán</span>}
+                    {noCount > 0 && <span style={{ fontFamily:T.font, fontSize:11, color:'#e84040', fontWeight:700 }}>· {noCount} nem tud</span>}
+                  </div>
+                )}
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.sub} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}><polyline points="9 18 15 12 9 6"/></svg>
             </div>
-            <button onClick={e => { e.stopPropagation(); goEdit && goEdit(ev.id); }} style={{ width:34, height:34, borderRadius:10, border:'none', background:T.border, display:'grid', placeItems:'center', cursor:'pointer', flexShrink:0 }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function EventCreateScreen({ go, editId }) {
-  const existing = editId ? (evLoad().find(e => e.id === editId) || null) : null;
-  const [title, setTitle] = React.useState(existing?.title || '');
-  const [desc, setDesc] = React.useState(existing?.desc || '');
-  const [date, setDate] = React.useState(existing?.date ? existing.date.slice(0,16) : '');
-  const [locationUnknown, setLocationUnknown] = React.useState(existing ? !existing.location : false);
-  const [location, setLocation] = React.useState(existing?.location || '');
-  const [locationQuery, setLocationQuery] = React.useState(existing?.location || '');
+// ── Shared event form (used in admin screen) ──────────────────────────────────
+function EventForm({ initial, onSave, onCancel }) {
+  const [title, setTitle] = React.useState(initial?.title || '');
+  const [desc, setDesc] = React.useState(initial?.desc || '');
+  const [date, setDate] = React.useState(initial?.date ? initial.date.slice(0,16) : '');
+  const [locationUnknown, setLocationUnknown] = React.useState(initial ? !initial.location : false);
+  const [location, setLocation] = React.useState(initial?.location || '');
+  const [locationQuery, setLocationQuery] = React.useState(initial?.location || '');
   const [locationSuggestions, setLocationSuggestions] = React.useState([]);
   const [locationSearching, setLocationSearching] = React.useState(false);
   const locationDebounce = React.useRef(null);
+  const [saving, setSaving] = React.useState(false);
 
   function searchLocation(q) {
-    setLocationQuery(q);
-    setLocation(q);
+    setLocationQuery(q); setLocation(q);
     clearTimeout(locationDebounce.current);
     if (!q.trim() || q.length < 3) { setLocationSuggestions([]); return; }
     locationDebounce.current = setTimeout(async () => {
       setLocationSearching(true);
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&accept-language=hu`, { headers: { 'Accept-Language': 'hu' } });
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=5&accept-language=hu`);
         const data = await res.json();
         setLocationSuggestions(data.map(r => ({ label: r.display_name, short: r.name || r.display_name.split(',')[0] })));
       } catch(e) { setLocationSuggestions([]); }
@@ -35981,105 +36008,173 @@ function EventCreateScreen({ go, editId }) {
     }, 500);
   }
 
-  function pickLocation(s) {
-    setLocation(s.label);
-    setLocationQuery(s.short);
-    setLocationSuggestions([]);
-  }
-  const [saving, setSaving] = React.useState(false);
+  function pickLocation(s) { setLocation(s.label); setLocationQuery(s.short); setLocationSuggestions([]); }
 
-  function save() {
+  function submit() {
     if (!title.trim() || saving) return;
     setSaving(true);
-    const loc = locationUnknown ? '' : location.trim();
+    onSave({ title: title.trim(), desc: desc.trim(), date: date || null, location: locationUnknown ? '' : location.trim() }, () => setSaving(false));
+  }
+
+  return (
+    <div>
+      <div style={{ marginBottom:10 }}>
+        <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:5 }}>Esemény neve *</div>
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="pl. Pénteki parti" style={{ width:'100%', boxSizing:'border-box', padding:'12px 13px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none' }} />
+      </div>
+      <div style={{ marginBottom:10 }}>
+        <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:5 }}>Leírás</div>
+        <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Mit kell tudni az eseményről?" rows={2} style={{ width:'100%', boxSizing:'border-box', padding:'12px 13px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none', resize:'none' }} />
+      </div>
+      <div style={{ marginBottom:10 }}>
+        <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:5 }}>📅 Időpont</div>
+        <div style={{ display:'flex', gap:8 }}>
+          <input type="date" value={date ? date.slice(0,10) : ''} onChange={e => setDate(prev => e.target.value + (prev && prev.length>10 ? prev.slice(10) : 'T00:00'))} style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'10px 10px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+          <input type="time" value={date ? date.slice(11,16) : ''} onChange={e => setDate(prev => (prev ? prev.slice(0,10) : new Date().toISOString().slice(0,10)) + 'T' + e.target.value)} style={{ width:96, boxSizing:'border-box', padding:'10px 10px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+        </div>
+      </div>
+      <div style={{ marginBottom:14 }}>
+        <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:5 }}>📍 Helyszín</div>
+        {!locationUnknown && (
+          <div style={{ position:'relative', marginBottom:7 }}>
+            <div style={{ display:'flex', alignItems:'center', background:T.bg, borderRadius:13, border:`1.5px solid ${T.border}`, overflow:'hidden' }}>
+              <span style={{ padding:'0 9px', fontSize:15 }}>🔍</span>
+              <input value={locationQuery} onChange={e => searchLocation(e.target.value)} placeholder="Keress helyszínt…" style={{ flex:1, padding:'11px 10px 11px 0', border:'none', background:'transparent', fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+              {locationSearching && <span style={{ padding:'0 10px', fontSize:12, color:T.sub }}>…</span>}
+            </div>
+            {locationSuggestions.length > 0 && (
+              <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:50, background:T.surface, borderRadius:13, boxShadow:'0 8px 24px rgba(0,0,0,0.18)', marginTop:4, overflow:'hidden' }}>
+                {locationSuggestions.map((s, i) => (
+                  <div key={i} onClick={() => pickLocation(s)} style={{ padding:'11px 13px', borderBottom: i < locationSuggestions.length-1 ? `1px solid ${T.border}` : 'none', cursor:'pointer', fontFamily:T.font, fontSize:13, color:T.ink, lineHeight:1.3 }}>
+                    <div style={{ fontWeight:700 }}>{s.short}</div>
+                    <div style={{ fontSize:11, color:T.sub, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <button onClick={() => { setLocationUnknown(u => !u); setLocationSuggestions([]); }} style={{ display:'flex', alignItems:'center', gap:7, padding:'9px 13px', borderRadius:11, border:`1.5px solid ${locationUnknown ? '#E8631A' : T.border}`, background: locationUnknown ? '#E8631A18' : 'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:13, color: locationUnknown ? '#E8631A' : T.sub }}>
+          <div style={{ width:16, height:16, borderRadius:4, border:`2px solid ${locationUnknown ? '#E8631A' : T.sub}`, background: locationUnknown ? '#E8631A' : 'transparent', display:'grid', placeItems:'center', flexShrink:0 }}>
+            {locationUnknown && <svg width="10" height="10" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+          </div>
+          Még nem tudjuk a helyszínt
+        </button>
+      </div>
+      <div style={{ display:'flex', gap:8 }}>
+        {onCancel && <button onClick={onCancel} style={{ flex:1, padding:'13px', borderRadius:13, border:'none', background:T.border, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, cursor:'pointer' }}>Mégse</button>}
+        <button onClick={submit} disabled={!title.trim() || saving} style={{ flex:2, padding:'13px', borderRadius:13, border:'none', background: title.trim() && !saving ? '#E8631A' : T.border, fontFamily:T.font, fontWeight:800, fontSize:14, color:'#fff', cursor: title.trim() && !saving ? 'pointer' : 'default' }}>
+          {saving ? '…' : (initial ? 'Mentés' : 'Létrehozás')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EventCreateScreen({ go }) {
+  const [events, setEvents] = React.useState(evLoad);
+  const [editingId, setEditingId] = React.useState(null); // null=new form, id=edit form
+  const [showNewForm, setShowNewForm] = React.useState(false);
+  const [deleteConfirm, setDeleteConfirm] = React.useState(null);
+
+  // Live sync
+  React.useEffect(() => {
     const col = evDb();
-    if (col) {
-      if (editId) {
-        col.doc(String(editId)).update({ title: title.trim(), desc: desc.trim(), date: date || null, location: loc })
-          .finally(() => { setSaving(false); go('log'); });
-      } else {
-        const entry = { title: title.trim(), desc: desc.trim(), date: date || null, location: loc, rsvp: {}, createdAt: new Date().toISOString() };
-        col.add(entry).finally(() => { setSaving(false); go('log'); });
-      }
-    } else {
-      // offline fallback
-      const events = evLoad();
-      if (editId) {
-        evSave(events.map(e => e.id !== editId ? e : { ...e, title: title.trim(), desc: desc.trim(), date: date || null, location: loc }));
-      } else {
-        const entry = { id: Date.now(), title: title.trim(), desc: desc.trim(), date: date || null, location: loc, rsvp: {}, createdAt: new Date().toISOString() };
-        evSave([entry, ...events]);
-      }
-      setSaving(false);
-      go('log');
-    }
+    if (!col) return;
+    const unsub = col.orderBy('createdAt','desc').onSnapshot(snap => {
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setEvents(docs);
+    });
+    return () => unsub();
+  }, []);
+
+  function saveNew(data, done) {
+    const col = evDb();
+    const entry = { ...data, rsvp: {}, createdAt: new Date().toISOString() };
+    if (col) { col.add(entry).finally(() => { done(); setShowNewForm(false); }); }
+    else { evSave([{ id: Date.now(), ...entry }, ...evLoad()]); done(); setShowNewForm(false); }
+  }
+
+  function saveEdit(data, done) {
+    const col = evDb();
+    if (col) { col.doc(String(editingId)).update(data).finally(() => { done(); setEditingId(null); }); }
+    else { evSave(evLoad().map(e => e.id !== editingId ? e : { ...e, ...data })); done(); setEditingId(null); }
+  }
+
+  function deleteEvent(id) {
+    const col = evDb();
+    if (col) col.doc(String(id)).delete();
+    else evSave(evLoad().filter(e => e.id !== id));
+    setDeleteConfirm(null);
   }
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
       <div style={{ display:'flex', alignItems:'center', padding:'16px 16px 12px', gap:10 }}>
-        <button onClick={() => go(editId ? 'log' : 'home')} style={{ width:40, height:40, borderRadius:12, border:'none', background:T.surface, display:'grid', placeItems:'center', cursor:'pointer', boxShadow:T.shadow, flexShrink:0 }}>
+        <button onClick={() => go('home')} style={{ width:40, height:40, borderRadius:12, border:'none', background:T.surface, display:'grid', placeItems:'center', cursor:'pointer', boxShadow:T.shadow, flexShrink:0 }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <div style={{ flex:1, fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink }}>{editId ? 'Esemény szerkesztése' : 'Új esemény'}</div>
-        <button onClick={save} disabled={!title.trim() || saving} style={{ padding:'9px 18px', borderRadius:12, border:'none', background: title.trim() && !saving ? '#E8631A' : T.border, fontFamily:T.font, fontWeight:800, fontSize:14, color:'#fff', cursor: title.trim() && !saving ? 'pointer' : 'default' }}>
-          {saving ? '…' : 'Mentés'}
-        </button>
+        <div style={{ flex:1, fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink }}>Események kezelése</div>
       </div>
       <div style={{ flex:1, overflowY:'auto', padding:'0 16px 32px' }}>
-        {/* Title */}
-        <div style={{ marginBottom:12 }}>
-          <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Esemény neve *</div>
-          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="pl. Pénteki parti" style={{ width:'100%', boxSizing:'border-box', padding:'13px 14px', borderRadius:14, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none' }} />
-        </div>
-        {/* Description */}
-        <div style={{ marginBottom:12 }}>
-          <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Leírás</div>
-          <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Mit kell tudni az eseményről?" rows={3} style={{ width:'100%', boxSizing:'border-box', padding:'13px 14px', borderRadius:14, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none', resize:'none' }} />
-        </div>
-        {/* Date — compact two-column */}
-        <div style={{ marginBottom:12 }}>
-          <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>📅 Időpont</div>
-          <div style={{ display:'flex', gap:8 }}>
-            <input type="date" value={date ? date.slice(0,10) : ''} onChange={e => setDate(prev => e.target.value + (prev && prev.length>10 ? prev.slice(10) : 'T00:00'))} style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'11px 10px', borderRadius:14, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
-            <input type="time" value={date ? date.slice(11,16) : ''} onChange={e => setDate(prev => (prev ? prev.slice(0,10) : new Date().toISOString().slice(0,10)) + 'T' + e.target.value)} style={{ width:100, boxSizing:'border-box', padding:'11px 10px', borderRadius:14, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+
+        {/* Existing events */}
+        {events.length > 0 && (
+          <div style={{ marginBottom:20 }}>
+            <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Meglévő események</div>
+            {events.map(ev => (
+              <div key={ev.id}>
+                {editingId === ev.id ? (
+                  <div style={{ background:T.surface, borderRadius:16, padding:'16px', marginBottom:10, boxShadow:T.shadow }}>
+                    <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, marginBottom:12 }}>✏️ {ev.title}</div>
+                    <EventForm initial={ev} onSave={saveEdit} onCancel={() => setEditingId(null)} />
+                  </div>
+                ) : (
+                  <div style={{ display:'flex', alignItems:'center', gap:10, background:T.surface, borderRadius:14, padding:'12px 14px', marginBottom:8, boxShadow:T.shadow }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ev.title}</div>
+                      {ev.date && <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginTop:2 }}>{new Date(ev.date).toLocaleDateString('hu-HU',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>}
+                    </div>
+                    <button onClick={() => { setEditingId(ev.id); setShowNewForm(false); }} style={{ width:34, height:34, borderRadius:10, border:'none', background:'#E8631A18', display:'grid', placeItems:'center', cursor:'pointer', flexShrink:0 }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#E8631A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button onClick={() => setDeleteConfirm(ev.id)} style={{ width:34, height:34, borderRadius:10, border:'none', background:'#e8404018', display:'grid', placeItems:'center', cursor:'pointer', flexShrink:0 }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#e84040" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* New event form */}
+        <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Új esemény</div>
+        {showNewForm ? (
+          <div style={{ background:T.surface, borderRadius:16, padding:'16px', boxShadow:T.shadow }}>
+            <EventForm onSave={saveNew} onCancel={() => setShowNewForm(false)} />
+          </div>
+        ) : (
+          <button onClick={() => { setShowNewForm(true); setEditingId(null); }} style={{ width:'100%', padding:'14px', borderRadius:14, border:`2px dashed ${T.border}`, background:'transparent', fontFamily:T.font, fontWeight:800, fontSize:15, color:'#E8631A', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E8631A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Új esemény hozzáadása
+          </button>
+        )}
+      </div>
+
+      {/* Delete confirm */}
+      {deleteConfirm && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+          <div style={{ background:T.surface, borderRadius:24, padding:'24px', maxWidth:300, width:'100%', textAlign:'center' }}>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, marginBottom:8 }}>Törlöd az eseményt?</div>
+            <div style={{ fontFamily:T.font, fontSize:13, color:T.sub, marginBottom:20 }}>Ez nem visszavonható.</div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={() => setDeleteConfirm(null)} style={{ flex:1, padding:'12px', borderRadius:12, border:'none', background:T.border, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, cursor:'pointer' }}>Mégse</button>
+              <button onClick={() => deleteEvent(deleteConfirm)} style={{ flex:1, padding:'12px', borderRadius:12, border:'none', background:'#e84040', fontFamily:T.font, fontWeight:800, fontSize:14, color:'#fff', cursor:'pointer' }}>Törlés</button>
+            </div>
           </div>
         </div>
-        {/* Location with OSM search */}
-        <div style={{ marginBottom:12 }}>
-          <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>📍 Helyszín</div>
-          {!locationUnknown && (
-            <div style={{ position:'relative', marginBottom:8 }}>
-              <div style={{ display:'flex', alignItems:'center', background:T.surface, borderRadius:14, border:`1.5px solid ${T.border}`, overflow:'hidden' }}>
-                <span style={{ padding:'0 10px', fontSize:16, flexShrink:0 }}>🔍</span>
-                <input
-                  value={locationQuery}
-                  onChange={e => searchLocation(e.target.value)}
-                  placeholder="Keress helyszínt…"
-                  style={{ flex:1, padding:'12px 12px 12px 0', border:'none', background:'transparent', fontFamily:T.font, fontSize:15, color:T.ink, outline:'none' }}
-                />
-                {locationSearching && <span style={{ padding:'0 12px', fontSize:13, color:T.sub }}>…</span>}
-              </div>
-              {locationSuggestions.length > 0 && (
-                <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:50, background:T.surface, borderRadius:14, boxShadow:'0 8px 24px rgba(0,0,0,0.18)', marginTop:4, overflow:'hidden' }}>
-                  {locationSuggestions.map((s, i) => (
-                    <div key={i} onClick={() => pickLocation(s)} style={{ padding:'12px 14px', borderBottom: i < locationSuggestions.length-1 ? `1px solid ${T.border}` : 'none', cursor:'pointer', fontFamily:T.font, fontSize:14, color:T.ink, lineHeight:1.3 }}>
-                      <div style={{ fontWeight:700 }}>{s.short}</div>
-                      <div style={{ fontSize:12, color:T.sub, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.label}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          <button onClick={() => { setLocationUnknown(u => !u); setLocationSuggestions([]); }} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 14px', borderRadius:12, border:`1.5px solid ${locationUnknown ? '#E8631A' : T.border}`, background: locationUnknown ? '#E8631A18' : 'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:14, color: locationUnknown ? '#E8631A' : T.sub }}>
-            <div style={{ width:18, height:18, borderRadius:4, border:`2px solid ${locationUnknown ? '#E8631A' : T.sub}`, background: locationUnknown ? '#E8631A' : 'transparent', display:'grid', placeItems:'center', flexShrink:0 }}>
-              {locationUnknown && <svg width="11" height="11" viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-            </div>
-            Még nem tudjuk a helyszínt
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
