@@ -33998,7 +33998,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.657';
+const APP_VERSION = 'v9.658';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -35734,7 +35734,15 @@ function evSave(logs) { try { localStorage.setItem(EV_KEY, JSON.stringify(logs))
 
 function EventLogScreen({ go }) {
   const [events, setEvents] = React.useState(evLoad);
-  const [detail, setDetail] = React.useState(null); // event object
+  const [detail, setDetail] = React.useState(null); // event id
+  const [rsvpSheet, setRsvpSheet] = React.useState(false); // show profile picker
+  const [rsvpStep, setRsvpStep] = React.useState('who'); // 'who' | 'status'
+  const [rsvpProfile, setRsvpProfile] = React.useState(null); // chosen profile
+  const [profiles, setProfiles] = React.useState([]);
+
+  React.useEffect(() => {
+    if (typeof window.getProfiles === 'function') window.getProfiles().then(p => setProfiles(p || []));
+  }, []);
 
   function formatDate(iso) {
     if (!iso) return '—';
@@ -35743,7 +35751,23 @@ function EventLogScreen({ go }) {
     return `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
-  if (detail) {
+  function getDetail() { return events.find(e => e.id === detail) || null; }
+
+  function saveRsvp(status) {
+    if (!rsvpProfile || !detail) return;
+    const next = events.map(ev => ev.id !== detail ? ev : { ...ev, rsvp: { ...(ev.rsvp||{}), [rsvpProfile.name]: status } });
+    setEvents(next);
+    evSave(next);
+    setRsvpSheet(false);
+    setRsvpStep('who');
+    setRsvpProfile(null);
+  }
+
+  const ev = detail ? getDetail() : null;
+
+  if (ev) {
+    const rsvp = ev.rsvp || {};
+    const rsvpEntries = Object.entries(rsvp);
     return (
       <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
         <div style={{ display:'flex', alignItems:'center', padding:'16px 16px 12px', gap:10 }}>
@@ -35752,45 +35776,115 @@ function EventLogScreen({ go }) {
           </button>
           <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink }}>Esemény részletei</div>
         </div>
-        <div style={{ flex:1, overflowY:'auto', padding:'0 16px 32px' }}>
+        <div style={{ flex:1, overflowY:'auto', padding:'0 16px 16px' }}>
           {/* Title */}
-          <div style={{ background:T.surface, borderRadius:18, padding:'18px 18px', marginBottom:12, boxShadow:T.shadow }}>
+          <div style={{ background:T.surface, borderRadius:18, padding:'18px', marginBottom:12, boxShadow:T.shadow }}>
             <div style={{ fontFamily:T.font, fontSize:12, color:'#E8631A', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Esemény neve</div>
-            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink }}>{detail.title}</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink }}>{ev.title}</div>
           </div>
           {/* Description */}
-          {detail.desc && (
-            <div style={{ background:T.surface, borderRadius:18, padding:'18px 18px', marginBottom:12, boxShadow:T.shadow }}>
+          {ev.desc && (
+            <div style={{ background:T.surface, borderRadius:18, padding:'18px', marginBottom:12, boxShadow:T.shadow }}>
               <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Leírás</div>
-              <div style={{ fontFamily:T.font, fontSize:15, color:T.ink, lineHeight:1.5 }}>{detail.desc}</div>
+              <div style={{ fontFamily:T.font, fontSize:15, color:T.ink, lineHeight:1.5 }}>{ev.desc}</div>
             </div>
           )}
-          {/* Date + Location row */}
+          {/* Date + Location */}
           <div style={{ display:'flex', gap:10, marginBottom:12 }}>
             <div style={{ flex:1, background:T.surface, borderRadius:18, padding:'16px', boxShadow:T.shadow }}>
               <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:5 }}>📅 Időpont</div>
-              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>{detail.date ? formatDate(detail.date) : '—'}</div>
+              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>{ev.date ? formatDate(ev.date) : '—'}</div>
             </div>
             <div style={{ flex:1, background:T.surface, borderRadius:18, padding:'16px', boxShadow:T.shadow }}>
               <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:5 }}>📍 Helyszín</div>
-              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>{detail.location || '—'}</div>
+              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>{ev.location || '—'}</div>
             </div>
           </div>
-          {/* RSVP */}
-          {detail.rsvp && Object.keys(detail.rsvp).length > 0 && (
-            <div style={{ background:T.surface, borderRadius:18, padding:'18px', boxShadow:T.shadow }}>
-              <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:12 }}>Ki jön?</div>
-              {Object.entries(detail.rsvp).map(([name, status]) => (
+          {/* RSVP list */}
+          <div style={{ background:T.surface, borderRadius:18, padding:'18px', marginBottom:12, boxShadow:T.shadow }}>
+            <div style={{ display:'flex', alignItems:'center', marginBottom:12 }}>
+              <div style={{ flex:1, fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em' }}>Ki jön?</div>
+              {rsvpEntries.length > 0 && (
+                <div style={{ display:'flex', gap:8, fontFamily:T.font, fontSize:12, color:T.sub }}>
+                  <span style={{ color:'#25b572', fontWeight:700 }}>✅ {rsvpEntries.filter(([,s])=>s==='yes').length}</span>
+                  <span style={{ color:'#c07a10', fontWeight:700 }}>🤔 {rsvpEntries.filter(([,s])=>s==='maybe').length}</span>
+                  <span style={{ color:'#e84040', fontWeight:700 }}>❌ {rsvpEntries.filter(([,s])=>s==='no').length}</span>
+                </div>
+              )}
+            </div>
+            {rsvpEntries.length === 0 && (
+              <div style={{ fontFamily:T.font, fontSize:14, color:T.sub, textAlign:'center', padding:'8px 0' }}>Még senki sem válaszolt.</div>
+            )}
+            {rsvpEntries.map(([name, status]) => {
+              const p = profiles.find(pr => pr.name === name);
+              return (
                 <div key={name} style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+                  <div style={{ width:32, height:32, borderRadius:'50%', background:p?.color||'#888', overflow:'hidden', display:'grid', placeItems:'center', flexShrink:0 }}>
+                    {p?.img ? <img src={p.img} style={{ width:32, height:32, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff' }}>{(name||'?').charAt(0).toUpperCase()}</span>}
+                  </div>
                   <div style={{ flex:1, fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>{name}</div>
                   <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color: status==='yes'?'#25b572':status==='maybe'?'#c07a10':'#e84040' }}>
                     {status==='yes' ? '✅ Jövök' : status==='maybe' ? '🤔 Talán' : '❌ Nem tudok'}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
+          {/* RSVP button */}
+          <button onClick={() => { setRsvpStep('who'); setRsvpProfile(null); setRsvpSheet(true); }} style={{ width:'100%', padding:'15px', borderRadius:16, border:'none', background:'#E8631A', fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff', cursor:'pointer', boxShadow:'0 4px 16px rgba(232,99,26,0.4)' }}>
+            Visszaigazolás
+          </button>
         </div>
+
+        {/* RSVP sheet */}
+        {rsvpSheet && (
+          <div style={{ position:'fixed', inset:0, zIndex:400, display:'flex', flexDirection:'column', justifyContent:'flex-end' }}>
+            <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.5)' }} onClick={() => setRsvpSheet(false)} />
+            <div style={{ position:'relative', background:T.surface, borderTopLeftRadius:28, borderTopRightRadius:28, padding:'20px 20px 40px', maxHeight:'80vh', overflowY:'auto' }}>
+              <div style={{ width:36, height:4, borderRadius:2, background:T.border, margin:'0 auto 18px' }} />
+              {rsvpStep === 'who' ? (
+                <>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink, marginBottom:4, textAlign:'center' }}>Ki vagy?</div>
+                  <div style={{ fontFamily:T.font, fontSize:13, color:T.sub, marginBottom:20, textAlign:'center' }}>Válaszd ki a profilod</div>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:12 }}>
+                    {profiles.map(p => (
+                      <button key={p.name} onClick={() => { setRsvpProfile(p); setRsvpStep('status'); }} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, padding:'14px 8px', borderRadius:16, border:`2px solid ${T.border}`, background:T.bg, cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
+                        <div style={{ width:52, height:52, borderRadius:'50%', background:p.color||'#888', overflow:'hidden', display:'grid', placeItems:'center' }}>
+                          {p.img ? <img src={p.img} style={{ width:52, height:52, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:'#fff' }}>{(p.name||'?').charAt(0).toUpperCase()}</span>}
+                        </div>
+                        <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, textAlign:'center', lineHeight:1.2 }}>{p.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', marginBottom:20 }}>
+                    <div style={{ width:60, height:60, borderRadius:'50%', background:rsvpProfile?.color||'#888', overflow:'hidden', display:'grid', placeItems:'center', marginBottom:10 }}>
+                      {rsvpProfile?.img ? <img src={rsvpProfile.img} style={{ width:60, height:60, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:24, color:'#fff' }}>{(rsvpProfile?.name||'?').charAt(0).toUpperCase()}</span>}
+                    </div>
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink }}>{rsvpProfile?.name}</div>
+                    <div style={{ fontFamily:T.font, fontSize:13, color:T.sub, marginTop:4 }}>Mi a válaszod?</div>
+                  </div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    <button onClick={() => saveRsvp('yes')} style={{ padding:'16px', borderRadius:16, border:'none', background:'#25b57218', fontFamily:T.font, fontWeight:800, fontSize:16, color:'#25b572', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+                      <span style={{ fontSize:22 }}>✅</span> Jövök
+                    </button>
+                    <button onClick={() => saveRsvp('maybe')} style={{ padding:'16px', borderRadius:16, border:'none', background:'#c07a1018', fontFamily:T.font, fontWeight:800, fontSize:16, color:'#c07a10', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+                      <span style={{ fontSize:22 }}>🤔</span> Talán nem tudok
+                    </button>
+                    <button onClick={() => saveRsvp('no')} style={{ padding:'16px', borderRadius:16, border:'none', background:'#e8404018', fontFamily:T.font, fontWeight:800, fontSize:16, color:'#e84040', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+                      <span style={{ fontSize:22 }}>❌</span> Nem tudok menni
+                    </button>
+                  </div>
+                  <button onClick={() => setRsvpStep('who')} style={{ marginTop:14, width:'100%', padding:'12px', borderRadius:14, border:'none', background:'transparent', fontFamily:T.font, fontSize:14, color:T.sub, cursor:'pointer' }}>
+                    ← Vissza
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
