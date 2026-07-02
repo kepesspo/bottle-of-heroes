@@ -34001,7 +34001,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.698';
+const APP_VERSION = 'v9.699';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -35772,8 +35772,18 @@ function EventCalendarView({ events, calMonth, setCalMonth, setDetail }) {
   const colorMap = {};
   monthEvs.forEach(ev => { colorMap[ev.id] = 0; });
 
+  const swipeStartX = React.useRef(null);
+  function onSwipeStart(e) { swipeStartX.current = e.touches[0].clientX; }
+  function onSwipeEnd(e) {
+    if (swipeStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - swipeStartX.current;
+    swipeStartX.current = null;
+    if (Math.abs(dx) < 50) return;
+    if (dx < 0) setCalMonth(new Date(year, month+1, 1));
+    else setCalMonth(new Date(year, month-1, 1));
+  }
   return (
-    <div style={{ flex:1, overflowY:'auto', padding:'6px 6px 24px' }}>
+    <div style={{ flex:1, overflowY:'auto', padding:'6px 6px 24px' }} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
         <button onClick={() => setCalMonth(new Date(year, month-1, 1))} style={{ width:26, height:26, borderRadius:7, border:'none', background:T.surface, cursor:'pointer', display:'grid', placeItems:'center', boxShadow:T.shadow }}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
