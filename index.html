@@ -34001,7 +34001,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.671';
+const APP_VERSION = 'v9.672';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -36266,12 +36266,43 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
             </div>
           </div>
         </div>
-        {/* Top-left: version */}
+        {/* Top-left: version + event shortcut */}
         <div style={{ position:'absolute', top:14, left:18, zIndex:10, display:'flex', flexDirection:'column', gap:8, alignItems:'flex-start' }}>
           <div style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'5px 12px', background:T.surface, borderRadius:999, boxShadow:T.shadow, fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', whiteSpace:'nowrap' }}>
             <span style={{ width:6, height:6, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
             {APP_VERSION}
           </div>
+          {/* DNR Events shortcut card */}
+          {(() => {
+            const [nextEv, setNextEv] = React.useState(null);
+            React.useEffect(() => {
+              const col = evDb();
+              if (!col) { try { const all = evLoad(); const future = all.filter(e=>e.date&&new Date(e.date)>=new Date()).sort((a,b)=>new Date(a.date)-new Date(b.date)); setNextEv(future[0]||null); } catch(e){} return; }
+              const unsub = col.orderBy('createdAt','desc').onSnapshot(snap => {
+                const docs = snap.docs.map(d=>({id:d.id,...d.data()}));
+                const future = docs.filter(e=>e.date&&new Date(e.date)>=new Date()).sort((a,b)=>new Date(a.date)-new Date(b.date));
+                setNextEv(future[0]||null);
+              }, ()=>{});
+              return ()=>unsub();
+            }, []);
+            const dLeft = nextEv?.date ? Math.ceil((new Date(nextEv.date)-new Date())/86400000) : null;
+            const dTag = dLeft===0?'Ma!':dLeft===1?'Holnap':dLeft!=null?`${dLeft} nap`:null;
+            return (
+              <button onClick={()=>go('log')} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:T.surface, borderRadius:16, border:'none', boxShadow:T.shadow, cursor:'pointer', WebkitTapHighlightColor:'transparent', maxWidth:180 }}>
+                <div style={{ width:36, height:36, borderRadius:10, background:'#E8631A', display:'grid', placeItems:'center', flexShrink:0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="12" y2="15"/></svg>
+                </div>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.ink, lineHeight:1 }}>DNR események</div>
+                  {nextEv ? (
+                    <div style={{ fontFamily:T.font, fontSize:11, color:'#E8631A', fontWeight:700, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{dTag} · {nextEv.title}</div>
+                  ) : (
+                    <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, marginTop:2 }}>Nincs közelgő</div>
+                  )}
+                </div>
+              </button>
+            );
+          })()}
           {resumeRoomData && onResume && (
             <button onClick={() => onResume(resumeRoomData)} style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 14px', borderRadius:999, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer', boxShadow:T.shadowLift, animation:'pulse 2s infinite' }}>
               <span style={{ fontSize:16 }}>🏓</span> {t('continuation')}
