@@ -34001,7 +34001,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.682';
+const APP_VERSION = 'v9.683';
 
 // ── Service Worker + Notification permission ──
 if ('serviceWorker' in navigator) {
@@ -36025,11 +36025,13 @@ function EventLogScreen({ go, goEdit }) {
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
       <AppBar title="Események" onBack={() => go('home')} />
-      {/* View switcher */}
-      <div style={{ display:'flex', justifyContent:'center', padding:'10px 16px 0' }}>
-        <div style={{ display:'flex', background:T.bgSoft||T.border, borderRadius:16, padding:4, gap:0 }}>
-          {[['list','☰ Lista'],['calendar','📅 Naptár']].map(([key,label]) => (
-            <button key={key} onClick={() => setEvView(key)} style={{ padding:'9px 22px', borderRadius:12, border:'none', fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer', background: evView===key ? T.mint : 'transparent', color: evView===key ? '#fff' : T.sub, boxShadow: 'none', transition:'all .2s', WebkitTapHighlightColor:'transparent' }}>{label}</button>
+      {/* View switcher — full width, stats style */}
+      <div style={{ padding:'10px 16px 0' }}>
+        <div style={{ display:'flex', background:T.surface, borderRadius:18, padding:4, gap:0, boxShadow:T.shadow }}>
+          {[['list','☰','Lista'],['calendar','📅','Naptár']].map(([key,icon,label]) => (
+            <button key={key} onClick={() => setEvView(key)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:7, padding:'13px 0', borderRadius:14, border:'none', fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer', background: evView===key ? T.mint : 'transparent', color: evView===key ? '#fff' : T.sub, transition:'all .2s', WebkitTapHighlightColor:'transparent' }}>
+              <span style={{ fontSize:16 }}>{icon}</span>{label}
+            </button>
           ))}
         </div>
       </div>
@@ -36125,6 +36127,7 @@ function EventForm({ initial, onSave, onCancel }) {
   const [desc, setDesc] = React.useState(initial?.desc || '');
   const [date, setDate] = React.useState(initial?.date ? initial.date.slice(0,16) : '');
   const [dateTo, setDateTo] = React.useState(initial?.dateTo ? initial.dateTo.slice(0,16) : '');
+  const [allDay, setAllDay] = React.useState(initial?.allDay || false);
   const [locationUnknown, setLocationUnknown] = React.useState(initial ? !initial.location : false);
   const [location, setLocation] = React.useState(initial?.location || '');
   const [locationQuery, setLocationQuery] = React.useState(initial?.location || '');
@@ -36153,7 +36156,7 @@ function EventForm({ initial, onSave, onCancel }) {
   function submit() {
     if (!title.trim() || saving) return;
     setSaving(true);
-    onSave({ title: title.trim(), desc: desc.trim(), date: date || null, dateTo: dateTo || null, location: locationUnknown ? '' : location.trim() }, () => setSaving(false));
+    onSave({ title: title.trim(), desc: desc.trim(), date: date || null, dateTo: dateTo || null, allDay, location: locationUnknown ? '' : location.trim() }, () => setSaving(false));
   }
 
   return (
@@ -36167,16 +36170,21 @@ function EventForm({ initial, onSave, onCancel }) {
         <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Mit kell tudni az eseményről?" rows={2} style={{ width:'100%', boxSizing:'border-box', padding:'12px 13px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none', resize:'none' }} />
       </div>
       <div style={{ marginBottom:10 }}>
-        <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:5 }}>📅 Időpont</div>
+        <div style={{ display:'flex', alignItems:'center', marginBottom:8, gap:10 }}>
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em' }}>📅 Időpont</div>
+          <button onClick={() => setAllDay(a=>!a)} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 11px', borderRadius:999, border:`1.5px solid ${allDay ? T.mint : T.border}`, background: allDay ? T.mint+'22' : 'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:12, color: allDay ? T.mint : T.sub, WebkitTapHighlightColor:'transparent' }}>
+            {allDay ? '✓' : '○'} Egész nap
+          </button>
+        </div>
         <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:6 }}>
           <span style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, flexShrink:0, width:28 }}>Től</span>
           <input type="date" value={date ? date.slice(0,10) : ''} onChange={e => setDate(prev => e.target.value + (prev && prev.length>10 ? prev.slice(10) : 'T00:00'))} style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'10px 10px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
-          <input type="time" value={date ? date.slice(11,16) : ''} onChange={e => setDate(prev => (prev ? prev.slice(0,10) : new Date().toISOString().slice(0,10)) + 'T' + e.target.value)} style={{ width:90, boxSizing:'border-box', padding:'10px 10px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+          {!allDay && <input type="time" value={date ? date.slice(11,16) : ''} onChange={e => setDate(prev => (prev ? prev.slice(0,10) : new Date().toISOString().slice(0,10)) + 'T' + e.target.value)} style={{ width:90, boxSizing:'border-box', padding:'10px 10px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />}
         </div>
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
           <span style={{ fontFamily:T.font, fontSize:12, color:T.sub, fontWeight:700, flexShrink:0, width:28 }}>Ig</span>
           <input type="date" value={dateTo ? dateTo.slice(0,10) : ''} onChange={e => setDateTo(prev => e.target.value + (prev && prev.length>10 ? prev.slice(10) : 'T00:00'))} style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'10px 10px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
-          <input type="time" value={dateTo ? dateTo.slice(11,16) : ''} onChange={e => setDateTo(prev => (prev ? prev.slice(0,10) : (date ? date.slice(0,10) : new Date().toISOString().slice(0,10))) + 'T' + e.target.value)} style={{ width:90, boxSizing:'border-box', padding:'10px 10px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+          {!allDay && <input type="time" value={dateTo ? dateTo.slice(11,16) : ''} onChange={e => setDateTo(prev => (prev ? prev.slice(0,10) : (date ? date.slice(0,10) : new Date().toISOString().slice(0,10))) + 'T' + e.target.value)} style={{ width:90, boxSizing:'border-box', padding:'10px 10px', borderRadius:13, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />}
         </div>
       </div>
       <div style={{ marginBottom:14 }}>
