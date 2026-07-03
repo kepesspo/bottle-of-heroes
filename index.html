@@ -33617,7 +33617,8 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   // Detect events deep-link
   var _isEventsDeepLink = (location.search.indexOf('screen=events') !== -1 || location.search.indexOf('screen=calendar') !== -1);
   if (_isEventsDeepLink) {
-    t = themes['ice'] || t;
+    var _spEvTh = localStorage.getItem('boh_events_theme') || 'ice';
+    t = themes[_spEvTh] || themes['ice'] || t;
     var evLogoWrap = document.getElementById('splash-events-logo-wrap');
     var mainLogoWrap = document.getElementById('splash-logo-wrap');
     var titleWrap = document.getElementById('splash-title-wrap');
@@ -33901,6 +33902,19 @@ window.triggerHaptic = function() {
   window.setAnnouncement = function(data) {
     return db.collection('config').doc('announcement').set(data).catch(function(e) { console.warn('setAnnouncement', e); });
   };
+  window.getEventsTheme = function() {
+    return db.collection('config').doc('eventsTheme').get().then(function(d) {
+      return d.exists ? (d.data().theme || 'ice') : 'ice';
+    }).catch(function() { return 'ice'; });
+  };
+  window.setEventsTheme = function(theme) {
+    return db.collection('config').doc('eventsTheme').set({ theme: theme }).catch(function(e) { console.warn('setEventsTheme', e); });
+  };
+  window.onEventsTheme = function(cb) {
+    return db.collection('config').doc('eventsTheme').onSnapshot(function(d) {
+      cb(d.exists ? (d.data().theme || 'ice') : 'ice');
+    });
+  };
   window.onAnnouncement = function(cb) {
     return db.collection('config').doc('announcement').onSnapshot(function(d) {
       cb(d.exists ? d.data() : null);
@@ -34076,7 +34090,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.733';
+const APP_VERSION = 'v9.734';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -34245,7 +34259,7 @@ const THEMES = {
 
 let T = THEMES[localStorage.getItem('boh_theme')] || THEMES['warm'];
 if (!T) T = THEMES['warm'];
-if (location.search.indexOf('screen=events') !== -1 || location.search.indexOf('screen=calendar') !== -1) { T = THEMES['ice']; }
+if (location.search.indexOf('screen=events') !== -1 || location.search.indexOf('screen=calendar') !== -1) { var _evTh = localStorage.getItem('boh_events_theme') || 'ice'; T = THEMES[_evTh] || THEMES['ice']; }
 (function() {
   const bg = T.bg;
   document.documentElement.style.setProperty('--app-bg', bg);
@@ -35941,7 +35955,7 @@ function EventCalendarView({ events, calMonth, setCalMonth, setDetail }) {
 // ── AdminScreen ────────────────────────────────────────────────────────────────
 function AdminScreen({ go }) {
   const [tab, setTab] = React.useState('profiles');
-  const TABS = [['profiles','Profilok'],['events','Események'],['db','Adatbázis'],['games','Játékok'],['rooms','Szobák'],['message','Hirdetmény']];
+  const TABS = [['profiles','Profilok'],['events','Események'],['db','Adatbázis'],['games','Játékok'],['rooms','Szobák'],['message','Hirdetmény'],['settings','Beállítások']];
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
@@ -35963,6 +35977,7 @@ function AdminScreen({ go }) {
         {tab === 'games'    && <AdminGames />}
         {tab === 'rooms'    && <AdminRooms />}
         {tab === 'message'  && <AdminMessage />}
+        {tab === 'settings' && <AdminSettings />}
       </div>
     </div>
   );
@@ -36317,6 +36332,63 @@ function AdminRooms() {
 }
 
 // ── Admin: Message/Announcement tab ───────────────────────────────────────────
+const THEME_OPTIONS = [
+  { key:'warm',     label:'Meleg',    bg:'#F4C57E', mint:'#4FC2A0' },
+  { key:'dark',     label:'Sötét',    bg:'#2C3554', mint:'#5A7EF0' },
+  { key:'peach',    label:'Barack',   bg:'#FFE8D8', mint:'#4FC2A0' },
+  { key:'lemon',    label:'Citrom',   bg:'#F8F8D8', mint:'#4FC2A0' },
+  { key:'ice',      label:'Jég',      bg:'#E8F4FF', mint:'#3B82F6' },
+  { key:'jade',     label:'Jade',     bg:'#B8E8C8', mint:'#22A85A' },
+  { key:'slate',    label:'Palakő',   bg:'#1E2A38', mint:'#6EA8D0' },
+  { key:'midnight', label:'Éjfél',    bg:'#28204A', mint:'#A07AE8' },
+];
+
+function AdminSettings() {
+  const [evTheme, setEvTheme] = React.useState('ice');
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    if (typeof window.onEventsTheme === 'function') {
+      const unsub = window.onEventsTheme(t => {
+        setEvTheme(t);
+        try { localStorage.setItem('boh_events_theme', t); } catch(e) {}
+      });
+      return () => unsub();
+    }
+  }, []);
+
+  function save(theme) {
+    setSaving(true);
+    try { localStorage.setItem('boh_events_theme', theme); } catch(e) {}
+    window.setEventsTheme && window.setEventsTheme(theme).then(() => setSaving(false)).catch(() => setSaving(false));
+  }
+
+  return (
+    <div style={{ padding:16 }}>
+      <div style={{ background:T.surface, borderRadius:16, padding:16, boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:4 }}>Események oldal témája</div>
+        <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginBottom:16 }}>Ez a téma jelenik meg a <span style={{ fontFamily:'monospace', fontSize:11, background:T.surfaceMuted, padding:'1px 5px', borderRadius:4 }}>?screen=events</span> URL-en.</div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10 }}>
+          {THEME_OPTIONS.map(th => {
+            const sel = evTheme === th.key;
+            return (
+              <div key={th.key} onClick={() => !saving && save(th.key)} style={{ cursor:'pointer', borderRadius:14, overflow:'hidden', outline: sel ? `2.5px solid ${T.mint}` : '2.5px solid transparent', outlineOffset:2, transition:'outline-color .15s', opacity: saving ? 0.6 : 1 }}>
+                <div style={{ height:44, background:th.bg, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <div style={{ width:20, height:20, borderRadius:'50%', background:th.mint }} />
+                </div>
+                <div style={{ background:T.surfaceMuted, padding:'5px 4px', textAlign:'center', fontFamily:T.font, fontWeight: sel ? 900 : 600, fontSize:11, color: sel ? T.mint : T.inkSoft }}>
+                  {th.label}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {saving && <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, textAlign:'center', marginTop:10 }}>Mentés…</div>}
+      </div>
+    </div>
+  );
+}
+
 function AdminMessage() {
   const [title, setTitle] = React.useState('');
   const [body, setBody] = React.useState('');
