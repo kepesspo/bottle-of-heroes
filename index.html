@@ -34054,7 +34054,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.719';
+const APP_VERSION = 'v9.720';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -36809,8 +36809,11 @@ function EventForm({ initial, onSave, onCancel }) {
 
   function pickLocation(s) { setLocation(s.label); setLocationQuery(s.short); setLocationSuggestions([]); }
 
+  const [titleTouched, setTitleTouched] = React.useState(false);
+  const titleErr = titleTouched && !title.trim();
+
   function submit() {
-    if (!title.trim() || saving) return;
+    if (!title.trim() || saving) { setTitleTouched(true); return; }
     setSaving(true);
     onSave({ title: title.trim(), desc: desc.trim(), date: date || null, dateTo: dateTo || null, allDay, location: locationUnknown ? '' : location.trim(), creator: creator || null }, () => setSaving(false));
   }
@@ -36848,9 +36851,12 @@ function EventForm({ initial, onSave, onCancel }) {
       )}
 
       {/* Név */}
-      <div style={card}>
-        {label('Esemény neve')}
-        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="pl. Pénteki parti" style={inpStyle} />
+      <div style={{ ...card, border: titleErr ? '1.5px solid #ef4444' : '1.5px solid transparent' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+          {label('Esemény neve')}
+          {titleErr && <div style={{ fontFamily:T.font, fontSize:11, color:'#ef4444', fontWeight:700 }}>Kötelező mező</div>}
+        </div>
+        <input value={title} onChange={e => { setTitle(e.target.value); setTitleTouched(true); }} onBlur={() => setTitleTouched(true)} placeholder="pl. Pénteki parti" style={{ ...inpStyle, outline: titleErr ? '1.5px solid #ef4444' : 'none' }} />
       </div>
 
       {/* Leírás */}
