@@ -34031,7 +34031,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.705';
+const APP_VERSION = 'v9.706';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -35932,6 +35932,7 @@ function AdminProfiles() {
   const [saving, setSaving] = React.useState(false);
   const [deleting, setDeleting] = React.useState(null);
   const [hiddenProfs, setHiddenProfs] = React.useState([]);
+  const [avatarImg, setAvatarImg] = React.useState(null);
 
   function load() {
     setLoading(true);
@@ -35955,9 +35956,19 @@ function AdminProfiles() {
   function save() {
     if (!name.trim() || saving) return;
     setSaving(true);
-    window.saveProfile({ name: name.trim(), color }).then(() => {
-      setSaving(false); setShowForm(false); setName(''); setColor('#E8631A'); load();
+    const prof = { name: name.trim(), color };
+    if (avatarImg) prof.img = avatarImg;
+    window.saveProfile(prof).then(() => {
+      setSaving(false); setShowForm(false); setName(''); setColor('#E8631A'); setAvatarImg(null); load();
     }).catch(() => setSaving(false));
+  }
+
+  function pickAvatar(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => setAvatarImg(ev.target.result);
+    reader.readAsDataURL(file);
   }
 
   function deleteProfile(id) {
@@ -35981,6 +35992,18 @@ function AdminProfiles() {
               <div key={c} onClick={() => setColor(c)} style={{ width:32, height:32, borderRadius:'50%', background:c, cursor:'pointer', boxShadow: color===c ? `0 0 0 3px ${T.bg}, 0 0 0 5px ${c}` : 'none', transition:'box-shadow .15s' }} />
             ))}
           </div>
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>Avatar kép (opcionális)</div>
+          <label style={{ display:'flex', alignItems:'center', gap:12, marginBottom:14, cursor:'pointer' }}>
+            <div style={{ width:56, height:56, borderRadius:14, background: avatarImg ? 'transparent' : T.border, display:'grid', placeItems:'center', overflow:'hidden', flexShrink:0, border:`2px dashed ${avatarImg ? T.mint : T.border}` }}>
+              {avatarImg ? <img src={avatarImg} style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={T.sub} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>}
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.mint }}>Kép kiválasztása</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, marginTop:2 }}>JPG, PNG — a készülékről</div>
+            </div>
+            {avatarImg && <button type="button" onClick={e => { e.preventDefault(); setAvatarImg(null); }} style={{ width:28, height:28, borderRadius:8, border:'none', background:'#fef2f2', display:'grid', placeItems:'center', cursor:'pointer' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>}
+            <input type="file" accept="image/*" onChange={pickAvatar} style={{ display:'none' }} />
+          </label>
           <div style={{ display:'flex', gap:8 }}>
             <button onClick={() => setShowForm(false)} style={{ flex:1, padding:'11px', borderRadius:12, border:`1.5px solid ${T.border}`, background:'transparent', fontFamily:T.font, fontWeight:700, fontSize:14, color:T.sub, cursor:'pointer' }}>Mégsem</button>
             <button onClick={save} disabled={saving||!name.trim()} style={{ flex:2, padding:'11px', borderRadius:12, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', cursor:'pointer', opacity:saving||!name.trim()?0.6:1 }}>
@@ -35995,7 +36018,13 @@ function AdminProfiles() {
         <div style={{ textAlign:'center', padding:32, color:T.sub, fontFamily:T.font, fontSize:14 }}>Még nincs profil</div>
       ) : profiles.map(p => (
         <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, background:T.surface, borderRadius:14, padding:'12px 14px', marginBottom:8, boxShadow:T.shadow }}>
-          <div style={{ width:12, height:12, borderRadius:'50%', background:p.color||'#888', flexShrink:0 }} />
+          {p.img ? (
+            <div style={{ width:38, height:38, borderRadius:10, overflow:'hidden', flexShrink:0 }}>
+              <img src={p.img} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+            </div>
+          ) : (
+            <div style={{ width:12, height:12, borderRadius:'50%', background:p.color||'#888', flexShrink:0 }} />
+          )}
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>{p.name}</div>
             {p.nickname && <div style={{ fontFamily:T.font, fontSize:12, color:T.sub }}>{p.nickname}</div>}
