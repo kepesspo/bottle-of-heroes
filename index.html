@@ -34076,7 +34076,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.730';
+const APP_VERSION = 'v9.731';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -37264,21 +37264,11 @@ function PlayersScreen({ players, setPlayers, go }) {
 
 
 
-  // Seed/sync Firestore profiles — fix ID-vel frissít, régi auto-ID-sokat törli
+  // Seed preset profiles to Firestore (fixed IDs) — do NOT delete custom admin profiles
   React.useEffect(() => {
-    if (typeof window.saveProfile !== 'function' || typeof window.getProfiles !== 'function') return;
-    // Először mentsük a preset profilokat fix ID-kkel
+    if (typeof window.saveProfile !== 'function') return;
     PRESET_PLAYERS.forEach(p => {
       window.saveProfile({ id: p.id, name: p.name, nickname: p.nickname, color: p.color, avatarId: p.avatarId || null, img: p.img || (p.imgKey ? (typeof IMGS !== 'undefined' ? IMGS[p.imgKey] : null) : null) });
-    });
-    // Majd töröljük a régi, nem preset_ ID-s profilokat
-    const presetIds = new Set(PRESET_PLAYERS.map(p => p.id));
-    window.getProfiles().then(existing => {
-      existing.forEach(prof => {
-        if (!presetIds.has(prof.id) && typeof firebase !== 'undefined') {
-          firebase.firestore().collection('profiles').doc(prof.id).delete().catch(() => {});
-        }
-      });
     });
   }, []);
 
