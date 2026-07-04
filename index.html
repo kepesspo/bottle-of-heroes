@@ -34088,7 +34088,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.752';
+const APP_VERSION = 'v9.753';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -35946,14 +35946,18 @@ function EventCalendarView({ events, calMonth, setCalMonth, setDetail, evT: calE
               : `${new Date(ev.date).getDate()}. ${ev.allDay?'Egész nap':new Date(ev.date).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit'})}`;
             const yesCount = ev.rsvp ? Object.values(ev.rsvp).filter(s=>s==='yes').length : 0;
             return (
-              <div key={ev.id} onClick={() => setDetail(ev.id)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background:T.surface, borderRadius:12, marginBottom:6, boxShadow:T.shadow, cursor:'pointer' }}>
-                <div style={{ width:4, alignSelf:'stretch', borderRadius:4, background:col, flexShrink:0 }} />
-                <div style={{ width:34, height:34, borderRadius:8, background:col, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', lineHeight:1 }}>{new Date(ev.date).getDate()}</span>
+              <div key={ev.id} onClick={() => setDetail(ev.id)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background: ev.cancelled ? '#fef2f2' : T.surface, borderRadius:12, marginBottom:6, boxShadow:T.shadow, cursor:'pointer', border: ev.cancelled ? '1.5px solid #ef4444' : '1.5px solid transparent' }}>
+                <div style={{ width:4, alignSelf:'stretch', borderRadius:4, background: ev.cancelled ? '#ef4444' : col, flexShrink:0 }} />
+                <div style={{ width:34, height:34, borderRadius:8, background: ev.cancelled ? '#ef4444' : col, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', lineHeight:1 }}>{ev.cancelled ? '✕' : new Date(ev.date).getDate()}</span>
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ev.title}</div>
-                  <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, marginTop:1 }}>{dateLabel}{ev.location?' · '+ev.location.split(',')[0]:''}</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color: ev.cancelled ? '#ef4444' : T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textDecoration: ev.cancelled ? 'line-through' : 'none', flex:1, minWidth:0 }}>{ev.title}</div>
+                    {ev.cancelled && <div style={{ fontFamily:T.font, fontWeight:900, fontSize:9, color:'#fff', background:'#ef4444', borderRadius:5, padding:'2px 5px', flexShrink:0 }}>ELMARAD</div>}
+                  </div>
+                  </div>
+                  <div style={{ fontFamily:T.font, fontSize:11, color: ev.cancelled ? '#ef4444' : T.sub, marginTop:1 }}>{dateLabel}{ev.location?' · '+ev.location.split(',')[0]:''}</div>
                   <div style={{ fontFamily:T.font, fontSize:11, marginTop:3 }}>
                     {yesCount > 0
                       ? <span style={{ color:T.mint, fontWeight:700 }}>✓ {yesCount} jön</span>
@@ -36858,11 +36862,12 @@ function EventLogScreen({ go, goEdit, deepLink }) {
             ? (() => { const s=new Date(ev.date); const e=new Date(ev.dateTo); return s.toLocaleDateString('hu-HU',{month:'short',day:'numeric'})+' – '+e.toLocaleDateString('hu-HU',{month:'short',day:'numeric'}); })()
             : ev.allDay ? 'Egész nap' : timeStr || '';
           return (
-            <div key={ev.id} onClick={() => setDetail(ev.id)} style={{ background:T.surface, borderRadius:16, marginBottom:8, boxShadow:T.shadow, cursor:'pointer', WebkitTapHighlightColor:'transparent', overflow:'hidden' }}>
+            <div key={ev.id} onClick={() => setDetail(ev.id)} style={{ background: ev.cancelled ? '#fef2f2' : T.surface, borderRadius:16, marginBottom:8, boxShadow:T.shadow, cursor:'pointer', WebkitTapHighlightColor:'transparent', overflow:'hidden', border: ev.cancelled ? '1.5px solid #ef4444' : '1.5px solid transparent' }}>
+              {ev.cancelled && <div style={{ background:'#ef4444', padding:'4px 14px', fontFamily:T.font, fontWeight:900, fontSize:11, color:'#fff', letterSpacing:'0.08em', textAlign:'center' }}>ELMARAD</div>}
               {/* Top row */}
               <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 12px 10px' }}>
                 {/* Date badge */}
-                <div style={{ width:44, height:44, borderRadius:12, background:'#E8631A', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                <div style={{ width:44, height:44, borderRadius:12, background: ev.cancelled ? '#ef4444' : '#E8631A', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                   {d ? (
                     <>
                       <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff', lineHeight:1 }}>{d.getDate()}</span>
@@ -36874,7 +36879,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
                 </div>
                 {/* Title + meta */}
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, lineHeight:1.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ev.title}</div>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color: ev.cancelled ? '#ef4444' : T.ink, lineHeight:1.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textDecoration: ev.cancelled ? 'line-through' : 'none' }}>{ev.title}</div>
                   <div style={{ display:'flex', gap:6, marginTop:3, flexWrap:'wrap', alignItems:'center' }}>
                     {metaLine && <span style={{ fontFamily:T.font, fontSize:12, color:T.sub, display:'flex', alignItems:'center', gap:2 }}>🕐 {metaLine}</span>}
                     {ev.location
