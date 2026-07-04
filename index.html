@@ -34088,7 +34088,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.746';
+const APP_VERSION = 'v9.748';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -35818,11 +35818,28 @@ const EV_KEY = 'boh_event_log';
 function evLoad() { try { return JSON.parse(localStorage.getItem(EV_KEY) || '[]'); } catch(e) { return []; } }
 function evSave(logs) { try { localStorage.setItem(EV_KEY, JSON.stringify(logs)); } catch(e) {} }
 
-const EventsThemeCtx = React.createContext(null);
-function useEvT() { return React.useContext(EventsThemeCtx) || T; }
+function useEventsTheme() {
+  const [evT, setEvT] = React.useState(() => {
+    const key = localStorage.getItem('boh_events_theme') || 'ice';
+    return THEMES[key] || THEMES['ice'] || THEMES['warm'];
+  });
+  React.useEffect(() => {
+    if (typeof window.onEventsTheme === 'function') {
+      const unsub = window.onEventsTheme(key => {
+        const th = THEMES[key] || THEMES['ice'] || THEMES['warm'];
+        setEvT(th);
+        window.__evT = th;
+        try { localStorage.setItem('boh_events_theme', key); } catch(e) {}
+      });
+      return () => unsub();
+    }
+  }, []);
+  React.useEffect(() => { window.__evT = evT; }, [evT]);
+  return evT;
+}
 
-function EventCalendarView({ events, calMonth, setCalMonth, setDetail }) {
-  const T = useEvT();
+function EventCalendarView({ events, calMonth, setCalMonth, setDetail, evT: calEvT }) {
+  const T = calEvT || window.__evT || THEMES['warm'];
   const HU_DAYS = ['H','K','Sz','Cs','P','Sz','V'];
   const HU_MONTHS = ['Január','Február','Március','Április','Május','Június','Július','Augusztus','Szeptember','Október','November','December'];
   const year = calMonth.getFullYear(), month = calMonth.getMonth();
@@ -36564,20 +36581,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
   const [profiles, setProfiles] = React.useState([]);
   const [evView, setEvView] = React.useState('list'); // 'list' | 'calendar'
   const [calMonth, setCalMonth] = React.useState(() => { const n=new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); });
-  const [evT, setEvT] = React.useState(() => {
-    const key = localStorage.getItem('boh_events_theme') || 'ice';
-    return THEMES[key] || THEMES['ice'] || T;
-  });
-  React.useEffect(() => {
-    if (typeof window.onEventsTheme === 'function') {
-      const unsub = window.onEventsTheme(key => {
-        const th = THEMES[key] || THEMES['ice'] || T;
-        setEvT(th);
-        try { localStorage.setItem('boh_events_theme', key); } catch(e) {}
-      });
-      return () => unsub();
-    }
-  }, []);
+  const evT = useEventsTheme();
   // Shadow global T with reactive events theme inside this component
   const T = evT;
 
@@ -36805,7 +36809,6 @@ function EventLogScreen({ go, goEdit, deepLink }) {
   };
 
   return (
-    <EventsThemeCtx.Provider value={evT}>
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }} {...evSwipeHandlers}>
       <AppBar title="Események" onBack={deepLink ? null : () => go('home')} right={
         <button onClick={() => go('create')} style={{ width:38, height:38, borderRadius:11, border:'none', background:T.mint, display:'grid', placeItems:'center', cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
@@ -36827,7 +36830,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
         const endOf = ev => { const d = ev.dateTo ? new Date(ev.dateTo) : (ev.date ? new Date(ev.date) : null); return d; };
         const isPast = ev => { const d = endOf(ev); return d ? d < now : false; };
         const shown = evView === 'past' ? [...events].filter(isPast).reverse() : events.filter(ev => !isPast(ev));
-        if (evView === 'calendar') return <EventCalendarView events={events} calMonth={calMonth} setCalMonth={setCalMonth} setDetail={setDetail} />;
+        if (evView === 'calendar') return <EventCalendarView events={events} calMonth={calMonth} setCalMonth={setCalMonth} setDetail={setDetail} evT={evT} />;
         return <div style={{ flex:1, overflowY:'auto', padding:'16px 16px 32px' }}>
         {shown.length === 0 && (
           <div style={{ textAlign:'center', padding:'64px 24px', color:T.sub, fontFamily:T.font, fontSize:15, lineHeight:1.6 }}>
@@ -36914,13 +36917,12 @@ function EventLogScreen({ go, goEdit, deepLink }) {
         })}
       </div>; })()}
     </div>
-    </EventsThemeCtx.Provider>
   );
 }
 
 // ── Shared event form (used in admin screen) ──────────────────────────────────
-function EventForm({ initial, onSave, onCancel }) {
-  const T = useEvT();
+function EventForm({ initial, onSave, onCancel, evT: formEvT }) {
+  const T = formEvT || window.__evT || THEMES['warm'];
   const [title, setTitle] = React.useState(initial?.title || '');
   const [desc, setDesc] = React.useState(initial?.desc || '');
   const [date, setDate] = React.useState(initial?.date ? initial.date.slice(0,16) : '');
@@ -37086,6 +37088,8 @@ function EventForm({ initial, onSave, onCancel }) {
 
 function EventCreateScreen({ go }) {
   const [saving, setSaving] = React.useState(false);
+  const evT = useEventsTheme();
+  const T = evT;
 
   function saveNew(data, done) {
     setSaving(true);
@@ -37099,7 +37103,7 @@ function EventCreateScreen({ go }) {
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
       <AppBar title="Új esemény" onBack={() => go('log')} />
       <div style={{ flex:1, overflowY:'auto', padding:'16px 16px 32px' }}>
-        <EventForm onSave={saveNew} onCancel={() => go('log')} />
+        <EventForm onSave={saveNew} onCancel={() => go('log')} evT={evT} />
       </div>
     </div>
   );
