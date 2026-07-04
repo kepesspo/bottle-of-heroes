@@ -34088,7 +34088,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.756';
+const APP_VERSION = 'v9.757';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -36588,8 +36588,8 @@ function EventLogScreen({ go, goEdit, deepLink }) {
   const [evView, setEvView] = React.useState('list'); // 'list' | 'calendar'
   const [calMonth, setCalMonth] = React.useState(() => { const n=new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); });
   const evT = useEventsTheme();
-  // Shadow global T with reactive events theme inside this component
-  const T = evT;
+  // Use events theme only on deep link; otherwise use the app's global theme
+  const T = deepLink ? evT : (THEMES[localStorage.getItem('boh_theme')] || THEMES['warm']);
   // Subscribe to Firestore events collection, ordered by createdAt desc
   React.useEffect(() => {
     const col = evDb();
@@ -36831,7 +36831,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
         const endOf = ev => { const d = ev.dateTo ? new Date(ev.dateTo) : (ev.date ? new Date(ev.date) : null); return d; };
         const isPast = ev => { const d = endOf(ev); return d ? d < now : false; };
         const shown = evView === 'past' ? [...events].filter(isPast).reverse() : events.filter(ev => !isPast(ev));
-        if (evView === 'calendar') return <EventCalendarView events={events} calMonth={calMonth} setCalMonth={setCalMonth} setDetail={setDetail} evT={evT} />;
+        if (evView === 'calendar') return <EventCalendarView events={events} calMonth={calMonth} setCalMonth={setCalMonth} setDetail={setDetail} evT={T} />;
         return <div style={{ flex:1, overflowY:'auto', padding:'16px 16px 32px' }}>
         {shown.length === 0 && (
           <div style={{ textAlign:'center', padding:'64px 24px', color:T.sub, fontFamily:T.font, fontSize:15, lineHeight:1.6 }}>
@@ -37102,10 +37102,10 @@ function EventForm({ initial, onSave, onCancel, evT: formEvT }) {
   );
 }
 
-function EventCreateScreen({ go }) {
+function EventCreateScreen({ go, deepLink }) {
   const [saving, setSaving] = React.useState(false);
   const evT = useEventsTheme();
-  const T = evT;
+  const T = deepLink ? evT : (THEMES[localStorage.getItem('boh_theme')] || THEMES['warm']);
 
   function saveNew(data, done) {
     setSaving(true);
@@ -56711,7 +56711,7 @@ function BottleApp() {
         {screen==='stats'    && <StatsScreen    go={go} onOpenObserver={openObserver} />}
         {screen==='log'      && <EventLogScreen go={go} goEdit={goEdit} deepLink={_deepLink} />}
         {screen==='admin'    && <AdminScreen go={go} />}
-        {screen==='create'   && <EventCreateScreen go={go} editId={editEventId} />}
+        {screen==='create'   && <EventCreateScreen go={go} editId={editEventId} deepLink={_deepLink} />}
         {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
         {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} gameMeta={gameMeta} setGameMeta={setGameMeta} setLastGameRound={setLastGameRound} setScoreHistory={setScoreHistory} />}
