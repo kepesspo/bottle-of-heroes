@@ -34088,7 +34088,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.738';
+const APP_VERSION = 'v9.739';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -36785,15 +36785,20 @@ function EventLogScreen({ go, goEdit, deepLink }) {
           ))}
         </div>
       </div>
-      {evView === 'calendar' ? <EventCalendarView events={events} calMonth={calMonth} setCalMonth={setCalMonth} setDetail={setDetail} /> : <div style={{ flex:1, overflowY:'auto', padding:'16px 16px 32px' }}>
-        {events.length === 0 && (
+      {(() => {
+        const now = new Date(); now.setHours(0,0,0,0);
+        const endOf = ev => { const d = ev.dateTo ? new Date(ev.dateTo) : (ev.date ? new Date(ev.date) : null); return d; };
+        const isPast = ev => { const d = endOf(ev); return d ? d < now : false; };
+        const shown = evView === 'past' ? [...events].filter(isPast).reverse() : events.filter(ev => !isPast(ev));
+        if (evView === 'calendar') return <EventCalendarView events={events} calMonth={calMonth} setCalMonth={setCalMonth} setDetail={setDetail} />;
+        return <div style={{ flex:1, overflowY:'auto', padding:'16px 16px 32px' }}>
+        {shown.length === 0 && (
           <div style={{ textAlign:'center', padding:'64px 24px', color:T.sub, fontFamily:T.font, fontSize:15, lineHeight:1.6 }}>
-            <div style={{ fontSize:48, marginBottom:14 }}>📋</div>
-            Még nincsenek események.<br/>
-            <span style={{ fontSize:13 }}>Tartsd nyomva 5 másodpercig a főoldalon<br/>a napló ikont új esemény létrehozásához.</span>
+            <div style={{ fontSize:48, marginBottom:14 }}>{evView === 'past' ? '🕰️' : '📋'}</div>
+            {evView === 'past' ? 'Még nincs elmúlt esemény.' : 'Még nincsenek közelgő események.'}
           </div>
         )}
-        {events.map((ev) => {
+        {shown.map((ev) => {
           const rsvpEntries = Object.entries(ev.rsvp || {});
           const yesNames = rsvpEntries.filter(([,s])=>s==='yes').map(([n])=>n);
           const maybeCount = rsvpEntries.filter(([,s])=>s==='maybe').length;
@@ -36870,8 +36875,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
             </div>
           );
         })}
-      </div>
-      ; })()}
+      </div>; })()}
     </div>
   );
 }
