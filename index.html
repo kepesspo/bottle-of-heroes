@@ -34088,7 +34088,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.744';
+const APP_VERSION = 'v9.746';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -35818,7 +35818,11 @@ const EV_KEY = 'boh_event_log';
 function evLoad() { try { return JSON.parse(localStorage.getItem(EV_KEY) || '[]'); } catch(e) { return []; } }
 function evSave(logs) { try { localStorage.setItem(EV_KEY, JSON.stringify(logs)); } catch(e) {} }
 
+const EventsThemeCtx = React.createContext(null);
+function useEvT() { return React.useContext(EventsThemeCtx) || T; }
+
 function EventCalendarView({ events, calMonth, setCalMonth, setDetail }) {
+  const T = useEvT();
   const HU_DAYS = ['H','K','Sz','Cs','P','Sz','V'];
   const HU_MONTHS = ['Január','Február','Március','Április','Május','Június','Július','Augusztus','Szeptember','Október','November','December'];
   const year = calMonth.getFullYear(), month = calMonth.getMonth();
@@ -36560,6 +36564,22 @@ function EventLogScreen({ go, goEdit, deepLink }) {
   const [profiles, setProfiles] = React.useState([]);
   const [evView, setEvView] = React.useState('list'); // 'list' | 'calendar'
   const [calMonth, setCalMonth] = React.useState(() => { const n=new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); });
+  const [evT, setEvT] = React.useState(() => {
+    const key = localStorage.getItem('boh_events_theme') || 'ice';
+    return THEMES[key] || THEMES['ice'] || T;
+  });
+  React.useEffect(() => {
+    if (typeof window.onEventsTheme === 'function') {
+      const unsub = window.onEventsTheme(key => {
+        const th = THEMES[key] || THEMES['ice'] || T;
+        setEvT(th);
+        try { localStorage.setItem('boh_events_theme', key); } catch(e) {}
+      });
+      return () => unsub();
+    }
+  }, []);
+  // Shadow global T with reactive events theme inside this component
+  const T = evT;
 
   // Subscribe to Firestore events collection, ordered by createdAt desc
   React.useEffect(() => {
@@ -36785,6 +36805,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
   };
 
   return (
+    <EventsThemeCtx.Provider value={evT}>
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }} {...evSwipeHandlers}>
       <AppBar title="Események" onBack={deepLink ? null : () => go('home')} right={
         <button onClick={() => go('create')} style={{ width:38, height:38, borderRadius:11, border:'none', background:T.mint, display:'grid', placeItems:'center', cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
@@ -36893,11 +36914,13 @@ function EventLogScreen({ go, goEdit, deepLink }) {
         })}
       </div>; })()}
     </div>
+    </EventsThemeCtx.Provider>
   );
 }
 
 // ── Shared event form (used in admin screen) ──────────────────────────────────
 function EventForm({ initial, onSave, onCancel }) {
+  const T = useEvT();
   const [title, setTitle] = React.useState(initial?.title || '');
   const [desc, setDesc] = React.useState(initial?.desc || '');
   const [date, setDate] = React.useState(initial?.date ? initial.date.slice(0,16) : '');
