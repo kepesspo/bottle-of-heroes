@@ -34129,7 +34129,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.772';
+const APP_VERSION = 'v9.773';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -48231,7 +48231,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
     return () => clearTimeout(id);
   }, [countdown]);
 
-  const resetRound = () => { cdStartedRef.current = false; setAnswers({}); setVotes({}); setRoundScores({}); setCountdown(null); setMaxTimer(null); calcCalledRef.current = false; setHostLocalAns({}); hostSubmittedRef.current = false; };
+  const resetRound = () => { cdStartedRef.current = false; setAnswers({}); setVotes({}); setRoundScores({}); setCountdown(null); setMaxTimer(null); calcCalledRef.current = false; setHostLocalAns({}); hostSubmittedRef.current = false; setHostVotes({}); };
   const startWriting = () => { setPhase('writing'); setMaxTimer(TIME_LIMIT); };
   const forceStop = () => { if (!cdStartedRef.current) cdStartedRef.current = true; setCountdown(0); };
 
@@ -48255,7 +48255,10 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
         const vk=`${pid}_${cat.key}`, vm=votes[vk]||{}, vl=Object.values(vm);
         const yes=vl.filter(Boolean).length, no=vl.filter(x=>!x).length;
         if(vl.length>0 && no>yes) return;
-        rs[pid]=(rs[pid]||0)+(vals[v]>1?0:10);
+        // Exclude wrong first letter (digraph-aware)
+        const letterL = letter.toLowerCase();
+        if (!v.startsWith(letterL)) return;
+        rs[pid]=(rs[pid]||0)+(vals[v]>1?5:10);
       });
     });
     setRoundScores(rs);
@@ -48372,22 +48375,24 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
               const val=(ans[cat.key]||'').trim(), vk=`${p.id}_${cat.key}`, vm=votes[vk]||{};
               const yes=Object.values(vm).filter(Boolean).length, no=Object.values(vm).filter(x=>!x).length;
               const isDup = val && dupMap[cat.key].has(val.toLowerCase());
+              const isWrongLetter = val && !val.toLowerCase().startsWith(letter.toLowerCase());
+              const isInvalid = isDup || isWrongLetter;
               const hostVote = hostPlayer && !isHostSelf ? hostVotes[vk] : undefined;
               return (
                 <div key={cat.key} style={{display:'flex',alignItems:'center',gap:6,marginBottom:5,paddingBottom:4,borderBottom:`1px solid ${T.surfaceMuted}`}}>
                   <span style={{fontSize:13,flexShrink:0,width:20,textAlign:'center'}}>{cat.emoji}</span>
                   <span style={{fontFamily:T.font,fontSize:12,fontWeight:T.weightTitle,color:T.inkSoft,width:66,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
-                  <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:13,flex:1,color:isDup?T.coral:val?T.ink:T.inkMute,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:isDup?'line-through':'none',opacity:isDup?0.7:1}}>{val||'—'}</span>
-                  {val && !isDup && !isHostSelf && hostPlayer ? (
+                  <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:13,flex:1,color:isInvalid?T.coral:val?T.ink:T.inkMute,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:isInvalid?'line-through':'none',opacity:isInvalid?0.7:1}}>{val||'—'}</span>
+                  {val && !isInvalid && !isHostSelf && hostPlayer ? (
                     <div style={{display:'flex',gap:3,flexShrink:0,alignItems:'center'}}>
                       <span style={{fontFamily:T.font,fontSize:10,color:T.inkSoft}}>👍{yes} 👎{no}</span>
                       <button onClick={()=>submitHostVote(p.id,cat.key,true)} style={{width:30,height:28,borderRadius:8,border:`1.5px solid ${hostVote===true?T.mint:T.surfaceMuted}`,background:hostVote===true?T.mintSoft:'transparent',cursor:'pointer',fontSize:13,display:'grid',placeItems:'center'}}>👍</button>
                       <button onClick={()=>submitHostVote(p.id,cat.key,false)} style={{width:30,height:28,borderRadius:8,border:`1.5px solid ${hostVote===false?T.coral:T.surfaceMuted}`,background:hostVote===false?T.coralSoft:'transparent',cursor:'pointer',fontSize:13,display:'grid',placeItems:'center'}}>👎</button>
                     </div>
-                  ) : val && !isDup ? (
+                  ) : val && !isInvalid ? (
                     <span style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,flexShrink:0}}>👍{yes} 👎{no}</span>
                   ) : null}
-                  {isDup && <span style={{fontFamily:T.font,fontSize:12,fontWeight:T.weightTitle,color:T.coral,flexShrink:0}}>×</span>}
+                  {isInvalid && <span style={{fontFamily:T.font,fontSize:12,fontWeight:T.weightTitle,color:T.coral,flexShrink:0}}>{isWrongLetter?'✗ betű':'× egyező'}</span>}
                   {val && <a href={`https://www.google.com/search?q=${encodeURIComponent(val)}`} target="_blank" rel="noreferrer" style={{fontSize:13,flexShrink:0,textDecoration:'none',opacity:0.55,lineHeight:1}}>🔍</a>}
                 </div>
               );
@@ -48436,12 +48441,18 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
               <div key={cat.key} style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
                 <span style={{fontSize:14,flexShrink:0,width:22,textAlign:'center'}}>{cat.emoji}</span>
                 <span style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.inkSoft,width:64,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
-                <input
-                  value={hostLocalAns[cat.key]||''}
-                  onChange={e => setHostLocalAns(prev => ({...prev, [cat.key]: e.target.value}))}
-                  placeholder={`${cat.label}...`}
-                  style={{flex:1,padding:'7px 10px',borderRadius:10,border:`1px solid ${T.surfaceMuted}`,background:T.bgSoft,fontFamily:T.font,fontSize:13,color:T.ink,outline:'none'}}
-                />
+                {(()=>{
+                  const hv = hostLocalAns[cat.key]||'';
+                  const hwrong = hv.trim().length > 0 && !hv.trim().toLowerCase().startsWith(letter.toLowerCase());
+                  return (
+                    <input
+                      value={hv}
+                      onChange={e => setHostLocalAns(prev => ({...prev, [cat.key]: e.target.value}))}
+                      placeholder={`${letter}...`}
+                      style={{flex:1,padding:'7px 10px',borderRadius:10,border:`1.5px solid ${hwrong?T.coral:T.surfaceMuted}`,background:T.bgSoft,fontFamily:T.font,fontSize:13,color:hwrong?T.coral:T.ink,outline:'none',textDecoration:hwrong?'line-through':'none'}}
+                    />
+                  );
+                })()}
               </div>
             ))}
             <button
@@ -48714,7 +48725,7 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
               </div>
               {(()=>{
                 const v = localAns[cat.key]||'';
-                const wrongLetter = v.trim().length > 0 && v.trim()[0].toLowerCase() !== letter.toLowerCase();
+                const wrongLetter = v.trim().length > 0 && !v.trim().toLowerCase().startsWith(letter.toLowerCase());
                 return (
                   <input
                     ref={el=>inputRefs.current[idx]=el}
