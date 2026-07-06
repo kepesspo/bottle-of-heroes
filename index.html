@@ -34166,7 +34166,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.801';
+const APP_VERSION = 'v9.802';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -46041,7 +46041,25 @@ function BJGiftOverlay({ pool, recipients, onConfirm, onCancel }) {
 }
 
 // ═══════════════ BLACKJACK — host nézet (a gép oszt) ═══════════════
-function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFooter, onLiveDrinkUpdate }) {
+// ── Kaszinó zseton — kortykészlet vizuál ──
+function BJChipStack({ count, size }) {
+  const s = size || 44;
+  const n = count || 0;
+  const grey = n === 0;
+  const col = grey ? '#B7BCC2' : n <= 5 ? '#F4977A' : n <= 12 ? '#E8B36A' : T.mint;
+  return (
+    <div style={{ width:s, height:s, borderRadius:'50%', background:col, position:'relative', display:'grid', placeItems:'center', flexShrink:0, boxShadow:'0 2px 6px rgba(0,0,0,0.2)' }}>
+      <div style={{ position:'absolute', inset:Math.max(2, Math.round(s*0.05)), borderRadius:'50%', border:`${Math.max(2, Math.round(s*0.065))}px dashed rgba(255,255,255,0.92)`, boxSizing:'border-box' }} />
+      <div style={{ position:'absolute', inset:Math.max(5, Math.round(s*0.2)), borderRadius:'50%', background:'rgba(255,255,255,0.94)' }} />
+      <div style={{ position:'relative', textAlign:'center', lineHeight:1 }}>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:Math.round(s*0.32), color: grey ? '#8a8f94' : col }}>{n}</div>
+        <div style={{ fontSize:Math.max(8, Math.round(s*0.18)), marginTop:1 }}>🍺</div>
+      </div>
+    </div>
+  );
+}
+
+function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFooter, onLiveDrinkUpdate, onSetBuszSwitch }) {
   const isOnline = !!roomCode;
   const [room, setRoom] = React.useState(null);
   const [localState, setLocalState] = React.useState(null);
@@ -46052,6 +46070,12 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
   const hostPlayer = players && players[0];
   const [giftFor, setGiftFor] = React.useState(null); // { pid, pool } — kiszálló nyereség-kiosztása
   const [hostRebuyPick, setHostRebuyPick] = React.useState(null); // pid — újra-beszállás készlet-választó
+  const [hostViewMode, setHostViewMode] = React.useState('host'); // 'host' | 'player' — a házigazda is játszhat
+  const hostSelfIdRef = React.useRef(null); // a host által választott játékos-id, váltások közt megmarad
+  React.useEffect(() => {
+    if (onSetBuszSwitch) onSetBuszSwitch(isOnline ? { fn: () => setHostViewMode(m => m === 'host' ? 'player' : 'host'), badge: 0 } : null);
+  }, [isOnline]);
+  React.useEffect(() => () => { onSetBuszSwitch && onSetBuszSwitch(null); }, []);
   const [hostGiftNotice, setHostGiftNotice] = React.useState(null);
   const hostGiftTsRef = React.useRef(undefined);
   React.useEffect(() => {
@@ -46169,6 +46193,10 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     update({ ...bjState, stacks: { ...(bjState.stacks || {}), [pid]: newStack }, chips: { ...(bjState.chips || {}), [pid]: newStack }, cashedOut: { ...(bjState.cashedOut || {}), [pid]: false } });
   }
 
+  if (isOnline && hostViewMode === 'player' && room) {
+    return <BlackjackObserverView room={room} code={roomCode} onLeave={() => setHostViewMode('host')} keepClaimOnUnmount={true} initialPlayerId={hostSelfIdRef.current} onPlayerIdChange={pid => { hostSelfIdRef.current = pid; }} />;
+  }
+
   if (!bjState) return (
     <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center' }}>
       <span style={{ fontFamily:T.font, fontSize:16, color:T.inkSoft }}>Betöltés…</span>
@@ -46234,7 +46262,10 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
             <BJAvatar p={p} size={32} />
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{p?.name || pid}</div>
-              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>Készlet: {chips} 🍺</div>
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:3 }}>
+                <BJChipStack count={chips} size={34} />
+                <span style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>készlet</span>
+              </div>
             </div>
             {!isOnline && (
               <button onClick={() => update({ ...bjState, bets: { ...bjState.bets, [pid]: Math.max(1, bet - 1) } })} style={{ width:30, height:30, borderRadius:8, border:'none', background:T.surfaceMuted, fontFamily:T.font, fontWeight:900, fontSize:18, cursor:'pointer', color:T.ink }}>−</button>
@@ -46281,7 +46312,11 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
             <div key={pid} style={{ marginBottom:10, background: isTurn ? T.surface : 'transparent', borderRadius:14, padding: isTurn ? '10px 12px' : '4px 2px', border: isTurn ? `2px solid ${T.mint}` : '2px solid transparent', boxShadow: isTurn ? T.shadow : 'none' }}>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
                 <BJAvatar p={p} size={26} />
-                <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink, flex:1 }}>{p?.name || pid} <span style={{ color:T.inkSoft, fontWeight:400 }}>· tét {bjState.bets[pid] || 1} · készlet {(bjState.chips || {})[pid] !== undefined ? bjState.chips[pid] : stackOf(pid)} 🍺</span></span>
+                <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink, flex:1, display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
+                  <span style={{ whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p?.name || pid}</span>
+                  <span style={{ color:T.inkSoft, fontWeight:400, whiteSpace:'nowrap' }}>· tét {bjState.bets[pid] || 1}</span>
+                  <BJChipStack count={(bjState.chips || {})[pid] !== undefined ? bjState.chips[pid] : stackOf(pid)} size={34} />
+                </span>
                 <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color: isBust ? T.coral : isBJ ? T.mint : T.ink }}>
                   {isBust ? 'Bust 💀' : isBJ ? 'BJ! 🂡' : isStood ? `${score} ✋` : score}
                 </span>
@@ -46342,8 +46377,9 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
               </div>
               <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
                 <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color: res.delta < 0 ? T.coral : res.delta > 0 ? T.mint : T.inkSoft }}>{res.label}</span>
-                <span style={{ marginLeft:'auto', fontFamily:T.font, fontSize:13, fontWeight:T.weightTitle, color: res.delta < 0 ? T.coral : res.delta > 0 ? T.mint : T.inkSoft }}>
-                  {res.delta > 0 ? '+' : ''}{res.delta} → {chips} 🍺
+                <span style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, fontFamily:T.font, fontSize:13, fontWeight:T.weightTitle, color: res.delta < 0 ? T.coral : res.delta > 0 ? T.mint : T.inkSoft }}>
+                  <span>{res.delta > 0 ? '+' : ''}{res.delta} →</span>
+                  <BJChipStack count={chips} size={34} />
                 </span>
               </div>
               {broke && (
@@ -46398,12 +46434,12 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
 }
 
 // ═══════════════ BLACKJACK — játékos (telefon) nézet ═══════════════
-function BlackjackObserverView({ room, code, onLeave }) {
+function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initialPlayerId, onPlayerIdChange }) {
   const bj = room.bjState || null;
   const stackOf = pid => ((bj && bj.stacks) || {})[pid] || (bj && bj.startStack) || 10;
   const players = room.players || [];
   const taken = room.bjTakenIds || [];
-  const [playerId, setPlayerId] = React.useState(null);
+  const [playerId, setPlayerId] = React.useState(initialPlayerId || null);
   const [pendingId, setPendingId] = React.useState(null);
   const [unlockPressId, setUnlockPressId] = React.useState(null);
   const [unlockProgress, setUnlockProgress] = React.useState(0);
@@ -46412,6 +46448,7 @@ function BlackjackObserverView({ room, code, onLeave }) {
   const unlockStartRef = React.useRef(null);
   const playerIdRef = React.useRef(playerId);
   React.useEffect(() => { playerIdRef.current = playerId; }, [playerId]);
+  React.useEffect(() => { if (typeof onPlayerIdChange === 'function') onPlayerIdChange(playerId); }, [playerId]);
   const [giftPool, setGiftPool] = React.useState(null); // kiszállási nyereség kiosztása
   const [rebuyPick, setRebuyPick] = React.useState(null); // { drinkN } — újra-beszállás készlet-választó
   const [giftNotice, setGiftNotice] = React.useState(null); // { name, n, ts } — ki adott nekem kortyot (modal, amíg le nem OK-zza)
@@ -46434,7 +46471,7 @@ function BlackjackObserverView({ room, code, onLeave }) {
     if (!pid || !code) return;
     try { firebase.firestore().collection('rooms').doc(code).update({ bjTakenIds: firebase.firestore.FieldValue.arrayRemove(pid) }); } catch(e) {}
   }, [code]);
-  React.useEffect(() => () => { releasePlayer(playerIdRef.current); }, []);
+  React.useEffect(() => () => { if (!keepClaimOnUnmount) releasePlayer(playerIdRef.current); }, []);
   React.useEffect(() => () => {
     cancelAnimationFrame(unlockRafRef.current);
     clearTimeout(unlockTimerRef.current);
@@ -46599,7 +46636,12 @@ function BlackjackObserverView({ room, code, onLeave }) {
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
           <BJAvatar p={me} size={34} />
           <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>{me?.name}</span>
-          {bj.phase !== 'joining' && <span style={{ marginLeft:'auto', fontFamily:T.font, fontSize:13, color:T.inkSoft }}>Készlet: <b style={{ color: myChips < startStack ? T.coral : T.mint }}>{myChips}</b> 🍺{inRound ? ` · Tét: ${myBet}` : ''}</span>}
+          {bj.phase !== 'joining' && (
+            <span style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
+              {inRound && <span style={{ fontFamily:T.font, fontSize:13, fontWeight:T.weightTitle, color:T.inkSoft }}>Tét: {myBet}</span>}
+              <BJChipStack count={myChips} size={54} />
+            </span>
+          )}
         </div>
 
         {bj.phase === 'joining' && (
@@ -46639,7 +46681,8 @@ function BlackjackObserverView({ room, code, onLeave }) {
         {bj.phase === 'betting' && inRound && (
           <div style={{ background:T.surface, borderRadius:18, padding:'20px 18px', boxShadow:T.shadow, textAlign:'center' }}>
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink, marginBottom:4 }}>Mennyit teszel fel? 🍺</div>
-            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginBottom:16 }}>A tét a kortykészletedből megy — max {myChips} 🍺</div>
+            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginBottom:12 }}>A tét a kortykészletedből megy — max {myChips} 🍺</div>
+            <div style={{ display:'flex', justifyContent:'center', marginBottom:14 }}><BJChipStack count={myChips} size={44} /></div>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:18, marginBottom:18 }}>
               <button onClick={() => !bj.betsDone[playerId] && setMyBet(myBet - 1)} disabled={!!bj.betsDone[playerId]} style={{ width:52, height:52, borderRadius:14, border:'none', background:T.surfaceMuted, fontFamily:T.font, fontWeight:900, fontSize:26, cursor:'pointer', color:T.ink, opacity: bj.betsDone[playerId] ? 0.4 : 1 }}>−</button>
               <div>
@@ -46697,8 +46740,9 @@ function BlackjackObserverView({ room, code, onLeave }) {
                   <div style={{ marginTop:12 }}>
                     <div style={{ padding:'12px', borderRadius:14, background: res.delta < 0 ? T.coralSoft : res.delta > 0 ? `${T.mint}20` : T.surfaceMuted, textAlign:'center' }}>
                       <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color: res.delta < 0 ? T.coral : res.delta > 0 ? T.mint : T.ink }}>{res.label}</div>
-                      <div style={{ fontFamily:T.font, fontSize:14, fontWeight:T.weightTitle, color: res.delta < 0 ? T.coral : res.delta > 0 ? T.mint : T.inkSoft, marginTop:4 }}>
-                        {res.delta > 0 ? '+' : ''}{res.delta} 🍺 → készleted: {myChips}
+                      <div style={{ fontFamily:T.font, fontSize:14, fontWeight:T.weightTitle, color: res.delta < 0 ? T.coral : res.delta > 0 ? T.mint : T.inkSoft, marginTop:6, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                        <span>{res.delta > 0 ? '+' : ''}{res.delta} 🍺 → készleted:</span>
+                        <BJChipStack count={myChips} size={34} />
                       </div>
                     </div>
                     {broke ? (
@@ -50949,7 +50993,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'quiz') return <QuizGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} gameMeta={gameMeta} />;
   if (gameId === 'utveszto') return <UtvesztoGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} />;
   if (gameId === 'beerpong') return <BeerPongGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} initialBpState={null} onSetHideFooter={onSetHideFooter} />;
-  if (gameId === 'blackjack') return <BlackjackGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onLiveDrinkUpdate={onLiveDrinkUpdate} />;
+  if (gameId === 'blackjack') return <BlackjackGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onLiveDrinkUpdate={onLiveDrinkUpdate} onSetBuszSwitch={onSetBuszSwitch} />;
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onSetBuszSwitch={onSetBuszSwitch} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
