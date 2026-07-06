@@ -34165,7 +34165,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.796';
+const APP_VERSION = 'v9.797';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -45923,8 +45923,8 @@ function bjResultFor(state, pid) {
   if (state.bust[pid])   return { label:'Besokallt 💀', delta: -bet };
   if (pBJ && dBJ)        return { label:'Döntetlen — dupla Blackjack', delta: 0 };
   if (pBJ)               return { label:'Blackjack! 🂡', delta: Math.ceil(bet * 1.5) };
-  if (dBJ)               return { label:'Osztó Blackjack', delta: -bet };
-  if (ds > 21)           return { label:'Osztó besokallt — nyert! 🏆', delta: bet };
+  if (dBJ)               return { label:'Gép Blackjack 🤖', delta: -bet };
+  if (ds > 21)           return { label:'A gép besokallt — nyert! 🏆', delta: bet };
   if (ps > ds)           return { label:'Nyert! 🏆', delta: bet };
   if (ps === ds)         return { label:'Döntetlen', delta: 0 };
   return { label:'Vesztett', delta: -bet };
@@ -45987,7 +45987,7 @@ function BJAvatar({ p, size }) {
   );
 }
 
-// Kiszállási nyereség-kiosztó overlay — kortyok szétosztása a többiek + az osztó közt
+// Kiszállási nyereség-kiosztó overlay — kortyok szétosztása a többi játékos közt
 function BJGiftOverlay({ pool, recipients, onConfirm, onCancel }) {
   const [assigned, setAssigned] = React.useState({});
   const total = Object.values(assigned).reduce((s, n) => s + (n || 0), 0);
@@ -46004,7 +46004,7 @@ function BJGiftOverlay({ pool, recipients, onConfirm, onCancel }) {
           return (
             <div key={r.id} style={{ display:'flex', alignItems:'center', gap:10, background:T.surface, borderRadius:14, padding:'10px 12px', marginBottom:8, boxShadow:T.shadow }}>
               <BJAvatar p={r.p} size={30} />
-              <span style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.isDealer ? `🎩 Osztó — ${r.p?.name || '?'}` : (r.p?.name || r.id)}</span>
+              <span style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.p?.name || r.id}</span>
               <button onClick={() => setAssigned(a => ({ ...a, [r.id]: Math.max(0, (a[r.id] || 0) - 1) }))} disabled={n <= 0} style={{ width:32, height:32, borderRadius:9, border:'none', background:T.surfaceMuted, fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink, cursor:'pointer', opacity: n <= 0 ? 0.4 : 1 }}>−</button>
               <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color: n > 0 ? T.mint : T.inkSoft, minWidth:22, textAlign:'center' }}>{n}</span>
               <button onClick={() => remaining > 0 && setAssigned(a => ({ ...a, [r.id]: (a[r.id] || 0) + 1 }))} disabled={remaining <= 0} style={{ width:32, height:32, borderRadius:9, border:'none', background: remaining > 0 ? T.mintSoft : T.surfaceMuted, fontFamily:T.font, fontWeight:900, fontSize:18, color: remaining > 0 ? T.mint : T.inkSoft, cursor:'pointer', opacity: remaining <= 0 ? 0.4 : 1 }}>+</button>
@@ -46020,7 +46020,7 @@ function BJGiftOverlay({ pool, recipients, onConfirm, onCancel }) {
   );
 }
 
-// ═══════════════ BLACKJACK — host (osztó) nézet ═══════════════
+// ═══════════════ BLACKJACK — host nézet (a gép oszt) ═══════════════
 function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFooter, onLiveDrinkUpdate }) {
   const isOnline = !!roomCode;
   const [room, setRoom] = React.useState(null);
@@ -46045,8 +46045,8 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
 
   React.useEffect(() => {
     if (!isOnline) {
-      // Offline: mindenki a host telefonján játszik, a host az osztó
-      const parts = players.slice(1).map(p => p.id);
+      // Offline: mindenki a host telefonján játszik, a gép oszt
+      const parts = players.map(p => p.id);
       const bets = {}; const chips = {};
       parts.forEach(pid => { bets[pid] = 1; chips[pid] = 10; });
       setLocalState({ phase:'betting', gameIdx, hostId: hostPlayer?.id || 'host', participants: parts, deck: bjNewDeck(), hands: {}, dealerHand: [], bets, betsDone: {}, stood: {}, bust: {}, doubled: {}, currentTurn: null, startStack: 10, chips, cashedOut: {}, roundsPlayed: 0 });
@@ -46075,8 +46075,8 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
 
   function startRound() {
     const claimed = isOnline
-      ? players.filter(p => takenIds.includes(p.id) && p.id !== bjState.hostId).map(p => p.id)
-      : players.slice(1).map(p => p.id);
+      ? players.filter(p => takenIds.includes(p.id)).map(p => p.id)
+      : players.map(p => p.id);
     const chips = { ...(bjState.chips || {}) };
     const startStack = bjState.startStack || 10;
     claimed.forEach(pid => { if (chips[pid] === undefined) chips[pid] = startStack; });
@@ -46118,7 +46118,13 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     const startStack = bjState.startStack || 10;
     const ch = (bjState.chips || {})[pid] || 0;
     const diff = ch - startStack;
-    if (diff > 0) { setGiftFor({ pid, pool: diff }); return; } // nyereség — kiosztó overlay
+    if (diff > 0) {
+      const recips = (bjState.participants || []).filter(rp => rp !== pid);
+      if (recips.length) { setGiftFor({ pid, pool: diff }); return; } // nyereség — kiosztó overlay
+      alert(`Nincs kinek kiosztani — ${getPlayer(pid)?.name || '?'} szóban ossza ki a ${diff} kortyot! 🍺`);
+      update({ ...bjState, cashedOut: { ...(bjState.cashedOut || {}), [pid]: true } });
+      return;
+    }
     bookDrinks(pid, Math.max(0, -diff));
     update({ ...bjState, cashedOut: { ...(bjState.cashedOut || {}), [pid]: true } });
   }
@@ -46137,14 +46143,6 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
       update({ ...bjState, lastGift, cashedOut: { ...(bjState.cashedOut || {}), [g.pid]: true } });
     }
   }
-  // Offline osztóváltás az első kör előtt: résztvevők = mindenki, kivéve az osztó
-  function setOfflineDealer(did) {
-    const parts = players.filter(p => p.id !== did).map(p => p.id);
-    const startStack = bjState.startStack || 10;
-    const bets = {}; const chips = {};
-    parts.forEach(pid => { bets[pid] = 1; chips[pid] = startStack; });
-    update({ ...bjState, hostId: did, participants: parts, bets, chips, betsDone: {} });
-  }
   function hostRebuy(pid, mustDrink) {
     const startStack = bjState.startStack || 10;
     if (mustDrink) bookDrinks(pid, startStack);
@@ -46162,13 +46160,13 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
 
   // ── Csatlakozási fázis (online) ──
   const JoiningView = () => {
-    const joined = players.filter(p => takenIds.includes(p.id) && p.id !== bjState.hostId);
+    const joined = players.filter(p => takenIds.includes(p.id));
     return (
       <div style={{ padding:'0 16px 16px' }}>
         <div style={{ textAlign:'center', marginBottom:14 }}>
           <div style={{ fontSize:44 }}>🂡</div>
           <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.ink, textTransform:'uppercase', letterSpacing:'0.04em', marginTop:4 }}>Csatlakozás</div>
-          <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:4 }}>A játékosok a telefonjukon válasszák ki magukat — te vagy az osztó!</div>
+          <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:4 }}>A játékosok a telefonjukon válasszák ki magukat — mindenki a gép ellen játszik!</div>
         </div>
         <div style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:T.shadow, marginBottom:12 }}>
           <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightTitle, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Csatlakozott játékosok ({joined.length})</div>
@@ -46182,27 +46180,13 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
           ))}
         </div>
         <div style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:T.shadow, marginBottom:12 }}>
-          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightTitle, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>🎩 Ki az osztó?</div>
-          <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:4 }}>
-            {players.map(p => {
-              const sel = p.id === bjState.hostId;
-              return (
-                <button key={p.id} onClick={() => update({ ...bjState, hostId: p.id })} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5, padding:'8px 10px', borderRadius:12, border:`2px solid ${sel ? T.mint : 'transparent'}`, background: sel ? T.mintSoft : T.surfaceMuted, cursor:'pointer', flexShrink:0, minWidth:64, WebkitTapHighlightColor:'transparent' }}>
-                  <BJAvatar p={p} size={34} />
-                  <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:11, color: sel ? T.mint : T.ink, whiteSpace:'nowrap' }}>{sel ? '🎩 ' : ''}{p.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:T.shadow, marginBottom:12 }}>
           <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightTitle, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Kezdő kortykészlet 🍺</div>
           <div style={{ display:'flex', gap:8 }}>
             {[5, 10, 20].map(v => (
               <button key={v} onClick={() => update({ ...bjState, startStack: v })} style={{ flex:1, padding:'12px 0', borderRadius:12, border:`2px solid ${(bjState.startStack || 10) === v ? T.mint : T.surfaceMuted}`, background: (bjState.startStack || 10) === v ? T.mintSoft : 'transparent', fontFamily:T.font, fontWeight:900, fontSize:17, color: (bjState.startStack || 10) === v ? T.mint : T.inkSoft, cursor:'pointer' }}>{v}</button>
             ))}
           </div>
-          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:8 }}>Kiszálláskor: aki ez alatt van, a különbséget issza — aki felette, kiosztja (az osztónak is adhatja! 🎩)</div>
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:8 }}>Kiszálláskor: aki ez alatt van, a különbséget issza — aki felette, kiosztja</div>
         </div>
         <button onClick={hostStart} disabled={joined.length === 0} style={{ width:'100%', padding:'14px', borderRadius:16, background: joined.length ? T.mint : T.surfaceMuted, border:'none', fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff', cursor: joined.length ? 'pointer' : 'default' }}>
           Kezdés ({joined.length} játékos)
@@ -46216,22 +46200,6 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     <div style={{ padding:'0 16px 16px' }}>
       <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink, marginBottom:4, textAlign:'center' }}>Tétek 🍺</div>
       <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginBottom:14, textAlign:'center' }}>{isOnline ? 'A játékosok a telefonjukon állítják be a tétjüket' : 'Állítsátok be, ki hány kortyot tesz fel'}</div>
-      {!isOnline && (bjState.roundsPlayed || 0) === 0 && (
-        <div style={{ background:T.surface, borderRadius:18, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
-          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightTitle, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>🎩 Ki az osztó?</div>
-          <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:4 }}>
-            {players.map(p => {
-              const sel = p.id === bjState.hostId;
-              return (
-                <button key={p.id} onClick={() => setOfflineDealer(p.id)} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5, padding:'8px 10px', borderRadius:12, border:`2px solid ${sel ? T.mint : 'transparent'}`, background: sel ? T.mintSoft : T.surfaceMuted, cursor:'pointer', flexShrink:0, minWidth:64, WebkitTapHighlightColor:'transparent' }}>
-                  <BJAvatar p={p} size={34} />
-                  <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:11, color: sel ? T.mint : T.ink, whiteSpace:'nowrap' }}>{sel ? '🎩 ' : ''}{p.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
       {!isOnline && (bjState.roundsPlayed || 0) === 0 && (
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12, justifyContent:'center' }}>
           <span style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>Kezdőkészlet:</span>
@@ -46278,7 +46246,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
       <div style={{ padding:'0 16px 16px' }}>
         <div style={{ background:'#1a6b3c', borderRadius:18, padding:'12px 14px', marginBottom:14 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-            <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:'rgba(255,255,255,0.85)', textTransform:'uppercase', letterSpacing:'0.06em' }}>🎩 Osztó{revealed ? ` — ${bjScore(bjState.dealerHand)}` : ''}</span>
+            <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:'rgba(255,255,255,0.85)', textTransform:'uppercase', letterSpacing:'0.06em' }}>🤖 Gép{revealed ? ` — ${bjScore(bjState.dealerHand)}` : ''}</span>
           </div>
           <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
             {(bjState.dealerHand || []).map((c, i) => <BJCardEl key={i} card={c} faceDown={i === 1 && !revealed} />)}
@@ -46319,7 +46287,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
           );
         })}
         {bjState.phase === 'dealer' && (
-          <div style={{ textAlign:'center', fontFamily:T.font, fontSize:14, fontWeight:T.weightTitle, color:T.inkSoft, marginTop:8 }}>Az osztó húz… 🎩</div>
+          <div style={{ textAlign:'center', fontFamily:T.font, fontSize:14, fontWeight:T.weightTitle, color:T.inkSoft, marginTop:8 }}>A gép húz… 🤖</div>
         )}
       </div>
     );
@@ -46332,7 +46300,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
       <div style={{ padding:'0 16px 16px' }}>
         <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink, marginBottom:12, textAlign:'center' }}>Eredmények</div>
         <div style={{ background:'#1a6b3c', borderRadius:18, padding:'12px 14px', marginBottom:14 }}>
-          <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:'rgba(255,255,255,0.85)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>🎩 Osztó — {ds}{ds > 21 ? ' (besokallt!)' : ''}{bjIsBlackjack(bjState.dealerHand) ? ' 🂡' : ''}</div>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:'rgba(255,255,255,0.85)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>🤖 Gép — {ds}{ds > 21 ? ' (besokallt!)' : ''}{bjIsBlackjack(bjState.dealerHand) ? ' 🂡' : ''}</div>
           <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
             {(bjState.dealerHand || []).map((c, i) => <BJCardEl key={i} card={c} small />)}
           </div>
@@ -46375,7 +46343,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
               )}
               {!broke && !out && !isOnline && (
                 <button onClick={() => hostCashOut(pid)} style={{ marginTop:8, width:'100%', padding:'8px', borderRadius:10, border:`1.5px solid ${T.surfaceMuted}`, background:'transparent', fontFamily:T.font, fontWeight:800, fontSize:12, color:T.inkSoft, cursor:'pointer' }}>
-                  🚪 Kiszáll {diff < 0 ? `— iszik ${-diff} kortyot` : diff > 0 ? `— kioszt ${diff} kortyot (az osztónak is adhatja 🎩)` : '— nullán van, se nem iszik, se nem oszt'}
+                  🚪 Kiszáll {diff < 0 ? `— iszik ${-diff} kortyot` : diff > 0 ? `— kioszt ${diff} kortyot` : '— nullán van, se nem iszik, se nem oszt'}
                 </button>
               )}
             </div>
@@ -46405,15 +46373,12 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
           <div style={{ fontWeight:900, marginBottom:2 }}>🍺 {hostGiftNotice.giverName} kiosztotta a nyereségét!</div>
           {Object.entries(hostGiftNotice.assigned || {}).filter(([, n]) => n > 0).map(([rpid, n]) => {
             const rp = getPlayer(rpid) || players.find(pp => String(pp.id) === String(rpid));
-            const isDealer = String(rpid) === String(bjState.hostId);
-            return <div key={rpid} style={{ fontSize:12 }}>{isDealer ? `🎩 Osztó — ${rp?.name || '?'}` : (rp?.name || rpid)}: +{n} korty</div>;
+            return <div key={rpid} style={{ fontSize:12 }}>{rp?.name || rpid}: +{n} korty</div>;
           })}
         </div>
       )}
       {giftFor && (() => {
-        const dealer = getPlayer(bjState.hostId) || hostPlayer;
-        const recips = (bjState.participants || []).filter(pid => pid !== giftFor.pid).map(pid => ({ id: pid, p: getPlayer(pid), isDealer: false }));
-        if (dealer && !recips.some(r => r.id === dealer.id)) recips.push({ id: dealer.id, p: dealer, isDealer: true });
+        const recips = (bjState.participants || []).filter(pid => pid !== giftFor.pid).map(pid => ({ id: pid, p: getPlayer(pid) }));
         return <BJGiftOverlay pool={giftFor.pool} recipients={recips} onConfirm={hostConfirmGift} onCancel={() => setGiftFor(null)} />;
       })()}
     </div>
@@ -46495,13 +46460,13 @@ function BlackjackObserverView({ room, code, onLeave }) {
   if (!bj) return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, minHeight:0, overflow:'hidden' }}>
       {Header}
-      <div style={{ flex:1, display:'grid', placeItems:'center', fontFamily:T.font, fontSize:15, color:T.inkSoft }}>Várakozás az osztóra… 🎩</div>
+      <div style={{ flex:1, display:'grid', placeItems:'center', fontFamily:T.font, fontSize:15, color:T.inkSoft }}>Várakozás a házigazdára… 📱</div>
     </div>
   );
 
   // ── Névválasztás (claim, mint a busznál) ──
   if (!playerId) {
-    const selectable = players.filter(p => p.id !== bj.hostId);
+    const selectable = players;
     const confirmSelection = () => {
       if (!pendingId) return;
       setPlayerId(pendingId);
@@ -46576,7 +46541,13 @@ function BlackjackObserverView({ room, code, onLeave }) {
   };
   const guestCashOut = () => {
     const surplus = Math.max(0, myChips - startStack);
-    if (surplus > 0) { setGiftPool(surplus); return; } // nyereség — kiosztó overlay
+    if (surplus > 0) {
+      const others = (bj.participants || []).filter(pid => pid !== playerId);
+      if (others.length) { setGiftPool(surplus); return; } // nyereség — kiosztó overlay
+      alert(`Nincs kinek kiosztani — mondd be szóban a ${surplus} kortyot! 🍺`);
+      bjWrite(code, { ...bj, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true } });
+      return;
+    }
     const deficit = Math.max(0, startStack - myChips);
     if (deficit > 0) bjBookDrinksRemote(code, playerId, deficit);
     bjWrite(code, { ...bj, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true } });
@@ -46598,9 +46569,7 @@ function BlackjackObserverView({ room, code, onLeave }) {
         </div>
       )}
       {giftPool !== null && (() => {
-        const dealer = players.find(p => p.id === bj.hostId);
-        const recips = (bj.participants || []).filter(pid => pid !== playerId).map(pid => ({ id: pid, p: players.find(pp => pp.id === pid), isDealer: false }));
-        if (dealer && !recips.some(r => r.id === dealer.id)) recips.push({ id: dealer.id, p: dealer, isDealer: true });
+        const recips = (bj.participants || []).filter(pid => pid !== playerId).map(pid => ({ id: pid, p: players.find(pp => pp.id === pid) }));
         return <BJGiftOverlay pool={giftPool} recipients={recips} onConfirm={guestConfirmGift} onCancel={() => setGiftPool(null)} />;
       })()}
       <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'12px 16px 24px' }}>
@@ -46616,7 +46585,7 @@ function BlackjackObserverView({ room, code, onLeave }) {
           <div style={{ background:T.surface, borderRadius:18, padding:'26px 18px', boxShadow:T.shadow, textAlign:'center' }}>
             <div style={{ fontSize:44 }}>✅</div>
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, marginTop:8 }}>Csatlakoztál!</div>
-            <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:6 }}>Várj, amíg az osztó elindítja a játékot…</div>
+            <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:6 }}>Várj, amíg a házigazda elindítja a játékot…</div>
           </div>
         )}
 
@@ -46655,7 +46624,7 @@ function BlackjackObserverView({ room, code, onLeave }) {
           <React.Fragment>
             {/* Osztó */}
             <div style={{ background:'#1a6b3c', borderRadius:18, padding:'12px 14px', marginBottom:12 }}>
-              <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, color:'rgba(255,255,255,0.85)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>🎩 Osztó{revealed ? ` — ${bjScore(bj.dealerHand)}${bjScore(bj.dealerHand) > 21 ? ' (besokallt!)' : ''}` : ''}</div>
+              <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, color:'rgba(255,255,255,0.85)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>🤖 Gép{revealed ? ` — ${bjScore(bj.dealerHand)}${bjScore(bj.dealerHand) > 21 ? ' (besokallt!)' : ''}` : ''}</div>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                 {(bj.dealerHand || []).map((c, i) => <BJCardEl key={i} card={c} faceDown={i === 1 && !revealed} small />)}
               </div>
@@ -46688,7 +46657,6 @@ function BlackjackObserverView({ room, code, onLeave }) {
                 const res = bjResultFor(bj, playerId);
                 const broke = !amOut && myChips === 0;
                 const diff = myChips - startStack;
-                const dealerName = players.find(p => p.id === bj.hostId)?.name || 'az osztó';
                 return (
                   <div style={{ marginTop:12 }}>
                     <div style={{ padding:'12px', borderRadius:14, background: res.delta < 0 ? T.coralSoft : res.delta > 0 ? `${T.mint}20` : T.surfaceMuted, textAlign:'center' }}>
@@ -46708,7 +46676,7 @@ function BlackjackObserverView({ room, code, onLeave }) {
                       </div>
                     ) : !amOut ? (
                       <button onClick={guestCashOut} style={{ marginTop:10, width:'100%', padding:'11px', borderRadius:12, border:`1.5px solid ${T.surfaceMuted}`, background:'transparent', fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkSoft, cursor:'pointer' }}>
-                        🚪 Kiszállok {diff < 0 ? `— megiszom ${-diff} kortyot` : diff > 0 ? `— kiosztok ${diff} kortyot (${dealerName} 🎩 is kaphat!)` : '— nullán vagyok'}
+                        🚪 Kiszállok {diff < 0 ? `— megiszom ${-diff} kortyot` : diff > 0 ? `— kiosztok ${diff} kortyot` : '— nullán vagyok'}
                       </button>
                     ) : null}
                   </div>
