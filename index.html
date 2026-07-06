@@ -34165,7 +34165,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.797';
+const APP_VERSION = 'v9.798';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -46049,7 +46049,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
       const parts = players.map(p => p.id);
       const bets = {}; const chips = {};
       parts.forEach(pid => { bets[pid] = 1; chips[pid] = 10; });
-      setLocalState({ phase:'betting', gameIdx, hostId: hostPlayer?.id || 'host', participants: parts, deck: bjNewDeck(), hands: {}, dealerHand: [], bets, betsDone: {}, stood: {}, bust: {}, doubled: {}, currentTurn: null, startStack: 10, chips, cashedOut: {}, roundsPlayed: 0 });
+      setLocalState({ phase:'betting', gameIdx, hostId: hostPlayer?.id || 'host', participants: parts, deck: bjNewDeck(), hands: {}, dealerHand: [], bets, betsDone: {}, stood: {}, bust: {}, doubled: {}, currentTurn: null, startStack: 10, stacks: {}, chips, cashedOut: {}, roundsPlayed: 0 });
       return;
     }
     const unsub = firebase.firestore().collection('rooms').doc(roomCode).onSnapshot(snap => setRoom(snap.data() || null));
@@ -46062,7 +46062,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     if (!room.bjState || room.bjState.gameIdx !== gameIdx) {
       initRef.current = true;
       firebase.firestore().collection('rooms').doc(roomCode).update({
-        bjState: { phase:'joining', gameIdx, hostId: hostPlayer?.id || 'host', participants: [], deck: [], hands: {}, dealerHand: [], bets: {}, betsDone: {}, stood: {}, bust: {}, doubled: {}, currentTurn: null, startStack: 10, chips: {}, cashedOut: {}, roundsPlayed: 0 },
+        bjState: { phase:'joining', gameIdx, hostId: hostPlayer?.id || 'host', participants: [], deck: [], hands: {}, dealerHand: [], bets: {}, betsDone: {}, stood: {}, bust: {}, doubled: {}, currentTurn: null, startStack: 10, stacks: {}, chips: {}, cashedOut: {}, roundsPlayed: 0 },
         bjTakenIds: []
       });
     }
@@ -46073,13 +46073,14 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     else setLocalState(ns);
   }
 
+  const stackOf = pid => ((bjState && bjState.stacks) || {})[pid] || (bjState && bjState.startStack) || 10;
+
   function startRound() {
     const claimed = isOnline
       ? players.filter(p => takenIds.includes(p.id)).map(p => p.id)
       : players.map(p => p.id);
     const chips = { ...(bjState.chips || {}) };
-    const startStack = bjState.startStack || 10;
-    claimed.forEach(pid => { if (chips[pid] === undefined) chips[pid] = startStack; });
+    claimed.forEach(pid => { if (chips[pid] === undefined) chips[pid] = stackOf(pid); });
     // csak akinek van zsetonja és nem szállt ki
     const parts = claimed.filter(pid => !(bjState.cashedOut || {})[pid] && chips[pid] > 0);
     if (!parts.length) return;
@@ -46098,10 +46099,9 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     const timeout = setTimeout(() => {
       const preState = { ...bjState, deck, dealerHand };
       const chips = { ...(bjState.chips || {}) };
-      const startStack = bjState.startStack || 10;
       (bjState.participants || []).forEach(pid => {
         const r = bjResultFor(preState, pid);
-        chips[pid] = Math.max(0, (chips[pid] === undefined ? startStack : chips[pid]) + r.delta);
+        chips[pid] = Math.max(0, (chips[pid] === undefined ? stackOf(pid) : chips[pid]) + r.delta);
       });
       update({ ...preState, phase:'results', chips, roundsPlayed: (bjState.roundsPlayed || 0) + 1 });
     }, 1500);
@@ -46115,9 +46115,8 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     if (typeof onLiveDrinkUpdate === 'function') onLiveDrinkUpdate({ [pid]: n });
   }
   function hostCashOut(pid) {
-    const startStack = bjState.startStack || 10;
     const ch = (bjState.chips || {})[pid] || 0;
-    const diff = ch - startStack;
+    const diff = ch - stackOf(pid);
     if (diff > 0) {
       const recips = (bjState.participants || []).filter(rp => rp !== pid);
       if (recips.length) { setGiftFor({ pid, pool: diff }); return; } // nyereség — kiosztó overlay
@@ -46144,9 +46143,9 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     }
   }
   function hostRebuy(pid, mustDrink) {
-    const startStack = bjState.startStack || 10;
-    if (mustDrink) bookDrinks(pid, startStack);
-    update({ ...bjState, chips: { ...(bjState.chips || {}), [pid]: startStack }, cashedOut: { ...(bjState.cashedOut || {}), [pid]: false } });
+    const st = stackOf(pid);
+    if (mustDrink) bookDrinks(pid, st);
+    update({ ...bjState, chips: { ...(bjState.chips || {}), [pid]: st }, cashedOut: { ...(bjState.cashedOut || {}), [pid]: false } });
   }
 
   if (!bjState) return (
@@ -46175,12 +46174,12 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
             <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'6px 0' }}>
               <BJAvatar p={p} size={30} />
               <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{p.name}</span>
-              <span style={{ marginLeft:'auto', fontFamily:T.font, fontSize:12, fontWeight:T.weightTitle, color:T.mint }}>✓ Kész</span>
+              <span style={{ marginLeft:'auto', fontFamily:T.font, fontSize:12, fontWeight:T.weightTitle, color:T.mint }}>✓ Kész · {stackOf(p.id)} 🍺</span>
             </div>
           ))}
         </div>
         <div style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:T.shadow, marginBottom:12 }}>
-          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightTitle, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Kezdő kortykészlet 🍺</div>
+          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightTitle, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Alap kortykészlet (aki nem választ) 🍺</div>
           <div style={{ display:'flex', gap:8 }}>
             {[5, 10, 20].map(v => (
               <button key={v} onClick={() => update({ ...bjState, startStack: v })} style={{ flex:1, padding:'12px 0', borderRadius:12, border:`2px solid ${(bjState.startStack || 10) === v ? T.mint : T.surfaceMuted}`, background: (bjState.startStack || 10) === v ? T.mintSoft : 'transparent', fontFamily:T.font, fontWeight:900, fontSize:17, color: (bjState.startStack || 10) === v ? T.mint : T.inkSoft, cursor:'pointer' }}>{v}</button>
@@ -46210,7 +46209,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
       )}
       {(bjState.participants || []).map(pid => {
         const p = getPlayer(pid);
-        const chips = (bjState.chips || {})[pid] !== undefined ? bjState.chips[pid] : (bjState.startStack || 10);
+        const chips = (bjState.chips || {})[pid] !== undefined ? bjState.chips[pid] : stackOf(pid);
         const bet = Math.min(bjState.bets[pid] || 1, chips);
         const done = !!bjState.betsDone[pid];
         return (
@@ -46265,7 +46264,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
             <div key={pid} style={{ marginBottom:10, background: isTurn ? T.surface : 'transparent', borderRadius:14, padding: isTurn ? '10px 12px' : '4px 2px', border: isTurn ? `2px solid ${T.mint}` : '2px solid transparent', boxShadow: isTurn ? T.shadow : 'none' }}>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
                 <BJAvatar p={p} size={26} />
-                <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink, flex:1 }}>{p?.name || pid} <span style={{ color:T.inkSoft, fontWeight:400 }}>· tét {bjState.bets[pid] || 1} · készlet {(bjState.chips || {})[pid] !== undefined ? bjState.chips[pid] : (bjState.startStack || 10)} 🍺</span></span>
+                <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink, flex:1 }}>{p?.name || pid} <span style={{ color:T.inkSoft, fontWeight:400 }}>· tét {bjState.bets[pid] || 1} · készlet {(bjState.chips || {})[pid] !== undefined ? bjState.chips[pid] : stackOf(pid)} 🍺</span></span>
                 <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color: isBust ? T.coral : isBJ ? T.mint : T.ink }}>
                   {isBust ? 'Bust 💀' : isBJ ? 'BJ! 🂡' : isStood ? `${score} ✋` : score}
                 </span>
@@ -46309,7 +46308,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
           const p = getPlayer(pid);
           const hand = bjState.hands[pid] || [];
           const res = bjResultFor(bjState, pid);
-          const startStack = bjState.startStack || 10;
+          const startStack = stackOf(pid);
           const chips = (bjState.chips || {})[pid] !== undefined ? bjState.chips[pid] : startStack;
           const out = !!(bjState.cashedOut || {})[pid];
           const broke = !out && chips === 0;
@@ -46388,6 +46387,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
 // ═══════════════ BLACKJACK — játékos (telefon) nézet ═══════════════
 function BlackjackObserverView({ room, code, onLeave }) {
   const bj = room.bjState || null;
+  const stackOf = pid => ((bj && bj.stacks) || {})[pid] || (bj && bj.startStack) || 10;
   const players = room.players || [];
   const taken = room.bjTakenIds || [];
   const [playerId, setPlayerId] = React.useState(null);
@@ -46531,7 +46531,7 @@ function BlackjackObserverView({ room, code, onLeave }) {
   const isMyTurn = bj.phase === 'playing' && bj.currentTurn === playerId;
   const revealed = bj.phase === 'dealer' || bj.phase === 'results';
 
-  const startStack = bj.startStack || 10;
+  const startStack = stackOf(playerId);
   const myChips = (bj.chips || {})[playerId] !== undefined ? bj.chips[playerId] : startStack;
   const amOut = !!(bj.cashedOut || {})[playerId];
   const setMyBet = (v) => { if (typeof syncRoom === 'function') syncRoom(code, { bjState: { bets: { [playerId]: Math.max(1, Math.min(myChips, v)) } } }); };
@@ -46586,6 +46586,18 @@ function BlackjackObserverView({ room, code, onLeave }) {
             <div style={{ fontSize:44 }}>✅</div>
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, marginTop:8 }}>Csatlakoztál!</div>
             <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:6 }}>Várj, amíg a házigazda elindítja a játékot…</div>
+            <div style={{ marginTop:20, paddingTop:16, borderTop:`1px solid ${T.surfaceMuted}` }}>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:10 }}>Mennyi kortyval szállsz be? 🍺</div>
+              <div style={{ display:'flex', gap:8 }}>
+                {[5, 10, 20].map(v => {
+                  const sel = stackOf(playerId) === v;
+                  return (
+                    <button key={v} onClick={() => { if (typeof syncRoom === 'function') syncRoom(code, { bjState: { stacks: { [playerId]: v } } }); }} style={{ flex:1, padding:'12px 0', borderRadius:12, border:`2px solid ${sel ? T.mint : T.surfaceMuted}`, background: sel ? T.mintSoft : 'transparent', fontFamily:T.font, fontWeight:900, fontSize:17, color: sel ? T.mint : T.inkSoft, cursor:'pointer' }}>{v}</button>
+                  );
+                })}
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:8 }}>Kezdésig bármikor módosíthatod</div>
+            </div>
           </div>
         )}
 
@@ -46698,7 +46710,7 @@ function BlackjackObserverView({ room, code, onLeave }) {
                     <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink, flex:1 }}>{p?.name || pid}{isTurn ? ' 👈' : ''}</span>
                     <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color: bj.bust[pid] ? T.coral : bjIsBlackjack(hand) ? T.mint : T.inkSoft }}>
                       {bj.bust[pid] ? '💀' : bjIsBlackjack(hand) ? 'BJ 🂡' : bj.phase === 'results' || bj.stood[pid] ? score : hand.length + ' lap'}
-                      {bj.phase === 'results' ? ` · ${(bj.chips || {})[pid] !== undefined ? bj.chips[pid] : startStack} 🍺` : ''}
+                      {bj.phase === 'results' ? ` · ${(bj.chips || {})[pid] !== undefined ? bj.chips[pid] : stackOf(pid)} 🍺` : ''}
                     </span>
                   </div>
                 );
