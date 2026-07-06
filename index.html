@@ -33974,6 +33974,19 @@ window.triggerHaptic = function() {
     });
   };
 
+  window.getComingSoon = function() {
+    return db.collection('config').doc('comingSoonGames').get().then(function(d) {
+      return d.exists ? (d.data().ids || []) : null;
+    }).catch(function() { return null; });
+  };
+  window.setComingSoon = function(ids) {
+    return db.collection('config').doc('comingSoonGames').set({ ids: ids }).catch(function(e) { console.warn('setComingSoon', e); });
+  };
+  window.onComingSoon = function(cb) {
+    return db.collection('config').doc('comingSoonGames').onSnapshot(function(d) {
+      cb(d.exists ? (d.data().ids || []) : null);
+    });
+  };
   window.getHiddenGames = function() {
     return db.collection('config').doc('hiddenGames').get().then(function(d) {
       return d.exists ? (d.data().ids || []) : [];
@@ -34129,7 +34142,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.783';
+const APP_VERSION = 'v9.784';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -34895,6 +34908,8 @@ const R = (base) => Math.round(base); // radius at scale 1
 
 // ─── Game catalog ─────────────────────────────────────────────
 const IMGS = {
+  'blackjack_icon.png': 'assets/blackjack_icon.png',
+  'blackjack_banner.png': 'assets/blackjack_banner.png',
   'bus_custom_icon.png': 'assets/bus_custom_icon.png',
   'c08054bde_008-puzzle.png': 'assets/c08054bde_008-puzzle.png',
   'b2b517b2a_005-promise.png': 'assets/b2b517b2a_005-promise.png',
@@ -35053,7 +35068,7 @@ const IMGS = {
 };
 const IMG = '';  // images embedded below
 const GAMES = [
-  { id:'blackjack', roundTime:'slow',  name:'Blackjack',             difficulty:'közepes', category:'Csapat', emoji:'🂡', symbol:null, img:null, banner:null, color:'#1a6b3c', desc:'Csatlakozz a telefonoddal, tegyél tétet kortyokban, és játssz az osztó (a host) ellen! Hit, Stand vagy Double Down — aki veszít, megissza a tétjét, aki nyer, kiosztja. Blackjack másfélszeresét ér!' },
+  { id:'blackjack', roundTime:'slow',  name:'Blackjack',             difficulty:'közepes', category:'Csapat', emoji:'🂡', symbol:IMGS['blackjack_icon.png'], img:IMGS['blackjack_icon.png'], banner:IMGS['blackjack_banner.png'], color:'#1a6b3c', desc:'Csatlakozz a telefonoddal, tegyél tétet kortyokban, és játssz az osztó (a host) ellen! Hit, Stand vagy Double Down — aki veszít, megissza a tétjét, aki nyer, kiosztja. Blackjack másfélszeresét ér!' },
   { id:'busz',      roundTime:'slow',  name:'Busz',                  difficulty:'nehéz',   category:'Csapat', emoji:'🚌', symbol:IMGS['busz_symbol.png'], img:IMGS['busz_icon.png'], banner:IMGS['busz_banner.png'], color:'#F4A04A', desc:'A piramis kártyasor aljától indulva fordítják fel sorban a lapokat. Akinek megegyezik a lapja az aktuális kártyával, kioszthat annyi kortyt amennyit ér a sor. Az utolsó helyen állók buszoznak: kisebb-nagyobb tippeket kell mondani egy 6 lapos sorra — ha rontasz, előről kezded és iszol.' },
   { id:'imposztor', roundTime:'mid',  name:'Imposztor',               difficulty:'közepes', category:'Csapat', emoji:'🕵️', symbol:IMGS['imposztor_symbol.png'], img:IMGS['imposztor_icon.png'], banner:IMGS['imposztor_banner.png'], dnr:true, color:'#6366F1', desc:'Valaki köztetek az Imposztor! Mindenki kap egy titkos szerepet — csak az Imposztor nem tudja a titkos szót. Adjatok tippeket a szóra, a csoport szavazzon, ki a besúgó!' },
   { id:'memoria',   roundTime:'mid',  name:'Memória',               difficulty:'nehéz',   category:'Csapat', emoji:'🧩', symbol:IMGS['memoria_symbol.png'], img:IMGS['memoria_icon.png'], banner:IMGS['memoria_banner.png'], color:'#22D096', desc:'Klasszikus memória emoji lapokkal. Felváltva fordítsatok le lapokat — aki párt talál, pontot szerez és folytathatja. Aki a végén egy párt sem talált, iszik egyet.' },
@@ -36566,6 +36581,24 @@ function AdminEvents({ go }) {
 function AdminGames() {
   const [hidden, setHidden] = React.useState([]);
   const [saving, setSaving] = React.useState(false);
+  const [soon, setSoon] = React.useState(null);
+
+  React.useEffect(() => {
+    if (typeof window.onComingSoon !== 'function') return;
+    const unsub = window.onComingSoon(ids => {
+      setSoon(ids !== null ? ids : GAMES.filter(g => g.comingSoon).map(g => g.id));
+    });
+    return () => unsub && unsub();
+  }, []);
+
+  const soonList = soon !== null ? soon : GAMES.filter(g => g.comingSoon).map(g => g.id);
+  const isSoon = id => soonList.includes(id);
+  function toggleSoon(e, id) {
+    e.stopPropagation();
+    const next = soonList.includes(id) ? soonList.filter(x => x !== id) : [...soonList, id];
+    setSaving(true);
+    window.setComingSoon(next).finally(() => setSaving(false));
+  }
 
   React.useEffect(() => {
     if (typeof window.onHiddenGames === 'function') {
@@ -36612,6 +36645,9 @@ function AdminGames() {
               <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{g.name}</div>
               <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, marginTop:1 }}>{g.category} · {g.difficulty}</div>
             </div>
+            <button onClick={e => toggleSoon(e, g.id)} style={{ flexShrink:0, padding:'6px 10px', borderRadius:999, border:`1.5px solid ${isSoon(g.id) ? '#f59e0b' : T.mint}`, background: isSoon(g.id) ? 'rgba(245,158,11,0.08)' : 'rgba(37,181,114,0.08)', fontFamily:T.font, fontWeight:800, fontSize:11, color: isSoon(g.id) ? '#b45309' : T.mint, cursor:'pointer', whiteSpace:'nowrap' }}>
+              {isSoon(g.id) ? '🔒 Hamarosan' : '✅ Élő'}
+            </button>
             <div style={{ width:36, height:36, borderRadius:10, border:`2px solid ${isHidden ? '#ef4444' : T.mint}`, background: isHidden ? '#fef2f2' : 'rgba(37,181,114,0.08)', display:'grid', placeItems:'center', flexShrink:0 }}>
               {isHidden ? (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -37960,7 +37996,21 @@ function PlayersScreen({ players, setPlayers, go }) {
       {editing &&
         <PlayerEditSheet
           player={players.find(p => p.id === editing)}
-          onClose={() => setEditing(null)}
+          onClose={() => {
+            const p = players.find(pp => pp.id === editing);
+            setEditing(null);
+            // Egyedi nevű, profil nélküli játékos → automatikus profil mentés Firebase-be
+            if (p && !p.profileId && p.name && p.name.trim() && !/^Játékos \d+$/.test(p.name.trim()) && typeof window.saveProfile === 'function') {
+              const nm = p.name.trim();
+              (window.getProfiles ? window.getProfiles() : Promise.resolve([])).then(profs => {
+                const ex = (profs || []).find(pr => (pr.name || '').trim().toLowerCase() === nm.toLowerCase() || (pr.nickname || '').trim().toLowerCase() === nm.toLowerCase());
+                if (ex) return ex.id;
+                return window.saveProfile({ name: nm, color: p.color, img: p.img || null });
+              }).then(pid => {
+                if (pid) setPlayers(prev => prev.map(pp => pp.id === p.id ? { ...pp, profileId: pid } : pp));
+              }).catch(() => {});
+            }
+          }}
           onChange={patch => updatePlayer(editing, patch)}
           usedColors={new Set(players.filter(p => p.id !== editing).map(p => p.color))}
           usedProfileIds={new Set(players.filter(p => p.id !== editing && p.profileId).map(p => p.profileId))}
@@ -38757,6 +38807,16 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   };
 
   const [_hiddenGames, _setHiddenGames] = React.useState([]);
+  const [, _setCsVer] = React.useState(0);
+  React.useEffect(() => {
+    if (typeof window.onComingSoon !== 'function') return;
+    const unsub = window.onComingSoon(ids => {
+      if (ids === null) return;
+      GAMES.forEach(g => { g.comingSoon = ids.includes(g.id); });
+      _setCsVer(v => v + 1);
+    });
+    return () => unsub && unsub();
+  }, []);
   React.useEffect(() => {
     if (typeof window.onHiddenGames === 'function') {
       const unsub = window.onHiddenGames(ids => _setHiddenGames(ids));
