@@ -158,6 +158,7 @@
     @keyframes slideInLeft  { from{transform:translateX(-100%)} to{transform:translateX(0)} }
     @keyframes spin      { to { transform: rotate(360deg); } }
     @keyframes popIn     { from{transform:scale(.7);opacity:0} to{transform:scale(1);opacity:1} }
+    @keyframes bjDeal    { from { opacity:0; transform: translateY(-14px) rotate(-6deg) scale(.9); } to { opacity:1; transform:none; } }
     @keyframes cardFlip  { 0%{transform:rotateY(90deg) scale(.85);opacity:0} 60%{transform:rotateY(-8deg) scale(1.05)} 100%{transform:rotateY(0) scale(1);opacity:1} }
     @keyframes songSlideIn { from{transform:translateX(60px);opacity:0} to{transform:translateX(0);opacity:1} }
     @keyframes songSlideOut { from{transform:translateX(0);opacity:1} to{transform:translateX(-60px);opacity:0} }
@@ -34165,7 +34166,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.798';
+const APP_VERSION = 'v9.799';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -45959,14 +45960,14 @@ function bjWrite(code, ns) {
 function BJCardEl({ card, faceDown, small }) {
   const W = small ? 36 : 48, H = small ? 52 : 70;
   if (faceDown) return (
-    <div style={{ width:W, height:H, borderRadius:8, background:'#1a3a5c', border:'2px solid rgba(255,255,255,0.25)', display:'grid', placeItems:'center', fontSize:small?18:24, flexShrink:0 }}>🂠</div>
+    <div style={{ width:W, height:H, borderRadius:8, background:'#1a3a5c', border:'2px solid rgba(255,255,255,0.25)', display:'grid', placeItems:'center', fontSize:small?18:24, flexShrink:0, animation:'bjDeal .3s ease-out' }}>🂠</div>
   );
   if (!card) return null;
   const isRed = bjIsRed(card);
   const rank = card.replace(/[♠♥♦♣]/g, '');
   const suit = card.slice(-1);
   return (
-    <div style={{ width:W, height:H, borderRadius:8, background:'#fff', border:'2px solid #ddd', display:'flex', flexDirection:'column', padding:'3px 5px', flexShrink:0, userSelect:'none' }}>
+    <div style={{ width:W, height:H, borderRadius:8, background:'#fff', border:'2px solid #ddd', display:'flex', flexDirection:'column', padding:'3px 5px', flexShrink:0, userSelect:'none', animation:'bjDeal .3s ease-out' }}>
       <span style={{ fontFamily:T.font, fontWeight:900, fontSize:small?13:15, color: isRed ? '#c02828' : '#111', lineHeight:1 }}>{rank}</span>
       <div style={{ flex:1, display:'grid', placeItems:'center' }}>
         <span style={{ fontSize:small?16:20, color: isRed ? '#c02828' : '#111' }}>{suit}</span>
@@ -45983,6 +45984,25 @@ function BJAvatar({ p, size }) {
   ) : (
     <div style={{ width:s, height:s, borderRadius:'50%', background:p?.color||'#555', display:'grid', placeItems:'center', flexShrink:0 }}>
       <span style={{ fontFamily:T.font, fontWeight:900, fontSize:Math.round(s*0.42), color:'#fff' }}>{(p?.name||'?').charAt(0).toUpperCase()}</span>
+    </div>
+  );
+}
+
+// Készlet-választó újra-beszálláshoz (5/10/20)
+function BJStackPicker({ onConfirm, onCancel }) {
+  const [sel, setSel] = React.useState(10);
+  return (
+    <div style={{ marginTop:10, padding:'10px', borderRadius:12, background:T.surfaceMuted }}>
+      <div style={{ fontFamily:T.font, fontSize:12, fontWeight:800, color:T.ink, marginBottom:8, textAlign:'center' }}>Mekkora készlettel szállsz be? 🍺</div>
+      <div style={{ display:'flex', gap:6 }}>
+        {[5, 10, 20].map(v => (
+          <button key={v} onClick={() => setSel(v)} style={{ flex:1, padding:'9px 0', borderRadius:10, border:`2px solid ${sel === v ? T.mint : 'transparent'}`, background: sel === v ? T.mintSoft : T.surface, fontFamily:T.font, fontWeight:900, fontSize:15, color: sel === v ? T.mint : T.inkSoft, cursor:'pointer' }}>{v}</button>
+        ))}
+      </div>
+      <div style={{ display:'flex', gap:6, marginTop:8 }}>
+        <button onClick={() => onConfirm(sel)} style={{ flex:1, padding:'10px', borderRadius:10, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>Beszállok {sel} 🍺-vel ✓</button>
+        <button onClick={onCancel} style={{ padding:'10px 14px', borderRadius:10, border:'none', background:T.surface, fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkSoft, cursor:'pointer' }}>✕</button>
+      </div>
     </div>
   );
 }
@@ -46031,6 +46051,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
   const takenIds = isOnline ? (room?.bjTakenIds || []) : [];
   const hostPlayer = players && players[0];
   const [giftFor, setGiftFor] = React.useState(null); // { pid, pool } — kiszálló nyereség-kiosztása
+  const [hostRebuyPick, setHostRebuyPick] = React.useState(null); // pid — újra-beszállás készlet-választó
   const [hostGiftNotice, setHostGiftNotice] = React.useState(null);
   const hostGiftTsRef = React.useRef(undefined);
   React.useEffect(() => {
@@ -46133,19 +46154,19 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     if (!g) return;
     const giver = getPlayer(g.pid);
     const lastGift = { giverId: g.pid, giverName: giver?.name || '?', assigned, ts: Date.now() };
+    const giftLog = [...(bjState.giftLog || []), { giverName: lastGift.giverName, assigned, ts: lastGift.ts }].slice(-10);
     if (isOnline) {
-      bjBookDrinksRemoteMulti(roomCode, assigned, { bjState: { ...bjState, lastGift, cashedOut: { ...(bjState.cashedOut || {}), [g.pid]: true } } });
+      bjBookDrinksRemoteMulti(roomCode, assigned, { bjState: { ...bjState, lastGift, giftLog, cashedOut: { ...(bjState.cashedOut || {}), [g.pid]: true } } });
     } else {
       const deltas = {};
       Object.entries(assigned).forEach(([rpid, n]) => { if (n > 0) deltas[rpid] = n; });
       if (Object.keys(deltas).length && typeof onLiveDrinkUpdate === 'function') onLiveDrinkUpdate(deltas);
-      update({ ...bjState, lastGift, cashedOut: { ...(bjState.cashedOut || {}), [g.pid]: true } });
+      update({ ...bjState, lastGift, giftLog, cashedOut: { ...(bjState.cashedOut || {}), [g.pid]: true } });
     }
   }
-  function hostRebuy(pid, mustDrink) {
-    const st = stackOf(pid);
-    if (mustDrink) bookDrinks(pid, st);
-    update({ ...bjState, chips: { ...(bjState.chips || {}), [pid]: st }, cashedOut: { ...(bjState.cashedOut || {}), [pid]: false } });
+  function hostRebuy(pid, mustDrink, newStack) {
+    if (mustDrink) bookDrinks(pid, stackOf(pid));
+    update({ ...bjState, stacks: { ...(bjState.stacks || {}), [pid]: newStack }, chips: { ...(bjState.chips || {}), [pid]: newStack }, cashedOut: { ...(bjState.cashedOut || {}), [pid]: false } });
   }
 
   if (!bjState) return (
@@ -46332,11 +46353,14 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
               {broke && (
                 <div style={{ marginTop:8, padding:'8px 10px', borderRadius:10, background:T.coralSoft }}>
                   <div style={{ fontFamily:T.font, fontSize:13, fontWeight:900, color:T.coral }}>💀 Elfogyott a készlete — igyon {startStack} kortyot!</div>
-                  {!isOnline && (
+                  {!isOnline && hostRebuyPick !== pid && (
                     <div style={{ display:'flex', gap:8, marginTop:8 }}>
-                      <button onClick={() => hostRebuy(pid, true)} style={{ flex:1, padding:'9px', borderRadius:10, border:'none', background:T.mint, fontFamily:T.font, fontWeight:800, fontSize:12, color:'#fff', cursor:'pointer' }}>🔄 Megitta — újra beszáll</button>
+                      <button onClick={() => setHostRebuyPick(pid)} style={{ flex:1, padding:'9px', borderRadius:10, border:'none', background:T.mint, fontFamily:T.font, fontWeight:800, fontSize:12, color:'#fff', cursor:'pointer' }}>🔄 Megitta — újra beszáll</button>
                       <button onClick={() => update({ ...bjState, cashedOut: { ...(bjState.cashedOut || {}), [pid]: true } })} style={{ flex:1, padding:'9px', borderRadius:10, border:'none', background:'#555', fontFamily:T.font, fontWeight:800, fontSize:12, color:'#fff', cursor:'pointer' }}>🚪 Megitta — kiszáll</button>
                     </div>
+                  )}
+                  {!isOnline && hostRebuyPick === pid && (
+                    <BJStackPicker onConfirm={v => { hostRebuy(pid, true, v); setHostRebuyPick(null); }} onCancel={() => setHostRebuyPick(null)} />
                   )}
                 </div>
               )}
@@ -46400,21 +46424,22 @@ function BlackjackObserverView({ room, code, onLeave }) {
   const playerIdRef = React.useRef(playerId);
   React.useEffect(() => { playerIdRef.current = playerId; }, [playerId]);
   const [giftPool, setGiftPool] = React.useState(null); // kiszállási nyereség kiosztása
-  const [giftNotice, setGiftNotice] = React.useState(null); // { name, n, ts } — ki adott nekem kortyot
-  const bjGiftTsRef = React.useRef(undefined);
+  const [rebuyPick, setRebuyPick] = React.useState(null); // { drinkN } — újra-beszállás készlet-választó
+  const [giftNotice, setGiftNotice] = React.useState(null); // { name, n, ts } — ki adott nekem kortyot (modal, amíg le nem OK-zza)
   React.useEffect(() => {
     const lg = bj && bj.lastGift;
-    if (bjGiftTsRef.current === undefined) { bjGiftTsRef.current = lg ? lg.ts : null; return; }
-    if (!lg || lg.ts === bjGiftTsRef.current) return;
-    bjGiftTsRef.current = lg.ts;
-    if (!playerId) return;
+    if (!playerId || !lg || !lg.ts) return;
     const n = (lg.assigned || {})[playerId] || 0;
-    if (n > 0 && lg.giverId !== playerId) {
-      const ts = lg.ts;
-      setGiftNotice({ name: lg.giverName || '?', n, ts });
-      setTimeout(() => setGiftNotice(cur => (cur && cur.ts === ts) ? null : cur), 4500);
-    }
+    if (n <= 0 || lg.giverId === playerId) return;
+    let seen = 0;
+    try { seen = parseInt(localStorage.getItem('bj_gift_seen_' + playerId) || '0', 10) || 0; } catch(e) {}
+    if (lg.ts <= seen) return;
+    setGiftNotice({ name: lg.giverName || '?', n, ts: lg.ts });
   }, [bj && bj.lastGift && bj.lastGift.ts, playerId]);
+  const dismissGift = () => {
+    if (giftNotice) { try { localStorage.setItem('bj_gift_seen_' + playerId, String(giftNotice.ts)); } catch(e) {} }
+    setGiftNotice(null);
+  };
 
   const releasePlayer = React.useCallback((pid) => {
     if (!pid || !code) return;
@@ -46535,9 +46560,10 @@ function BlackjackObserverView({ room, code, onLeave }) {
   const myChips = (bj.chips || {})[playerId] !== undefined ? bj.chips[playerId] : startStack;
   const amOut = !!(bj.cashedOut || {})[playerId];
   const setMyBet = (v) => { if (typeof syncRoom === 'function') syncRoom(code, { bjState: { bets: { [playerId]: Math.max(1, Math.min(myChips, v)) } } }); };
-  const guestRebuy = (drinkN) => {
+  const guestRebuy = (drinkN, newStack) => {
     if (drinkN > 0) bjBookDrinksRemote(code, playerId, drinkN);
-    bjWrite(code, { ...bj, chips: { ...(bj.chips || {}), [playerId]: startStack }, cashedOut: { ...(bj.cashedOut || {}), [playerId]: false } });
+    bjWrite(code, { ...bj, stacks: { ...(bj.stacks || {}), [playerId]: newStack }, chips: { ...(bj.chips || {}), [playerId]: newStack }, cashedOut: { ...(bj.cashedOut || {}), [playerId]: false } });
+    setRebuyPick(null);
   };
   const guestCashOut = () => {
     const surplus = Math.max(0, myChips - startStack);
@@ -46554,8 +46580,10 @@ function BlackjackObserverView({ room, code, onLeave }) {
   };
   const guestConfirmGift = (assigned) => {
     setGiftPool(null);
+    const ts = Date.now();
+    const giftLog = [...(bj.giftLog || []), { giverName: me?.name || '?', assigned, ts }].slice(-10);
     bjBookDrinksRemoteMulti(code, assigned, {
-      bjState: { ...bj, lastGift: { giverId: playerId, giverName: me?.name || '?', assigned, ts: Date.now() }, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true } }
+      bjState: { ...bj, lastGift: { giverId: playerId, giverName: me?.name || '?', assigned, ts }, giftLog, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true } }
     });
   };
   const confirmBet = () => { if (typeof syncRoom === 'function') syncRoom(code, { bjState: { betsDone: { [playerId]: true } } }); };
@@ -46564,8 +46592,12 @@ function BlackjackObserverView({ room, code, onLeave }) {
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, minHeight:0, overflow:'hidden' }}>
       {Header}
       {giftNotice && (
-        <div style={{ position:'fixed', top:'max(14px, env(safe-area-inset-top))', left:'50%', transform:'translateX(-50%)', zIndex:620, background:T.coral, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:T.font, fontWeight:700, fontSize:14, boxShadow:'0 6px 20px rgba(0,0,0,0.3)', animation:'popIn .25s', whiteSpace:'nowrap' }}>
-          {giftNotice.name} adott {giftNotice.n} kortyot 🍺
+        <div style={{ position:'fixed', inset:0, zIndex:620, background:'rgba(0,0,0,0.72)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+          <div style={{ width:'100%', maxWidth:340, background:T.surface, borderRadius:24, padding:'28px 22px', textAlign:'center', boxShadow:'0 12px 40px rgba(0,0,0,0.4)', animation:'popIn .25s' }}>
+            <div style={{ fontSize:64 }}>🍺</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink, marginTop:10 }}>{giftNotice.name} adott Neked {giftNotice.n} kortyot!</div>
+            <button onClick={dismissGift} style={{ marginTop:18, width:'100%', padding:'14px', borderRadius:16, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff', cursor:'pointer' }}>OK, iszom! ✓</button>
+          </div>
         </div>
       )}
       {giftPool !== null && (() => {
@@ -46606,8 +46638,11 @@ function BlackjackObserverView({ room, code, onLeave }) {
             <div style={{ fontSize:44 }}>{amOut ? '🚪' : '⏳'}</div>
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, marginTop:8 }}>{amOut ? 'Kiszálltál' : 'Ebből a körből kimaradtál'}</div>
             <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:6 }}>{amOut ? 'Visszaszállhatsz egy új készlettel — a következő körtől játszol.' : 'A következő körben már játszol!'}</div>
-            {amOut && (
-              <button onClick={() => guestRebuy(0)} style={{ marginTop:14, width:'100%', padding:'13px', borderRadius:14, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:15, color:'#fff', cursor:'pointer' }}>🔄 Visszaszállok ({startStack} 🍺 készlettel)</button>
+            {amOut && !rebuyPick && (
+              <button onClick={() => setRebuyPick({ drinkN: 0 })} style={{ marginTop:14, width:'100%', padding:'13px', borderRadius:14, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:15, color:'#fff', cursor:'pointer' }}>🔄 Visszaszállok</button>
+            )}
+            {amOut && rebuyPick && (
+              <BJStackPicker onConfirm={v => guestRebuy(rebuyPick.drinkN, v)} onCancel={() => setRebuyPick(null)} />
             )}
           </div>
         )}
@@ -46681,10 +46716,15 @@ function BlackjackObserverView({ room, code, onLeave }) {
                       <div style={{ marginTop:10, padding:'12px', borderRadius:14, background:T.coralSoft, textAlign:'center' }}>
                         <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.coral }}>💀 Elfogyott a készleted!</div>
                         <div style={{ fontFamily:T.font, fontSize:13, fontWeight:T.weightTitle, color:T.coral, marginTop:4 }}>Igyál {startStack} kortyot!</div>
+                        {!rebuyPick && (
                         <div style={{ display:'flex', gap:8, marginTop:10 }}>
-                          <button onClick={() => guestRebuy(startStack)} style={{ flex:1, padding:'11px', borderRadius:12, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>🔄 Megittam — újra beszállok</button>
+                          <button onClick={() => setRebuyPick({ drinkN: startStack })} style={{ flex:1, padding:'11px', borderRadius:12, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>🔄 Megittam — újra beszállok</button>
                           <button onClick={() => { bjBookDrinksRemote(code, playerId, startStack); bjWrite(code, { ...bj, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true } }); }} style={{ flex:1, padding:'11px', borderRadius:12, border:'none', background:'#555', fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>🚪 Kiszállok</button>
                         </div>
+                        )}
+                        {rebuyPick && (
+                          <BJStackPicker onConfirm={v => guestRebuy(rebuyPick.drinkN, v)} onCancel={() => setRebuyPick(null)} />
+                        )}
                       </div>
                     ) : !amOut ? (
                       <button onClick={guestCashOut} style={{ marginTop:10, width:'100%', padding:'11px', borderRadius:12, border:`1.5px solid ${T.surfaceMuted}`, background:'transparent', fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkSoft, cursor:'pointer' }}>
@@ -46719,6 +46759,25 @@ function BlackjackObserverView({ room, code, onLeave }) {
                 <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, textAlign:'center', padding:'6px 0' }}>Egyedül játszol az osztó ellen</div>
               )}
             </div>
+
+            {/* Kapott kortyok log */}
+            {(() => {
+              const entries = (bj.giftLog || []).filter(g => ((g.assigned || {})[playerId] || 0) > 0).slice(-10).reverse();
+              if (!entries.length) return null;
+              return (
+                <div style={{ background:T.surface, borderRadius:18, padding:'12px 14px', boxShadow:T.shadow, marginTop:12 }}>
+                  <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightTitle, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>🍺 Kapott kortyok</div>
+                  {entries.map((g, i) => {
+                    const mins = Math.max(0, Math.round((Date.now() - (g.ts || 0)) / 60000));
+                    return (
+                      <div key={i} style={{ fontFamily:T.font, fontSize:12, color:T.ink, padding:'3px 0' }}>
+                        <b>{g.giverName}</b> → {(g.assigned || {})[playerId]} korty <span style={{ color:T.inkSoft }}>· {mins} perce</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </React.Fragment>
         )}
       </div>
