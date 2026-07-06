@@ -34166,7 +34166,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.800';
+const APP_VERSION = 'v9.801';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -45994,9 +45994,9 @@ function BJStackPicker({ onConfirm, onCancel }) {
   return (
     <div style={{ marginTop:10, padding:'10px', borderRadius:12, background:T.surfaceMuted }}>
       <div style={{ fontFamily:T.font, fontSize:12, fontWeight:800, color:T.ink, marginBottom:8, textAlign:'center' }}>Mekkora készlettel szállsz be? 🍺</div>
-      <div style={{ display:'flex', gap:6 }}>
+      <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
         {[5, 10, 20].map(v => (
-          <button key={v} onClick={() => setSel(v)} style={{ flex:1, padding:'9px 0', borderRadius:10, border:`2px solid ${sel === v ? T.mint : 'transparent'}`, background: sel === v ? T.mintSoft : T.surface, fontFamily:T.font, fontWeight:900, fontSize:15, color: sel === v ? T.mint : T.inkSoft, cursor:'pointer' }}>{v}</button>
+          <button key={v} onClick={() => setSel(v)} style={{ width:'100%', padding:'14px 0', borderRadius:10, border:`2px solid ${sel === v ? T.mint : 'transparent'}`, background: sel === v ? T.mintSoft : T.surface, fontFamily:T.font, fontWeight:900, fontSize:17, color: sel === v ? T.mint : T.inkSoft, cursor:'pointer' }}>{v} 🍺</button>
         ))}
       </div>
       <div style={{ display:'flex', gap:6, marginTop:8 }}>
@@ -46181,12 +46181,17 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
   // ── Csatlakozási fázis (online) ──
   const JoiningView = () => {
     const joined = players.filter(p => takenIds.includes(p.id));
+    const chosenCount = joined.filter(p => ((bjState && bjState.stacks) || {})[p.id] !== undefined).length;
+    const allChosen = joined.length > 0 && chosenCount === joined.length;
     return (
       <div style={{ padding:'0 16px 16px' }}>
-        <div style={{ textAlign:'center', marginBottom:14 }}>
-          <div style={{ fontSize:44 }}>🂡</div>
-          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.ink, textTransform:'uppercase', letterSpacing:'0.04em', marginTop:4 }}>Csatlakozás</div>
-          <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:4 }}>A játékosok a telefonjukon válasszák ki magukat — mindenki a gép ellen játszik!</div>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+          <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontSize:12, color:T.inkSoft, lineHeight:1.35 }}>A játékosok a telefonjukon csatlakoznak — mindenki a gép ellen játszik!</div>
+          {roomUrl && (
+            <button onClick={() => setShowQR(true)} style={{ flexShrink:0, background:'transparent', border:`1.5px solid ${T.surfaceMuted}`, borderRadius:20, padding:'8px 14px', fontFamily:T.font, fontSize:13, fontWeight:800, color:T.inkSoft, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
+              <span>📱</span> QR
+            </button>
+          )}
         </div>
         <div style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:T.shadow, marginBottom:12 }}>
           <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightTitle, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Csatlakozott játékosok ({joined.length})</div>
@@ -46195,21 +46200,12 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
             <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'6px 0' }}>
               <BJAvatar p={p} size={30} />
               <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{p.name}</span>
-              <span style={{ marginLeft:'auto', fontFamily:T.font, fontSize:12, fontWeight:T.weightTitle, color:T.mint }}>✓ Kész · {stackOf(p.id)} 🍺</span>
+              <span style={{ marginLeft:'auto', fontFamily:T.font, fontSize:12, fontWeight:T.weightTitle, color: ((bjState && bjState.stacks) || {})[p.id] !== undefined ? T.mint : T.inkSoft }}>{((bjState && bjState.stacks) || {})[p.id] !== undefined ? `✓ Kész · ${stackOf(p.id)} 🍺` : 'választ… 🍺'}</span>
             </div>
           ))}
         </div>
-        <div style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:T.shadow, marginBottom:12 }}>
-          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightTitle, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Alap kortykészlet (aki nem választ) 🍺</div>
-          <div style={{ display:'flex', gap:8 }}>
-            {[5, 10, 20].map(v => (
-              <button key={v} onClick={() => update({ ...bjState, startStack: v })} style={{ flex:1, padding:'12px 0', borderRadius:12, border:`2px solid ${(bjState.startStack || 10) === v ? T.mint : T.surfaceMuted}`, background: (bjState.startStack || 10) === v ? T.mintSoft : 'transparent', fontFamily:T.font, fontWeight:900, fontSize:17, color: (bjState.startStack || 10) === v ? T.mint : T.inkSoft, cursor:'pointer' }}>{v}</button>
-            ))}
-          </div>
-          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:8 }}>Kiszálláskor: aki ez alatt van, a különbséget issza — aki felette, kiosztja</div>
-        </div>
-        <button onClick={hostStart} disabled={joined.length === 0} style={{ width:'100%', padding:'14px', borderRadius:16, background: joined.length ? T.mint : T.surfaceMuted, border:'none', fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff', cursor: joined.length ? 'pointer' : 'default' }}>
-          Kezdés ({joined.length} játékos)
+        <button onClick={hostStart} disabled={!allChosen} style={{ width:'100%', padding:'14px', borderRadius:16, background: allChosen ? T.mint : T.surfaceMuted, border:'none', fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff', cursor: allChosen ? 'pointer' : 'default' }}>
+          {allChosen ? `Kezdés (${joined.length} játékos)` : joined.length === 0 ? 'Kezdés (0 játékos)' : `Várakozás a készlet-választásra… (${chosenCount}/${joined.length})`}
         </button>
       </div>
     );
@@ -46379,13 +46375,6 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
 
   return (
     <div style={{ flex:1, overflowY:'auto', paddingTop:8 }}>
-      {isOnline && roomUrl && bjState.phase === 'joining' && (
-        <div style={{ display:'flex', justifyContent:'center', marginBottom:8 }}>
-          <button onClick={() => setShowQR(true)} style={{ background:'transparent', border:`1.5px solid ${T.surfaceMuted}`, borderRadius:20, padding:'6px 16px', fontFamily:T.font, fontSize:13, color:T.inkSoft, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
-            <span>📱</span> QR kód — csatlakozás
-          </button>
-        </div>
-      )}
       {showQR && roomUrl && <QRModal url={roomUrl} onClose={() => setShowQR(false)} />}
       {bjState.phase === 'joining' && <JoiningView />}
       {bjState.phase === 'betting' && <BettingView />}
@@ -46620,11 +46609,11 @@ function BlackjackObserverView({ room, code, onLeave }) {
             <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:6 }}>Várj, amíg a házigazda elindítja a játékot…</div>
             <div style={{ marginTop:20, paddingTop:16, borderTop:`1px solid ${T.surfaceMuted}` }}>
               <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:10 }}>Mennyi kortyval szállsz be? 🍺</div>
-              <div style={{ display:'flex', gap:8 }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                 {[5, 10, 20].map(v => {
-                  const sel = stackOf(playerId) === v;
+                  const sel = ((bj && bj.stacks) || {})[playerId] === v;
                   return (
-                    <button key={v} onClick={() => { if (typeof syncRoom === 'function') syncRoom(code, { bjState: { stacks: { [playerId]: v } } }); }} style={{ flex:1, padding:'12px 0', borderRadius:12, border:`2px solid ${sel ? T.mint : T.surfaceMuted}`, background: sel ? T.mintSoft : 'transparent', fontFamily:T.font, fontWeight:900, fontSize:17, color: sel ? T.mint : T.inkSoft, cursor:'pointer' }}>{v}</button>
+                    <button key={v} onClick={() => { if (typeof syncRoom === 'function') syncRoom(code, { bjState: { stacks: { [playerId]: v } } }); }} style={{ width:'100%', padding:'14px 0', borderRadius:12, border:`2px solid ${sel ? T.mint : T.surfaceMuted}`, background: sel ? T.mintSoft : 'transparent', fontFamily:T.font, fontWeight:900, fontSize:19, color: sel ? T.mint : T.inkSoft, cursor:'pointer' }}>{v} 🍺</button>
                   );
                 })}
               </div>
@@ -53108,7 +53097,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         <div key={gameIdx} style={{ display:'flex', flexDirection:'column', padding:'8px 24px 20px', gap:18, maxWidth:960, margin:'0 auto', width:'100%', boxSizing:'border-box', animation: transitioning ? 'gameSlideOut 0.22s ease forwards' : 'gameSlideIn 0.28s cubic-bezier(0.2,0.9,0.3,1)' }}>
         <div style={{ display:'flex', flexDirection:'column', gap:18, width:'100%' }}>
 
-        {currentGameId !== 'busz' && currentGameId !== 'utveszto' && (
+        {currentGameId !== 'busz' && currentGameId !== 'utveszto' && currentGameId !== 'blackjack' && (
           <div style={{ fontFamily:T.font, fontSize:14, fontWeight:600, color:T.inkSoft, textAlign:'center', maxWidth:280, lineHeight:1.4, alignSelf:'center' }}>
             {scenario.prompt}
           </div>
