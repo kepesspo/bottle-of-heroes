@@ -34166,7 +34166,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.810';
+const APP_VERSION = 'v9.811';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -38977,6 +38977,25 @@ function BuszConfigSheet({ config, setConfig, onClose }) {
   );
 }
 
+function BlackjackConfigSheet({ config, setConfig, onClose }) {
+  const hostPlaysOn = config.hostPlays === true;
+  return (
+    <SheetOverlay onClose={onClose} title="Blackjack beállítások" footer={
+      <button onClick={onClose} style={{ width:'100%', padding:'15px', borderRadius:16, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)' }}>{t('busDoneBtn')}</button>
+    }>
+      <div style={{ padding:'0 18px 8px', display:'flex', flexDirection:'column' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'none' }}>
+          <div>
+            <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>🎮 A host is játszik</span>
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>A házigazda is beszállhat játékosként a saját telefonján</div>
+          </div>
+          <Toggle on={hostPlaysOn} onChange={() => setConfig(cf => ({...cf, hostPlays: !hostPlaysOn}))} />
+        </div>
+      </div>
+    </SheetOverlay>
+  );
+}
+
 function KisebbConfigSheet({ config, setConfig, onClose }) {
   const decks = config.decks ?? 1;
   const stackMode = config.stackMode ?? 'plus1';
@@ -39211,6 +39230,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
     return next;
   });
   const [buszSheet, setBuszSheet] = useState(false);
+  const [blackjackSheet, setBlackjackSheet] = useState(false);
   const [beerpongSheet, setBeerpongSheet] = useState(false);
   const [kisebbSheet, setKisebbSheet] = useState(false);
   const [collectSheet, setCollectSheet] = useState(false);
@@ -39232,6 +39252,8 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   const setBeerpongConfig = cfg => setGameMeta(m => ({...m, beerpongConfig: typeof cfg === 'function' ? cfg(m?.beerpongConfig||{}) : cfg}));
   const zeneConfig = gameMeta?.zeneConfig || {};
   const setZeneConfig = cfg => setGameMeta(m => ({...m, zeneConfig: typeof cfg === 'function' ? cfg(m?.zeneConfig||{}) : cfg}));
+  const blackjackConfig = gameMeta?.blackjackConfig || {};
+  const setBlackjackConfig = cfg => setGameMeta(m => ({...m, blackjackConfig: typeof cfg === 'function' ? cfg(m?.blackjackConfig||{}) : cfg}));
 
   const allOn = selectedGames.length === GAMES.length;
   const anySelected = selectedGames.length > 0;
@@ -39398,6 +39420,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
                   const longPress = g.id==='busz' ? ()=>{ if(!selectedGames.includes('busz')) toggle('busz'); setBuszSheet(true); }
                     : g.id==='beerpong' ? ()=>{ if(!selectedGames.includes('beerpong')) toggle('beerpong'); setBeerpongSheet(true); }
                     : g.id==='zene' ? ()=>{ if(!selectedGames.includes('zene')) toggle('zene'); setZeneSheet(true); }
+                    : g.id==='blackjack' ? ()=>{ if(!selectedGames.includes('blackjack')) toggle('blackjack'); setBlackjackSheet(true); }
                     : undefined;
                   return (
                     <FavTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked}
@@ -39452,7 +39475,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
                       return (
                         <NetflixTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked || !!g.comingSoon}
                           onClick={() => { if (!g.comingSoon) toggle(g.id); }} onInfo={() => setInfo(g.id)}
-                          onLongPress={g.id==='busz' ? ()=>{ if(!selectedGames.includes('busz')) toggle('busz'); setBuszSheet(true); } : g.id==='beerpong' ? ()=>{ if(!selectedGames.includes('beerpong')) toggle('beerpong'); setBeerpongSheet(true); } : g.id==='kisebb' ? ()=>{ if(!selectedGames.includes('kisebb')) toggle('kisebb'); setKisebbSheet(true); } : g.id==='collect' ? ()=>{ if(!selectedGames.includes('collect')) toggle('collect'); setCollectSheet(true); } : g.id==='ovfj' ? ()=>{ if(!selectedGames.includes('ovfj')) toggle('ovfj'); setOvfjSheet(true); } : g.id==='zene' ? ()=>{ if(!selectedGames.includes('zene')) toggle('zene'); setZeneSheet(true); } : undefined} />
+                          onLongPress={g.id==='busz' ? ()=>{ if(!selectedGames.includes('busz')) toggle('busz'); setBuszSheet(true); } : g.id==='beerpong' ? ()=>{ if(!selectedGames.includes('beerpong')) toggle('beerpong'); setBeerpongSheet(true); } : g.id==='kisebb' ? ()=>{ if(!selectedGames.includes('kisebb')) toggle('kisebb'); setKisebbSheet(true); } : g.id==='collect' ? ()=>{ if(!selectedGames.includes('collect')) toggle('collect'); setCollectSheet(true); } : g.id==='ovfj' ? ()=>{ if(!selectedGames.includes('ovfj')) toggle('ovfj'); setOvfjSheet(true); } : g.id==='zene' ? ()=>{ if(!selectedGames.includes('zene')) toggle('zene'); setZeneSheet(true); } : g.id==='blackjack' ? ()=>{ if(!selectedGames.includes('blackjack')) toggle('blackjack'); setBlackjackSheet(true); } : undefined} />
                       );
                     })}
                   </div>
@@ -39469,7 +39492,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
                     return (
                       <GameTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked || !!g.comingSoon}
                         onClick={() => { if (!g.comingSoon) toggle(g.id); }} onInfo={() => setInfo(g.id)}
-                        onLongPress={g.id==='busz' ? ()=>{ if(!selectedGames.includes('busz')) toggle('busz'); setBuszSheet(true); } : g.id==='beerpong' ? ()=>{ if(!selectedGames.includes('beerpong')) toggle('beerpong'); setBeerpongSheet(true); } : g.id==='kisebb' ? ()=>{ if(!selectedGames.includes('kisebb')) toggle('kisebb'); setKisebbSheet(true); } : g.id==='collect' ? ()=>{ if(!selectedGames.includes('collect')) toggle('collect'); setCollectSheet(true); } : g.id==='ovfj' ? ()=>{ if(!selectedGames.includes('ovfj')) toggle('ovfj'); setOvfjSheet(true); } : g.id==='zene' ? ()=>{ if(!selectedGames.includes('zene')) toggle('zene'); setZeneSheet(true); } : undefined} />
+                        onLongPress={g.id==='busz' ? ()=>{ if(!selectedGames.includes('busz')) toggle('busz'); setBuszSheet(true); } : g.id==='beerpong' ? ()=>{ if(!selectedGames.includes('beerpong')) toggle('beerpong'); setBeerpongSheet(true); } : g.id==='kisebb' ? ()=>{ if(!selectedGames.includes('kisebb')) toggle('kisebb'); setKisebbSheet(true); } : g.id==='collect' ? ()=>{ if(!selectedGames.includes('collect')) toggle('collect'); setCollectSheet(true); } : g.id==='ovfj' ? ()=>{ if(!selectedGames.includes('ovfj')) toggle('ovfj'); setOvfjSheet(true); } : g.id==='zene' ? ()=>{ if(!selectedGames.includes('zene')) toggle('zene'); setZeneSheet(true); } : g.id==='blackjack' ? ()=>{ if(!selectedGames.includes('blackjack')) toggle('blackjack'); setBlackjackSheet(true); } : undefined} />
                     );
                   })}
                 </div>
@@ -39517,6 +39540,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
       {collectSheet && <CollectBoomConfigSheet config={collectConfig} setConfig={setCollectConfig} onClose={() => setCollectSheet(false)} />}
       {ovfjSheet && <OVFJConfigSheet config={ovfjConfig} setConfig={setOvfjConfig} onClose={() => setOvfjSheet(false)} />}
       {zeneSheet && <ZeneConfigSheet config={zeneConfig} setConfig={setZeneConfig} onClose={() => setZeneSheet(false)} />}
+      {blackjackSheet && <BlackjackConfigSheet config={blackjackConfig} setConfig={setBlackjackConfig} onClose={() => setBlackjackSheet(false)} />}
       {beerpongSheet && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setBeerpongSheet(false)} playerCount={99} />}
       {filterSheet && (
         <SheetOverlay onClose={() => setFilterSheet(false)} title="Szűrés" footer={
@@ -46081,10 +46105,15 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
   const [hostRebuyPick, setHostRebuyPick] = React.useState(null); // pid — újra-beszállás készlet-választó
   const [hostViewMode, setHostViewMode] = React.useState('host'); // 'host' | 'player' — a házigazda is játszhat
   const hostSelfIdRef = React.useRef(null); // a host által választott játékos-id, váltások közt megmarad
+  const bjHostPlaysEnabled = !!(gameMeta?.blackjackConfig?.hostPlays);
   React.useEffect(() => {
-    if (onSetBuszSwitch) onSetBuszSwitch(isOnline ? { fn: () => setHostViewMode(m => m === 'host' ? 'player' : 'host'), badge: 0 } : null);
-  }, [isOnline]);
+    if (onSetBuszSwitch) onSetBuszSwitch((isOnline && bjHostPlaysEnabled) ? { fn: () => setHostViewMode(m => m === 'host' ? 'player' : 'host'), badge: 0 } : null);
+  }, [isOnline, gameMeta]);
   React.useEffect(() => () => { onSetBuszSwitch && onSetBuszSwitch(null); }, []);
+  React.useEffect(() => {
+    if (onSetHideFooter) onSetHideFooter(isOnline && hostViewMode === 'player');
+  }, [isOnline, hostViewMode]);
+  React.useEffect(() => () => { onSetHideFooter && onSetHideFooter(false); }, []);
   const [hostGiftNotice, setHostGiftNotice] = React.useState(null);
   const hostGiftTsRef = React.useRef(undefined);
   React.useEffect(() => {
@@ -46205,7 +46234,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
   }
 
   if (isOnline && hostViewMode === 'player' && room) {
-    return <BlackjackObserverView room={room} code={roomCode} onLeave={() => setHostViewMode('host')} keepClaimOnUnmount={true} initialPlayerId={hostSelfIdRef.current} onPlayerIdChange={pid => { hostSelfIdRef.current = pid; }} />;
+    return <BlackjackObserverView room={room} code={roomCode} onLeave={() => setHostViewMode('host')} keepClaimOnUnmount={true} initialPlayerId={hostSelfIdRef.current} onPlayerIdChange={pid => { hostSelfIdRef.current = pid; }} onSwitchToHost={() => setHostViewMode('host')} />;
   }
 
   if (!bjState) return (
@@ -46490,7 +46519,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
 }
 
 // ═══════════════ BLACKJACK — játékos (telefon) nézet ═══════════════
-function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initialPlayerId, onPlayerIdChange }) {
+function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initialPlayerId, onPlayerIdChange, onSwitchToHost }) {
   const bj = room.bjState || null;
   const stackOf = pid => ((bj && bj.stacks) || {})[pid] || (bj && bj.startStack) || 10;
   const players = room.players || [];
@@ -46583,6 +46612,13 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
     return (
       <div style={{ position:'fixed', inset:0, zIndex:200, background:T.bg, display:'flex', flexDirection:'column' }}>
         <div style={{ flexShrink:0, background:T.bg, paddingTop:16, paddingBottom:12 }}>
+          {onSwitchToHost && (
+            <div style={{ display:'flex', alignItems:'center', padding:'0 12px', marginBottom:4 }}>
+              <button onClick={onSwitchToHost} style={{ width:40, height:40, borderRadius:999, border:'none', background:'transparent', cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke={T.inkSoft} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+            </div>
+          )}
           <div style={{ textAlign:'center', padding:'0 18px' }}>
             <div style={{ fontSize:48 }}>🂡</div>
             <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginTop:6 }}>Ki vagy te?</div>
