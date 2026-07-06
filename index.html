@@ -34166,7 +34166,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.802';
+const APP_VERSION = 'v9.803';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -45957,17 +45957,17 @@ function bjBookDrinksRemoteMulti(code, assigned, extraUpdate) {
 function bjWrite(code, ns) {
   try { firebase.firestore().collection('rooms').doc(code).update({ bjState: ns }); } catch(e) { console.warn('bjWrite', e); }
 }
-function BJCardEl({ card, faceDown, small }) {
+function BJCardEl({ card, faceDown, small, animate }) {
   const W = small ? 36 : 48, H = small ? 52 : 70;
   if (faceDown) return (
-    <div style={{ width:W, height:H, borderRadius:8, background:'#1a3a5c', border:'2px solid rgba(255,255,255,0.25)', display:'grid', placeItems:'center', fontSize:small?18:24, flexShrink:0, animation:'bjDeal .3s ease-out' }}>🂠</div>
+    <div style={{ width:W, height:H, borderRadius:8, background:'#1a3a5c', border:'2px solid rgba(255,255,255,0.25)', display:'grid', placeItems:'center', fontSize:small?18:24, flexShrink:0, animation: animate ? 'bjDeal .7s ease-out' : undefined }}>🂠</div>
   );
   if (!card) return null;
   const isRed = bjIsRed(card);
   const rank = card.replace(/[♠♥♦♣]/g, '');
   const suit = card.slice(-1);
   return (
-    <div style={{ width:W, height:H, borderRadius:8, background:'#fff', border:'2px solid #ddd', display:'flex', flexDirection:'column', padding:'3px 5px', flexShrink:0, userSelect:'none', animation:'bjDeal .3s ease-out' }}>
+    <div style={{ width:W, height:H, borderRadius:8, background:'#fff', border:'2px solid #ddd', display:'flex', flexDirection:'column', padding:'3px 5px', flexShrink:0, userSelect:'none', animation: animate ? 'bjDeal .7s ease-out' : undefined }}>
       <span style={{ fontFamily:T.font, fontWeight:900, fontSize:small?13:15, color: isRed ? '#c02828' : '#111', lineHeight:1 }}>{rank}</span>
       <div style={{ flex:1, display:'grid', placeItems:'center' }}>
         <span style={{ fontSize:small?16:20, color: isRed ? '#c02828' : '#111' }}>{suit}</span>
@@ -46129,8 +46129,10 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     // csak akinek van zsetonja és nem szállt ki
     const parts = claimed.filter(pid => !(bjState.cashedOut || {})[pid] && chips[pid] > 0);
     if (!parts.length) return;
+    const brokeDrank = { ...(bjState.brokeDrank || {}) };
+    claimed.forEach(pid => { if (chips[pid] > 0) delete brokeDrank[pid]; });
     const bets = {}; parts.forEach(pid => bets[pid] = Math.max(1, Math.min((bjState.bets || {})[pid] || 1, chips[pid])));
-    update({ ...bjState, phase:'betting', participants: parts, chips, bets, betsDone: {}, deck: bjNewDeck(), hands: {}, dealerHand: [], stood: {}, bust: {}, doubled: {}, currentTurn: null });
+    update({ ...bjState, phase:'betting', participants: parts, chips, bets, betsDone: {}, deck: bjNewDeck(), hands: {}, dealerHand: [], stood: {}, bust: {}, doubled: {}, currentTurn: null, brokeDrank });
   }
   const hostStart = startRound;
   const hostNewRound = startRound;
@@ -46189,8 +46191,8 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     }
   }
   function hostRebuy(pid, mustDrink, newStack) {
-    if (mustDrink) bookDrinks(pid, stackOf(pid));
-    update({ ...bjState, stacks: { ...(bjState.stacks || {}), [pid]: newStack }, chips: { ...(bjState.chips || {}), [pid]: newStack }, cashedOut: { ...(bjState.cashedOut || {}), [pid]: false } });
+    if (mustDrink && !(bjState.brokeDrank || {})[pid]) bookDrinks(pid, stackOf(pid));
+    update({ ...bjState, stacks: { ...(bjState.stacks || {}), [pid]: newStack }, chips: { ...(bjState.chips || {}), [pid]: newStack }, cashedOut: { ...(bjState.cashedOut || {}), [pid]: false }, brokeDrank: { ...(bjState.brokeDrank || {}), [pid]: false } });
   }
 
   if (isOnline && hostViewMode === 'player' && room) {
@@ -46296,7 +46298,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
             <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:'rgba(255,255,255,0.85)', textTransform:'uppercase', letterSpacing:'0.06em' }}>🤖 Gép{revealed ? ` — ${bjScore(bjState.dealerHand)}` : ''}</span>
           </div>
           <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-            {(bjState.dealerHand || []).map((c, i) => <BJCardEl key={i} card={c} faceDown={i === 1 && !revealed} />)}
+            {(bjState.dealerHand || []).map((c, i) => <BJCardEl key={i} card={c} faceDown={i === 1 && !revealed} animate={i >= 1 && revealed} />)}
           </div>
         </div>
         {(bjState.participants || []).map(pid => {
@@ -46353,7 +46355,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
         <div style={{ background:'#1a6b3c', borderRadius:18, padding:'12px 14px', marginBottom:14 }}>
           <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:'rgba(255,255,255,0.85)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>🤖 Gép — {ds}{ds > 21 ? ' (besokallt!)' : ''}{bjIsBlackjack(bjState.dealerHand) ? ' 🂡' : ''}</div>
           <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-            {(bjState.dealerHand || []).map((c, i) => <BJCardEl key={i} card={c} small />)}
+            {(bjState.dealerHand || []).map((c, i) => <BJCardEl key={i} card={c} small animate={i >= 1} />)}
           </div>
         </div>
         {(bjState.participants || []).map(pid => {
@@ -46388,7 +46390,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
                   {!isOnline && hostRebuyPick !== pid && (
                     <div style={{ display:'flex', gap:8, marginTop:8 }}>
                       <button onClick={() => setHostRebuyPick(pid)} style={{ flex:1, padding:'9px', borderRadius:10, border:'none', background:T.mint, fontFamily:T.font, fontWeight:800, fontSize:12, color:'#fff', cursor:'pointer' }}>🔄 Megitta — újra beszáll</button>
-                      <button onClick={() => update({ ...bjState, cashedOut: { ...(bjState.cashedOut || {}), [pid]: true } })} style={{ flex:1, padding:'9px', borderRadius:10, border:'none', background:'#555', fontFamily:T.font, fontWeight:800, fontSize:12, color:'#fff', cursor:'pointer' }}>🚪 Megitta — kiszáll</button>
+                      <button onClick={() => update({ ...bjState, cashedOut: { ...(bjState.cashedOut || {}), [pid]: true }, brokeDrank: { ...(bjState.brokeDrank || {}), [pid]: true } })} style={{ flex:1, padding:'9px', borderRadius:10, border:'none', background:'#555', fontFamily:T.font, fontWeight:800, fontSize:12, color:'#fff', cursor:'pointer' }}>🚪 Megitta — kiszáll</button>
                     </div>
                   )}
                   {!isOnline && hostRebuyPick === pid && (
@@ -46587,8 +46589,8 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
   const amOut = !!(bj.cashedOut || {})[playerId];
   const setMyBet = (v) => { if (typeof syncRoom === 'function') syncRoom(code, { bjState: { bets: { [playerId]: Math.max(1, Math.min(myChips, v)) } } }); };
   const guestRebuy = (drinkN, newStack) => {
-    if (drinkN > 0) bjBookDrinksRemote(code, playerId, drinkN);
-    bjWrite(code, { ...bj, stacks: { ...(bj.stacks || {}), [playerId]: newStack }, chips: { ...(bj.chips || {}), [playerId]: newStack }, cashedOut: { ...(bj.cashedOut || {}), [playerId]: false } });
+    if (drinkN > 0 && !(bj.brokeDrank || {})[playerId]) bjBookDrinksRemote(code, playerId, drinkN);
+    bjWrite(code, { ...bj, stacks: { ...(bj.stacks || {}), [playerId]: newStack }, chips: { ...(bj.chips || {}), [playerId]: newStack }, cashedOut: { ...(bj.cashedOut || {}), [playerId]: false }, brokeDrank: { ...(bj.brokeDrank || {}), [playerId]: false } });
     setRebuyPick(null);
   };
   const guestCashOut = () => {
@@ -46664,7 +46666,24 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
           </div>
         )}
 
-        {bj.phase !== 'joining' && !inRound && (
+        {bj.phase !== 'joining' && !inRound && !amOut && myChips === 0 && (
+          <div style={{ background:T.surface, borderRadius:18, padding:'26px 18px', boxShadow:T.shadow, textAlign:'center' }}>
+            <div style={{ fontSize:44 }}>💀</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.coral, marginTop:8 }}>Elfogyott a készleted!</div>
+            <div style={{ fontFamily:T.font, fontSize:13, fontWeight:T.weightTitle, color:T.coral, marginTop:6 }}>Igyál {startStack} kortyot!</div>
+            {!rebuyPick && (
+              <div style={{ display:'flex', gap:8, marginTop:14 }}>
+                <button onClick={() => setRebuyPick({ drinkN: startStack })} style={{ flex:1, padding:'11px', borderRadius:12, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>🔄 Megittam — újra beszállok</button>
+                <button onClick={() => { if (!(bj.brokeDrank || {})[playerId]) bjBookDrinksRemote(code, playerId, startStack); bjWrite(code, { ...bj, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true }, brokeDrank: { ...(bj.brokeDrank || {}), [playerId]: true } }); }} style={{ flex:1, padding:'11px', borderRadius:12, border:'none', background:'#555', fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>🚪 Kiszállok</button>
+              </div>
+            )}
+            {rebuyPick && (
+              <BJStackPicker onConfirm={v => guestRebuy(rebuyPick.drinkN, v)} onCancel={() => setRebuyPick(null)} />
+            )}
+          </div>
+        )}
+
+        {bj.phase !== 'joining' && !inRound && (amOut || myChips > 0) && (
           <div style={{ background:T.surface, borderRadius:18, padding:'26px 18px', boxShadow:T.shadow, textAlign:'center' }}>
             <div style={{ fontSize:44 }}>{amOut ? '🚪' : '⏳'}</div>
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, marginTop:8 }}>{amOut ? 'Kiszálltál' : 'Ebből a körből kimaradtál'}</div>
@@ -46705,7 +46724,7 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
             <div style={{ background:'#1a6b3c', borderRadius:18, padding:'12px 14px', marginBottom:12 }}>
               <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, color:'rgba(255,255,255,0.85)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>🤖 Gép{revealed ? ` — ${bjScore(bj.dealerHand)}${bjScore(bj.dealerHand) > 21 ? ' (besokallt!)' : ''}` : ''}</div>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                {(bj.dealerHand || []).map((c, i) => <BJCardEl key={i} card={c} faceDown={i === 1 && !revealed} small />)}
+                {(bj.dealerHand || []).map((c, i) => <BJCardEl key={i} card={c} faceDown={i === 1 && !revealed} small animate={i >= 1 && revealed} />)}
               </div>
             </div>
 
@@ -46752,7 +46771,7 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
                         {!rebuyPick && (
                         <div style={{ display:'flex', gap:8, marginTop:10 }}>
                           <button onClick={() => setRebuyPick({ drinkN: startStack })} style={{ flex:1, padding:'11px', borderRadius:12, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>🔄 Megittam — újra beszállok</button>
-                          <button onClick={() => { bjBookDrinksRemote(code, playerId, startStack); bjWrite(code, { ...bj, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true } }); }} style={{ flex:1, padding:'11px', borderRadius:12, border:'none', background:'#555', fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>🚪 Kiszállok</button>
+                          <button onClick={() => { if (!(bj.brokeDrank || {})[playerId]) bjBookDrinksRemote(code, playerId, startStack); bjWrite(code, { ...bj, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true }, brokeDrank: { ...(bj.brokeDrank || {}), [playerId]: true } }); }} style={{ flex:1, padding:'11px', borderRadius:12, border:'none', background:'#555', fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>🚪 Kiszállok</button>
                         </div>
                         )}
                         {rebuyPick && (
