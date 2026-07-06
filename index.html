@@ -34166,7 +34166,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.808';
+const APP_VERSION = 'v9.809';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -45924,8 +45924,8 @@ function bjResultFor(state, pid) {
   if (state.bust[pid])   return { label:'Besokallt 💀', delta: -bet };
   if (pBJ && dBJ)        return { label:'Döntetlen — dupla Blackjack', delta: 0 };
   if (pBJ)               return { label:'Blackjack! 🂡', delta: Math.ceil(bet * 1.5) };
-  if (dBJ)               return { label:'Gép Blackjack 🤖', delta: -bet };
-  if (ds > 21)           return { label:'A gép besokallt — nyert! 🏆', delta: bet };
+  if (dBJ)               return { label:'Osztó Blackjack 🎩', delta: -bet };
+  if (ds > 21)           return { label:'Az osztó besokallt — nyert! 🏆', delta: bet };
   if (ps > ds)           return { label:'Nyert! 🏆', delta: bet };
   if (ps === ds)         return { label:'Döntetlen', delta: 0 };
   return { label:'Vesztett', delta: -bet };
@@ -45957,10 +45957,10 @@ function bjBookDrinksRemoteMulti(code, assigned, extraUpdate) {
 function bjWrite(code, ns) {
   try { firebase.firestore().collection('rooms').doc(code).update({ bjState: ns }); } catch(e) { console.warn('bjWrite', e); }
 }
-function BJCardEl({ card, faceDown, small, animate }) {
-  const W = small ? 36 : 48, H = small ? 52 : 70;
+function BJCardEl({ card, faceDown, small, big, animate }) {
+  const W = big ? 56 : small ? 36 : 48, H = big ? 80 : small ? 52 : 70;
   if (faceDown) return (
-    <div style={{ width:W, height:H, borderRadius:8, background:'#1a3a5c', border:'2px solid rgba(255,255,255,0.25)', display:'grid', placeItems:'center', fontSize:small?18:24, flexShrink:0, animation: animate ? 'bjDeal .7s ease-out' : undefined }}>🂠</div>
+    <div style={{ width:W, height:H, borderRadius:8, background:'#1a3a5c', border:'2px solid rgba(255,255,255,0.25)', display:'grid', placeItems:'center', fontSize:big?28:small?18:24, flexShrink:0, animation: animate ? 'bjDeal .7s ease-out' : undefined }}>🂠</div>
   );
   if (!card) return null;
   const isRed = bjIsRed(card);
@@ -45968,9 +45968,9 @@ function BJCardEl({ card, faceDown, small, animate }) {
   const suit = card.slice(-1);
   return (
     <div style={{ width:W, height:H, borderRadius:8, background:'#fff', border:'2px solid #ddd', display:'flex', flexDirection:'column', padding:'3px 5px', flexShrink:0, userSelect:'none', animation: animate ? 'bjDeal .7s ease-out' : undefined }}>
-      <span style={{ fontFamily:T.font, fontWeight:900, fontSize:small?13:15, color: isRed ? '#c02828' : '#111', lineHeight:1 }}>{rank}</span>
+      <span style={{ fontFamily:T.font, fontWeight:900, fontSize:big?18:small?13:15, color: isRed ? '#c02828' : '#111', lineHeight:1 }}>{rank}</span>
       <div style={{ flex:1, display:'grid', placeItems:'center' }}>
-        <span style={{ fontSize:small?16:20, color: isRed ? '#c02828' : '#111' }}>{suit}</span>
+        <span style={{ fontSize:big?24:small?16:20, color: isRed ? '#c02828' : '#111' }}>{suit}</span>
       </div>
     </div>
   );
@@ -46040,7 +46040,7 @@ function BJGiftOverlay({ pool, recipients, onConfirm, onCancel }) {
   );
 }
 
-// ═══════════════ BLACKJACK — host nézet (a gép oszt) ═══════════════
+// ═══════════════ BLACKJACK — host nézet (az osztó oszt) ═══════════════
 // ── Kaszinó zseton — kortykészlet vizuál ──
 function BJChipStack({ count, size, hideCount }) {
   const s = size || 44;
@@ -46099,7 +46099,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
 
   React.useEffect(() => {
     if (!isOnline) {
-      // Offline: mindenki a host telefonján játszik, a gép oszt
+      // Offline: mindenki a host telefonján játszik, az osztó oszt
       const parts = players.map(p => p.id);
       const bets = {}; const chips = {};
       parts.forEach(pid => { bets[pid] = 1; chips[pid] = 10; });
@@ -46225,7 +46225,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     return (
       <div style={{ padding:'0 16px 16px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-          <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontSize:12, color:T.inkSoft, lineHeight:1.35 }}>A játékosok a telefonjukon csatlakoznak — mindenki a gép ellen játszik!</div>
+          <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontSize:12, color:T.inkSoft, lineHeight:1.35 }}>A játékosok a telefonjukon csatlakoznak — mindenki az osztó (a ház) ellen játszik!</div>
           {roomUrl && (
             <button onClick={() => setShowQR(true)} style={{ flexShrink:0, background:'transparent', border:`1.5px solid ${T.surfaceMuted}`, borderRadius:20, padding:'8px 14px', fontFamily:T.font, fontSize:13, fontWeight:800, color:T.inkSoft, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
               <span>📱</span> QR
@@ -46297,61 +46297,75 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     </div>
   );
 
-  // ── Játék fázis (asztal nézet) ──
+  // ── Játék fázis (zöld filc asztal) ──
   const PlayingView = () => {
     const revealed = bjState.phase === 'dealer' || bjState.phase === 'results';
+    const curPid = bjState.phase === 'playing' ? bjState.currentTurn : null;
+    const curP = curPid ? getPlayer(curPid) : null;
+    const curHand = curPid ? (bjState.hands[curPid] || []) : [];
+    const canDouble = curPid && curHand.length === 2 && !bjState.doubled[curPid];
     return (
       <div style={{ padding:'0 16px 16px' }}>
-        <div style={{ background:'#1a6b3c', borderRadius:18, padding:'12px 14px', marginBottom:14 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-            <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:'rgba(255,255,255,0.85)', textTransform:'uppercase', letterSpacing:'0.06em' }}>🤖 Gép{revealed ? ` — ${bjScore(bjState.dealerHand)}` : ''}</span>
+        <div style={{ background:'radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.10), rgba(255,255,255,0) 60%), #1E6E44', border:'6px solid #175636', borderRadius:'150px 150px 22px 22px', padding:'26px 12px 18px', boxShadow:'inset 0 2px 12px rgba(0,0,0,0.25)' }}>
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, marginBottom:16 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:'#fff', letterSpacing:'0.12em', textTransform:'uppercase' }}>🎩 OSZTÓ</span>
+              <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:'#fff', background:'#0e3d26', borderRadius:999, padding:'3px 10px' }}>{revealed ? bjScore(bjState.dealerHand) : '?'}</span>
+            </div>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap', justifyContent:'center' }}>
+              {(bjState.dealerHand || []).map((c, i) => <BJCardEl key={i} card={c} faceDown={i === 1 && !revealed} animate={i >= 1 && revealed} />)}
+            </div>
           </div>
-          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-            {(bjState.dealerHand || []).map((c, i) => <BJCardEl key={i} card={c} faceDown={i === 1 && !revealed} animate={i >= 1 && revealed} />)}
+          <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:10 }}>
+            {(bjState.participants || []).map(pid => {
+              const p = getPlayer(pid);
+              const hand = bjState.hands[pid] || [];
+              const score = bjScore(hand);
+              const isTurn = bjState.currentTurn === pid && bjState.phase === 'playing';
+              const isStood = bjState.stood[pid];
+              const isBust = bjState.bust[pid];
+              const isBJ = bjIsBlackjack(hand);
+              const rowChips = (bjState.chips || {})[pid] !== undefined ? bjState.chips[pid] : stackOf(pid);
+              const status = isBust ? { t:`💀 ${score}`, c:'#FF9C86' } : isBJ ? { t:'BJ! 🂡', c:'#7CF0BF' } : isTurn ? { t:'⏳ GONDOLKODIK…', c:'#F4D46B' } : isStood ? { t:`✋ ${score}`, c:'#F4D46B' } : { t:String(score), c:'#F4D46B' };
+              const lblS = { fontFamily:T.font, fontSize:8, fontWeight:800, letterSpacing:'0.08em', textTransform:'uppercase', color:'rgba(255,255,255,0.7)', marginTop:2 };
+              return (
+                <div key={pid} style={{ width:106, display:'flex', flexDirection:'column', alignItems:'center', gap:5, background:'rgba(255,255,255,0.08)', border:`1.5px solid ${isTurn ? '#F4D46B' : 'rgba(255,255,255,0.18)'}`, borderRadius:14, padding:'10px 6px 8px', boxShadow: isTurn ? '0 0 0 2px #F4D46B66' : 'none' }}>
+                  <BJAvatar p={p} size={30} />
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:'#fff', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p?.name || pid}</span>
+                  <div style={{ display:'flex', gap:3, flexWrap:'wrap', justifyContent:'center', minHeight:52 }}>
+                    {hand.map((c, i) => <BJCardEl key={i} card={c} small />)}
+                  </div>
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
+                      <span style={{ width:26, height:26, borderRadius:'50%', background:T.coral, border:'1.5px dashed rgba(255,255,255,0.9)', display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:11, color:'#fff', boxSizing:'border-box' }}>{bjState.bets[pid] || 1}</span>
+                      <span style={lblS}>TÉT</span>
+                    </div>
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:3, height:26 }}><BJChipStack count={rowChips} size={20} hideCount /><span style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:'#fff' }}>{rowChips}</span></span>
+                      <span style={lblS}>KÉSZLET</span>
+                    </div>
+                  </div>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:9.5, color:status.c, letterSpacing:'0.04em' }}>{status.t}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
-        {(bjState.participants || []).map(pid => {
-          const p = getPlayer(pid);
-          const hand = bjState.hands[pid] || [];
-          const score = bjScore(hand);
-          const isTurn = bjState.currentTurn === pid && bjState.phase === 'playing';
-          const isStood = bjState.stood[pid];
-          const isBust = bjState.bust[pid];
-          const isBJ = bjIsBlackjack(hand);
-          const canDouble = hand.length === 2 && !bjState.doubled[pid];
-          const rowChips = (bjState.chips || {})[pid] !== undefined ? bjState.chips[pid] : stackOf(pid);
-          const pillS = { display:'inline-flex', alignItems:'center', gap:4, background:T.surfaceMuted, borderRadius:10, padding:'0 10px', height:26, fontFamily:T.font, fontWeight:800, fontSize:11, color:T.ink };
-          return (
-            <div key={pid} style={{ marginBottom:10, background: isTurn ? T.surface : 'transparent', borderRadius:14, padding: isTurn ? '10px 12px' : '4px 2px', border: isTurn ? `2px solid ${T.mint}` : '2px solid transparent', boxShadow: isTurn ? T.shadow : 'none' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                <BJAvatar p={p} size={26} />
-                <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink, flex:1, display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
-                  <span style={{ whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p?.name || pid}</span>
-                  <span style={{ ...pillS, whiteSpace:'nowrap' }}>Tét {bjState.bets[pid] || 1} 🍺</span>
-                  <span style={{ ...pillS, whiteSpace:'nowrap' }}><BJChipStack count={rowChips} size={20} hideCount /><span>{rowChips} 🍺</span></span>
-                </span>
-                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color: isBust ? T.coral : isBJ ? T.mint : T.ink }}>
-                  {isBust ? 'Bust 💀' : isBJ ? 'BJ! 🂡' : isStood ? `${score} ✋` : score}
-                </span>
-              </div>
-              <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
-                {hand.map((c, i) => <BJCardEl key={i} card={c} small />)}
-              </div>
-              {isTurn && (
-                <div style={{ display:'flex', gap:8, marginTop:10 }}>
-                  <button onClick={() => update(bjDoHit(bjState, pid))} style={{ flex:1, padding:'10px', borderRadius:12, background:T.mint, border:'none', fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', cursor:'pointer' }}>Hit 🃏</button>
-                  <button onClick={() => update(bjDoStand(bjState, pid))} style={{ flex:1, padding:'10px', borderRadius:12, background:'#555', border:'none', fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', cursor:'pointer' }}>Stand ✋</button>
-                  {canDouble && <button onClick={() => update(bjDoDouble(bjState, pid))} style={{ flex:1, padding:'10px', borderRadius:12, background:'#c07a10', border:'none', fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', cursor:'pointer' }}>Double 2×</button>}
-                </div>
-              )}
-              {isTurn && isOnline && (
-                <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:6, textAlign:'center' }}>📱 A telefonján is léphet — vagy üsd le itt helyette</div>
-              )}
+        {bjState.phase === 'playing' && curPid && (
+          <div style={{ marginTop:12 }}>
+            <div style={{ fontFamily:T.font, fontSize:12, fontWeight:T.weightTitle, color:T.inkSoft, textAlign:'center', marginBottom:8 }}>{curP?.name || '?'} jön</div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={() => update(bjDoHit(bjState, curPid))} style={{ flex:1, padding:'10px', borderRadius:12, background:T.mint, border:'none', fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', cursor:'pointer' }}>Hit 🃏</button>
+              <button onClick={() => update(bjDoStand(bjState, curPid))} style={{ flex:1, padding:'10px', borderRadius:12, background:'#555', border:'none', fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', cursor:'pointer' }}>Stand ✋</button>
+              {canDouble && <button onClick={() => update(bjDoDouble(bjState, curPid))} style={{ flex:1, padding:'10px', borderRadius:12, background:'#c07a10', border:'none', fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', cursor:'pointer' }}>Double 2×</button>}
             </div>
-          );
-        })}
+            {isOnline && (
+              <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:6, textAlign:'center' }}>📱 A telefonján is léphet — vagy üsd le itt helyette</div>
+            )}
+          </div>
+        )}
         {bjState.phase === 'dealer' && (
-          <div style={{ textAlign:'center', fontFamily:T.font, fontSize:14, fontWeight:T.weightTitle, color:T.inkSoft, marginTop:8 }}>A gép húz… 🤖</div>
+          <div style={{ textAlign:'center', fontFamily:T.font, fontSize:14, fontWeight:T.weightTitle, color:T.inkSoft, marginTop:12 }}>Az osztó húz… 🎩</div>
         )}
       </div>
     );
@@ -46363,60 +46377,88 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     return (
       <div style={{ padding:'0 16px 16px' }}>
         <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink, marginBottom:12, textAlign:'center' }}>Eredmények</div>
-        <div style={{ background:'#1a6b3c', borderRadius:18, padding:'12px 14px', marginBottom:14 }}>
-          <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:'rgba(255,255,255,0.85)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>🤖 Gép — {ds}{ds > 21 ? ' (besokallt!)' : ''}{bjIsBlackjack(bjState.dealerHand) ? ' 🂡' : ''}</div>
-          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-            {(bjState.dealerHand || []).map((c, i) => <BJCardEl key={i} card={c} small animate={i >= 1} />)}
+        <div style={{ background:'radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.10), rgba(255,255,255,0) 60%), #1E6E44', border:'6px solid #175636', borderRadius:'150px 150px 22px 22px', padding:'26px 12px 18px', boxShadow:'inset 0 2px 12px rgba(0,0,0,0.25)', marginBottom:14 }}>
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, marginBottom:16 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:'#fff', letterSpacing:'0.12em', textTransform:'uppercase' }}>🎩 OSZTÓ</span>
+              <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:'#fff', background:'#0e3d26', borderRadius:999, padding:'3px 10px' }}>{ds}{ds > 21 ? ' 💀' : ''}{bjIsBlackjack(bjState.dealerHand) ? ' 🂡' : ''}</span>
+            </div>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap', justifyContent:'center' }}>
+              {(bjState.dealerHand || []).map((c, i) => <BJCardEl key={i} card={c} small animate={i >= 1} />)}
+            </div>
+          </div>
+          <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:10 }}>
+            {(bjState.participants || []).map(pid => {
+              const p = getPlayer(pid);
+              const hand = bjState.hands[pid] || [];
+              const res = bjResultFor(bjState, pid);
+              const rowChips = (bjState.chips || {})[pid] !== undefined ? bjState.chips[pid] : stackOf(pid);
+              const out = !!(bjState.cashedOut || {})[pid];
+              const status = res.delta > 0 ? { t:`+${res.delta} 🍺`, c:'#7CF0BF' } : res.delta < 0 ? { t:`−${-res.delta} 🍺`, c:'#FF9C86' } : { t:'=', c:'#F4D46B' };
+              const lblS = { fontFamily:T.font, fontSize:8, fontWeight:800, letterSpacing:'0.08em', textTransform:'uppercase', color:'rgba(255,255,255,0.7)', marginTop:2 };
+              return (
+                <div key={pid} style={{ width:106, display:'flex', flexDirection:'column', alignItems:'center', gap:5, background:'rgba(255,255,255,0.08)', border:'1.5px solid rgba(255,255,255,0.18)', borderRadius:14, padding:'10px 6px 8px', opacity: out ? 0.6 : 1 }}>
+                  <BJAvatar p={p} size={30} />
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:'#fff', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p?.name || pid}{out ? ' 🚪' : ''}</span>
+                  <div style={{ display:'flex', gap:3, flexWrap:'wrap', justifyContent:'center', minHeight:52 }}>
+                    {hand.map((c, i) => <BJCardEl key={i} card={c} small />)}
+                  </div>
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
+                      <span style={{ width:26, height:26, borderRadius:'50%', background:T.coral, border:'1.5px dashed rgba(255,255,255,0.9)', display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:11, color:'#fff', boxSizing:'border-box' }}>{bjState.bets[pid] || 1}</span>
+                      <span style={lblS}>TÉT</span>
+                    </div>
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:3, height:26 }}><BJChipStack count={rowChips} size={20} hideCount /><span style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:'#fff' }}>{rowChips}</span></span>
+                      <span style={lblS}>KÉSZLET</span>
+                    </div>
+                  </div>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:9.5, color:status.c, letterSpacing:'0.04em' }}>{status.t}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
         {(bjState.participants || []).map(pid => {
           const p = getPlayer(pid);
-          const hand = bjState.hands[pid] || [];
-          const res = bjResultFor(bjState, pid);
           const startStack = stackOf(pid);
           const chips = (bjState.chips || {})[pid] !== undefined ? bjState.chips[pid] : startStack;
           const out = !!(bjState.cashedOut || {})[pid];
           const broke = !out && chips === 0;
           const diff = chips - startStack;
-          const pillS = { display:'inline-flex', alignItems:'center', gap:4, background:T.surfaceMuted, borderRadius:10, padding:'0 10px', height:26, fontFamily:T.font, fontWeight:800, fontSize:11, color:T.ink };
-          return (
-            <div key={pid} style={{ marginBottom:10, background:T.surface, borderRadius:14, padding:'10px 14px', boxShadow:T.shadow, opacity: out ? 0.6 : 1 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                <BJAvatar p={p} size={28} />
-                <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink, flex:1 }}>{p?.name || pid}{out ? ' · kiszállt 🚪' : ''}</span>
-                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:T.inkSoft }}>Lapok: {bjScore(hand)}</span>
+          if (broke) return (
+            <div key={pid} style={{ marginBottom:8, padding:'10px 12px', borderRadius:12, background:T.coralSoft }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <BJAvatar p={p} size={24} />
+                <span style={{ fontFamily:T.font, fontSize:12.5, fontWeight:900, color:T.coral }}>💀 {p?.name || pid} — elfogyott a készlete, igyon {startStack} kortyot!</span>
               </div>
-              <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginBottom:6 }}>
-                {hand.map((c, i) => <BJCardEl key={i} card={c} small />)}
-              </div>
-              <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color: res.delta < 0 ? T.coral : res.delta > 0 ? T.mint : T.inkSoft }}>{res.label}</span>
-                <span style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, fontFamily:T.font, fontSize:13, fontWeight:T.weightTitle, color: res.delta < 0 ? T.coral : res.delta > 0 ? T.mint : T.inkSoft }}>
-                  <span style={{ ...pillS, whiteSpace:'nowrap' }}>{res.delta > 0 ? '+' : ''}{res.delta} 🍺</span>
-                  <span style={{ ...pillS, whiteSpace:'nowrap' }}><BJChipStack count={chips} size={20} hideCount /><span>{chips} 🍺</span></span>
-                </span>
-              </div>
-              {broke && (
-                <div style={{ marginTop:8, padding:'8px 10px', borderRadius:10, background:T.coralSoft }}>
-                  <div style={{ fontFamily:T.font, fontSize:13, fontWeight:900, color:T.coral }}>💀 Elfogyott a készlete — igyon {startStack} kortyot!</div>
-                  {!isOnline && hostRebuyPick !== pid && (
-                    <div style={{ display:'flex', gap:8, marginTop:8 }}>
-                      <button onClick={() => setHostRebuyPick(pid)} style={{ flex:1, padding:'9px', borderRadius:10, border:'none', background:T.mint, fontFamily:T.font, fontWeight:800, fontSize:12, color:'#fff', cursor:'pointer' }}>🔄 Megitta — újra beszáll</button>
-                      <button onClick={() => update({ ...bjState, cashedOut: { ...(bjState.cashedOut || {}), [pid]: true }, brokeDrank: { ...(bjState.brokeDrank || {}), [pid]: true } })} style={{ flex:1, padding:'9px', borderRadius:10, border:'none', background:'#555', fontFamily:T.font, fontWeight:800, fontSize:12, color:'#fff', cursor:'pointer' }}>🚪 Megitta — kiszáll</button>
-                    </div>
-                  )}
-                  {!isOnline && hostRebuyPick === pid && (
-                    <BJStackPicker onConfirm={v => { hostRebuy(pid, true, v); setHostRebuyPick(null); }} onCancel={() => setHostRebuyPick(null)} />
-                  )}
+              {!isOnline && hostRebuyPick !== pid && (
+                <div style={{ display:'flex', gap:8, marginTop:8 }}>
+                  <button onClick={() => setHostRebuyPick(pid)} style={{ flex:1, padding:'9px', borderRadius:10, border:'none', background:T.mint, fontFamily:T.font, fontWeight:800, fontSize:12, color:'#fff', cursor:'pointer' }}>🔄 Megitta — újra beszáll</button>
+                  <button onClick={() => update({ ...bjState, cashedOut: { ...(bjState.cashedOut || {}), [pid]: true }, brokeDrank: { ...(bjState.brokeDrank || {}), [pid]: true } })} style={{ flex:1, padding:'9px', borderRadius:10, border:'none', background:'#555', fontFamily:T.font, fontWeight:800, fontSize:12, color:'#fff', cursor:'pointer' }}>🚪 Megitta — kiszáll</button>
                 </div>
               )}
-              {!broke && !out && !isOnline && (
-                <button onClick={() => hostCashOut(pid)} style={{ marginTop:8, width:'100%', padding:'8px', borderRadius:10, border:`1.5px solid ${T.surfaceMuted}`, background:'transparent', fontFamily:T.font, fontWeight:800, fontSize:12, color:T.inkSoft, cursor:'pointer' }}>
-                  🚪 Kiszáll {diff < 0 ? `— iszik ${-diff} kortyot` : diff > 0 ? `— kioszt ${diff} kortyot` : '— nullán van, se nem iszik, se nem oszt'}
-                </button>
+              {!isOnline && hostRebuyPick === pid && (
+                <BJStackPicker onConfirm={v => { hostRebuy(pid, true, v); setHostRebuyPick(null); }} onCancel={() => setHostRebuyPick(null)} />
               )}
             </div>
           );
+          if (!out && !isOnline) return (
+            <div key={pid} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+              <BJAvatar p={p} size={24} />
+              <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink, flexShrink:0 }}>{p?.name || pid}</span>
+              <button onClick={() => hostCashOut(pid)} style={{ flex:1, minWidth:0, padding:'7px 8px', borderRadius:10, border:`1.5px solid ${T.surfaceMuted}`, background:'transparent', fontFamily:T.font, fontWeight:800, fontSize:11.5, color:T.inkSoft, cursor:'pointer' }}>
+                🚪 Kiszáll {diff < 0 ? `— iszik ${-diff} kortyot` : diff > 0 ? `— kioszt ${diff} kortyot` : '— nullán van'}
+              </button>
+            </div>
+          );
+          if (out) return (
+            <div key={pid} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8, opacity:0.6 }}>
+              <BJAvatar p={p} size={24} />
+              <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.inkSoft }}>{p?.name || pid} · kiszállt 🚪</span>
+            </div>
+          );
+          return null;
         })}
         <button onClick={hostNewRound} style={{ width:'100%', padding:'14px', borderRadius:16, background:'#1a6b3c', border:'none', fontFamily:T.font, fontWeight:900, fontSize:15, color:'#fff', cursor:'pointer', marginTop:14 }}>Új kör 🔄</button>
       </div>
@@ -46733,11 +46775,40 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
 
         {(bj.phase === 'playing' || bj.phase === 'dealer' || bj.phase === 'results') && inRound && (
           <React.Fragment>
-            {/* Osztó */}
-            <div style={{ background:'#1a6b3c', borderRadius:18, padding:'12px 14px', marginBottom:12 }}>
-              <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, color:'rgba(255,255,255,0.85)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>🤖 Gép{revealed ? ` — ${bjScore(bj.dealerHand)}${bjScore(bj.dealerHand) > 21 ? ' (besokallt!)' : ''}` : ''}</div>
-              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                {(bj.dealerHand || []).map((c, i) => <BJCardEl key={i} card={c} faceDown={i === 1 && !revealed} small animate={i >= 1 && revealed} />)}
+            {/* Mini asztal — osztó + többiek */}
+            <div style={{ background:'radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.10), rgba(255,255,255,0) 60%), #1E6E44', border:'4px solid #175636', borderRadius:'90px 90px 18px 18px', padding:'18px 10px 12px', marginBottom:12 }}>
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, marginBottom:10 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:'#fff', letterSpacing:'0.12em', textTransform:'uppercase' }}>🎩 OSZTÓ</span>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:'#fff', background:'#0e3d26', borderRadius:999, padding:'2px 9px' }}>{revealed ? `${bjScore(bj.dealerHand)}${bjScore(bj.dealerHand) > 21 ? ' 💀' : ''}` : '?'}</span>
+                </div>
+                <div style={{ display:'flex', gap:5, flexWrap:'wrap', justifyContent:'center' }}>
+                  {(bj.dealerHand || []).map((c, i) => <BJCardEl key={i} card={c} faceDown={i === 1 && !revealed} small animate={i >= 1 && revealed} />)}
+                </div>
+              </div>
+              <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:8 }}>
+                {(bj.participants || []).filter(pid => pid !== playerId).map(pid => {
+                  const p = players.find(pp => pp.id === pid);
+                  const hand = (bj.hands || {})[pid] || [];
+                  const score = bjScore(hand);
+                  const isTurn = bj.phase === 'playing' && bj.currentTurn === pid;
+                  const status = bj.phase === 'results'
+                    ? { t:`Lapok: ${bj.bust[pid] ? '💀' : bjIsBlackjack(hand) ? 'BJ 🂡' : score} · Zseton: ${(bj.chips || {})[pid] !== undefined ? bj.chips[pid] : stackOf(pid)} 🍺`, c:'#fff' }
+                    : bj.bust[pid] ? { t:'💀', c:'#FF9C86' }
+                    : bjIsBlackjack(hand) ? { t:'BJ! 🂡', c:'#7CF0BF' }
+                    : bj.stood[pid] ? { t:`${score} ✋`, c:'#F4D46B' }
+                    : { t:`${hand.length} LAP`, c:'#F4D46B' };
+                  return (
+                    <div key={pid} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3, background:'rgba(255,255,255,0.08)', border:`1.5px solid ${isTurn ? '#F4D46B' : 'rgba(255,255,255,0.18)'}`, borderRadius:12, padding:'7px 8px', minWidth:66, maxWidth:140, boxShadow: isTurn ? '0 0 0 2px #F4D46B66' : 'none' }}>
+                      <BJAvatar p={p} size={24} />
+                      <span style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:'#fff', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p?.name || pid}</span>
+                      <span style={{ fontFamily:T.font, fontWeight:900, fontSize:9, color:status.c, letterSpacing:'0.04em', textAlign:'center' }}>{status.t}</span>
+                    </div>
+                  );
+                })}
+                {(bj.participants || []).filter(pid => pid !== playerId).length === 0 && (
+                  <div style={{ fontFamily:T.font, fontSize:11, color:'rgba(255,255,255,0.75)', textAlign:'center', padding:'2px 0' }}>Egyedül játszol az osztó ellen</div>
+                )}
               </div>
             </div>
 
@@ -46745,12 +46816,13 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
             <div style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:T.shadow, border: isMyTurn ? `2px solid ${T.mint}` : '2px solid transparent', marginBottom:12 }}>
               <div style={{ display:'flex', alignItems:'center', marginBottom:8 }}>
                 <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em' }}>A lapjaid</span>
+                {isMyTurn && <span style={{ marginLeft:8, fontFamily:T.font, fontWeight:900, fontSize:10, color:'#fff', background:T.mint, borderRadius:999, padding:'3px 8px', letterSpacing:'0.06em' }}>TE JÖSSZ!</span>}
                 <span style={{ marginLeft:'auto', fontFamily:T.font, fontWeight:900, fontSize:20, color: bj.bust[playerId] ? T.coral : bjIsBlackjack(myHand) ? T.mint : T.ink }}>
                   {bj.bust[playerId] ? `${myScore} 💀` : bjIsBlackjack(myHand) ? '21 🂡' : myScore}
                 </span>
               </div>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                {myHand.map((c, i) => <BJCardEl key={i} card={c} />)}
+                {myHand.map((c, i) => <BJCardEl key={i} card={c} big />)}
               </div>
               {isMyTurn && (
                 <div style={{ display:'flex', gap:8, marginTop:14 }}>
@@ -46799,31 +46871,6 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
                   </div>
                 );
               })()}
-            </div>
-
-            {/* Többiek */}
-            <div style={{ background:T.surface, borderRadius:18, padding:'12px 14px', boxShadow:T.shadow }}>
-              <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightTitle, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>Többiek</div>
-              {(bj.participants || []).filter(pid => pid !== playerId).map(pid => {
-                const p = players.find(pp => pp.id === pid);
-                const hand = (bj.hands || {})[pid] || [];
-                const score = bjScore(hand);
-                const isTurn = bj.phase === 'playing' && bj.currentTurn === pid;
-                return (
-                  <div key={pid} style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 0', borderBottom:`1px solid ${T.surfaceMuted}` }}>
-                    <BJAvatar p={p} size={24} />
-                    <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink, flex:1 }}>{p?.name || pid}{isTurn ? ' 👈' : ''}</span>
-                    <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color: bj.bust[pid] ? T.coral : bjIsBlackjack(hand) ? T.mint : T.inkSoft }}>
-                      {bj.phase === 'results'
-                        ? `Lapok: ${bj.bust[pid] ? '💀' : bjIsBlackjack(hand) ? 'BJ 🂡' : score} · Zseton: ${(bj.chips || {})[pid] !== undefined ? bj.chips[pid] : stackOf(pid)} 🍺`
-                        : (bj.bust[pid] ? '💀' : bjIsBlackjack(hand) ? 'BJ 🂡' : bj.stood[pid] ? score : hand.length + ' lap')}
-                    </span>
-                  </div>
-                );
-              })}
-              {(bj.participants || []).filter(pid => pid !== playerId).length === 0 && (
-                <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, textAlign:'center', padding:'6px 0' }}>Egyedül játszol az osztó ellen</div>
-              )}
             </div>
 
             {/* Kapott kortyok log */}
