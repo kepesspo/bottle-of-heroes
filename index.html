@@ -34129,7 +34129,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.782';
+const APP_VERSION = 'v9.783';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -40408,6 +40408,17 @@ const WILDCARDS = [
 ];
 
 const OVFJ_LETTERS = ['A','Á','B','C','CS','D','E','É','F','G','GY','H','I','Í','J','K','L','LY','M','N','NY','O','Ó','Ö','Ő','P','R','S','SZ','T','TY','U','Ú','Ü','Ű','V','Z','ZS'];
+const OVFJ_DIGRAPHS = ['dzs','dz','cs','gy','ly','ny','sz','ty','zs'];
+function ovfjLetterOk(value, letter) {
+  const s = String(value||'').trim().toLowerCase();
+  const l = String(letter||'').toLowerCase();
+  if (!s || !l) return false;
+  if (!s.startsWith(l)) return false;
+  // Egybetűs húzott betűnél a hosszabb digráf nem érvényes (S ≠ Sz, C ≠ Cs, G ≠ Gy…)
+  if (l.length === 1 && OVFJ_DIGRAPHS.some(d => d[0] === l && s.startsWith(d))) return false;
+  if (l === 'dz' && s.startsWith('dzs')) return false;
+  return true;
+}
 const OVFJ_CATS = [
   { key:'orszag', label:'Ország',      emoji:'🌍' },
   { key:'varos',  label:'Város',       emoji:'🏙️' },
@@ -41356,7 +41367,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       const groups = gPlayers.map((gp, gi) => ({
         id: gi, label: 'A B C D E F G H'.split(' ')[gi] + ' csoport',
         players: gp,
-        matches: groupType === 'rr' ? buildRRMatches(gp) : buildSEBracket(gp).flat(),
+        matches: (groupType === 'rr' || gp.length === 2) ? buildRRMatches(gp) : buildSEBracket(gp).flat(),
         seRounds: groupType === 'se' ? buildSEBracket(gp) : null,
         seCurRound: 0,
         curIdx: 0, done: false,
@@ -41669,7 +41680,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       const groups = gPlayers.map((gp, gi) => ({
         id: gi, label: 'A B C D E F G H'.split(' ')[gi] + ' csoport',
         players: gp,
-        matches: groupType === 'rr' ? buildRRMatches(gp) : buildSEBracket(gp).flat(),
+        matches: (groupType === 'rr' || gp.length === 2) ? buildRRMatches(gp) : buildSEBracket(gp).flat(),
         seRounds: groupType === 'se' ? buildSEBracket(gp) : null,
         seCurRound: 0, curIdx: 0, done: false,
       }));
@@ -41750,7 +41761,18 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       const ng = prev.map((g, gi) => {
         if (gi !== viewGroup) return g;
         const nm = g.matches.map((mm, i) => i === g.curIdx ? { ...mm, winner, loser, score, draw: isDraw } : mm);
-        const nextIdx = nm.findIndex(mm => mm.winner === null && !mm.draw);
+        // SE csoport: a prelim meccs győztesét betöltjük a következő kör TBD meccsébe
+        const curM = nm[g.curIdx];
+        if (!isRR && winner && curM && curM.r1slot !== undefined && curM.r1slot !== null) {
+          const base = nm.filter(mm => mm.r1slot !== undefined && mm.r1slot !== null).length;
+          const ti = base + curM.r1slot;
+          if (nm[ti]) {
+            const filled = { ...nm[ti], [curM.r1side]: winner };
+            filled.tbd = !(filled.p1 && filled.p2);
+            nm[ti] = filled;
+          }
+        }
+        const nextIdx = nm.findIndex(mm => mm.winner === null && !mm.draw && mm.p1 && mm.p2);
         const done = nextIdx === -1;
         return { ...g, matches: nm, curIdx: done ? g.curIdx : nextIdx, done };
       });
@@ -45231,6 +45253,10 @@ function bjNewDeck() {
   }
   return d;
 }
+function bjPop(deck) {
+  if (!deck.length) bjNewDeck().forEach(cd => deck.push(cd)); // elfogyott a pakli — újrakeverés
+  return deck.pop();
+}
 function bjCardValue(rank) {
   if (['J','Q','K'].includes(rank)) return 10;
   if (rank === 'A') return 11;
@@ -45259,7 +45285,7 @@ function bjAdvanceTurn(state) {
 }
 function bjDoHit(state, pid) {
   const deck = [...state.deck];
-  const card = deck.pop();
+  const card = bjPop(deck);
   const hand = [...(state.hands[pid] || []), card];
   let ns = { ...state, deck, hands: { ...state.hands, [pid]: hand } };
   if (bjScore(hand) > 21) {
@@ -45273,7 +45299,7 @@ function bjDoStand(state, pid) {
 }
 function bjDoDouble(state, pid) {
   const deck = [...state.deck];
-  const card = deck.pop();
+  const card = bjPop(deck);
   const hand = [...(state.hands[pid] || []), card];
   let ns = { ...state, deck,
     hands: { ...state.hands, [pid]: hand },
@@ -45290,8 +45316,8 @@ function bjDeal(state) {
   (state.participants || []).forEach(pid => hands[pid] = []);
   // Standard osztás: kör 1 — játékosok + osztó (felfelé), kör 2 — játékosok + osztó (hole card)
   for (let i = 0; i < 2; i++) {
-    (state.participants || []).forEach(pid => hands[pid].push(deck.pop()));
-    dealerHand.push(deck.pop());
+    (state.participants || []).forEach(pid => hands[pid].push(bjPop(deck)));
+    dealerHand.push(bjPop(deck));
   }
   const stood = {};
   (state.participants || []).forEach(pid => { if (bjIsBlackjack(hands[pid])) stood[pid] = true; });
@@ -45405,7 +45431,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     if (!bjState || bjState.phase !== 'dealer') return;
     const deck = [...bjState.deck];
     const dealerHand = [...bjState.dealerHand];
-    while (bjScore(dealerHand) < 17) dealerHand.push(deck.pop());
+    while (bjScore(dealerHand) < 17) dealerHand.push(bjPop(deck));
     const timeout = setTimeout(() => {
       const finalState = { ...bjState, deck, dealerHand, phase:'results' };
       update(finalState);
@@ -45527,7 +45553,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
               <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
                 {hand.map((c, i) => <BJCardEl key={i} card={c} small />)}
               </div>
-              {isTurn && !isOnline && (
+              {isTurn && (
                 <div style={{ display:'flex', gap:8, marginTop:10 }}>
                   <button onClick={() => update(bjDoHit(bjState, pid))} style={{ flex:1, padding:'10px', borderRadius:12, background:T.mint, border:'none', fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', cursor:'pointer' }}>Hit 🃏</button>
                   <button onClick={() => update(bjDoStand(bjState, pid))} style={{ flex:1, padding:'10px', borderRadius:12, background:'#555', border:'none', fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', cursor:'pointer' }}>Stand ✋</button>
@@ -45535,7 +45561,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
                 </div>
               )}
               {isTurn && isOnline && (
-                <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:6, textAlign:'center' }}>📱 A telefonján gondolkodik…</div>
+                <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:6, textAlign:'center' }}>📱 A telefonján is léphet — vagy üsd le itt helyette</div>
               )}
             </div>
           );
@@ -45737,8 +45763,8 @@ function BlackjackObserverView({ room, code, onLeave }) {
   const isMyTurn = bj.phase === 'playing' && bj.currentTurn === playerId;
   const revealed = bj.phase === 'dealer' || bj.phase === 'results';
 
-  const setMyBet = (v) => bjWrite(code, { ...bj, bets: { ...bj.bets, [playerId]: Math.max(1, Math.min(10, v)) } });
-  const confirmBet = () => bjWrite(code, { ...bj, betsDone: { ...bj.betsDone, [playerId]: true } });
+  const setMyBet = (v) => { if (typeof syncRoom === 'function') syncRoom(code, { bjState: { bets: { [playerId]: Math.max(1, Math.min(10, v)) } } }); };
+  const confirmBet = () => { if (typeof syncRoom === 'function') syncRoom(code, { bjState: { betsDone: { [playerId]: true } } }); };
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, minHeight:0, overflow:'hidden' }}>
@@ -46097,8 +46123,9 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
       setTimeout(() => {
         setGuessResult(null); setLastCardFail(true); setTimeout(() => setLastCardFail(false), 3000);
         // Save busz fail stat
-        if (typeof window.updateStats === 'function' && players[turn]?.profileId) {
-          window.updateStats(players[turn].profileId, {
+        const riderP = players.find(p => p.id === riderId);
+        if (typeof window.updateStats === 'function' && riderP?.profileId) {
+          window.updateStats(riderP.profileId, {
             busz_played: firebase.firestore.FieldValue.increment(1),
             busz_fails: firebase.firestore.FieldValue.increment(1),
             busz_total_drinks: firebase.firestore.FieldValue.increment(1),
@@ -48493,9 +48520,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
         const vk=`${pid}_${cat.key}`, vm=votes[vk]||{}, vl=Object.values(vm);
         const yes=vl.filter(Boolean).length, no=vl.filter(x=>!x).length;
         if(vl.length>0 && no>yes) return;
-        // Exclude wrong first letter (digraph-aware)
-        const letterL = letter.toLowerCase();
-        if (!v.startsWith(letterL)) return;
+        if (!ovfjLetterOk(v, letter)) return; // rossz kezdőbetű (digráf-helyes)
         rs[pid]=(rs[pid]||0)+(vals[v]>1?5:10);
       });
     });
@@ -48536,6 +48561,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
       OVFJ_CATS.forEach(cat => {
         const val = (answers[p.id]?.[cat.key]||'').trim();
         if (!val || dm[cat.key].has(val.toLowerCase())) return;
+        if (!ovfjLetterOk(val, letter)) return; // rossz kezdőbetű — nem kell rá szavazni
         voteableItems.push({pid: p.id, catKey: cat.key});
       });
     });
@@ -48613,7 +48639,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
               const val=(ans[cat.key]||'').trim(), vk=`${p.id}_${cat.key}`, vm=votes[vk]||{};
               const yes=Object.values(vm).filter(Boolean).length, no=Object.values(vm).filter(x=>!x).length;
               const isDup = val && dupMap[cat.key].has(val.toLowerCase());
-              const isWrongLetter = val && !val.toLowerCase().startsWith(letter.toLowerCase());
+              const isWrongLetter = val && !ovfjLetterOk(val, letter);
               const isInvalid = isDup || isWrongLetter;
               const hostVote = hostPlayer && !isHostSelf ? hostVotes[vk] : undefined;
               return (
@@ -48681,7 +48707,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
                 <span style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.inkSoft,width:64,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
                 {(()=>{
                   const hv = hostLocalAns[cat.key]||'';
-                  const hwrong = hv.trim().length > 0 && !hv.trim().toLowerCase().startsWith(letter.toLowerCase());
+                  const hwrong = hv.trim().length > 0 && !ovfjLetterOk(hv, letter);
                   return (
                     <input
                       value={hv}
@@ -48825,10 +48851,8 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
   const prevLocalAnsRef = React.useRef({});
   React.useEffect(() => {
     if (ovfj.round && lastRoundRef.current !== ovfj.round) {
-      // Keep previous answers as defaults for new round
-      const prev = lastRoundRef.current ? {...prevLocalAnsRef.current} : {};
       lastRoundRef.current = ovfj.round;
-      setLocalAns(prev); setSubmitted(false); setMyVotes({});
+      setLocalAns({}); setSubmitted(false); setMyVotes({});
     }
   }, [ovfj.round]);
   React.useEffect(() => { prevLocalAnsRef.current = localAns; }, [localAns]);
@@ -48963,7 +48987,7 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
               </div>
               {(()=>{
                 const v = localAns[cat.key]||'';
-                const wrongLetter = v.trim().length > 0 && !v.trim().toLowerCase().startsWith(letter.toLowerCase());
+                const wrongLetter = v.trim().length > 0 && !ovfjLetterOk(v, letter);
                 return (
                   <input
                     ref={el=>inputRefs.current[idx]=el}
@@ -49050,7 +49074,7 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
               {OVFJ_CATS.map(cat => {
                 const val = (ans[cat.key] || '').trim();
                 const vk = `${p.id}_${cat.key}`, mv = myVotes[vk];
-                const dup = isDup(cat.key, val);
+                const dup = isDup(cat.key, val) || (!!val && !ovfjLetterOk(val, letter));
                 return (
                   <div key={cat.key} style={{display:'flex',alignItems:'center',gap:5,marginBottom:6,paddingBottom:5,borderBottom:`1px solid ${T.surfaceMuted}`}}>
                     <span style={{fontSize:13,flexShrink:0,width:20,textAlign:'center'}}>{cat.emoji}</span>
@@ -49764,6 +49788,7 @@ function SzolancGame({ gameIdx, players, onAdvance, onResult, onSetHideFooter })
   const tapWord = (word, idx) => {
     if (S.phase !== 'recall') return;
     if (S.tapped.includes(idx)) return;
+    if (S.wrongIdx != null) return; // hibás érintés után zárolva
     const expected = S.chain[S.tapped.length];
     if (word !== expected) {
       setS(s => ({...s, wrongIdx: idx}));
