@@ -34112,7 +34112,7 @@ window.triggerHaptic = function() {
       var url = 'https://api.deezer.com/search?q=' + q + '&limit=5&output=jsonp&callback=' + cbName;
       var done = false;
       var timer = setTimeout(function() {
-        if (!done) { done = true; delete window[cbName]; if (sc.parentNode) sc.parentNode.removeChild(sc); _dzCache[spotifyId] = null; resolve(null); }
+        if (!done) { done = true; delete window[cbName]; if (sc.parentNode) sc.parentNode.removeChild(sc); resolve('__ERR__'); }
       }, 6000);
       window[cbName] = function(data) {
         if (done) return; done = true; clearTimeout(timer);
@@ -34127,7 +34127,7 @@ window.triggerHaptic = function() {
       var sc = document.createElement('script');
       sc.src = url;
       sc.onerror = function() {
-        if (!done) { done = true; clearTimeout(timer); delete window[cbName]; _dzCache[spotifyId] = null; resolve(null); }
+        if (!done) { done = true; clearTimeout(timer); delete window[cbName]; resolve('__ERR__'); }
       };
       document.head.appendChild(sc);
     });
@@ -34142,7 +34142,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.785';
+const APP_VERSION = 'v9.786';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -43418,7 +43418,10 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
   const selectedEras   = gameMeta?.zeneConfig?.eras   || [];
   const selectedGenres = gameMeta?.zeneConfig?.genres || [];
 
-
+  const [songOffset, setSongOffset] = React.useState(0);
+  const [blacklistVersion, setBlacklistVersion] = React.useState(0);
+  const [debugOpen, setDebugOpen] = React.useState(false);
+  const [allExhausted, setAllExhausted] = React.useState(false);
 
   const filteredSongs = React.useMemo(() => {
     let songs = [...ZENE_SONGS];
@@ -43439,10 +43442,6 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
     return songs;
   }, [selectedEras.join(','), selectedGenres.join(','), blacklistVersion]);
 
-  const [songOffset, setSongOffset] = React.useState(0);
-  const [blacklistVersion, setBlacklistVersion] = React.useState(0);
-  const [debugOpen, setDebugOpen] = React.useState(false);
-  const [allExhausted, setAllExhausted] = React.useState(false);
   const song = (!allExhausted && filteredSongs.length > 0) ? filteredSongs[(gameIdx + songOffset) % filteredSongs.length] : null;
 
   const [playing, setPlaying] = React.useState(false);
@@ -43452,8 +43451,11 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
   const audioRef    = React.useRef(null);
   const advancedRef = React.useRef(false);
 
+  const errSkipsRef = React.useRef(0);
+  const sessionSkipRef = React.useRef(new Set());
+
   // Reset offset when turn changes
-  React.useEffect(() => { setSongOffset(0); setAllExhausted(false); }, [gameIdx]);
+  React.useEffect(() => { setSongOffset(0); setAllExhausted(false); errSkipsRef.current = 0; sessionSkipRef.current = new Set(); }, [gameIdx]);
 
   React.useEffect(() => {
     if (!song) return;
@@ -43464,13 +43466,31 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
     advancedRef.current = false;
     if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ''; }
 
-    const tryNextSong = () => {
-      window.markZeneBad && window.markZeneBad(song.spotifyId);
-      // Bump blacklistVersion → filteredSongs re-shuffles without this song
-      // Reset offset to 0 so we start fresh from the new filtered list
-      setBlacklistVersion(v => v + 1);
-      setSongOffset(0);
-      setAllExhausted(false);
+    const anyPlayableLeft = () => ZENE_SONGS.some(s => {
+      if (sessionSkipRef.current.has(s.spotifyId)) return false;
+      try { if (localStorage.getItem('znobad_' + s.spotifyId)) return false; } catch(e) {}
+      return !(window._zeneBadIds && window._zeneBadIds.has(s.spotifyId));
+    });
+
+    // isError=true → hálózati hiba (timeout/offline): NEM kerül végleges tiltólistára
+    const tryNextSong = (isError) => {
+      if (isError) {
+        sessionSkipRef.current.add(song.spotifyId);
+        errSkipsRef.current += 1;
+      } else {
+        window.markZeneBad && window.markZeneBad(song.spotifyId);
+      }
+      if (errSkipsRef.current >= 6 || !anyPlayableLeft()) {
+        setLoading(false);
+        setAllExhausted(true);
+        return;
+      }
+      if (isError) {
+        setSongOffset(o => o + 1); // lépés a lista következő számára
+      } else {
+        setBlacklistVersion(v => v + 1); // újraszűrés a tiltott szám nélkül
+        setSongOffset(0);
+      }
     };
 
     // Known bad — skip instantly without waiting
@@ -43483,10 +43503,11 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
 
     var isCached = false;
     try { isCached = localStorage.getItem('zdz_' + song.spotifyId) !== null; } catch(e) {}
-    const skipTimer = setTimeout(tryNextSong, isCached ? 2000 : 4000);
+    const skipTimer = setTimeout(() => tryNextSong(true), isCached ? 2000 : 4000);
 
     window.getZenePreviewUrl(song.spotifyId, song.artist, song.title).then(url => {
       clearTimeout(skipTimer);
+      if (url === '__ERR__') { tryNextSong(true); return; }
       if (url) {
         setPreviewUrl(url);
         setLoading(false);
@@ -43535,7 +43556,14 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
         <audio ref={audioRef} src={previewUrl}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
-          onEnded={() => setPlaying(false)} />
+          onEnded={() => setPlaying(false)}
+          onError={() => {
+            // lejárt/hibás preview URL — cache törlés és következő szám
+            try { localStorage.removeItem('zdz_' + (song?.spotifyId || '')); } catch(e) {}
+            setPreviewUrl(null); setLoading(true);
+            sessionSkipRef.current.add(song?.spotifyId);
+            setSongOffset(o => o + 1);
+          }} />
       )}
 
       {/* Vinyl */}
@@ -43561,8 +43589,14 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
       {/* Buttons */}
       <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8 }}>
         {allExhausted ? (
-          <div style={{ width:'100%', padding:'14px 0', borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center' }}>
-            <span style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft }}>😕 Nincs elérhető szám ebben a szűrőben</span>
+          <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8, alignItems:'center' }}>
+            <span style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, padding:'4px 0', textAlign:'center' }}>😕 Nem sikerült számot betölteni — nincs net, vagy elfogytak a számok</span>
+            <div style={{ display:'flex', gap:8, width:'100%' }}>
+              <button onClick={() => { sessionSkipRef.current = new Set(); errSkipsRef.current = 0; setAllExhausted(false); setLoading(true); setSongOffset(o => o + 1); setBlacklistVersion(v => v + 1); }}
+                style={{ flex:1, padding:'13px 0', background:T.blue, border:'none', borderRadius:16, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, cursor:'pointer' }}>🔄 Újrapróbálás</button>
+              <button onClick={() => { if (!advancedRef.current) { advancedRef.current = true; onAdvance && onAdvance({}, {}); } }}
+                style={{ flex:1, padding:'13px 0', background:T.surface, border:`1.5px solid ${T.inkMute}40`, borderRadius:16, color:T.ink, fontFamily:T.font, fontWeight:700, fontSize:15, cursor:'pointer' }}>Kihagyás →</button>
+            </div>
           </div>
         ) : loading ? (
           <div style={{ width:'100%', padding:'14px 0', borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center' }}>
