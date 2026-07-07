@@ -34170,7 +34170,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.820';
+const APP_VERSION = 'v9.821';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -49492,6 +49492,7 @@ function PowerHourGame({ players, onAdvance }) {
 }
 function OVFJConfigSheet({ config, setConfig, onClose }) {
   const rounds = config.rounds ?? 5;
+  const roundTime = config.roundTime === undefined ? 90 : config.roundTime;
   return (
     <SheetOverlay onClose={onClose} title="Ország-Város beállítások" footer={
       <button onClick={onClose} style={{ width:'100%', padding:'15px', borderRadius:16, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)' }}>Kész</button>
@@ -49507,6 +49508,16 @@ function OVFJConfigSheet({ config, setConfig, onClose }) {
             {[3,5,8,10].map(n=>(
               <button key={n} onClick={()=>setConfig(c=>({...c,rounds:n}))} style={{ width:42, padding:'8px 4px', borderRadius:9, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background:rounds===n?T.mint:'transparent', color:rounds===n?'#fff':T.inkSoft, transition:'all .15s' }}>{n}</button>
             ))}
+          </div>
+        </div>
+        <div style={{ padding:'13px 0', borderTop:`1px solid ${T.surfaceMuted}` }}>
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>Kör ideje</div>
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>Mennyi idő van az íráskor</div>
+          <div style={{ display:'flex', background:T.surfaceMuted, padding:4, borderRadius:12, gap:3, marginTop:8 }}>
+            {[{v:60,l:'1 perc'},{v:90,l:'1:30'},{v:120,l:'2 perc'},{v:null,l:'Idő nélkül'}].map(o=>{
+              const sel = roundTime===o.v;
+              return (<button key={String(o.v)} onClick={()=>setConfig(c=>({...c,roundTime:o.v}))} style={{ flex:1, padding:'8px 4px', borderRadius:9, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:12, background:sel?T.mint:'transparent', color:sel?'#fff':T.inkSoft, transition:'all .15s', whiteSpace:'nowrap' }}>{o.l}</button>);
+            })}
           </div>
         </div>
       </div>
@@ -49535,6 +49546,7 @@ function ovfjBuildValidity(answers, letter, round) {
     return { val, valid:true, reason:null };
   };
 }
+function ovfjFmtTime(sec) { if (sec == null) return ''; if (sec >= 60) { const m = Math.floor(sec/60), s = sec%60; return m + ':' + String(s).padStart(2,'0'); } return sec + 's'; }
 // Betűsorsoló animáció — drawTs-től lokálisan fut, mindenkinél szinkronban
 function OVFJDrawAnim({ letter, drawTs, size }) {
   const s = size || 170;
@@ -49587,8 +49599,8 @@ function OVFJWritingForm({ letter, remaining, localAns, setLocalAns, submitted, 
         <div style={{flex:1,background:remaining!=null&&remaining<=5?T.coralSoft:T.surface,borderRadius:22,padding:'12px 16px',boxShadow:T.shadow,display:'flex',flexDirection:'column',justifyContent:'center',gap:3,transition:'background .3s'}}>
           {remaining != null ? (
             <>
-              <div style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:remaining<=5?T.coral:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em'}}>Valaki kész — siess!</div>
-              <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:36,color:remaining<=5?T.coral:T.ink,lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{remaining}s</div>
+              <div style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:remaining<=5?T.coral:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em'}}>Hátralévő idő</div>
+              <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:36,color:remaining<=5?T.coral:T.ink,lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{ovfjFmtTime(remaining)}</div>
             </>
           ) : (
             <>
@@ -49718,6 +49730,7 @@ function OVFJStandings({ players, roundScores, cumScores, myPid, final }) {
 // ═══════════════ ORSZÁG-VÁROS — host nézet ═══════════════
 function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta }) {
   const totalRounds = gameMeta?.ovfjConfig?.rounds ?? 5;
+  const roundTime = gameMeta?.ovfjConfig?.roundTime === undefined ? 90 : gameMeta.ovfjConfig.roundTime;
   const pl = players || [];
   const sessRef = React.useRef(Date.now());
   const sess = sessRef.current;
@@ -49756,13 +49769,13 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
   // Reset a szoba dokumentumban induláskor (új játék / gameIdx váltás)
   React.useEffect(() => {
     if (!roomCode || typeof syncRoom !== 'function') return;
-    syncRoom(roomCode, { ovfjTakenIds: [], ovfjState: { sess, phase:'pick', round:1, totalRounds, letter:null, drawTs:null, doneAt:null, hostPid:null } });
+    syncRoom(roomCode, { ovfjTakenIds: [], ovfjState: { sess, phase:'pick', round:1, totalRounds, roundTime, letter:null, drawTs:null, doneAt:null, hostPid:null } });
   }, []);
 
   // Host az egyetlen, aki a teljes ovfjState-et írja
   React.useEffect(() => {
     if (!roomCode || typeof syncRoom !== 'function') return;
-    syncRoom(roomCode, { ovfjState: { sess, phase, round, totalRounds, letter, drawTs, doneAt, hostPid, answers, roundScores, cumScores } });
+    syncRoom(roomCode, { ovfjState: { sess, phase, round, totalRounds, roundTime, letter, drawTs, doneAt, hostPid, answers, roundScores, cumScores } });
   }, [phase, round, letter, drawTs, doneAt, hostPid, answers, roundScores, cumScores]);
 
   // Telefonos válaszok + szavazatok begyűjtése
@@ -49788,12 +49801,12 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
     });
   }, [roomCode, round]);
 
-  // Ticker a visszaszámláláshoz
+  // Ticker a visszaszámláláshoz (teljes kör-idő vagy "valaki kész" gyorsító)
   React.useEffect(() => {
-    if (!(phase === 'writing' && doneAt)) return;
+    if (!(phase === 'writing' && (roundTime != null || doneAt))) return;
     const id = setInterval(() => setTick(t => t + 1), 250);
     return () => clearInterval(id);
-  }, [phase, doneAt]);
+  }, [phase, doneAt, roundTime]);
 
   // Sorsolás animáció vége → írás
   React.useEffect(() => {
@@ -49835,8 +49848,8 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
     if (!doneAt && Object.values(answers).some(a => a && a.done)) setDoneAt(Date.now());
   }, [answers, phase, claimedPids]);
   React.useEffect(() => {
-    if (phase !== 'writing' || !doneAt) return;
-    if (Date.now() >= doneAt + 10000) endWriting();
+    if (phase !== 'writing') return;
+    if ((roundTime != null || doneAt) && remaining === 0) endWriting();
   });
 
   // Szavazás: host is szavaz
@@ -49908,6 +49921,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
   };
   const nextRound = () => {
     if (round >= totalRounds) { setPhase('final'); onAdvance && onAdvance({}); return; }
+    onResult && onResult(null);
     calcRef.current = false;
     submittedRef.current = false;
     setSubmitted(false); setLocalAns({}); setMyVotes({});
@@ -49918,7 +49932,14 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
   };
 
   const joinUrl = roomCode ? window.location.href.split('?')[0] + '?room=' + roomCode : null;
-  const remaining = (phase === 'writing' && doneAt) ? Math.max(0, Math.ceil((doneAt + 10000 - Date.now()) / 1000)) : null;
+  const writingStart = drawTs != null ? drawTs + OVFJ_DRAW_MS : null;
+  const remaining = (() => {
+    if (phase !== 'writing') return null;
+    if (roundTime == null) return doneAt ? Math.max(0, Math.ceil((doneAt + 10000 - Date.now()) / 1000)) : null;
+    let deadline = (writingStart != null ? writingStart : Date.now()) + roundTime * 1000;
+    if (doneAt) deadline = Math.min(deadline, doneAt + 10000);
+    return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+  })();
   const tallies = React.useMemo(() => {
     const t = {};
     Object.entries(votes).forEach(([vk, per]) => {
@@ -50119,12 +50140,13 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
     }
   }, [ovfj.round]);
 
-  // Ticker a visszaszámláláshoz
+  // Ticker a visszaszámláláshoz (teljes kör-idő vagy "valaki kész" gyorsító)
   React.useEffect(() => {
-    if (!(ovfj.phase === 'writing' && ovfj.doneAt)) return;
+    const rt = ovfj.roundTime === undefined ? 90 : ovfj.roundTime;
+    if (!(ovfj.phase === 'writing' && (rt != null || ovfj.doneAt))) return;
     const id = setInterval(() => setTick(t => t + 1), 250);
     return () => clearInterval(id);
-  }, [ovfj.phase, ovfj.doneAt]);
+  }, [ovfj.phase, ovfj.doneAt, ovfj.roundTime]);
 
   const buildRec = (done) => {
     const r = { pid: myPid, sess: ovfj.sess, round: ovfj.round, done, doneAt: Date.now() };
@@ -50142,7 +50164,15 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
     if (ovfj.phase === 'voting' && myPid && !submittedRef.current) submitAnswers(false);
   }, [ovfj.phase, myPid]);
 
-  const remaining = (ovfj.phase === 'writing' && ovfj.doneAt) ? Math.max(0, Math.ceil((ovfj.doneAt + 10000 - Date.now()) / 1000)) : null;
+  const obsRoundTime = ovfj.roundTime === undefined ? 90 : ovfj.roundTime;
+  const obsWritingStart = ovfj.drawTs != null ? ovfj.drawTs + OVFJ_DRAW_MS : null;
+  const remaining = (() => {
+    if (ovfj.phase !== 'writing') return null;
+    if (obsRoundTime == null) return ovfj.doneAt ? Math.max(0, Math.ceil((ovfj.doneAt + 10000 - Date.now()) / 1000)) : null;
+    let deadline = (obsWritingStart != null ? obsWritingStart : Date.now()) + obsRoundTime * 1000;
+    if (ovfj.doneAt) deadline = Math.min(deadline, ovfj.doneAt + 10000);
+    return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+  })();
   // Lejárt a 10 mp → automatikus beadás lokálisan is
   React.useEffect(() => {
     if (ovfj.phase === 'writing' && remaining === 0 && myPid && !submittedRef.current) submitAnswers(false);
