@@ -34582,7 +34582,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.824';
+const APP_VERSION = 'v9.825';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -34758,6 +34758,14 @@ const THEMES = {
     bgOverlay: 'rgba(8, 4, 20, 0.98)',
   },
 };
+
+// Universal tokens injected into every theme — same values regardless of palette
+Object.values(THEMES).forEach(th => {
+  th.r      = { xs:8, sm:12, md:16, lg:20, full:9999 };
+  th.fs     = { xs:11, sm:13, md:15, lg:17, xl:20, h2:24, h1:32 };
+  th.border = th.inkMute + '55';
+  th.sub    = th.inkSoft;
+});
 
 let T = THEMES[localStorage.getItem('boh_theme')] || THEMES['warm'];
 if (!T) T = THEMES['warm'];
@@ -35682,19 +35690,23 @@ function BubbleBackground() {
   return null;
 }
 
-function PrimaryButton({ children, onClick, disabled, tone='mint', big=true, style:sx }) {
+function PrimaryButton({ children, onClick, disabled, tone='mint', big=true, size, style:sx }) {
   const baseColor = tone==='mint' ? T.mint : tone==='coral' ? T.coral : tone;
   const bg = disabled
     ? (tone==='mint' ? T.mintSoft : T.coralSoft)
     : `linear-gradient(160deg, ${baseColor}ee 0%, ${baseColor} 60%, ${baseColor}cc 100%)`;
   const fg = disabled ? T.inkMute : '#fff';
+  const sz = size === 'sm' ? { h:36, fs:13, r:T.r?.sm||12 }
+           : size === 'md' ? { h:44, fs:15, r:T.r?.md||16 }
+           : size === 'lg' ? { h:56, fs:17, r:T.r?.md||16 }
+           :                  { h: big ? 60 : 48, fs: big ? 20 : 16, r:16 };
   return (
     <button onClick={disabled ? undefined : onClick} style={{
-      width:'100%', minHeight: big ? 60 : 48, border:'none',
+      width:'100%', minHeight:sz.h, border:'none',
       background:bg, color:fg,
       fontFamily:T.font, fontWeight:T.weightTitle,
-      fontSize: big ? 20 : 16, letterSpacing:T.letterDisplay,
-      borderRadius: 16, position:'relative', overflow:'hidden',
+      fontSize:sz.fs, letterSpacing:T.letterDisplay,
+      borderRadius:sz.r, position:'relative', overflow:'hidden',
       boxShadow: disabled ? 'none' : `0 4px 18px ${baseColor}55`,
       cursor: disabled ? 'default' : 'pointer',
       transition:'transform .08s, box-shadow .08s',
@@ -35754,6 +35766,54 @@ function BottomBar({ children, anchored, extra }) {
         <div style={{ flex:1, minWidth:0 }}>{children}</div>
       </div>
     </div>
+  );
+}
+
+function TextInput({ value, onChange, placeholder, type='text', error, inputMode, style:sx, ...rest }) {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      inputMode={inputMode}
+      style={{
+        width:'100%', boxSizing:'border-box',
+        padding:'12px 14px',
+        borderRadius: T.r?.sm || 12,
+        border: `1.5px solid ${error ? T.coral : T.border}`,
+        background: T.surface,
+        fontFamily: T.font, fontWeight: 600, fontSize: T.fs?.md || 15,
+        color: T.ink, outline:'none',
+        boxShadow: error ? `0 0 0 3px ${T.coral}26` : 'none',
+        transition: 'border-color .15s, box-shadow .15s',
+        ...sx
+      }}
+      {...rest}
+    />
+  );
+}
+
+function IconButton({ onClick, children, icon, size=34, tone, disabled, title, style:sx }) {
+  const bg = tone === 'danger' ? T.coralSoft
+           : tone === 'mint'   ? T.mintSoft
+           : T.bgSoft;
+  const fg = tone === 'danger' ? T.coral
+           : tone === 'mint'   ? T.mint
+           : T.inkSoft;
+  return (
+    <button onClick={disabled ? undefined : onClick} disabled={disabled} title={title} style={{
+      width:size, height:size,
+      borderRadius: size <= 30 ? (T.r?.xs||8) : (T.r?.sm||12),
+      border:'none', background:bg, color:fg,
+      cursor: disabled ? 'default' : 'pointer',
+      display:'grid', placeItems:'center', flexShrink:0,
+      opacity: disabled ? 0.5 : 1,
+      transition:'opacity .1s',
+      ...sx
+    }}>
+      {icon ? icon(fg) : children}
+    </button>
   );
 }
 
@@ -36512,7 +36572,7 @@ function AdminScreen({ go }) {
         <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink }}>Admin PIN szükséges</div>
         <input type="password" inputMode="numeric" value={pinInput} onChange={e => { setPinInput(e.target.value); setPinErr(false); }}
           onKeyDown={e => { if (e.key === 'Enter' && pinInput === reqPin) { try { localStorage.setItem('boh_admin_ok', reqPin); } catch(err) {} setPinOk(true); } }}
-          placeholder="PIN kód" style={{ width:180, boxSizing:'border-box', padding:'13px', borderRadius:14, border:`2px solid ${pinErr ? '#ef4444' : T.border}`, background:T.surface, fontFamily:T.font, fontSize:18, textAlign:'center', letterSpacing:4, color:T.ink, outline:'none' }} />
+          placeholder="PIN kód" style={{ width:180, boxSizing:'border-box', padding:'13px', borderRadius:T.r?.sm||12, border:`2px solid ${pinErr ? T.coral : T.border}`, background:T.surface, fontFamily:T.font, fontSize:18, textAlign:'center', letterSpacing:4, color:T.ink, outline:'none' }} />
         {pinErr && <div style={{ fontFamily:T.font, fontSize:12, color:'#ef4444', fontWeight:700 }}>Hibás PIN</div>}
         <button onClick={() => { if (pinInput === reqPin) { try { localStorage.setItem('boh_admin_ok', reqPin); } catch(e) {} setPinOk(true); } else setPinErr(true); }}
           style={{ width:180, padding:'13px', borderRadius:14, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:15, color:'#fff', cursor:'pointer' }}>Belépés</button>
@@ -36737,13 +36797,13 @@ function AdminProfiles() {
       {showForm && (
         <div style={{ background:T.surface, borderRadius:16, padding:'16px', marginBottom:16, boxShadow:T.shadow }}>
           <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Név</div>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="pl. Kovács Péter" style={{ width:'100%', boxSizing:'border-box', padding:'12px', borderRadius:12, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none', marginBottom:12 }} />
+          <TextInput value={name} onChange={e => setName(e.target.value)} placeholder="pl. Kovács Péter" style={{ marginBottom:12 }} />
           <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Becenév</div>
-          <input value={nickname} onChange={e => setNickname(e.target.value)} placeholder="pl. Péter" style={{ width:'100%', boxSizing:'border-box', padding:'12px', borderRadius:12, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none', marginBottom:12 }} />
+          <TextInput value={nickname} onChange={e => setNickname(e.target.value)} placeholder="pl. Péter" style={{ marginBottom:12 }} />
           <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Telefonszám <span style={{ fontWeight:400, textTransform:'none', fontSize:10 }}>(opcionális)</span></div>
-          <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+36 30 123 4567" type="tel" style={{ width:'100%', boxSizing:'border-box', padding:'12px', borderRadius:12, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none', marginBottom:12 }} />
+          <TextInput value={phone} onChange={e => setPhone(e.target.value)} placeholder="+36 30 123 4567" type="tel" style={{ marginBottom:12 }} />
           <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Születésnap <span style={{ fontWeight:400, textTransform:'none', fontSize:10 }}>(opcionális)</span></div>
-          <input value={birthday} onChange={e => setBirthday(e.target.value)} type="date" style={{ width:'100%', boxSizing:'border-box', padding:'10px 12px', height:44, borderRadius:12, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none', marginBottom:12, WebkitAppearance:'none', appearance:'none', lineHeight:'normal' }} />
+          <input value={birthday} onChange={e => setBirthday(e.target.value)} type="date" style={{ width:'100%', boxSizing:'border-box', padding:'10px 14px', height:44, borderRadius:T.r?.sm||12, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none', marginBottom:12, WebkitAppearance:'none', appearance:'none', lineHeight:'normal' }} />
           <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>Szín</div>
           <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:14 }}>
             {AVATAR_COLORS.map(c => (
@@ -36809,15 +36869,15 @@ function AdminProfiles() {
               {savedStats === p.id ? <span style={{ fontSize:18, flexShrink:0 }}>✅</span> : (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.sub} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0, transform: isEd ? 'rotate(180deg)' : 'none', transition:'transform .2s' }}><polyline points="6 9 12 15 18 9"/></svg>
               )}
-              <div onClick={e => { e.stopPropagation(); toggleHideProfile(p.id); }} style={{ width:34, height:34, borderRadius:9, border:`1.5px solid ${hiddenProfs.includes(p.id) ? '#ef4444' : T.mint}`, background: hiddenProfs.includes(p.id) ? '#fef2f2' : 'rgba(37,181,114,0.08)', display:'grid', placeItems:'center', cursor:'pointer', flexShrink:0 }}>
+              <div onClick={e => { e.stopPropagation(); toggleHideProfile(p.id); }} style={{ width:34, height:34, borderRadius:T.r?.sm||12, border:`1.5px solid ${hiddenProfs.includes(p.id) ? T.coral : T.mint}`, background: hiddenProfs.includes(p.id) ? T.coralSoft : T.mintSoft, display:'grid', placeItems:'center', cursor:'pointer', flexShrink:0 }}>
                 {hiddenProfs.includes(p.id) ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.coral} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                 ) : (
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.mint} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 )}
               </div>
-              <div onClick={e => { e.stopPropagation(); deleteProfile(p.id); }} style={{ width:34, height:34, borderRadius:9, border:'none', background:'#fef2f2', display:'grid', placeItems:'center', cursor:'pointer', opacity:deleting===p.id?0.5:1, flexShrink:0 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+              <div onClick={e => { e.stopPropagation(); deleteProfile(p.id); }} style={{ width:34, height:34, borderRadius:T.r?.sm||12, border:'none', background:T.coralSoft, display:'grid', placeItems:'center', cursor:'pointer', opacity:deleting===p.id?0.5:1, flexShrink:0 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.coral} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
               </div>
             </div>
             {/* Inline combined editor: profile + stats */}
@@ -36827,13 +36887,13 @@ function AdminProfiles() {
                 <div style={{ padding:'14px 14px 0' }}>
                   <div style={{ fontFamily:T.font, fontSize:10, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>✏️ Profil szerkesztése</div>
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, marginBottom:4 }}>Név</div>
-                  <input value={epName} onChange={e => setEpName(e.target.value)} style={{ width:'100%', boxSizing:'border-box', padding:'10px 12px', borderRadius:11, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none', marginBottom:10 }} />
+                  <TextInput value={epName} onChange={e => setEpName(e.target.value)} style={{ marginBottom:10, fontSize:14, padding:'10px 12px' }} />
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, marginBottom:4 }}>Becenév</div>
-                  <input value={epNickname} onChange={e => setEpNickname(e.target.value)} style={{ width:'100%', boxSizing:'border-box', padding:'10px 12px', borderRadius:11, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none', marginBottom:10 }} />
+                  <TextInput value={epNickname} onChange={e => setEpNickname(e.target.value)} style={{ marginBottom:10, fontSize:14, padding:'10px 12px' }} />
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, marginBottom:4 }}>Telefonszám</div>
-                  <input value={epPhone} onChange={e => setEpPhone(e.target.value)} type="tel" style={{ width:'100%', boxSizing:'border-box', padding:'10px 12px', borderRadius:11, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none', marginBottom:10 }} />
+                  <TextInput value={epPhone} onChange={e => setEpPhone(e.target.value)} type="tel" style={{ marginBottom:10, fontSize:14, padding:'10px 12px' }} />
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, marginBottom:4 }}>Születésnap</div>
-                  <input value={epBirthday} onChange={e => setEpBirthday(e.target.value)} type="date" style={{ width:'100%', boxSizing:'border-box', padding:'10px 12px', height:44, borderRadius:11, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none', marginBottom:10, WebkitAppearance:'none', appearance:'none', lineHeight:'normal' }} />
+                  <input value={epBirthday} onChange={e => setEpBirthday(e.target.value)} type="date" style={{ width:'100%', boxSizing:'border-box', padding:'10px 12px', height:44, borderRadius:T.r?.sm||12, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none', marginBottom:10, WebkitAppearance:'none', appearance:'none', lineHeight:'normal' }} />
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, marginBottom:6 }}>Szín</div>
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12 }}>
                     {AVATAR_COLORS.map(c => (
@@ -37048,12 +37108,12 @@ function AdminEvents({ go }) {
                     </button>
                     {deleteConfirm === ev.id ? (
                       <React.Fragment>
-                        <button onClick={() => deleteEvent(ev.id)} style={{ padding:'6px 10px', borderRadius:9, border:'none', background:'#ef4444', fontFamily:T.font, fontWeight:700, fontSize:12, color:'#fff', cursor:'pointer' }}>Törlés</button>
-                        <button onClick={() => setDeleteConfirm(null)} style={{ padding:'6px 10px', borderRadius:9, border:`1px solid ${T.border}`, background:'transparent', fontFamily:T.font, fontWeight:700, fontSize:12, color:T.sub, cursor:'pointer' }}>Mégsem</button>
+                        <button onClick={() => deleteEvent(ev.id)} style={{ padding:'6px 10px', borderRadius:T.r?.xs||8, border:'none', background:T.coral, fontFamily:T.font, fontWeight:700, fontSize:12, color:'#fff', cursor:'pointer' }}>Törlés</button>
+                        <button onClick={() => setDeleteConfirm(null)} style={{ padding:'6px 10px', borderRadius:T.r?.xs||8, border:`1px solid ${T.border}`, background:'transparent', fontFamily:T.font, fontWeight:700, fontSize:12, color:T.sub, cursor:'pointer' }}>Mégsem</button>
                       </React.Fragment>
                     ) : (
-                      <button onClick={() => setDeleteConfirm(ev.id)} style={{ width:34, height:34, borderRadius:9, border:'none', background:'#fef2f2', display:'grid', placeItems:'center', cursor:'pointer', flexShrink:0 }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                      <button onClick={() => setDeleteConfirm(ev.id)} style={{ width:34, height:34, borderRadius:T.r?.sm||12, border:'none', background:T.coralSoft, display:'grid', placeItems:'center', cursor:'pointer', flexShrink:0 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.coral} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                       </button>
                     )}
                   </div>
@@ -37169,9 +37229,9 @@ function AdminZene() {
         <div style={{ display:'flex', gap:8 }}>
           <button onClick={load} style={{ padding:'6px 12px', borderRadius:10, border:'none', background:T.surface, fontFamily:T.font, fontWeight:700, fontSize:12, color:T.mint, cursor:'pointer', boxShadow:T.shadow }}>Frissítés</button>
           {items.length > 0 && (confirmAll ? (
-            <button onClick={clearAll} style={{ padding:'6px 12px', borderRadius:10, border:'none', background:'#ef4444', fontFamily:T.font, fontWeight:700, fontSize:12, color:'#fff', cursor:'pointer' }}>Biztos? Mind törlése</button>
+            <button onClick={clearAll} style={{ padding:'6px 12px', borderRadius:T.r?.xs||8, border:'none', background:T.coral, fontFamily:T.font, fontWeight:700, fontSize:12, color:'#fff', cursor:'pointer' }}>Biztos? Mind törlése</button>
           ) : (
-            <button onClick={() => setConfirmAll(true)} style={{ padding:'6px 12px', borderRadius:10, border:'none', background:'#fef2f2', fontFamily:T.font, fontWeight:700, fontSize:12, color:'#ef4444', cursor:'pointer' }}>Összes visszaengedése</button>
+            <button onClick={() => setConfirmAll(true)} style={{ padding:'6px 12px', borderRadius:T.r?.xs||8, border:'none', background:T.coralSoft, fontFamily:T.font, fontWeight:700, fontSize:12, color:T.coral, cursor:'pointer' }}>Összes visszaengedése</button>
           ))}
         </div>
       </div>
@@ -37386,7 +37446,7 @@ function AdminRooms() {
         if (!old.length) return null;
         return (
           <button onClick={() => { setLoading(true); Promise.all(old.map(r => window.deleteRoom(r.id))).finally(load); }}
-            style={{ width:'100%', padding:'11px', borderRadius:12, border:'none', background:'#fef2f2', fontFamily:T.font, fontWeight:800, fontSize:13, color:'#ef4444', cursor:'pointer', marginBottom:12 }}>
+            style={{ width:'100%', padding:'11px', borderRadius:T.r?.md||16, border:'none', background:T.coralSoft, fontFamily:T.font, fontWeight:800, fontSize:13, color:T.coral, cursor:'pointer', marginBottom:12 }}>
             🧹 {old.length} db 1 hétnél régebbi szoba törlése
           </button>
         );
@@ -37410,8 +37470,8 @@ function AdminRooms() {
             <button onClick={() => window.open(window.location.pathname + '?room=' + r.id, '_blank')} title="Belépés observerként" style={{ width:34, height:34, borderRadius:9, border:'none', background:'rgba(37,181,114,0.1)', display:'grid', placeItems:'center', cursor:'pointer', flexShrink:0 }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.mint} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
-            <button onClick={() => deleteRoom(r.id)} disabled={deleting===r.id} style={{ width:34, height:34, borderRadius:9, border:'none', background:'#fef2f2', display:'grid', placeItems:'center', cursor:'pointer', opacity:deleting===r.id?0.5:1 }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+            <button onClick={() => deleteRoom(r.id)} disabled={deleting===r.id} style={{ width:34, height:34, borderRadius:T.r?.sm||12, border:'none', background:T.coralSoft, display:'grid', placeItems:'center', cursor:'pointer', opacity:deleting===r.id?0.5:1 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.coral} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
             </button>
           </div>
         </div>
