@@ -33984,6 +33984,19 @@ window.triggerHaptic = function() {
       cb(d.exists ? (d.data().theme || 'ice') : 'ice');
     });
   };
+  window.getHomeDesign = function() {
+    return db.collection('config').doc('homeDesign').get().then(function(d) {
+      return d.exists ? (d.data().design || 'classic') : 'classic';
+    }).catch(function() { return 'classic'; });
+  };
+  window.setHomeDesign = function(design) {
+    return db.collection('config').doc('homeDesign').set({ design: design }).catch(function(e) { console.warn('setHomeDesign', e); });
+  };
+  window.onHomeDesign = function(cb) {
+    return db.collection('config').doc('homeDesign').onSnapshot(function(d) {
+      cb(d.exists ? (d.data().design || 'classic') : 'classic');
+    });
+  };
   window.onAnnouncement = function(cb) {
     return db.collection('config').doc('announcement').onSnapshot(function(d) {
       cb(d.exists ? d.data() : null);
@@ -34582,7 +34595,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.833';
+const APP_VERSION = 'v9.834';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -37548,6 +37561,8 @@ const THEME_OPTIONS = [
 function AdminSettings() {
   const [evTheme, setEvTheme] = React.useState('ice');
   const [saving, setSaving] = React.useState(false);
+  const [homeDesign, setHomeDesign] = React.useState('classic');
+  const [savingHd, setSavingHd] = React.useState(false);
 
   React.useEffect(() => {
     if (typeof window.onEventsTheme === 'function') {
@@ -37559,10 +37574,25 @@ function AdminSettings() {
     }
   }, []);
 
+  React.useEffect(() => {
+    if (typeof window.onHomeDesign === 'function') {
+      const unsub = window.onHomeDesign(d => setHomeDesign(d === 'playful' ? 'playful' : 'classic'));
+      return () => unsub();
+    }
+  }, []);
+
   function save(theme) {
     setSaving(true);
     try { localStorage.setItem('boh_events_theme', theme); } catch(e) {}
     window.setEventsTheme && window.setEventsTheme(theme).then(() => setSaving(false)).catch(() => setSaving(false));
+  }
+
+  function saveHomeDesign(design) {
+    if (design === homeDesign) return;
+    setSavingHd(true);
+    setHomeDesign(design);
+    try { localStorage.setItem('boh_home_design', design); } catch(e) {}
+    window.setHomeDesign && window.setHomeDesign(design).then(() => setSavingHd(false)).catch(() => setSavingHd(false));
   }
 
   return (
@@ -37586,6 +37616,27 @@ function AdminSettings() {
           })}
         </div>
         {saving && <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, textAlign:'center', marginTop:10 }}>Mentés…</div>}
+      </div>
+
+      <div style={{ background:T.surface, borderRadius:16, padding:16, boxShadow:T.shadow, marginTop:14 }}>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:4 }}>Kezdőképernyő design</div>
+        <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginBottom:14 }}>Ez a stílus jelenik meg <b>mindenkinél</b> — a beállítás Firebase-en keresztül azonnal frissül minden eszközön.</div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          {[
+            { key:'classic', label:'Klasszikus', desc:'Letisztult, központi logó', emoji:'🍾' },
+            { key:'playful', label:'Playful', desc:'Matrica-stílus, köszöntő', emoji:'🎮' },
+          ].map(opt => {
+            const sel = homeDesign === opt.key;
+            return (
+              <div key={opt.key} onClick={() => !savingHd && saveHomeDesign(opt.key)} style={{ cursor:'pointer', borderRadius:14, padding:'14px 12px', textAlign:'center', background: sel ? T.mintSoft : T.surfaceMuted, outline: sel ? `2.5px solid ${T.mint}` : '2.5px solid transparent', outlineOffset:-2, transition:'all .15s', opacity: savingHd ? 0.6 : 1 }}>
+                <div style={{ fontSize:26, marginBottom:6 }}>{opt.emoji}</div>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color: sel ? T.mintDeep : T.ink }}>{opt.label}</div>
+                <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:2 }}>{opt.desc}</div>
+              </div>
+            );
+          })}
+        </div>
+        {savingHd && <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, textAlign:'center', marginTop:10 }}>Mentés…</div>}
       </div>
 
       <AdminPinCard />
@@ -38723,9 +38774,19 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
   const [showSettings, setShowSettings] = React.useState(false);
   const isStandalone = typeof window !== 'undefined' && (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches);
 
-  // Home screen design switcher — 'classic' (default) | 'playful'
+  // Home screen design — global, admin-controlled via Firebase ('classic' default | 'playful')
+  // localStorage is only a cache to avoid a flash before the Firestore snapshot arrives.
   const [homeDesign, setHomeDesign] = React.useState(() => { try { return localStorage.getItem('boh_home_design') || 'classic'; } catch(e) { return 'classic'; } });
-  const setDesign = (d) => { setHomeDesign(d); try { localStorage.setItem('boh_home_design', d); } catch(e) {} };
+  React.useEffect(() => {
+    if (typeof window.onHomeDesign === 'function') {
+      const unsub = window.onHomeDesign(d => {
+        const val = d === 'playful' ? 'playful' : 'classic';
+        setHomeDesign(val);
+        try { localStorage.setItem('boh_home_design', val); } catch(e) {}
+      });
+      return () => unsub();
+    }
+  }, []);
   const isPlayful = homeDesign === 'playful';
   const greetHi = currentLang === 'en' ? 'Hey, team!' : 'Szia, csapat!';
   const _greetDays = currentLang === 'en'
@@ -38932,17 +38993,6 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
                   <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>{t('splashSub')}</div>
                 </div>
                 <Toggle on={splashOn} onChange={toggleSplash} />
-              </div>
-              {/* Home screen design switcher */}
-              <div style={{ height:1, background:T.inkMute+'25', margin:'20px 0' }} />
-              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:4 }}>{currentLang === 'en' ? 'Home screen' : 'Kezdőképernyő'}</div>
-              <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginBottom:10 }}>{currentLang === 'en' ? 'Choose the home screen style' : 'Válaszd ki a kezdőképernyő stílusát'}</div>
-              <div style={{ display:'flex', gap:8 }}>
-                {[['classic', currentLang === 'en' ? 'Classic' : 'Klasszikus'],['playful','Playful']].map(([key, label]) => (
-                  <button key={key} onClick={() => setDesign(key)} style={{ flex:1, padding:'12px 8px', borderRadius:14, border: homeDesign===key ? `2px solid ${T.mint}` : `2px solid transparent`, background: homeDesign===key ? T.mintSoft : T.surfaceMuted, cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:13, color: homeDesign===key ? T.mintDeep : T.inkSoft }}>
-                    {label}
-                  </button>
-                ))}
               </div>
 
             </div>
