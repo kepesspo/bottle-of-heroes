@@ -34600,7 +34600,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.849';
+const APP_VERSION = 'v9.850';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -44562,10 +44562,8 @@ function FingeritGame({ gameIdx, players, onAdvance, onResult }) {
       if (!advancedRef.current) {
         advancedRef.current = true;
         const drinkers = players.filter(p => newTotal[p.id]>0);
-        const subtitle = drinkers.length>0
-          ? drinkers.map(p=>`${p.name}: ${newTotal[p.id]}🍺`).join(', ')
-          : 'Mindenki hibátlan!';
-        onResult && onResult({ correct: drinkers.length===0, playerName: drinkers[0]?.name||null, drinks: drinkers.length, subtitle });
+        if (drinkers.length===0) onResult && onResult({ correct:true, playerName:null, drinks:0, subtitle:'Mindenki hibátlan! ✨' });
+        else onResult && onResult({ losers: drinkers, loseNote: drinkers.map(p=>`${p.name} ${newTotal[p.id]}🍺`).join(', ') });
         onAdvance && onAdvance(newTotal, {});
       }
       return;
@@ -46744,11 +46742,9 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
                         players.forEach(p => { if (p.id !== imp.id) dm[p.id] = 2; });
                       }
                       const correctVoters = isFound ? players.filter((p,i) => nv[p.id] === impostorIdx) : [];
-                      const sub = isFound
-                        ? `${imp.name} iszik 3-at · ${correctVoters.map(p=>p.name).join(', ')} +1 pont`
-                        : `${imp.name} +1 pont · Mindenki más iszik 2-t`;
                       setTimeout(() => {
-                        onResult && onResult({ correct: isFound, playerName: imp.name, drinks: isFound ? 3 : 2, subtitle: sub });
+                        if (isFound) onResult && onResult({ winners: correctVoters, losers:[imp], drinks:3, winNote:'+1 pont', loseNote:'Lebukott 🕵️' });
+                        else onResult && onResult({ winners:[imp], losers: players.filter(p=>p.id!==imp.id), drinks:2, winNote:'Megúszta · +1 pont' });
                         onAdvance && onAdvance(dm, pm);
                       }, 900);
                     }
@@ -48693,8 +48689,9 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
       const maxPot = st.maxFailPot[p.id] || 0;
       dm[p.id] = maxPot > 1 ? maxPot : 1;
     });
-    const loserNames = players.filter(p=>p.id!==winner.id).map(p=>`${p.name} ${dm[p.id]}🍺`).join(', ');
-    onResult && onResult({ correct: true, playerName: winner.name, drinks: 0, subtitle: `${winner.name} nyert · ${loserNames}` });
+    const otherPlayers = players.filter(p=>p.id!==winner.id);
+    const loserNames = otherPlayers.map(p=>`${p.name} ${dm[p.id]}🍺`).join(', ');
+    onResult && onResult({ winners:[winner], losers: otherPlayers, winNote:'+1 pont', loseNote: loserNames });
     onAdvance && onAdvance(dm, pm);
   };
 
@@ -49285,10 +49282,8 @@ function EremGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
             if (isCorrect && opponent) dm[opponent.id] = 1;
             if (!isCorrect && challenger) dm[challenger.id] = 1;
             if (isCorrect && challenger) pm[challenger.id] = 1;
-            const sub = isCorrect
-              ? `${challenger?.name||''} nyert — ${opponent?.name||'ellenfél'} iszik`
-              : `${challenger?.name||''} veszített — iszik egyet`;
-            onResult && onResult({ correct: isCorrect, playerName: isCorrect ? opponent?.name : challenger?.name, drinks: 1, subtitle: sub });
+            if (isCorrect) onResult && onResult({ winners:[challenger].filter(Boolean), losers:[opponent].filter(Boolean), drinks:1, winNote:'+1 pont' });
+            else onResult && onResult({ losers:[challenger].filter(Boolean), drinks:1, loseNote:'Rossz tipp 🍺' });
             onAdvance && onAdvance(dm, pm);
           }
         }, squishDurRef.current + 80);
@@ -49561,12 +49556,11 @@ function TapperGame({ gameIdx, challenger, opponent, onAdvance, onResult, roomCo
     else if (r === 'both-lose') { if(p1) dm[p1.id]=1; if(p2) dm[p2.id]=1; }
     const winner = r === 1 ? p1 : r === 2 ? p2 : null;
     const loser = r === 1 ? p2 : r === 2 ? p1 : null;
-    const subtitle = r === 'both-lose' ? 'Mindkettő túlment — mindkettő iszik!'
-      : r === 'draw' ? 'Döntetlen!'
-      : `${winner?.name} nyert — ${loser?.name} iszik`;
     if (!advancedRef.current) {
       advancedRef.current = true;
-      onResult && onResult({ correct: r !== 'both-lose' && r !== 'draw', playerName: winner?.name, drinks: r === 'both-lose' ? 1 : loser ? 1 : 0, subtitle });
+      if (winner && loser) onResult && onResult({ winners:[winner], losers:[loser], drinks:1, winNote:'+1 pont' });
+      else if (r === 'both-lose') onResult && onResult({ losers:[p1,p2].filter(Boolean), drinks:1, loseNote:'Mindkettő túlment 😵' });
+      else onResult && onResult({ correct:true, playerName:null, drinks:0, subtitle:'Döntetlen! 🤝' });
       onAdvance && onAdvance(dm, pm);
     }
   }, [p1Time, p2Time]);
@@ -51534,12 +51528,8 @@ function MemoriaGame({ gameIdx, players, onAdvance, onResult }) {
             const pointMap = {};
             losers.forEach(p  => { drinkMap[p.id] = 1; });
             winners.forEach(p => { pointMap[p.id] = 1; });
-            const subtitle = [
-              winners.length ? winners.map(p=>p.name).join(', ') + ' nyert (+1 pont)' : '',
-              losers.length  ? losers.map(p=>p.name).join(', ')  + ' iszik!' : '',
-            ].filter(Boolean).join(' · ');
             setTimeout(() => {
-              onResult && onResult({ correct: winners.length > 0, playerName: winners[0]?.name || null, drinks: losers.length, subtitle });
+              onResult && onResult({ winners, losers, drinks: losers.length?1:0, winNote:'+1 pont' });
               onAdvance && onAdvance(drinkMap, pointMap);
             }, 600);
           }
@@ -51647,15 +51637,11 @@ function KezCsereGame({ gameIdx, players, onAdvance, onResult }) {
     setDone(true);
     const dm = { ...mistakes };
     const losers = players.filter(p => dm[p.id]);
-    let subtitle;
-    if (losers.length === 0) {
-      subtitle = 'Mindenki hibátlan!';
-    } else {
-      subtitle = losers.map(p => `${p.name}: ${dm[p.id]} ${t('kezMistakeCount')}`).join(', ');
-    }
+    const winners = players.filter(p => !(dm[p.id] > 0));
     const pm = {};
-    players.forEach(p => { if (!(dm[p.id] > 0)) pm[p.id] = 1; });
-    onResult && onResult({ correct: losers.length === 0, playerName: losers[0]?.name || null, drinks: losers.length > 0 ? 1 : 0, subtitle });
+    winners.forEach(p => { pm[p.id] = 1; });
+    if (losers.length === 0) onResult && onResult({ winners, winNote:'Mindenki hibátlan! ✨' });
+    else onResult && onResult({ winners, losers, drinks:1, winNote:'+1 pont', loseNote: losers.map(p => `${p.name} ${dm[p.id]}×`).join(', ') });
     onAdvance && onAdvance(dm, pm);
   };
 
@@ -51756,9 +51742,10 @@ function HajimeGame({ gameIdx, players, onAdvance, onResult }) {
     if (done) return; setDone(true);
     const dm = { ...mistakes };
     const losers = players.filter(p => dm[p.id]);
-    const subtitle = losers.length === 0 ? 'Mindenki hibátlan!' : losers.map(p => `${p.name}: ${dm[p.id]} hiba`).join(', ');
-    const pm = {}; players.forEach(p => { if (!(dm[p.id] > 0)) pm[p.id] = 1; });
-    onResult && onResult({ correct: losers.length === 0, playerName: losers[0]?.name || null, drinks: losers.length > 0 ? 1 : 0, subtitle });
+    const winners = players.filter(p => !(dm[p.id] > 0));
+    const pm = {}; winners.forEach(p => { pm[p.id] = 1; });
+    if (losers.length === 0) onResult && onResult({ winners, winNote:'Mindenki hibátlan! ✨' });
+    else onResult && onResult({ winners, losers, drinks:1, winNote:'+1 pont', loseNote: losers.map(p => `${p.name} ${dm[p.id]} hiba`).join(', ') });
     onAdvance && onAdvance(dm, pm);
   };
 
@@ -52276,13 +52263,13 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
       const diff = Math.abs(p1W - p2W);
       if (p1W > p2W) {
         if (onAdvance) onAdvance({[p2id]: diff}, {[p1id]: 1});
-        if (onResult) onResult({ correct: true, playerName: p1Name, drinks: 0, subtitle: p1Name + ' nyerte a meccset!' });
+        if (onResult) onResult({ winners:[challenger], losers:[opponent], drinks: diff, winNote:'Nyerte a meccset · +1 pont' });
       } else if (p2W > p1W) {
         if (onAdvance) onAdvance({[p1id]: diff}, {[p2id]: 1});
-        if (onResult) onResult({ correct: false, playerName: p2Name, drinks: 0, subtitle: p2Name + ' nyerte a meccset!' });
+        if (onResult) onResult({ winners:[opponent], losers:[challenger], drinks: diff, winNote:'Nyerte a meccset · +1 pont' });
       } else {
         if (onAdvance) onAdvance({[p1id]: 1, [p2id]: 1}, {});
-        if (onResult) onResult({ correct: false, playerName: null, drinks: 1, subtitle: 'Döntetlen — mindenki iszik!' });
+        if (onResult) onResult({ losers:[challenger,opponent].filter(Boolean), drinks: 1, loseNote:'Döntetlen — mindenki iszik!' });
       }
       setS(s=>({...s,phase:'done'}));
     }, 1600);
@@ -52544,7 +52531,7 @@ function IdoparbajGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
       const loser = p1wins ? opponent : challenger;
       const winner = p1wins ? challenger : opponent;
       setTimeout(() => {
-        onResult && onResult({ correct: false, playerName: loser?.name, drinks: 1, subtitle: `${loser?.name} iszik — ${winner?.name} nyert` });
+        onResult && onResult({ winners:[winner].filter(Boolean), losers:[loser].filter(Boolean), drinks:1, winNote:'+1 pont' });
         onAdvance && onAdvance({ [loser?.id]: 1 });
       }, 400);
     }
@@ -52668,10 +52655,10 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
     setPhase('done');
     const drinks = (!success && isSecond) ? 2 : 1;
     if (success) {
-      onResult && onResult({ correct: true, playerName: challenger?.name, drinks: 0, subtitle: `${challenger?.name} & ${opponent?.name} — mindketten +1 pont!` });
+      onResult && onResult({ winners:[challenger,opponent].filter(Boolean), winNote:'Mindketten +1 pont!' });
       onAdvance && onAdvance({}, { [challenger?.id]:1,[opponent?.id]:1 });
     } else {
-      onResult && onResult({ correct: false, playerName: null, drinks, subtitle: isSecond ? `2 szóból sem sikerült — mindketten ${drinks} kortyt isznak 🍺🍺` : `Nem sikerült — mindketten isznak 🍺` });
+      onResult && onResult({ losers:[challenger,opponent].filter(Boolean), drinks, loseNote: isSecond ? '2 szóból sem sikerült 🍺🍺' : 'Nem sikerült 🍺' });
       onAdvance && onAdvance({ [challenger?.id]:drinks,[opponent?.id]:drinks }, {});
     }
   };
@@ -52851,9 +52838,9 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
       const loserKorty = winnerIsP1 ? (r2_.korty + 2) : (r1.korty + 2);
       const loserId = winnerIsP1 ? p2?.id : p1?.id;
       if (onAdvance && loserId) onAdvance({[loserId]: loserKorty});
-      const winnerName = winnerIsP1 ? (p1?.name||'P1') : (p2?.name||'P2');
-      const loserName = winnerIsP1 ? (p2?.name||'P2') : (p1?.name||'P1');
-      if (onResult) onResult({ correct: winnerIsP1, playerName: winnerName, drinks: loserKorty, subtitle: `${loserName} iszik ${loserKorty} kortyot!` });
+      const winnerP = winnerIsP1 ? p1 : p2;
+      const loserP = winnerIsP1 ? p2 : p1;
+      if (onResult) onResult({ winners:[winnerP].filter(Boolean), losers:[loserP].filter(Boolean), drinks: loserKorty, winNote:'Gyorsabb volt!' });
       setPhase('done');
     }, 1200);
     return () => clearTimeout(t);
@@ -54529,11 +54516,13 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         const hasWin = winners.length > 0, hasLose = losers.length > 0;
         const split = hasWin && hasLose;
         const drinks = gameResult.drinks || 0;
+        const neutral = !hasWin && !hasLose;
+        const neutralPos = neutral && drinks === 0 && gameResult.correct !== false;
         const winNote = gameResult.winNote || (hasWin ? '+1 pont' : '');
         const loseNote = gameResult.loseNote || '';
         const WIN_G = 'linear-gradient(160deg,#2ec27e,#178a52)';
         const LOSE_G = 'linear-gradient(200deg,#ec5545,#c0281f)';
-        const glow = hasWin && !hasLose ? '#25b572' : '#e84040';
+        const glow = (hasWin && !hasLose) || neutralPos ? '#25b572' : '#e84040';
         const names = list => list.map(p=>p.name).join(', ');
         const Pile = ({ list, size, overlap, borderW, emptyEmoji }) => {
           const shown = list.slice(0,3), extra = Math.max(0, list.length - 3);
@@ -54561,20 +54550,26 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               </div>
             </div>
           );
+          const MiniNeutral = () => (
+            <div style={{ flex:1, minWidth:0, background: neutralPos?WIN_G:LOSE_G, padding:'10px 14px', display:'flex', alignItems:'center', gap:9 }}>
+              <span style={{ fontSize:20, lineHeight:1, flexShrink:0 }}>{neutralPos?'✨':'🍺'}</span>
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{gameResult.subtitle || (neutralPos?'Kész!':'Inni kell!')}{!neutralPos&&drinks>0?` · ${drinks}🍺`:''}</div>
+              </div>
+            </div>
+          );
           return (
             <React.Fragment>
               {resultMinimized === 'shrinking' && (
                 <div style={{ position:'fixed', inset:0, zIndex:250, display:'flex', alignItems:'center', justifyContent:'center', animation:'backdropFadeOut .35s ease forwards', pointerEvents:'none' }}>
                   <div style={{ borderRadius:24, overflow:'hidden', display:'flex', minWidth:260, maxWidth:340, width:'80vw', animation:'resultShrinkOut .35s cubic-bezier(.4,0,.6,1) forwards', boxShadow:`0 20px 70px ${glow}99` }} onAnimationEnd={() => setResultMinimized(true)}>
-                    {hasWin && <MiniHalf list={winners} kind="win" />}
-                    {hasLose && <MiniHalf list={losers} kind="lose" />}
+                    {neutral ? <MiniNeutral /> : <React.Fragment>{hasWin && <MiniHalf list={winners} kind="win" />}{hasLose && <MiniHalf list={losers} kind="lose" />}</React.Fragment>}
                   </div>
                 </div>
               )}
               {showPill && (
                 <div key={'mini-' + gameResult.ts} onClick={() => setResultMinimized(false)} style={{ position:'fixed', bottom:'calc(96px + env(safe-area-inset-bottom, 0px))', left:16, right:16, zIndex:45, animation:'miniBarIn .25s ease-out', borderRadius:18, overflow:'hidden', display:'flex', boxShadow:`0 -2px 16px ${glow}44, 0 6px 20px rgba(0,0,0,0.35)`, cursor:'pointer' }}>
-                  {hasWin && <MiniHalf list={winners} kind="win" />}
-                  {hasLose && <MiniHalf list={losers} kind="lose" />}
+                  {neutral ? <MiniNeutral /> : <React.Fragment>{hasWin && <MiniHalf list={winners} kind="win" />}{hasLose && <MiniHalf list={losers} kind="lose" />}</React.Fragment>}
                   <button onClick={e => { e.stopPropagation(); setGameResult(null); setResultMinimized(false); }} aria-label="Bezárás" style={{ position:'absolute', top:'50%', right:8, transform:'translateY(-50%)', width:24, height:24, borderRadius:'50%', border:'none', background:'rgba(0,0,0,0.32)', color:'#fff', fontSize:13, lineHeight:1, cursor:'pointer', display:'grid', placeItems:'center', padding:0, zIndex:2 }}>✕</button>
                 </div>
               )}
@@ -54584,7 +54579,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
 
         const anim = hasWin && !hasLose ? 'resultBounceIn .45s cubic-bezier(.2,.9,.3,1.3) forwards' : 'resultShakeIn .5s ease-out forwards';
         const WinZone = () => (
-          <div style={{ background:WIN_G, boxShadow: split?'inset 0 -16px 20px -12px rgba(0,0,0,0.32)':'none', padding: split?'20px 22px 22px':'26px 24px 20px', display:'flex', flexDirection:'column', alignItems:'center', gap:7 }}>
+          <div style={{ background:WIN_G, padding: split?'22px 22px 16px':'26px 24px 20px', display:'flex', flexDirection:'column', alignItems:'center', gap:7 }}>
             <Pile list={winners} size={split?52:60} overlap={16} borderW={3} emptyEmoji="🌟" />
             {split
               ? <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, letterSpacing:'0.1em', textTransform:'uppercase', color:'rgba(255,255,255,0.72)' }}>🌟 {winners.length>1?'Helyesek':'Nyertes'}</div>
@@ -54594,7 +54589,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           </div>
         );
         const LoseZone = () => (
-          <div style={{ background:LOSE_G, boxShadow: split?'inset 0 16px 20px -12px rgba(0,0,0,0.32)':'none', padding: split?'22px 22px 22px':'20px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', gap:7, animation: !split ? 'shakeDrink .7s ease-in-out' : undefined }}>
+          <div style={{ background:LOSE_G, padding: split?'16px 22px 22px':'20px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', gap:7, animation: !split ? 'shakeDrink .7s ease-in-out' : undefined }}>
             <Pile list={losers} size={split?52:60} overlap={16} borderW={3} emptyEmoji="🍺" />
             {split
               ? <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, letterSpacing:'0.1em', textTransform:'uppercase', color:'rgba(255,255,255,0.72)' }}>🍺 {losers.length>1?'Isznak':'Iszik'}</div>
@@ -54609,24 +54604,37 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
             {loseNote && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:'rgba(255,255,255,0.85)' }}>{loseNote}</div>}
           </div>
         );
+        const NeutralZone = () => (
+          <div style={{ background: neutralPos?WIN_G:LOSE_G, padding:'30px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+            <div style={{ fontSize:46, lineHeight:1 }}>{neutralPos?'✨':'🍺'}</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:'#fff', textAlign:'center', lineHeight:1.15, textShadow:'0 2px 10px rgba(0,0,0,0.2)', wordBreak:'break-word' }}>{gameResult.subtitle || (neutralPos?'Kész!':'Inni kell! 🍺')}</div>
+            {drinks>0 && (
+              <div style={{ display:'flex', alignItems:'baseline', gap:5 }}>
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:40, color:'#fff', lineHeight:1, textShadow:'0 4px 20px rgba(0,0,0,0.25)' }}>{drinks}</span>
+                <span style={{ fontFamily:T.font, fontWeight:700, fontSize:15, color:'rgba(255,255,255,0.9)' }}>korty</span>
+              </div>
+            )}
+          </div>
+        );
         return (
           <div key={gameResult.ts} onClick={() => setResultMinimized(true)} style={{ position:'fixed', inset:0, zIndex:250, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.35)', backdropFilter:'blur(3px)', WebkitBackdropFilter:'blur(3px)' }}>
             <div style={{ borderRadius:32, overflow:'hidden', animation:anim, boxShadow:`0 20px 70px ${glow}99, 0 0 0 1.5px rgba(255,255,255,0.18)`, minWidth:260, maxWidth:340, width:'80vw', position:'relative' }}>
               <button onClick={e => { e.stopPropagation(); setResultMinimized(true); }} aria-label="Kicsinyítés" style={{ position:'absolute', top:10, right:10, width:30, height:30, borderRadius:'50%', border:'none', background:'rgba(255,255,255,0.22)', color:'#fff', fontSize:16, lineHeight:1, cursor:'pointer', display:'grid', placeItems:'center', zIndex:5 }}>✕</button>
+              {neutral && <NeutralZone />}
               {hasWin && <WinZone />}
               {split && (
-                <div style={{ height:16, position:'relative', margin:'-8px 0', zIndex:2 }}>
-                  <div style={{ position:'absolute', left:24, right:24, top:'50%', height:2, transform:'translateY(-50%)', background:'rgba(255,255,255,0.6)', boxShadow:'0 0 20px 5px rgba(255,255,255,0.4)', borderRadius:2 }} />
-                  <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:3, width:42, height:42, borderRadius:'50%', background:'linear-gradient(160deg,#3a3f5e,#20233a)', border:'2.5px solid rgba(255,255,255,0.85)', display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', boxShadow:'0 4px 16px rgba(0,0,0,0.4)' }}>VS</div>
+                <div style={{ height:44, position:'relative', margin:'-1px 0', zIndex:2, background:'linear-gradient(180deg,#178a52 0%,#7ec9a0 26%,#eef3ee 50%,#f0a89e 74%,#d13a2f 100%)' }}>
+                  <div style={{ position:'absolute', left:0, right:0, top:'50%', height:2, transform:'translateY(-50%)', background:'rgba(255,255,255,0.9)', boxShadow:'0 0 18px 4px rgba(255,255,255,0.55)' }} />
+                  <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:3, width:44, height:44, borderRadius:'50%', background:'linear-gradient(160deg,#3a3f5e,#20233a)', border:'2.5px solid rgba(255,255,255,0.9)', display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', boxShadow:'0 6px 18px rgba(0,0,0,0.45), 0 0 22px rgba(255,255,255,0.25)' }}>VS</div>
                 </div>
               )}
               {hasLose && <LoseZone />}
-              {gameResult.subtitle && !split && (
+              {gameResult.subtitle && !split && !neutral && (
                 <div style={{ background: hasWin?WIN_G:LOSE_G, padding:'0 22px 6px', marginTop:-2 }}>
                   <div style={{ fontFamily:T.font, fontSize:13, color:'rgba(255,255,255,0.78)', textAlign:'center', lineHeight:1.4 }}>{gameResult.subtitle}</div>
                 </div>
               )}
-              <div style={{ background: split?LOSE_G:(hasWin?WIN_G:LOSE_G), padding:'2px 0 8px', textAlign:'center' }}>
+              <div style={{ background: split?LOSE_G:(hasWin||neutralPos?WIN_G:LOSE_G), padding:'2px 0 8px', textAlign:'center' }}>
                 <span style={{ fontFamily:T.font, fontSize:11, color:'rgba(255,255,255,0.5)' }}>koppints a kicsinyítéshez</span>
               </div>
             </div>
@@ -56895,10 +56903,8 @@ function MeduzaGame({ players, onAdvance, onResult }) {
       if (!advancedRef.current) {
         advancedRef.current = true;
         const drinkers = players.filter(p => newTotal[p.id]>0);
-        const subtitle = drinkers.length>0
-          ? drinkers.map(p=>`${p.name}: ${newTotal[p.id]}🍺`).join(', ')
-          : 'Senki sem nézett össze!';
-        onResult && onResult({ correct: drinkers.length===0, playerName: drinkers[0]?.name||null, drinks: drinkers.length, subtitle });
+        if (drinkers.length===0) onResult && onResult({ correct:true, playerName:null, drinks:0, subtitle:'Senki sem nézett össze! ✨' });
+        else onResult && onResult({ losers: drinkers, loseNote: drinkers.map(p=>`${p.name} ${newTotal[p.id]}🍺`).join(', ') });
         onAdvance && onAdvance(newTotal, {});
       }
       return;
@@ -57352,9 +57358,9 @@ function TabuGame({ gameIdx, challenger, opponent, onAdvance, onResult, difficul
     const points = {}, drinks = {};
     both.forEach(p => { if (won) points[p.id] = 1; else drinks[p.id] = 1; });
     if (won) {
-      onResult && onResult({ correct: true, playerName: '', drinks: 0, subtitle: (challenger?.name||'') + ' & ' + (opponent?.name||'') + ' — mindkettő +1 pont!' });
+      onResult && onResult({ winners: both, winNote:'Mindkettő +1 pont!' });
     } else {
-      onResult && onResult({ correct: false, playerName: '', drinks: 1, subtitle: (challenger?.name||'') + ' & ' + (opponent?.name||'') + ' — mindkettő iszik 1-et!' });
+      onResult && onResult({ losers: both, drinks:1, loseNote:'Mindkettő iszik 1-et!' });
     }
     onAdvance && onAdvance(drinks, points);
   };
@@ -57784,8 +57790,9 @@ function SzamsorGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
     const p1Won = p1Time <= p2Time;
     const winner = p1Won ? challenger : opponent;
     const loser  = p1Won ? opponent  : challenger;
-    const sub = `${p1Name}: ${p1sec}s — ${p2Name}: ${p2sec}s`;
-    onResult && onResult({ correct: p1Won, playerName: loser?.name||'', drinks:1, subtitle: sub });
+    const winSec = p1Won ? p1sec : p2sec;
+    const loseSec = p1Won ? p2sec : p1sec;
+    onResult && onResult({ winners:[winner].filter(Boolean), losers:[loser].filter(Boolean), drinks:1, winNote:`+1 pont · ${winSec}s`, loseNote:`${loseSec}s` });
     onAdvance && onAdvance(
       loser  ? {[loser.id]:1}  : {},
       winner ? {[winner.id]:1} : {}
