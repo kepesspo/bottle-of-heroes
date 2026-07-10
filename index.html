@@ -34595,7 +34595,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.836';
+const APP_VERSION = 'v9.837';
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -41737,6 +41737,16 @@ function ovfjLetterOk(value, letter) {
   if (l === 'dz' && s.startsWith('dzs')) return false;
   return true;
 }
+const OVFJ_ICONS = {
+  orszag: (c,s=20)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 3 2.6 15 0 18M12 3c-2.6 3-2.6 15 0 18"/></svg>,
+  varos: (c,s=20)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 21V8.5l6-3v15.5"/><path d="M10 21V3.5l10 4V21"/><path d="M3.2 21h17.6"/><path d="M14 10h.01M14 13.5h.01M14 17h.01"/></svg>,
+  fiu: (c,s=20)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="7" r="3.4"/><path d="M5.6 21a6.4 6.4 0 0 1 12.8 0"/></svg>,
+  lany: (c,s=20)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="6.4" r="3.1"/><path d="M7.8 21l4.2-10 4.2 10z"/></svg>,
+  noveny: (c,s=20)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21v-9"/><path d="M12 12.5c0-4 3-6.6 8-6.6 0 4-3 6.6-8 6.6z"/><path d="M12 15.5c0-3-2.6-5-6-5 0 3 2.6 5 6 5z"/></svg>,
+  allat: (c,s=20)=><svg width={s} height={s} viewBox="0 0 24 24" fill={c} stroke="none"><circle cx="6.6" cy="11" r="1.7"/><circle cx="10.4" cy="8" r="1.7"/><circle cx="14.6" cy="8" r="1.7"/><circle cx="18" cy="11.2" r="1.7"/><path d="M12 12.2c-2.8 0-4.6 2-4.6 4.2C7.4 18.5 9.5 19.2 12 19.2s4.6-.7 4.6-2.8c0-2.2-1.8-4.2-4.6-4.2z"/></svg>,
+  targy: (c,s=20)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.2l8 4.4v8.8L12 20.8 4 16.4V7.6z"/><path d="M4.2 7.8L12 12l7.8-4.2"/><path d="M12 12v8.6"/></svg>,
+  hires: (c,s=20)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.6l2.55 5.2 5.75.85-4.15 4.05.98 5.7L12 16.6l-5.11 2.7.98-5.7L3.7 9.65l5.75-.85z"/></svg>,
+};
 const OVFJ_CATS = [
   { key:'orszag', label:'Ország',      emoji:'🌍' },
   { key:'varos',  label:'Város',       emoji:'🏙️' },
@@ -50256,48 +50266,65 @@ function OVFJAvatar({ p, size }) {
 // Írás UI — host telefonján és játékos telefonokon ugyanaz
 function OVFJWritingForm({ letter, remaining, localAns, setLocalAns, submitted, onSubmit, doneInfo }) {
   const inputRefs = React.useRef([]);
+  const [focusIdx, setFocusIdx] = React.useState(-1);
+  const doneCount = OVFJ_CATS.filter(c => { const v=(localAns[c.key]||'').trim(); return v.length>0 && ovfjLetterOk(v, letter); }).length;
+  const total = OVFJ_CATS.length;
+  const low = remaining != null && remaining <= 10;
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:10,width:'100%'}}>
-      <div style={{display:'flex',gap:10,alignItems:'stretch'}}>
-        <div style={{flex:'0 0 auto',width:92,minHeight:92,borderRadius:22,background:`linear-gradient(135deg,${T.yellow},${T.coral})`,display:'grid',placeItems:'center',boxShadow:T.shadowLift}}>
-          <span style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:50,color:'#fff',lineHeight:1}}>{letter}</span>
+    <div style={{display:'flex',flexDirection:'column',gap:8,width:'100%'}}>
+      {/* Top bar: letter chip + progress + stopwatch */}
+      <div style={{display:'flex',alignItems:'center',gap:10}}>
+        <div style={{flexShrink:0,width:40,height:40,borderRadius:12,background:`linear-gradient(135deg,${T.mint},${T.mintDeep||T.mint})`,display:'grid',placeItems:'center',boxShadow:`0 3px 10px ${T.mint}55`}}>
+          <span style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:20,color:'#fff',lineHeight:1}}>{letter}</span>
         </div>
-        <div style={{flex:1,background:remaining!=null&&remaining<=5?T.coralSoft:T.surface,borderRadius:22,padding:'12px 16px',boxShadow:T.shadow,display:'flex',flexDirection:'column',justifyContent:'center',gap:3,transition:'background .3s'}}>
-          {remaining != null ? (
-            <>
-              <div style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:remaining<=5?T.coral:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em'}}>Hátralévő idő</div>
-              <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:36,color:remaining<=5?T.coral:T.ink,lineHeight:1,fontVariantNumeric:'tabular-nums'}}>{ovfjFmtTime(remaining)}</div>
-            </>
-          ) : (
-            <>
-              <div style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em'}}>Írj a betűre!</div>
-              <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,lineHeight:1.4}}>Az első kész után mindenkinek 10 mp marad</div>
-            </>
-          )}
-          {doneInfo && <div style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,marginTop:2}}>{doneInfo}</div>}
+        <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',gap:6}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+            <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:13,color:T.ink}}>{doneCount}/{total} kategória kész</span>
+            {remaining != null && (
+              <span style={{display:'flex',alignItems:'center',gap:4,color:low?T.coral:T.ink}}>
+                <span style={{fontSize:14}}>⏱️</span>
+                <span style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:19,fontVariantNumeric:'tabular-nums',lineHeight:1}}>{ovfjFmtTime(remaining)}</span>
+              </span>
+            )}
+          </div>
+          <div style={{height:7,borderRadius:999,background:T.surfaceMuted,overflow:'hidden'}}>
+            <div style={{height:'100%',width:`${(doneCount/total)*100}%`,borderRadius:999,background:low?T.coral:T.mint,transition:'width .3s'}} />
+          </div>
         </div>
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+      {/* Category rows — single column, compact */}
+      <div style={{display:'flex',flexDirection:'column',gap:6}}>
         {OVFJ_CATS.map((cat,idx)=>{
           const v = localAns[cat.key]||'';
-          const wrong = v.trim().length > 0 && !ovfjLetterOk(v, letter);
+          const filled = v.trim().length > 0;
+          const wrong = filled && !ovfjLetterOk(v, letter);
+          const ok = filled && !wrong;
+          const active = focusIdx===idx && !submitted;
+          const hi = ok || active;
           return (
-            <div key={cat.key} style={{background:T.surface,borderRadius:16,padding:'10px 12px',boxShadow:submitted?'none':T.shadow,opacity:submitted?0.65:1,display:'flex',flexDirection:'column',gap:4}}>
-              <div style={{display:'flex',alignItems:'center',gap:6}}>
-                <span style={{fontSize:16,flexShrink:0}}>{cat.emoji}</span>
-                <span style={{fontFamily:T.font,fontSize:12,fontWeight:T.weightTitle,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.07em',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cat.label}</span>
-                {v.trim() && !wrong && <span style={{fontSize:13}}>✅</span>}
+            <div key={cat.key} style={{display:'flex',alignItems:'center',gap:10,background:active?T.mintSoft:T.surface,borderRadius:13,padding:'8px 11px',boxShadow:submitted?'none':T.shadow,opacity:submitted?0.7:1,border:active?`1.5px solid ${T.mint}`:'1.5px solid transparent',transition:'background .2s,border-color .2s'}}>
+              <div style={{width:30,height:30,borderRadius:9,background:hi?T.mint:T.inkMute+'22',display:'grid',placeItems:'center',flexShrink:0,transition:'background .2s'}}>
+                {OVFJ_ICONS[cat.key](hi?'#fff':T.inkSoft, 17)}
               </div>
-              <input
-                ref={el=>inputRefs.current[idx]=el}
-                type="text"
-                value={v}
-                onChange={e=>!submitted&&setLocalAns(p=>({...p,[cat.key]:e.target.value}))}
-                onKeyDown={e=>{if(e.key==='Enter'&&idx<OVFJ_CATS.length-1)inputRefs.current[idx+1]?.focus();}}
-                disabled={submitted}
-                placeholder={`${letter}...`}
-                style={{width:'100%',boxSizing:'border-box',padding:'5px 0',border:'none',borderBottom:`1.5px solid ${submitted?T.surfaceMuted:wrong?T.coral:T.mint}`,fontFamily:T.font,fontSize:14,fontWeight:T.weightTitle,background:'transparent',color:wrong?T.coral:T.ink,outline:'none',textDecoration:wrong?'line-through':'none'}}
-              />
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:11.5,color:T.inkSoft,lineHeight:1.1,marginBottom:1}}>{cat.label}</div>
+                <input
+                  ref={el=>inputRefs.current[idx]=el}
+                  type="text"
+                  value={v}
+                  onFocus={()=>setFocusIdx(idx)}
+                  onBlur={()=>setFocusIdx(f=>f===idx?-1:f)}
+                  onChange={e=>!submitted&&setLocalAns(p=>({...p,[cat.key]:e.target.value}))}
+                  onKeyDown={e=>{if(e.key==='Enter'&&idx<OVFJ_CATS.length-1)inputRefs.current[idx+1]?.focus();}}
+                  disabled={submitted}
+                  placeholder={`${letter}...`}
+                  style={{width:'100%',boxSizing:'border-box',padding:'1px 0',border:'none',borderBottom:`2px ${active||filled?'solid':'dashed'} ${wrong?T.coral:active||filled?T.mint:T.inkMute+'66'}`,fontFamily:T.font,fontSize:15,fontWeight:T.weightTitle,background:'transparent',color:wrong?T.coral:T.ink,outline:'none',textDecoration:wrong?'line-through':'none'}}
+                />
+              </div>
+              <div style={{width:24,height:24,borderRadius:'50%',flexShrink:0,display:'grid',placeItems:'center',background:ok?T.mint:'transparent',border:ok?'none':`2px solid ${wrong?T.coral:T.inkMute+'55'}`,transition:'background .2s'}}>
+                {ok && <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4 10-10" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                {wrong && <span style={{color:T.coral,fontFamily:T.font,fontSize:13,fontWeight:900,lineHeight:1}}>!</span>}
+              </div>
             </div>
           );
         })}
@@ -50306,8 +50333,9 @@ function OVFJWritingForm({ letter, remaining, localAns, setLocalAns, submitted, 
         {!submitted ? (
           <PrimaryButton onClick={onSubmit}>Kész vagyok! ✏️</PrimaryButton>
         ) : (
-          <div style={{textAlign:'center',fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.mint,padding:'16px',background:T.mintSoft,borderRadius:16}}>✅ Beadva! Várd a többieket…</div>
+          <div style={{textAlign:'center',fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.mint,padding:'14px',background:T.mintSoft,borderRadius:14}}>✅ Beadva! Várd a többieket…</div>
         )}
+        {doneInfo && <div style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,textAlign:'center',marginTop:6}}>{doneInfo}</div>}
       </div>
     </div>
   );
@@ -50316,59 +50344,44 @@ function OVFJWritingForm({ letter, remaining, localAns, setLocalAns, submitted, 
 function OVFJVotingView({ letter, round, players, answers, myPid, myVotes, onVote, tallies }) {
   const validity = ovfjBuildValidity(answers, letter, round);
   const participants = players.filter(p => answers[p.id] && answers[p.id].round === round);
-  const me = participants.find(p => p.id === myPid);
-  const others = participants.filter(p => p.id !== myPid);
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:10,width:'100%'}}>
-      <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:17,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay}}>„{letter}" — Szavazás 👍👎</div>
-      {me && (
-        <div style={{background:T.mintSoft,borderRadius:16,padding:'12px 14px'}}>
-          <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:11,color:T.mint,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.08em'}}>A te válaszaid</div>
-          {OVFJ_CATS.map(cat => {
-            const vi = validity(myPid, cat.key);
-            return (
-              <div key={cat.key} style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
-                <span style={{fontSize:13,width:20,textAlign:'center',flexShrink:0}}>{cat.emoji}</span>
-                <span style={{fontFamily:T.font,fontSize:12,fontWeight:T.weightTitle,color:T.mint,width:66,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
-                <span style={{fontFamily:T.font,fontSize:13,fontWeight:T.weightTitle,flex:1,color:!vi.val?T.inkMute:vi.valid?T.ink:T.coral,textDecoration:vi.val&&!vi.valid?'line-through':'none',opacity:vi.val&&!vi.valid?0.7:1}}>{vi.val||'—'}</span>
-                {vi.val && !vi.valid && <span style={{fontFamily:T.font,fontSize:12,fontWeight:T.weightTitle,color:T.coral,flexShrink:0}}>{vi.reason}</span>}
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {others.map(p => (
-        <div key={p.id} style={{background:T.surface,borderRadius:18,padding:'12px 14px',boxShadow:T.shadow}}>
-          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
-            <OVFJAvatar p={p} size={28} />
-            <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,color:T.ink,flex:1}}>{p.name}</span>
+    <div style={{display:'flex',flexDirection:'column',gap:8,width:'100%'}}>
+      <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:16,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay}}>„{letter}" — Szavazás 👍👎</div>
+      {participants.length === 0 && <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,textAlign:'center',padding:'12px 0'}}>Nincs kire szavazni…</div>}
+      {participants.length > 0 && OVFJ_CATS.map(cat => (
+        <div key={cat.key} style={{background:T.surface,borderRadius:14,padding:'10px 12px',boxShadow:T.shadow,display:'flex',flexDirection:'column',gap:7}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,paddingBottom:7,borderBottom:`1.5px solid ${T.surfaceMuted}`}}>
+            <div style={{width:28,height:28,borderRadius:8,background:T.mint,display:'grid',placeItems:'center',flexShrink:0}}>{OVFJ_ICONS[cat.key]('#fff',16)}</div>
+            <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:14,color:T.ink}}>{cat.label}</span>
           </div>
-          {OVFJ_CATS.map(cat => {
+          {participants.map(p => {
             const vi = validity(p.id, cat.key);
+            const isMe = p.id === myPid;
             const vk = ovfjVoteKey(round, p.id, cat.key);
             const mv = myVotes[vk];
             const tl = tallies ? (tallies[vk] || {yes:0,no:0}) : null;
             return (
-              <div key={cat.key} style={{display:'flex',alignItems:'center',gap:5,marginBottom:6,paddingBottom:5,borderBottom:`1px solid ${T.surfaceMuted}`}}>
-                <span style={{fontSize:13,flexShrink:0,width:20,textAlign:'center'}}>{cat.emoji}</span>
-                <span style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.inkSoft,width:60,flexShrink:0,textTransform:'uppercase',letterSpacing:'0.04em'}}>{cat.label}</span>
-                <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:13,flex:1,color:!vi.val?T.inkMute:vi.valid?T.ink:T.coral,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:vi.val&&!vi.valid?'line-through':'none',opacity:vi.val&&!vi.valid?0.7:1}}>{vi.val||'—'}</span>
-                {vi.valid ? (
+              <div key={p.id} style={{display:'flex',alignItems:'center',gap:8}}>
+                <OVFJAvatar p={p} size={22} />
+                <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:11.5,color:T.inkSoft,width:50,flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}{isMe?' (Te)':''}</span>
+                <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:14,flex:1,minWidth:0,color:!vi.val?T.inkMute:vi.valid?T.ink:T.coral,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:vi.val&&!vi.valid?'line-through':'none',opacity:vi.val&&!vi.valid?0.7:1}}>{vi.val||'—'}</span>
+                {vi.valid && !isMe ? (
                   <div style={{display:'flex',gap:4,flexShrink:0,alignItems:'center'}}>
-                    {tl && <span style={{fontFamily:T.font,fontSize:10,color:T.inkSoft}}>👍{tl.yes} 👎{tl.no}</span>}
-                    <a href={`https://www.google.com/search?q=${encodeURIComponent(vi.val)}`} target="_blank" rel="noreferrer" style={{fontSize:14,textDecoration:'none',opacity:0.5,lineHeight:1}}>🔍</a>
-                    <button onClick={()=>onVote(p.id,cat.key,true)} style={{width:34,height:32,borderRadius:9,border:`1.5px solid ${mv===true?T.mint:T.surfaceMuted}`,background:mv===true?T.mintSoft:'transparent',cursor:'pointer',fontSize:15,display:'grid',placeItems:'center'}}>👍</button>
-                    <button onClick={()=>onVote(p.id,cat.key,false)} style={{width:34,height:32,borderRadius:9,border:`1.5px solid ${mv===false?T.coral:T.surfaceMuted}`,background:mv===false?T.coralSoft:'transparent',cursor:'pointer',fontSize:15,display:'grid',placeItems:'center'}}>👎</button>
+                    {tl && <span style={{fontFamily:T.font,fontSize:10,color:T.inkSoft}}>👍{tl.yes}</span>}
+                    <a href={`https://www.google.com/search?q=${encodeURIComponent(vi.val)}`} target="_blank" rel="noreferrer" style={{fontSize:13,textDecoration:'none',opacity:0.5,lineHeight:1}}>🔍</a>
+                    <button onClick={()=>onVote(p.id,cat.key,true)} style={{width:32,height:30,borderRadius:8,border:`1.5px solid ${mv===true?T.mint:T.surfaceMuted}`,background:mv===true?T.mintSoft:'transparent',cursor:'pointer',fontSize:14,display:'grid',placeItems:'center'}}>👍</button>
+                    <button onClick={()=>onVote(p.id,cat.key,false)} style={{width:32,height:30,borderRadius:8,border:`1.5px solid ${mv===false?T.coral:T.surfaceMuted}`,background:mv===false?T.coralSoft:'transparent',cursor:'pointer',fontSize:14,display:'grid',placeItems:'center'}}>👎</button>
                   </div>
+                ) : vi.valid && isMe ? (
+                  <span style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.mint,flexShrink:0}}>a te szavad</span>
                 ) : vi.val ? (
-                  <span style={{fontFamily:T.font,fontSize:12,fontWeight:T.weightTitle,color:T.coral,flexShrink:0}}>{vi.reason}</span>
+                  <span style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.coral,flexShrink:0}}>{vi.reason}</span>
                 ) : null}
               </div>
             );
           })}
         </div>
       ))}
-      {others.length === 0 && <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,textAlign:'center',padding:'12px 0'}}>Nincs kire szavazni…</div>}
     </div>
   );
 }
