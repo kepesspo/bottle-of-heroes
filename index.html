@@ -34595,7 +34595,32 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.838';
+const APP_VERSION = 'v9.839';
+
+// ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
+let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
+let _appDesignInit = false;
+const _appDesignSubs = new Set();
+function _setAppDesign(d) {
+  const v = d === 'playful' ? 'playful' : 'classic';
+  if (v === _appDesign) return;
+  _appDesign = v;
+  try { localStorage.setItem('boh_home_design', v); } catch(e) {}
+  _appDesignSubs.forEach(fn => { try { fn(v); } catch(e) {} });
+}
+function useAppDesign() {
+  const [d, setD] = React.useState(_appDesign);
+  React.useEffect(() => {
+    _appDesignSubs.add(setD);
+    setD(_appDesign);
+    if (!_appDesignInit && typeof window.onHomeDesign === 'function') {
+      _appDesignInit = true;
+      window.onHomeDesign(x => _setAppDesign(x));
+    }
+    return () => { _appDesignSubs.delete(setD); };
+  }, []);
+  return d;
+}
 
 // ── Service Worker unregister (caching removed) ──
 if ('serviceWorker' in navigator) {
@@ -39091,6 +39116,7 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
 
 // ─── PLAYERS SCREEN ───────────────────────────────────────────
 function PlayersScreen({ players, setPlayers, go }) {
+  const isPlayful = useAppDesign() === 'playful';
   const [editing, setEditing] = useState(null);
   const [secretTaps, setSecretTaps] = useState(0);
   const secretTimerRef = React.useRef(null);
@@ -39199,7 +39225,7 @@ function PlayersScreen({ players, setPlayers, go }) {
         ) : (
         <div className="grid-players">
           {players.map((p, i) =>
-            <PlayerCard key={p.id} p={p} index={i} onEdit={() => setEditing(p.id)} onRemove={() => removePlayer(p.id)} badge={getBadge(p)} />
+            <PlayerCard key={p.id} p={p} index={i} playful={isPlayful} onEdit={() => setEditing(p.id)} onRemove={() => removePlayer(p.id)} badge={getBadge(p)} />
           )}
           <button onClick={addPlayer} style={{
             aspectRatio:'1/1.18', minHeight:120,
@@ -39220,7 +39246,7 @@ function PlayersScreen({ players, setPlayers, go }) {
 
       {players.length < 2 && (
         <div style={{ padding:'0 16px 8px' }} onClick={handleSecretTap}>
-          <div style={{ background:T.surface, borderRadius:12, boxShadow:T.shadow, padding:'11px 14px', display:'flex', alignItems:'center', gap:10, userSelect:'none' }}>
+          <div style={{ background:T.surface, borderRadius:12, boxShadow: isPlayful ? `0 3px 0 ${T.ink}` : T.shadow, border: isPlayful ? `2px solid ${T.ink}` : 'none', padding:'11px 14px', display:'flex', alignItems:'center', gap:10, userSelect:'none' }}>
             <div style={{ display:'flex', gap:5, flexShrink:0 }}>
               {[0,1,2,3].map(i => {
                 const filled = i < players.length;
@@ -39234,7 +39260,7 @@ function PlayersScreen({ players, setPlayers, go }) {
         </div>
       )}
       <BottomBar>
-        <PrimaryButton disabled={players.length < 2} onClick={() => go('games')}>{t('continueToGames')}</PrimaryButton>
+        <PrimaryButton disabled={players.length < 2} onClick={() => go('games')} style={isPlayful ? { border:`2.5px solid ${T.ink}`, boxShadow:`0 5px 0 ${T.ink}`, borderRadius:16 } : undefined}>{t('continueToGames')}</PrimaryButton>
       </BottomBar>
 
       {editing &&
@@ -39264,11 +39290,15 @@ function PlayersScreen({ players, setPlayers, go }) {
   );
 }
 
-function PlayerCard({ p, onEdit, onRemove, index, badge }) {
+function PlayerCard({ p, onEdit, onRemove, index, badge, playful }) {
+  const tilt = playful ? [-1.5,1.2,-1,1.4,-1.2,1.5][(index||0)%6] : 0;
   return (
     <div onClick={onEdit} style={{
       position:'relative', background:T.surface, borderRadius:16,
-      padding:'10px 8px 10px', boxShadow:T.shadow,
+      padding:'10px 8px 10px',
+      boxShadow: playful ? `0 5px 0 ${T.ink}` : T.shadow,
+      border: playful ? `2.5px solid ${T.ink}` : 'none',
+      transform: playful ? `rotate(${tilt}deg)` : 'none',
       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6,
       cursor:'pointer', aspectRatio:'1/1.18', minHeight:120,
       animation:'fadeInUp 0.32s ease both', animationDelay:`${(index||0)*0.06}s`,
@@ -39287,8 +39317,8 @@ function PlayerCard({ p, onEdit, onRemove, index, badge }) {
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" fill="#fff"/><path d="M4 20c1.5-4 4-6 8-6s6.5 2 8 6" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/></svg>
         </div>
       )}
-      <div style={{ width:56, height:56, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', overflow:'hidden', flexShrink:0 }}>
-        {p.img ? <img src={p.img} style={{ width:56, height:56, objectFit:'cover', borderRadius:'50%' }} /> : Icon.user('#fff')}
+      <div style={{ width:56, height:56, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', overflow:'hidden', flexShrink:0, border: playful ? `2.5px solid ${T.ink}` : 'none', boxSizing:'border-box' }}>
+        {p.img ? <img src={p.img} style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }} /> : Icon.user('#fff')}
       </div>
       <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink, textAlign:'center', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'100%' }}>{p.name || 'Új játékos'}</div>
       <div style={{ display:'flex', gap:4, alignItems:'center' }}>
