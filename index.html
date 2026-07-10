@@ -34600,7 +34600,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.848';
+const APP_VERSION = 'v9.849';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -54515,151 +54515,120 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           </div>
         );
       })()}
-      {/* ResultBanner — full overlay or mini pill */}
+      {/* ResultBanner — split (winners/losers) with legacy fallback */}
       {gameResult && (() => {
-        const rp = gameResult.playerName ? players.find(p => p.name === gameResult.playerName) : null;
-        const isCorrect = gameResult.correct;
-        const bgGrad = isCorrect
-          ? 'linear-gradient(160deg, #1a8a55f0 0%, #25b572f0 100%)'
-          : 'linear-gradient(160deg, #c02828f0 0%, #e84040f0 100%)';
-        const glow = isCorrect ? '#25b572' : '#e84040';
-        // Több játékos ha subtitle-ban vannak (pl. "Sere: 1 rontás, Kecsi: 1 rontás")
-        const subtitlePlayers = gameResult.subtitle
-          ? gameResult.subtitle.split(', ')
-              .map(s => { const name = s.split(':')[0].trim(); return players.find(p => p.name === name); })
-              .filter(Boolean)
-          : [];
-        const multiPlayers = subtitlePlayers.length >= 2 ? subtitlePlayers : (rp ? [rp] : []);
-        const shownAv = multiPlayers.slice(0, 2);
-        const extraAv = Math.max(0, multiPlayers.length - 2);
-        // Avatar pile helper — size px
-        const AvatarPile = ({size, overlap, borderW}) => (
-          <div style={{ display:'flex', alignItems:'center', flexShrink:0 }}>
-            {shownAv.map((p, i) => (
-              <div key={p.id||i} style={{ width:size, height:size, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', overflow:'hidden', border:`${borderW}px solid rgba(255,255,255,0.6)`, marginLeft: i===0 ? 0 : -overlap, zIndex: shownAv.length - i, flexShrink:0 }}>
-                {p.img ? <img src={p.img} style={{ width:size, height:size, objectFit:'cover' }} />
-                  : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:Math.round(size*0.42), color:'#fff' }}>{(p.name||'?').charAt(0).toUpperCase()}</span>}
-              </div>
-            ))}
-            {extraAv > 0 && (
-              <div style={{ width:size*0.75, height:size*0.75, borderRadius:'50%', background:'rgba(255,255,255,0.28)', display:'grid', placeItems:'center', border:`${borderW}px solid rgba(255,255,255,0.5)`, marginLeft:-overlap, fontFamily:T.font, fontWeight:900, fontSize:Math.round(size*0.28), color:'#fff', flexShrink:0 }}>+{extraAv}</div>
-            )}
-            {multiPlayers.length === 0 && (
-              <span style={{ fontSize:size*0.8, lineHeight:1 }}>{isCorrect ? '🌟' : '🍺'}</span>
-            )}
-          </div>
-        );
-        const isMulti = multiPlayers.length > 1;
+        const norm = arr => (Array.isArray(arr)?arr:[]).map(x => typeof x === 'string' ? players.find(p=>p.name===x) : (x && x.player ? x.player : x)).filter(Boolean);
+        let winners = norm(gameResult.winners);
+        let losers  = norm(gameResult.losers);
+        if (!gameResult.winners && !gameResult.losers) {
+          const rp = gameResult.playerName ? players.find(p => p.name === gameResult.playerName) : null;
+          const subPl = gameResult.subtitle ? gameResult.subtitle.split(', ').map(s => { const nm = s.split(':')[0].trim(); return players.find(p => p.name === nm); }).filter(Boolean) : [];
+          const grp = subPl.length >= 2 ? subPl : (rp ? [rp] : []);
+          if (gameResult.correct) winners = grp; else losers = grp;
+        }
+        const hasWin = winners.length > 0, hasLose = losers.length > 0;
+        const split = hasWin && hasLose;
+        const drinks = gameResult.drinks || 0;
+        const winNote = gameResult.winNote || (hasWin ? '+1 pont' : '');
+        const loseNote = gameResult.loseNote || '';
+        const WIN_G = 'linear-gradient(160deg,#2ec27e,#178a52)';
+        const LOSE_G = 'linear-gradient(200deg,#ec5545,#c0281f)';
+        const glow = hasWin && !hasLose ? '#25b572' : '#e84040';
+        const names = list => list.map(p=>p.name).join(', ');
+        const Pile = ({ list, size, overlap, borderW, emptyEmoji }) => {
+          const shown = list.slice(0,3), extra = Math.max(0, list.length - 3);
+          return (
+            <div style={{ display:'flex', alignItems:'center', flexShrink:0 }}>
+              {shown.map((p,i) => (
+                <div key={p.id||i} style={{ width:size, height:size, borderRadius:'50%', background:p.color||'#888', display:'grid', placeItems:'center', overflow:'hidden', border:`${borderW}px solid rgba(255,255,255,0.75)`, marginLeft: i===0?0:-overlap, zIndex: shown.length-i, flexShrink:0 }}>
+                  {p.img ? <img src={p.img} style={{ width:size, height:size, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:Math.round(size*0.42), color:'#fff' }}>{(p.name||'?').charAt(0).toUpperCase()}</span>}
+                </div>
+              ))}
+              {extra>0 && <div style={{ width:Math.round(size*0.8), height:Math.round(size*0.8), borderRadius:'50%', background:'rgba(255,255,255,0.28)', display:'grid', placeItems:'center', border:`${borderW}px solid rgba(255,255,255,0.6)`, marginLeft:-overlap, fontFamily:T.font, fontWeight:900, fontSize:Math.round(size*0.3), color:'#fff', flexShrink:0 }}>+{extra}</div>}
+              {list.length===0 && emptyEmoji && <span style={{ fontSize:size*0.8, lineHeight:1 }}>{emptyEmoji}</span>}
+            </div>
+          );
+        };
 
         if (resultMinimized === 'shrinking' || resultMinimized === true) {
-          // ── Mini pill (vagy shrinking state előtte) ────────────────────────
           const showPill = resultMinimized === true;
+          const MiniHalf = ({ list, kind }) => (
+            <div style={{ flex:1, minWidth:0, background: kind==='win'?WIN_G:LOSE_G, padding:'10px 12px', display:'flex', alignItems:'center', gap:8 }}>
+              <Pile list={list} size={28} overlap={9} borderW={2} emptyEmoji={kind==='win'?'🌟':'🍺'} />
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:'rgba(255,255,255,0.7)', lineHeight:1.1 }}>{kind==='win'?'Nyertes':'Iszik'}</div>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{names(list)}{kind==='lose'&&drinks>0?` · ${drinks}🍺`:''}</div>
+              </div>
+            </div>
+          );
           return (
-            <>
-              {/* Shrinking overlay — csak animáció közben látszik */}
+            <React.Fragment>
               {resultMinimized === 'shrinking' && (
-                <div style={{
-                  position:'fixed', inset:0, zIndex:250,
-                  display:'flex', alignItems:'center', justifyContent:'center',
-                  animation:'backdropFadeOut .35s ease forwards',
-                  pointerEvents:'none',
-                }}>
-                  <div style={{
-                    background: bgGrad,
-                    borderRadius: isMulti ? 28 : 32,
-                    padding: isMulti ? '20px 24px' : '32px 36px',
-                    display:'flex', flexDirection: isMulti ? 'row' : 'column', alignItems:'center', gap: isMulti ? 14 : 14,
-                    minWidth:260, maxWidth:340, width:'80vw',
-                    animation:'resultShrinkOut .35s cubic-bezier(.4,0,.6,1) forwards',
-                    boxShadow:`0 20px 70px ${glow}99`,
-                  }} onAnimationEnd={() => setResultMinimized(true)}>
-                    <AvatarPile size={isMulti ? 48 : 72} overlap={isMulti ? 14 : 20} borderW={isMulti ? 2 : 3} />
-                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color:'#fff' }}>{isCorrect ? 'Helyes! 🌟' : 'Inni kell!'}</div>
-                    {!isCorrect && gameResult.drinks > 0 && (
-                      <div style={{ display:'flex', alignItems:'baseline', gap:6 }}>
-                        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:64, color:'#fff', lineHeight:1 }}>{gameResult.drinks}</span>
-                        <span style={{ fontFamily:T.font, fontWeight:700, fontSize:22, color:'rgba(255,255,255,0.85)' }}>korty</span>
-                      </div>
-                    )}
+                <div style={{ position:'fixed', inset:0, zIndex:250, display:'flex', alignItems:'center', justifyContent:'center', animation:'backdropFadeOut .35s ease forwards', pointerEvents:'none' }}>
+                  <div style={{ borderRadius:24, overflow:'hidden', display:'flex', minWidth:260, maxWidth:340, width:'80vw', animation:'resultShrinkOut .35s cubic-bezier(.4,0,.6,1) forwards', boxShadow:`0 20px 70px ${glow}99` }} onAnimationEnd={() => setResultMinimized(true)}>
+                    {hasWin && <MiniHalf list={winners} kind="win" />}
+                    {hasLose && <MiniHalf list={losers} kind="lose" />}
                   </div>
                 </div>
               )}
-              {/* Mini bar — full width, above footer, below sheet */}
               {showPill && (
-                <div key={'mini-' + gameResult.ts} onClick={() => setResultMinimized(false)} style={{
-                  position:'fixed',
-                  bottom:'calc(96px + env(safe-area-inset-bottom, 0px))',
-                  left:16, right:16,
-                  zIndex:45,
-                  animation:'miniBarIn .25s ease-out',
-                  borderRadius:20,
-                  background: bgGrad,
-                  padding:'10px 14px',
-                  display:'flex', alignItems:'center', gap:12,
-                  boxShadow:`0 -2px 16px ${glow}33, 0 4px 16px ${glow}44`,
-                  cursor:'pointer',
-                }}>
-                  <AvatarPile size={34} overlap={10} borderW={2} />
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:'#fff' }}>
-                      {isCorrect ? 'Helyes! +1 pont 🌟' : `Inni kell!${!isCorrect && gameResult.drinks > 0 ? ` — ${gameResult.drinks} korty 🍺` : ''}`}
-                    </div>
-                    {gameResult.subtitle && (
-                      <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.8)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{gameResult.subtitle}</div>
-                    )}
-                  </div>
-                  <span style={{ fontSize:15, flexShrink:0, opacity:0.7 }}>▲</span>
-                  <button onClick={e => { e.stopPropagation(); setGameResult(null); setResultMinimized(false); }} aria-label="Bezárás" style={{ flexShrink:0, width:26, height:26, borderRadius:'50%', border:'none', background:'rgba(255,255,255,0.25)', color:'#fff', fontSize:14, lineHeight:1, cursor:'pointer', display:'grid', placeItems:'center', padding:0 }}>✕</button>
+                <div key={'mini-' + gameResult.ts} onClick={() => setResultMinimized(false)} style={{ position:'fixed', bottom:'calc(96px + env(safe-area-inset-bottom, 0px))', left:16, right:16, zIndex:45, animation:'miniBarIn .25s ease-out', borderRadius:18, overflow:'hidden', display:'flex', boxShadow:`0 -2px 16px ${glow}44, 0 6px 20px rgba(0,0,0,0.35)`, cursor:'pointer' }}>
+                  {hasWin && <MiniHalf list={winners} kind="win" />}
+                  {hasLose && <MiniHalf list={losers} kind="lose" />}
+                  <button onClick={e => { e.stopPropagation(); setGameResult(null); setResultMinimized(false); }} aria-label="Bezárás" style={{ position:'absolute', top:'50%', right:8, transform:'translateY(-50%)', width:24, height:24, borderRadius:'50%', border:'none', background:'rgba(0,0,0,0.32)', color:'#fff', fontSize:13, lineHeight:1, cursor:'pointer', display:'grid', placeItems:'center', padding:0, zIndex:2 }}>✕</button>
                 </div>
               )}
-            </>
+            </React.Fragment>
           );
         }
 
-        // ── Full overlay ───────────────────────────────────────────────────
-
-        const anim = isCorrect
-          ? 'resultBounceIn .45s cubic-bezier(.2,.9,.3,1.3) forwards'
-          : 'resultShakeIn .5s ease-out forwards';
+        const anim = hasWin && !hasLose ? 'resultBounceIn .45s cubic-bezier(.2,.9,.3,1.3) forwards' : 'resultShakeIn .5s ease-out forwards';
+        const WinZone = () => (
+          <div style={{ background:WIN_G, boxShadow: split?'inset 0 -16px 20px -12px rgba(0,0,0,0.32)':'none', padding: split?'20px 22px 22px':'26px 24px 20px', display:'flex', flexDirection:'column', alignItems:'center', gap:7 }}>
+            <Pile list={winners} size={split?52:60} overlap={16} borderW={3} emptyEmoji="🌟" />
+            {split
+              ? <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, letterSpacing:'0.1em', textTransform:'uppercase', color:'rgba(255,255,255,0.72)' }}>🌟 {winners.length>1?'Helyesek':'Nyertes'}</div>
+              : <div style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:'#fff', textShadow:'0 2px 10px rgba(0,0,0,0.2)' }}>Helyes! 🌟</div>}
+            {winners.length>0 && <div style={{ fontFamily:T.font, fontWeight:900, fontSize: split?20:18, color:'#fff', textAlign:'center', lineHeight:1.1, textShadow:'0 2px 10px rgba(0,0,0,0.2)', wordBreak:'break-word' }}>{names(winners)}</div>}
+            {winNote && <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:'rgba(255,255,255,0.92)' }}>{winNote}</div>}
+          </div>
+        );
+        const LoseZone = () => (
+          <div style={{ background:LOSE_G, boxShadow: split?'inset 0 16px 20px -12px rgba(0,0,0,0.32)':'none', padding: split?'22px 22px 22px':'20px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', gap:7, animation: !split ? 'shakeDrink .7s ease-in-out' : undefined }}>
+            <Pile list={losers} size={split?52:60} overlap={16} borderW={3} emptyEmoji="🍺" />
+            {split
+              ? <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, letterSpacing:'0.1em', textTransform:'uppercase', color:'rgba(255,255,255,0.72)' }}>🍺 {losers.length>1?'Isznak':'Iszik'}</div>
+              : <div style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:'#fff', textShadow:'0 2px 10px rgba(0,0,0,0.2)' }}>Inni kell! 🍺</div>}
+            {losers.length>0 && <div style={{ fontFamily:T.font, fontWeight:900, fontSize: split?20:18, color:'#fff', textAlign:'center', lineHeight:1.1, textShadow:'0 2px 10px rgba(0,0,0,0.2)', wordBreak:'break-word' }}>{names(losers)}</div>}
+            {drinks>0 && (
+              <div style={{ display:'flex', alignItems:'baseline', gap:5 }}>
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize: split?34:44, color:'#fff', lineHeight:1, textShadow:'0 4px 20px rgba(0,0,0,0.25)' }}>{drinks}</span>
+                <span style={{ fontFamily:T.font, fontWeight:700, fontSize:15, color:'rgba(255,255,255,0.9)' }}>korty{losers.length>1?'/fő':''}</span>
+              </div>
+            )}
+            {loseNote && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:'rgba(255,255,255,0.85)' }}>{loseNote}</div>}
+          </div>
+        );
         return (
-          <div key={gameResult.ts} onClick={() => setResultMinimized(true)} style={{
-            position:'fixed', inset:0, zIndex:250,
-            display:'flex', alignItems:'center', justifyContent:'center',
-            background:'rgba(0,0,0,0.35)', backdropFilter:'blur(3px)', WebkitBackdropFilter:'blur(3px)',
-          }}>
-            <div style={{
-              background: bgGrad,
-              borderRadius:32, padding:'32px 36px',
-              display:'flex', flexDirection:'column', alignItems:'center', gap:14,
-              animation: anim,
-              boxShadow: `0 20px 70px ${glow}99, 0 0 0 1.5px rgba(255,255,255,0.18)`,
-              minWidth:260, maxWidth:340, width:'80vw',
-              position:'relative',
-            }}>
-              <button onClick={e => { e.stopPropagation(); setGameResult(null); setResultMinimized(false); }} aria-label="Bezárás" style={{ position:'absolute', top:10, right:10, width:30, height:30, borderRadius:'50%', border:'none', background:'rgba(255,255,255,0.22)', color:'#fff', fontSize:16, lineHeight:1, cursor:'pointer', display:'grid', placeItems:'center', zIndex:2 }}>✕</button>
-              <div style={{ animation: !isCorrect && !isMulti ? 'shakeDrink .7s ease-in-out' : undefined }}>
-                <AvatarPile size={72} overlap={22} borderW={3} />
+          <div key={gameResult.ts} onClick={() => setResultMinimized(true)} style={{ position:'fixed', inset:0, zIndex:250, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.35)', backdropFilter:'blur(3px)', WebkitBackdropFilter:'blur(3px)' }}>
+            <div style={{ borderRadius:32, overflow:'hidden', animation:anim, boxShadow:`0 20px 70px ${glow}99, 0 0 0 1.5px rgba(255,255,255,0.18)`, minWidth:260, maxWidth:340, width:'80vw', position:'relative' }}>
+              <button onClick={e => { e.stopPropagation(); setResultMinimized(true); }} aria-label="Kicsinyítés" style={{ position:'absolute', top:10, right:10, width:30, height:30, borderRadius:'50%', border:'none', background:'rgba(255,255,255,0.22)', color:'#fff', fontSize:16, lineHeight:1, cursor:'pointer', display:'grid', placeItems:'center', zIndex:5 }}>✕</button>
+              {hasWin && <WinZone />}
+              {split && (
+                <div style={{ height:16, position:'relative', margin:'-8px 0', zIndex:2 }}>
+                  <div style={{ position:'absolute', left:24, right:24, top:'50%', height:2, transform:'translateY(-50%)', background:'rgba(255,255,255,0.6)', boxShadow:'0 0 20px 5px rgba(255,255,255,0.4)', borderRadius:2 }} />
+                  <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', zIndex:3, width:42, height:42, borderRadius:'50%', background:'linear-gradient(160deg,#3a3f5e,#20233a)', border:'2.5px solid rgba(255,255,255,0.85)', display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', boxShadow:'0 4px 16px rgba(0,0,0,0.4)' }}>VS</div>
+                </div>
+              )}
+              {hasLose && <LoseZone />}
+              {gameResult.subtitle && !split && (
+                <div style={{ background: hasWin?WIN_G:LOSE_G, padding:'0 22px 6px', marginTop:-2 }}>
+                  <div style={{ fontFamily:T.font, fontSize:13, color:'rgba(255,255,255,0.78)', textAlign:'center', lineHeight:1.4 }}>{gameResult.subtitle}</div>
+                </div>
+              )}
+              <div style={{ background: split?LOSE_G:(hasWin?WIN_G:LOSE_G), padding:'2px 0 8px', textAlign:'center' }}>
+                <span style={{ fontFamily:T.font, fontSize:11, color:'rgba(255,255,255,0.5)' }}>koppints a kicsinyítéshez</span>
               </div>
-              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color:'#fff', textAlign:'center', lineHeight:1.1, textShadow:'0 2px 10px rgba(0,0,0,0.2)' }}>
-                {isCorrect ? 'Helyes! 🌟' : 'Inni kell!'}
-              </div>
-              {!isCorrect && gameResult.drinks > 0 && (
-                <div style={{ display:'flex', alignItems:'baseline', gap:6, animation:'drinkNumPop .5s cubic-bezier(.2,.9,.3,1.4)' }}>
-                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:64, color:'#fff', lineHeight:1, textShadow:'0 4px 20px rgba(0,0,0,0.25)' }}>{gameResult.drinks}</span>
-                  <span style={{ fontFamily:T.font, fontWeight:700, fontSize:22, color:'rgba(255,255,255,0.85)' }}>{isMulti ? 'korty/fő' : 'korty'}</span>
-                </div>
-              )}
-              {gameResult.playerName && !isMulti && (
-                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:15, color:'rgba(255,255,255,0.9)', textAlign:'center' }}>
-                  {isCorrect ? `${gameResult.playerName} — +1 pont` : gameResult.playerName}
-                </div>
-              )}
-              {gameResult.subtitle && (
-                <div style={{ fontFamily:T.font, fontSize:13, color:'rgba(255,255,255,0.78)', textAlign:'center', lineHeight:1.4 }}>
-                  {gameResult.subtitle}
-                </div>
-              )}
-              <div style={{ fontFamily:T.font, fontSize:11, color:'rgba(255,255,255,0.45)', marginTop:4 }}>koppints a kicsinyítéshez</div>
             </div>
           </div>
         );
@@ -57620,9 +57589,9 @@ function ReakcioGame({ challenger, opponent, onAdvance, onResult }) {
     const p1Won = p1Ms <= p2Ms;
     const winner = p1Won ? challenger : opponent;
     const loser  = p1Won ? opponent  : challenger;
-    const sub = `🍺 ${loser?.name||'—'} iszik · ${Math.min(p1Ms,p2Ms)}ms vs ${Math.max(p1Ms,p2Ms)}ms`;
-    // A banner a győztest (kisebb reakcióidő) emeli ki, alatta ki iszik; a vesztes iszik (onAdvance)
-    onResult && onResult({ correct: true, playerName: winner?.name||'', drinks:0, subtitle: sub });
+    const winMs = Math.min(p1Ms, p2Ms), loseMs = Math.max(p1Ms, p2Ms);
+    // Split banner: győztes (kisebb reakcióidő) fent, vesztes (iszik) lent
+    onResult && onResult({ winners:[winner], losers:[loser], drinks:1, winNote:`+1 pont · ${winMs}ms`, loseNote:`${loseMs}ms` });
     onAdvance && onAdvance(
       loser  ? {[loser.id]:1}  : {},
       winner ? {[winner.id]:1} : {}
