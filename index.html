@@ -34600,7 +34600,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.853';
+const APP_VERSION = 'v9.854';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -46139,6 +46139,79 @@ function DrinkDistributor({ players, onFinish, title }) {
   );
 }
 
+// ── Lóverseny ovál pálya: geometria + felülnézeti sávos pálya ───────────────
+// Stadion (lekerekített téglalap) útvonal, tetőközépről indul, óramutató szerint.
+function lovStadiumPath(x, y, w, h, r) {
+  const cx = x + w / 2;
+  return `M ${cx} ${y} H ${x+w-r} A ${r} ${r} 0 0 1 ${x+w} ${y+r} V ${y+h-r} A ${r} ${r} 0 0 1 ${x+w-r} ${y+h} H ${x+r} A ${r} ${r} 0 0 1 ${x} ${y+h-r} V ${y+r} A ${r} ${r} 0 0 1 ${x+r} ${y} H ${cx} Z`;
+}
+// Pont a stadion-kerületen t∈[0,1] arány mentén (tetőközép = 0, óramutató szerint).
+function lovStadiumPoint(x, y, w, h, r, t) {
+  const cx = x + w / 2;
+  const topHalf = w / 2 - r, arc = Math.PI / 2 * r, sideV = h - 2 * r, botStraight = w - 2 * r;
+  const segs = [
+    { len: topHalf, fn: u => ({ x: cx + u, y }) },
+    { len: arc, fn: u => { const a = -Math.PI/2 + u/r; return { x: (x+w-r)+r*Math.cos(a), y: (y+r)+r*Math.sin(a) }; } },
+    { len: sideV, fn: u => ({ x: x+w, y: (y+r)+u }) },
+    { len: arc, fn: u => { const a = u/r; return { x: (x+w-r)+r*Math.cos(a), y: (y+h-r)+r*Math.sin(a) }; } },
+    { len: botStraight, fn: u => ({ x: (x+w-r)-u, y: y+h }) },
+    { len: arc, fn: u => { const a = Math.PI/2 + u/r; return { x: (x+r)+r*Math.cos(a), y: (y+h-r)+r*Math.sin(a) }; } },
+    { len: sideV, fn: u => ({ x, y: (y+h-r)-u }) },
+    { len: arc, fn: u => { const a = Math.PI + u/r; return { x: (x+r)+r*Math.cos(a), y: (y+r)+r*Math.sin(a) }; } },
+    { len: topHalf, fn: u => ({ x: (x+r)+u, y }) },
+  ];
+  const total = segs.reduce((s, g) => s + g.len, 0);
+  let d = (((t % 1) + 1) % 1) * total;
+  for (let i = 0; i < segs.length; i++) {
+    const g = segs[i];
+    if (d <= g.len || i === segs.length - 1) return g.fn(Math.max(0, Math.min(d, g.len)));
+    d -= g.len;
+  }
+  return { x: cx, y };
+}
+function LoversenyOval({ HORSES, positions, FINISH }) {
+  const W = 340, H = 220, laneW = 22, step = 27, edge = 14, cx = W / 2;
+  const lanes = HORSES.map((h, i) => {
+    const inset = edge + i * step;
+    return { h, x: inset, y: inset, w: W - inset * 2, hh: H - inset * 2, r: (H - inset * 2) / 2 };
+  });
+  const ranks = {};
+  HORSES.forEach(h => { const pos = positions[h.id-1] || 0; ranks[h.id] = 1 + HORSES.filter(o => (positions[o.id-1]||0) > pos).length; });
+  const yTop = edge - laneW / 2, yBot = (edge + 3 * step) + laneW / 2;
+  const colW = 9, rowH = 12, nRows = Math.round((yBot - yTop) / rowH);
+  return (
+    <div style={{ position:'relative', width:'100%', aspectRatio:`${W} / ${H}`, background:'linear-gradient(180deg,#f4f5f9,#e7e9f0)', borderRadius:20, overflow:'hidden', boxShadow:T.shadow }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="100%" style={{ position:'absolute', left:0, top:0 }} preserveAspectRatio="none">
+        {lanes.map(({ h, x, y, w, hh, r }) => {
+          const d = lovStadiumPath(x, y, w, hh, r);
+          return (
+            <React.Fragment key={h.id}>
+              <path d={d} fill="none" stroke={h.color+'22'} strokeWidth={laneW} strokeLinejoin="round" />
+              <path d={d} fill="none" stroke={h.color+'55'} strokeWidth={2} strokeDasharray="2 7" strokeLinecap="round" />
+            </React.Fragment>
+          );
+        })}
+        {Array.from({ length: nRows }).map((_, rr) => [0,1].map(cc => {
+          const on = (rr + cc) % 2 === 0;
+          return <rect key={rr+'-'+cc} x={cx-colW+cc*colW} y={yTop+rr*rowH} width={colW} height={rowH} fill={on?'#20233a':'#fff'} opacity={0.92} />;
+        }))}
+      </svg>
+      {lanes.map(({ h, x, y, w, hh, r }) => {
+        const t = Math.min((positions[h.id-1]||0) / FINISH, 1);
+        const pt = lovStadiumPoint(x, y, w, hh, r, t);
+        return (
+          <div key={h.id} style={{ position:'absolute', left:`${pt.x/W*100}%`, top:`${pt.y/H*100}%`, transform:'translate(-50%,-50%)', transition:'left .42s ease, top .42s ease', zIndex:5 }}>
+            <div style={{ width:30, height:30, borderRadius:'50%', background:h.color, display:'grid', placeItems:'center', fontSize:15, boxShadow:`0 3px 8px rgba(0,0,0,0.35), 0 0 0 2.5px #fff`, position:'relative' }}>
+              🏇
+              <div style={{ position:'absolute', bottom:-6, right:-6, width:16, height:16, borderRadius:'50%', background:'#20233a', color:'#fff', fontSize:9, fontWeight:900, display:'grid', placeItems:'center', border:'1.5px solid #fff', fontFamily:T.font }}>{ranks[h.id]}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult }) {
   const FINISH = 12;
   const HORSES = React.useMemo(() => pickHorses(gameIdx), [gameIdx]);
@@ -46343,25 +46416,8 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult }) {
             <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:leader.color }}>Élen: {leader.name}</div>
           </div>
         </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {HORSES.map((h, idx) => {
-            const pct = Math.min(positions[idx] / FINISH, 1);
-            const rank = ranks[h.id];
-            return (
-              <div key={h.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <div style={{ width:26, height:26, borderRadius:'50%', background:h.color, flexShrink:0, boxShadow:`0 2px 6px ${h.color}55` }} />
-                <div style={{ flex:1, height:34, background:T.surfaceMuted, borderRadius:17, overflow:'hidden', position:'relative', boxShadow:`0 0 0 1.5px rgba(0,0,0,0.08)` }}>
-                  <div style={{ position:'absolute', right:0, top:0, bottom:0, width:18, zIndex:2, background:'repeating-linear-gradient(135deg,rgba(0,0,0,0.13) 0px,rgba(0,0,0,0.13) 3px,transparent 3px,transparent 7px)', borderLeft:`2px solid ${T.inkMute}40` }} />
-                  <div style={{ width:`${Math.max(pct*100,0)}%`, height:'100%', background:`linear-gradient(90deg,${h.color}cc,${h.color})`, borderRadius:17, transition:'width .25s ease', display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:8, minWidth: pct>0?36:0, position:'relative', zIndex:1, boxShadow:`inset 0 0 0 2px rgba(255,255,255,0.3), 0 1px 4px ${h.color}88` }}>
-                    {pct > 0 && <span style={{ fontSize:18 }}>🏇</span>}
-                  </div>
-                </div>
-                <div style={{ width:22, textAlign:'center', fontFamily:T.font, fontSize:13, fontWeight:700, color:T.inkSoft, flexShrink:0 }}>{rank}.</div>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ textAlign:'center', fontFamily:T.font, fontSize:13, color:T.inkSoft }}>A célba érő szín nyer — a többire fogadók isznak 🍺</div>
+        <LoversenyOval HORSES={HORSES} positions={positions} FINISH={FINISH} />
+        <div style={{ textAlign:'center', fontFamily:T.font, fontSize:13, color:T.inkSoft }}>A célvonalat elérő szín nyer — a többire fogadók isznak 🍺</div>
       </div>
     );
   }
