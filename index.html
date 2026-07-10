@@ -34599,7 +34599,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.844';
+const APP_VERSION = 'v9.845';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -44773,6 +44773,62 @@ function SohanemGame({ gameIdx, players, onAdvance }) {
   );
 }
 
+function ZeneSliderHandle({ pct, onDown, note }) {
+  return (
+    <div onPointerDown={onDown} style={{ position:'absolute', top:'50%', left:`${pct}%`, transform:'translate(-50%,-50%)', width:28, height:28, borderRadius:'50%', background:'#fff', border:`4px solid ${T.mint}`, boxShadow:'0 2px 8px rgba(0,0,0,0.22)', cursor:'grab', touchAction:'none', display:'grid', placeItems:'center', zIndex:3 }}>
+      {note && <span style={{ fontSize:12, lineHeight:1 }}>🎵</span>}
+    </div>
+  );
+}
+// mode: 'range' → sel=[lo,hi] (dual handle); 'pick' → sel=[idx] (single handle)
+function ZeneSlider({ labels, sel, onChange, mode }) {
+  const trackRef = React.useRef(null);
+  const dragRef = React.useRef(null);
+  const n = labels.length;
+  const pct = i => n<=1 ? 0 : (i/(n-1))*100;
+  const idxFromX = (cx) => { const r = trackRef.current.getBoundingClientRect(); const ratio = Math.min(1, Math.max(0, (cx - r.left)/r.width)); return Math.round(ratio*(n-1)); };
+  const apply = (which, idx) => {
+    if (mode === 'range') {
+      let [lo,hi] = sel;
+      if (which === 'lo') lo = Math.min(idx, hi); else hi = Math.max(idx, lo);
+      onChange([lo,hi]);
+    } else onChange([idx]);
+  };
+  const startDrag = (which) => (e) => { e.preventDefault(); dragRef.current = which; };
+  const onTrackDown = (e) => {
+    const idx = idxFromX(e.clientX);
+    const which = mode === 'range' ? (Math.abs(idx-sel[0]) <= Math.abs(idx-sel[1]) ? 'lo' : 'hi') : 'pick';
+    dragRef.current = which; apply(which, idx);
+  };
+  React.useEffect(() => {
+    const move = e => { if (!dragRef.current || !trackRef.current) return; apply(dragRef.current, idxFromX(e.clientX)); };
+    const up = () => { dragRef.current = null; };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+    return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); };
+  });
+  const loPct = mode === 'range' ? pct(sel[0]) : 0;
+  const hiPct = mode === 'range' ? pct(sel[1]) : pct(sel[0]);
+  const isOn = i => mode === 'range' ? (i >= sel[0] && i <= sel[1]) : (i === sel[0]);
+  const lblTransform = i => i===0 ? 'translateX(-4px)' : i===n-1 ? 'translateX(calc(-100% + 4px))' : 'translateX(-50%)';
+  return (
+    <div style={{ padding:'2px 4px 0' }}>
+      <div ref={trackRef} onPointerDown={onTrackDown} style={{ position:'relative', height:34, cursor:'pointer', touchAction:'none' }}>
+        <div style={{ position:'absolute', top:14, left:0, right:0, height:6, borderRadius:999, background:T.inkMute+'33' }} />
+        <div style={{ position:'absolute', top:14, left:`${loPct}%`, width:`${hiPct-loPct}%`, height:6, borderRadius:999, background:T.mint }} />
+        {labels.map((_,i) => (<div key={i} style={{ position:'absolute', top:15, left:`${pct(i)}%`, transform:'translateX(-50%)', width:4, height:4, borderRadius:'50%', background: isOn(i) ? '#fff' : T.inkMute+'66', zIndex:2 }} />))}
+        {mode === 'range' && <ZeneSliderHandle pct={loPct} onDown={startDrag('lo')} />}
+        <ZeneSliderHandle pct={hiPct} onDown={startDrag(mode==='range'?'hi':'pick')} note={mode==='pick'} />
+      </div>
+      <div style={{ position:'relative', height:16, marginTop:3 }}>
+        {labels.map((l,i) => (
+          <span key={i} onClick={() => apply(mode==='range' ? (Math.abs(i-sel[0]) <= Math.abs(i-sel[1]) ? 'lo' : 'hi') : 'pick', i)}
+            style={{ position:'absolute', left:`${pct(i)}%`, transform:lblTransform(i), fontFamily:T.font, fontWeight: isOn(i)?800:600, fontSize: n>5?9:11, letterSpacing: n>5?'-0.02em':'0', color: isOn(i)?T.mintDeep:T.inkMute, whiteSpace:'nowrap', cursor:'pointer' }}>{l}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ZeneConfigSheet({ config, setConfig, onClose }) {
   // eras/genres: string[] — empty = all
   const eras   = config.eras   || [];
@@ -44793,44 +44849,17 @@ function ZeneConfigSheet({ config, setConfig, onClose }) {
     { v:'magyar',     label:'Magyar',       emoji:'🇭🇺' },
   ];
 
-  const toggle = (arr, v) => arr.includes(v) ? arr.filter(x=>x!==v) : [...arr, v];
-
-  const renderOptions = (options, selected, configKey) => {
-    const allActive = selected.length === 0;
-    const Dot = ({ active }) => (
-      <div style={{
-        width:18, height:18, borderRadius:'50%', flexShrink:0,
-        background: active ? T.mint : 'transparent',
-        border: active ? 'none' : `2px solid ${T.inkMute}55`,
-        display:'grid', placeItems:'center', transition:'all .15s',
-      }}>
-        {active && <span style={{ color:'#fff', fontSize:10, fontWeight:900, lineHeight:1 }}>✓</span>}
-      </div>
-    );
-    const Card = ({ active, onClick, label }) => (
-      <button onClick={onClick} style={{
-        display:'flex', alignItems:'center', gap:9,
-        padding:'12px 14px', borderRadius:16, cursor:'pointer', textAlign:'left',
-        background: active ? T.mintSoft : T.surface,
-        border: active ? `1.5px solid ${T.mint}` : `1.5px solid ${T.inkMute}22`,
-        transition:'all .15s',
-      }}>
-        <Dot active={active} />
-        <span style={{ fontFamily:T.font, fontWeight: active ? 800 : 600, fontSize:13, color: active ? T.mintDeep : T.inkSoft }}>{label}</span>
-      </button>
-    );
-    return (
-      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-        <Card active={allActive} onClick={() => setConfig(c=>({...c,[configKey]:[]}))} label={configKey==='eras' ? 'Minden korszak' : 'Minden stílus'} />
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-          {options.map(o => {
-            const active = selected.includes(o.v);
-            return <Card key={o.v} active={active} onClick={() => setConfig(c=>({...c,[configKey]:toggle(c[configKey]||[],o.v)}))} label={o.label} />;
-          })}
-        </div>
-      </div>
-    );
-  };
+  // Korszak — dual-handle range slider (empty eras = all)
+  const eraIdxs = eras.map(v => ERA_OPTIONS.findIndex(o=>o.v===v)).filter(i=>i>=0);
+  const eraLo = eraIdxs.length ? Math.min(...eraIdxs) : 0;
+  const eraHi = eraIdxs.length ? Math.max(...eraIdxs) : ERA_OPTIONS.length-1;
+  const setEraRange = ([lo,hi]) => setConfig(c => ({ ...c, eras: (lo===0 && hi===ERA_OPTIONS.length-1) ? [] : ERA_OPTIONS.slice(lo,hi+1).map(o=>o.v) }));
+  const eraTitle = (eraLo===0 && eraHi===ERA_OPTIONS.length-1) ? 'Minden korszak' : (eraLo===eraHi ? `${ERA_OPTIONS[eraLo].label} évek` : `${ERA_OPTIONS[eraLo].label} – ${ERA_OPTIONS[eraHi].label}`);
+  // Stílus — single-handle pick slider (index 0 = Minden)
+  const GENRE_STOPS = ['Minden', ...GENRE_OPTIONS.map(o=>o.label)];
+  const genreIdx = genres.length ? (GENRE_OPTIONS.findIndex(o=>o.v===genres[0]) + 1) : 0;
+  const setGenreIdx = ([idx]) => setConfig(c => ({ ...c, genres: idx===0 ? [] : [GENRE_OPTIONS[idx-1].v] }));
+  const genreTitle = genreIdx===0 ? '✨ Minden stílus' : GENRE_OPTIONS[genreIdx-1].label;
 
   const [activeTab, setActiveTab] = React.useState('eras');
 
@@ -44855,10 +44884,26 @@ function ZeneConfigSheet({ config, setConfig, onClose }) {
         </div>
 
         {/* Tab content */}
-        <div>
-          {activeTab === 'eras'   && renderOptions(ERA_OPTIONS,   eras,   'eras')}
-          {activeTab === 'genres' && renderOptions(GENRE_OPTIONS, genres, 'genres')}
-        </div>
+        {activeTab === 'eras' && (
+          <div style={{ display:'flex', flexDirection:'column', gap:16, padding:'6px 4px 8px' }}>
+            <div>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.mintDeep, letterSpacing:'-0.01em' }}>{eraTitle}</div>
+              <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:2 }}>Csúsztasd az idővonalat a kívánt évtizedekre</div>
+            </div>
+            <ZeneSlider labels={ERA_OPTIONS.map(o=>o.label)} sel={[eraLo,eraHi]} onChange={setEraRange} mode="range" />
+            <div style={{ background:T.surfaceMuted, borderRadius:14, padding:'12px 14px', fontFamily:T.font, fontSize:13, color:T.inkSoft, lineHeight:1.45 }}>ℹ️ A kiválasztott évtizedekből véletlenszerűen válogatunk zenéket a felismeréshez.</div>
+          </div>
+        )}
+        {activeTab === 'genres' && (
+          <div style={{ display:'flex', flexDirection:'column', gap:16, padding:'6px 4px 8px' }}>
+            <div>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.mintDeep, letterSpacing:'-0.01em' }}>{genreTitle}</div>
+              <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:2 }}>Csúsztasd a jelölőt egy konkrét stílusra, vagy hagyd az elején az összeshez</div>
+            </div>
+            <ZeneSlider labels={GENRE_STOPS} sel={[genreIdx]} onChange={setGenreIdx} mode="pick" />
+            <div style={{ background:T.surfaceMuted, borderRadius:14, padding:'12px 14px', fontFamily:T.font, fontSize:13, color:T.inkSoft, lineHeight:1.45 }}>ℹ️ A csúszkával válts stílust — a kiválasztott kategóriából válogatunk zenéket a felismeréshez.</div>
+          </div>
+        )}
 
       </div>
     </SheetOverlay>
