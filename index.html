@@ -34600,7 +34600,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.852';
+const APP_VERSION = 'v9.853';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -44939,6 +44939,7 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
 
   const [playing, setPlaying] = React.useState(false);
   const [revealed, setRevealed] = React.useState(false);
+  const [decided, setDecided] = React.useState(false);
   const [previewUrl, setPreviewUrl] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const audioRef    = React.useRef(null);
@@ -44954,6 +44955,7 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
     if (!song) return;
     setPlaying(false);
     setRevealed(false);
+    setDecided(false);
     setLoading(true);
     setPreviewUrl(null);
     advancedRef.current = false;
@@ -45033,6 +45035,7 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
   const handleResult = (correct) => {
     if (advancedRef.current) return;
     advancedRef.current = true;
+    setDecided(true);
     if (audioRef.current) audioRef.current.pause();
     if (correct) {
       onResult && onResult({ correct: true, playerName: challenger?.name || '', drinks: 0, subtitle: (challenger?.name || '') + ' felismerte — +1 pont!' });
@@ -45106,7 +45109,11 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
             <span style={{ fontSize:13 }}>⏸</span><span>Megállítás</span>
           </button>
         )}
-        {!loading && (!revealed
+        {!loading && (decided
+          ? <div style={{ width:'100%', padding:'13px 0', background:T.mintSoft, borderRadius:16, color:T.mint, fontFamily:T.font, fontWeight:700, fontSize:15, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+              <span>✅</span><span>Döntés beadva — nyomd a „Kövi" gombot</span>
+            </div>
+          : !revealed
           ? <button onClick={() => setRevealed(true)}
               style={{ width:'100%', padding:'13px 0', background:T.surface, border:`1.5px solid ${T.inkMute}40`, borderRadius:16, color:T.ink, fontFamily:T.font, fontWeight:700, fontSize:15, cursor:'pointer', boxShadow:T.shadow, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
               <span>🔍</span><span>Felfedés</span>
