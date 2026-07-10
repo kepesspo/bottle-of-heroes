@@ -33971,6 +33971,10 @@ window.triggerHaptic = function() {
   window.getBugReports = function(){ return db.collection('bug_reports').orderBy('createdAt','desc').limit(50).get().then(function(snap){ return snap.docs.map(function(d){ return Object.assign({ id:d.id }, d.data()); }); }).catch(function(){ return []; }); };
   window.updateBugReport = function(id, patch){ return db.collection('bug_reports').doc(id).set(patch, { merge:true }); };
   window.deleteBugReport = function(id){ return db.collection('bug_reports').doc(id).delete(); };
+  window.getTasks = function(){ return db.collection('tasks').orderBy('createdAt','desc').limit(200).get().then(function(snap){ return snap.docs.map(function(d){ return Object.assign({ id:d.id }, d.data()); }); }).catch(function(){ return []; }); };
+  window.addTask = function(data){ return db.collection('tasks').add(Object.assign({ status:'todo' }, data, { createdAt: firebase.firestore.FieldValue.serverTimestamp() })); };
+  window.updateTask = function(id, patch){ return db.collection('tasks').doc(id).set(patch, { merge:true }); };
+  window.deleteTask = function(id){ return db.collection('tasks').doc(id).delete(); };
   window.getEventsTheme = function() {
     return db.collection('config').doc('eventsTheme').get().then(function(d) {
       return d.exists ? (d.data().theme || 'ice') : 'ice';
@@ -34595,7 +34599,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.843';
+const APP_VERSION = 'v9.844';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -36650,7 +36654,7 @@ function EventCalendarView({ events, calMonth, setCalMonth, setDetail, evT: calE
 // ── AdminScreen ────────────────────────────────────────────────────────────────
 function AdminScreen({ go }) {
   const [tab, setTab] = React.useState('profiles');
-  const TABS = [['profiles','Profilok'],['events','Események'],['games','Játékok'],['stats','Statisztika'],['zene','Zene'],['rooms','Szobák'],['message','Hirdetmény'],['settings','Beállítások']];
+  const TABS = [['profiles','Profilok'],['feladatok','Feladatok'],['events','Események'],['games','Játékok'],['stats','Statisztika'],['zene','Zene'],['rooms','Szobák'],['message','Hirdetmény'],['settings','Beállítások']];
   const [pinOk, setPinOk] = React.useState(null);
   const [reqPin, setReqPin] = React.useState('');
   const [pinInput, setPinInput] = React.useState('');
@@ -36702,6 +36706,7 @@ function AdminScreen({ go }) {
       </div>
       <div style={{ flex:1, overflowY:'auto' }}>
         {tab === 'profiles' && <AdminProfiles />}
+        {tab === 'feladatok' && <AdminTasks />}
         {tab === 'events'   && <AdminEvents go={go} />}
         {tab === 'games'    && <AdminGames />}
         {tab === 'stats'    && <AdminStats />}
@@ -37697,8 +37702,6 @@ function AdminSettings() {
         <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginBottom:12 }}>Minden megnyitott app azonnal újratölt — deploy után hasznos, ha valakinél régi verzió ragadt be.</div>
         <ForceReloadButton />
       </div>
-
-      <BugReportsCard />
     </div>
   );
 }
@@ -38107,6 +38110,104 @@ function BugReportsCard() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── Admin: Feladatok (feature + bug lista + beérkezett hibák) ──
+function AdminTasks() {
+  const [tasks, setTasks] = React.useState(null);
+  const [type, setType] = React.useState('feature');
+  const [title, setTitle] = React.useState('');
+  const [note, setNote] = React.useState('');
+  const [prio, setPrio] = React.useState('normal');
+  const [adding, setAdding] = React.useState(false);
+  const [confirmDel, setConfirmDel] = React.useState(null);
+  const [hideDone, setHideDone] = React.useState(false);
+  const load = () => { setTasks(null); (window.getTasks ? window.getTasks() : Promise.resolve([])).then(setTasks); };
+  React.useEffect(() => { load(); }, []);
+  const add = () => {
+    if (!title.trim() || adding) return;
+    setAdding(true);
+    (window.addTask ? window.addTask({ type, title:title.trim(), note:note.trim()||null, prio, status:'todo' }) : Promise.resolve())
+      .then(() => { setTitle(''); setNote(''); setPrio('normal'); setAdding(false); load(); })
+      .catch(() => setAdding(false));
+  };
+  const NEXT = { todo:'doing', doing:'done', done:'todo' };
+  const STATUS = {
+    todo:  { label:'Teendő',      bg:T.surfaceMuted, fg:T.inkSoft },
+    doing: { label:'Folyamatban', bg:`${T.yellow||'#F5B301'}22`, fg:'#B8860B' },
+    done:  { label:'Kész ✓',      bg:T.mintSoft, fg:T.mintDeep||T.mint },
+  };
+  const cycle = (t2) => window.updateTask && window.updateTask(t2.id, { status: NEXT[t2.status||'todo'] }).then(load);
+  const del = (id) => window.deleteTask && window.deleteTask(id).then(() => { setConfirmDel(null); load(); });
+
+  const Section = ({ tp, icon, label, accent }) => {
+    const items = (tasks||[]).filter(x => x.type === tp && (!hideDone || x.status !== 'done'));
+    const openCount = (tasks||[]).filter(x => x.type === tp && x.status !== 'done').length;
+    return (
+      <div style={{ marginBottom:16 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+          <span style={{ fontSize:16 }}>{icon}</span>
+          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>{label}</span>
+          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:accent, background:`${accent}18`, borderRadius:999, padding:'2px 8px' }}>{openCount} nyitott</span>
+        </div>
+        {items.length === 0 && <div style={{ fontFamily:T.font, fontSize:13, color:T.sub, padding:'2px 0 10px' }}>Nincs elem 🎉</div>}
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {items.map(t2 => {
+            const st = STATUS[t2.status||'todo'];
+            return (
+              <div key={t2.id} style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, borderLeft:`4px solid ${accent}`, opacity: t2.status==='done'?0.6:1 }}>
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, textDecoration: t2.status==='done'?'line-through':'none', wordBreak:'break-word' }}>{t2.prio==='high'?'🔴 ':''}{t2.title}</div>
+                {t2.note && <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, marginTop:3, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{t2.note}</div>}
+                <div style={{ display:'flex', gap:8, marginTop:10, alignItems:'center' }}>
+                  <button onClick={() => cycle(t2)} style={{ padding:'5px 12px', borderRadius:999, border:'none', background:st.bg, color:st.fg, fontFamily:T.font, fontWeight:800, fontSize:12, cursor:'pointer' }}>{st.label}</button>
+                  <div style={{ flex:1 }} />
+                  <button onClick={() => { if (confirmDel===t2.id) del(t2.id); else setConfirmDel(t2.id); }} style={{ padding:'5px 10px', borderRadius:10, border:'none', background: confirmDel===t2.id?T.coral:T.coralSoft, color: confirmDel===t2.id?'#fff':T.coral, fontFamily:T.font, fontWeight:700, fontSize:12, cursor:'pointer' }}>{confirmDel===t2.id?'Biztos?':'🗑'}</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ padding:16 }}>
+      {/* Add form */}
+      <div style={{ background:T.surface, borderRadius:16, padding:14, boxShadow:T.shadow, marginBottom:16 }}>
+        <div style={{ display:'flex', gap:8, marginBottom:10 }}>
+          {[['feature','✨ Feature'],['bug','🐛 Bug']].map(([k,l]) => (
+            <button key={k} onClick={() => setType(k)} style={{ flex:1, padding:'9px', borderRadius:12, border: type===k?`2px solid ${T.mint}`:`2px solid transparent`, background: type===k?T.mintSoft:T.surfaceMuted, fontFamily:T.font, fontWeight:800, fontSize:13, color: type===k?(T.mintDeep||T.mint):T.inkSoft, cursor:'pointer' }}>{l}</button>
+          ))}
+        </div>
+        <input value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')add();}} placeholder="Mi a feladat?" style={{ width:'100%', boxSizing:'border-box', padding:'11px 12px', borderRadius:12, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none', marginBottom:8 }} />
+        <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Leírás (opcionális)" rows={2} style={{ width:'100%', boxSizing:'border-box', padding:'10px 12px', borderRadius:12, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:13, color:T.ink, outline:'none', resize:'vertical', marginBottom:10 }} />
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <button onClick={() => setPrio(p=>p==='high'?'normal':'high')} style={{ padding:'8px 12px', borderRadius:12, border:'none', background: prio==='high'?`${T.coral}22`:T.surfaceMuted, color: prio==='high'?T.coral:T.inkSoft, fontFamily:T.font, fontWeight:700, fontSize:13, cursor:'pointer' }}>{prio==='high'?'🔴 Sürgős':'Prioritás'}</button>
+          <div style={{ flex:1 }} />
+          <button onClick={add} disabled={!title.trim()||adding} style={{ padding:'10px 18px', borderRadius:12, border:'none', background: title.trim()?T.mint:T.mintSoft, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14, cursor: title.trim()?'pointer':'default', opacity: adding?0.6:1 }}>+ Hozzáad</button>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+        <button onClick={()=>setHideDone(h=>!h)} style={{ padding:'6px 12px', borderRadius:10, border:'none', background:hideDone?T.mintSoft:T.surfaceMuted, color:hideDone?T.mint:T.inkSoft, fontFamily:T.font, fontWeight:700, fontSize:12, cursor:'pointer' }}>{hideDone?'Kész elrejtve':'Kész mutatása'}</button>
+        <button onClick={load} style={{ padding:'6px 12px', borderRadius:10, border:'none', background:T.surface, boxShadow:T.shadow, color:T.mint, fontFamily:T.font, fontWeight:700, fontSize:12, cursor:'pointer' }}>Frissítés</button>
+      </div>
+
+      {tasks === null ? (
+        <div style={{ textAlign:'center', padding:30, fontFamily:T.font, color:T.sub }}>Betöltés…</div>
+      ) : (
+        <React.Fragment>
+          <Section tp="feature" icon="✨" label="Feature-ök" accent={T.mint} />
+          <Section tp="bug" icon="🐛" label="Bugok" accent={T.coral} />
+        </React.Fragment>
+      )}
+
+      {/* Beérkezett felhasználói hibajelentések */}
+      <BugReportsCard />
     </div>
   );
 }
