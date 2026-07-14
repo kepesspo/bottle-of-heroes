@@ -34608,7 +34608,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.869';
+const APP_VERSION = 'v9.870';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -39468,21 +39468,7 @@ function PlayersScreen({ players, setPlayers, go }) {
       {editing &&
         <PlayerEditSheet
           player={players.find(p => p.id === editing)}
-          onClose={() => {
-            const p = players.find(pp => pp.id === editing);
-            setEditing(null);
-            // Egyedi nevű, profil nélküli játékos → automatikus profil mentés Firebase-be
-            if (p && !p.profileId && p.name && p.name.trim() && !/^Játékos \d+$/.test(p.name.trim()) && typeof window.saveProfile === 'function') {
-              const nm = p.name.trim();
-              (window.getProfiles ? window.getProfiles() : Promise.resolve([])).then(profs => {
-                const ex = (profs || []).find(pr => (pr.name || '').trim().toLowerCase() === nm.toLowerCase() || (pr.nickname || '').trim().toLowerCase() === nm.toLowerCase());
-                if (ex) return ex.id;
-                return window.saveProfile({ name: nm, color: p.color, img: p.img || null });
-              }).then(pid => {
-                if (pid) setPlayers(prev => prev.map(pp => pp.id === p.id ? { ...pp, profileId: pid } : pp));
-              }).catch(() => {});
-            }
-          }}
+          onClose={() => setEditing(null)}
           onChange={patch => updatePlayer(editing, patch)}
           usedColors={new Set(players.filter(p => p.id !== editing).map(p => p.color))}
           usedProfileIds={new Set(players.filter(p => p.id !== editing && p.profileId).map(p => p.profileId))}
