@@ -33820,26 +33820,29 @@ window.triggerHaptic = function() {
   window.generateRoomCode = function() {
     var c=''; for(var i=0;i<6;i++) c+=Math.floor(Math.random()*10); return c;
   };
+  // Firestore nem fogad el undefined értéket (szinkron hibát dob rá) — rekurzívan null-ra cseréljük.
+  // A FieldValue sentinel-eket (serverTimestamp, arrayUnion, increment, ...) érintetlenül hagyjuk,
+  // különben elveszítik az osztály-azonosságukat és a Firestore SDK elutasítja őket.
+  function sanitizeForFirestore(obj) {
+    if (obj === undefined) return null;
+    if (obj === null || typeof obj !== 'object') return obj;
+    if (obj instanceof firebase.firestore.FieldValue) return obj;
+    if (Array.isArray(obj)) return obj.map(sanitizeForFirestore);
+    var r = {};
+    Object.keys(obj).forEach(function(k) { r[k] = sanitizeForFirestore(obj[k]); });
+    return r;
+  }
   window.createRoom = function(code, players, games, meta) {
-    return db.collection('rooms').doc(code).set({
+    return db.collection('rooms').doc(code).set(sanitizeForFirestore({
       code:code, players:players, selectedGames:games, gameMeta:meta,
       turn:0, gameIdx:0, round:1, active:true,
       observerAllowed: meta.observerAllowed || false,
       observers: [],
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
-    });
+    }));
   };
   window.syncRoom = function(code, data) {
-    // Firestore nem fogad el undefined értéket — rekurzívan null-ra cseréljük
-    function sanitize(obj) {
-      if (obj === undefined) return null;
-      if (obj === null || typeof obj !== 'object') return obj;
-      if (Array.isArray(obj)) return obj.map(sanitize);
-      var r = {};
-      Object.keys(obj).forEach(function(k) { r[k] = sanitize(obj[k]); });
-      return r;
-    }
-    return db.collection('rooms').doc(code).set(sanitize(data), { merge: true }).catch(function(e){ console.warn('syncRoom', e); });
+    return db.collection('rooms').doc(code).set(sanitizeForFirestore(data), { merge: true }).catch(function(e){ console.warn('syncRoom', e); });
   };
   window.checkRoom = function(code) {
     return db.collection('rooms').doc(code).get().then(function(d){ return d.exists ? d.data() : null; });
@@ -34608,7 +34611,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.871';
+const APP_VERSION = 'v9.872';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
