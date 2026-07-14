@@ -27,7 +27,7 @@
   <!-- iOS full-screen / status bar -->
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
-  <script>(function(){var q=location.search;var ev=q.indexOf('screen=events')!==-1||q.indexOf('screen=calendar')!==-1;var box=q.indexOf('screen=dnrbox')!==-1;document.write('<meta name="apple-mobile-web-app-title" content="'+(ev?'DNR Events':box?'DNR Box':'Bottle of Heroes')+'"/>');})();</script>
+  <script>(function(){var q=location.search;var ev=q.indexOf('screen=events')!==-1||q.indexOf('screen=calendar')!==-1;var box=q.indexOf('screen=dnrbox')!==-1;document.write('<meta name="apple-mobile-web-app-title" content="'+(ev?'DNR Events':box?'DNR BOX':'Bottle of Heroes')+'"/>');})();</script>
   <!-- Theme color (amber) -->
   <meta name="theme-color" content="#F4C57E"/>
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
@@ -39,9 +39,9 @@
         var m = document.querySelector('meta[name="apple-mobile-web-app-title"]');
         if (m) m.setAttribute('content', 'DNR Events');
       } else if (location.search.indexOf('screen=dnrbox') !== -1) {
-        document.title = 'DNR Box';
+        document.title = 'DNR BOX';
         var mb = document.querySelector('meta[name="apple-mobile-web-app-title"]');
-        if (mb) mb.setAttribute('content', 'DNR Box');
+        if (mb) mb.setAttribute('content', 'DNR BOX');
       }
     })();
   </script>
@@ -34611,7 +34611,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.872';
+const APP_VERSION = 'v9.873';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -59646,6 +59646,7 @@ function JukeboxScreen({ go, deepLink }) {
   const [adding, setAdding] = React.useState(false);
   const [addErr, setAddErr] = React.useState('');
   const [ytReady, setYtReady] = React.useState(false);
+  const [ytLoadFailed, setYtLoadFailed] = React.useState(false);
   const [paused, setPaused] = React.useState(false);
   const [needsGesture, setNeedsGesture] = React.useState(false);
   // ── search (phase 2) ──
@@ -59655,6 +59656,7 @@ function JukeboxScreen({ go, deepLink }) {
   const [results, setResults] = React.useState([]);
   const [searching, setSearching] = React.useState(false);
   const [searchErr, setSearchErr] = React.useState('');
+  const [addedFlash, setAddedFlash] = React.useState({});
   const searchDeb = React.useRef(null);
   // ── settings sheet ──
   const [setOpen, setSetOpen] = React.useState(false);
@@ -59664,6 +59666,7 @@ function JukeboxScreen({ go, deepLink }) {
   const [keyInput, setKeyInput] = React.useState('');
 
   const playerRef = React.useRef(null);
+  const ytReadyRef = React.useRef(false);
   const advancingRef = React.useRef(false);
   const otherPlayerActive = !!beat && (Date.now() - beat < 25000) && !isPlayer;
   const apiKey = cfg.ytApiKey || '';
@@ -59705,6 +59708,8 @@ function JukeboxScreen({ go, deepLink }) {
   React.useEffect(() => {
     if (!isPlayer) return;
     let cancelled = false;
+    setYtLoadFailed(false);
+    ytReadyRef.current = false;
     function ensureApi(cb) {
       if (window.YT && window.YT.Player) { cb(); return; }
       const prev = window.onYouTubeIframeAPIReady;
@@ -59715,12 +59720,12 @@ function JukeboxScreen({ go, deepLink }) {
       }
     }
     ensureApi(() => {
-      if (cancelled || playerRef.current) { if (playerRef.current) setYtReady(true); return; }
+      if (cancelled || playerRef.current) { if (playerRef.current) { ytReadyRef.current = true; setYtReady(true); setYtLoadFailed(false); } return; }
       playerRef.current = new window.YT.Player('dnrbox-yt', {
         height:'100%', width:'100%',
         playerVars:{ autoplay:1, playsinline:1, rel:0, modestbranding:1 },
         events:{
-          onReady: () => setYtReady(true),
+          onReady: () => { ytReadyRef.current = true; setYtReady(true); setYtLoadFailed(false); },
           onStateChange: (e) => {
             if (e.data === window.YT.PlayerState.ENDED) startNext();
             else if (e.data === window.YT.PlayerState.PLAYING) { setPaused(false); setNeedsGesture(false); }
@@ -59730,7 +59735,10 @@ function JukeboxScreen({ go, deepLink }) {
         },
       });
     });
-    return () => { cancelled = true; };
+    // ha 12mp múlva sincs kész a lejátszó (blokkolt/lassú net), jelezzük — a Következő/Szünet
+    // gombok addig "nem csinálnak semmit" a felületen, mert nincs mit vezérelniük
+    const failTimer = setTimeout(() => { if (!cancelled && !ytReadyRef.current) setYtLoadFailed(true); }, 12000);
+    return () => { cancelled = true; clearTimeout(failTimer); };
   }, [isPlayer]);
 
   React.useEffect(() => {
@@ -59792,7 +59800,11 @@ function JukeboxScreen({ go, deepLink }) {
     queueRef.doc(q.id).update({ ['votes.'+voteKey]: voted ? FV.delete() : true, voteCount: FV.increment(voted ? -1 : 1) }).catch(()=>{});
   }
   const sortedQueue = [...queue].sort((a,b) => (b.voteCount||0)-(a.voteCount||0) || (a.addedAt||0)-(b.addedAt||0));
-  async function addFromResult(r) { await addTrack(r); setSearchQ(''); setResults([]); }
+  async function addFromResult(r) {
+    await addTrack(r);
+    setAddedFlash(prev => ({ ...prev, [r.videoId]: true }));
+    setTimeout(() => setAddedFlash(prev => { const n = { ...prev }; delete n[r.videoId]; return n; }), 1500);
+  }
   async function addFromLink() {
     const id = jukeYtId(addInput);
     if (!id) { setAddErr('Illessz be egy YouTube linket vagy videó ID-t'); return; }
@@ -59816,7 +59828,7 @@ function JukeboxScreen({ go, deepLink }) {
   const np = nowPlaying;
   return (
     <div style={{ position:'fixed', inset:0, background:T.bg, fontFamily:T.font, display:'flex', flexDirection:'column', overflow:'hidden' }}>
-      <AppBar title="DNR Box" onBack={deepLink ? null : ()=>go('home')} right={
+      <AppBar title="DNR BOX" onBack={deepLink ? null : ()=>go('home')} right={
         <button onClick={()=>setIsPlayer(v=>!v)} style={{ display:'flex', alignItems:'center', gap:5, height:36, padding:'0 12px', borderRadius:12, border: isPlayer?'none':`1.5px solid ${T.inkMute}44`, background:isPlayer?T.mint:'transparent', color:isPlayer?'#fff':T.inkSoft, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' }}>
           {isPlayer ? '🔊 Lejátszó' : '📺 Lejátszó'}
         </button>
@@ -59828,7 +59840,7 @@ function JukeboxScreen({ go, deepLink }) {
             <div style={{ borderRadius:18, overflow:'hidden', boxShadow:T.shadow, background:'#000' }}>
               <div style={{ position:'relative', width:'100%', paddingTop:'56.25%' }}>
                 <div id="dnrbox-yt" style={{ position:'absolute', inset:0 }} />
-                {needsGesture && (
+                {needsGesture && !ytLoadFailed && (
                   <div onClick={() => { try { playerRef.current.playVideo(); } catch(x){} setNeedsGesture(false); }} style={{ position:'absolute', inset:0, display:'grid', placeItems:'center', background:'rgba(0,0,0,0.55)', cursor:'pointer', zIndex:2 }}>
                     <div style={{ textAlign:'center', color:'#fff' }}>
                       <div style={{ fontSize:46, lineHeight:1 }}>▶</div>
@@ -59836,10 +59848,19 @@ function JukeboxScreen({ go, deepLink }) {
                     </div>
                   </div>
                 )}
+                {ytLoadFailed && (
+                  <div style={{ position:'absolute', inset:0, display:'grid', placeItems:'center', background:'rgba(20,20,20,0.92)', zIndex:3, padding:20 }}>
+                    <div style={{ textAlign:'center', color:'#fff', display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+                      <div style={{ fontSize:34, lineHeight:1 }}>⚠️</div>
+                      <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, lineHeight:1.4 }}>Nem sikerült betölteni a YouTube lejátszót.<br/>Ellenőrizd a netkapcsolatot.</div>
+                      <button onClick={() => window.location.reload()} style={{ marginTop:4, padding:'9px 18px', borderRadius:12, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, cursor:'pointer' }}>🔄 Újratöltés</button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <div style={{ display:'flex', gap:10, marginTop:10 }}>
-              <PrimaryButton onClick={togglePlay} tone="mint" big={false} size="md">{paused?'▶ Folytatás':'⏸ Szünet'}</PrimaryButton>
+              <PrimaryButton onClick={togglePlay} tone="mint" big={false} size="md" disabled={ytLoadFailed}>{paused?'▶ Folytatás':'⏸ Szünet'}</PrimaryButton>
               <PrimaryButton onClick={skip} tone="coral" big={false} size="md">⏭ Következő</PrimaryButton>
             </div>
           </div>
@@ -59886,16 +59907,19 @@ function JukeboxScreen({ go, deepLink }) {
                 {searchErr && <div style={{ fontFamily:T.font, fontSize:12, color:T.coral, marginTop:8 }}>{searchErr}</div>}
                 {results.length > 0 && (
                   <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:10 }}>
-                    {results.map(r => (
-                      <button key={r.videoId} onClick={()=>addFromResult(r)} style={{ display:'flex', alignItems:'center', gap:10, textAlign:'left', background:T.surfaceMuted, border:'none', borderRadius:12, padding:'7px 8px', cursor:'pointer', width:'100%' }}>
+                    {results.map(r => {
+                      const justAdded = !!addedFlash[r.videoId];
+                      return (
+                      <button key={r.videoId} onClick={()=>addFromResult(r)} style={{ display:'flex', alignItems:'center', gap:10, textAlign:'left', background: justAdded ? T.mintSoft : T.surfaceMuted, border:'none', borderRadius:12, padding:'7px 8px', cursor:'pointer', width:'100%', transition:'background .2s' }}>
                         <img src={r.thumb} style={{ width:52, height:39, objectFit:'cover', borderRadius:8, flexShrink:0 }} />
                         <div style={{ minWidth:0, flex:1 }}>
                           <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink, lineHeight:1.25, ...clamp2 }}>{r.title}</div>
                           <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightBody, color:T.inkSoft, marginTop:1 }}>{r.author}</div>
                         </div>
-                        <span style={{ width:26, height:26, borderRadius:'50%', background:T.mint, color:'#fff', display:'grid', placeItems:'center', fontSize:16, fontWeight:900, flexShrink:0 }}>+</span>
+                        <span style={{ width:26, height:26, borderRadius:'50%', background:T.mint, color:'#fff', display:'grid', placeItems:'center', fontSize:16, fontWeight:900, flexShrink:0 }}>{justAdded ? '✓' : '+'}</span>
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </React.Fragment>
