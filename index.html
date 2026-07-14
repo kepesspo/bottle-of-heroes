@@ -34608,7 +34608,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.870';
+const APP_VERSION = 'v9.871';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -60089,7 +60089,11 @@ function BottleApp() {
         hist.unshift({ code, games: selectedGames || [], ts: Date.now() });
         localStorage.setItem('boh_room_hist', JSON.stringify(hist.slice(0, 15)));
       } catch(e) {}
-      createRoom(code, players.map(p=>({...p})), selectedGames, gameMeta)
+      const roomCreatePromise = (typeof createRoom === 'function')
+        ? createRoom(code, players.map(p=>({...p})), selectedGames, gameMeta)
+        : Promise.reject(new Error('createRoom unavailable'));
+      const roomCreateTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('room create timeout')), 7000));
+      Promise.race([roomCreatePromise, roomCreateTimeout])
         .then(() => {
           setRoomCode(code);
           if (roomUnsubRef.current) roomUnsubRef.current();
