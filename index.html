@@ -34600,7 +34600,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.863';
+const APP_VERSION = 'v9.864';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -59640,10 +59640,27 @@ function JukeboxScreen({ go, deepLink }) {
   const [addErr, setAddErr] = React.useState('');
   const [ytReady, setYtReady] = React.useState(false);
   const [paused, setPaused] = React.useState(false);
+  // ── search (phase 2) ──
+  const [cfg, setCfg] = React.useState({});
+  const [mode, setMode] = React.useState('search'); // 'search' | 'link'
+  const [searchQ, setSearchQ] = React.useState('');
+  const [results, setResults] = React.useState([]);
+  const [searching, setSearching] = React.useState(false);
+  const [searchErr, setSearchErr] = React.useState('');
+  const searchDeb = React.useRef(null);
+  // ── settings sheet ──
+  const [setOpen, setSetOpen] = React.useState(false);
+  const [setStep, setSetStep] = React.useState('code');
+  const [setCode, setSetCode] = React.useState('');
+  const [setErr, setSetErr] = React.useState(false);
+  const [keyInput, setKeyInput] = React.useState('');
+
   const playerRef = React.useRef(null);
   const advancingRef = React.useRef(false);
   const otherPlayerActive = !!beat && (Date.now() - beat < 25000) && !isPlayer;
+  const apiKey = cfg.ytApiKey || '';
   const clamp2 = { display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' };
+  const decodeHtml = (s) => { try { const t = document.createElement('textarea'); t.innerHTML = s || ''; return t.value; } catch(e){ return s || ''; } };
 
   React.useEffect(() => {
     if (!docRef || !queueRef) return;
@@ -59651,6 +59668,12 @@ function JukeboxScreen({ go, deepLink }) {
     const u2 = queueRef.orderBy('addedAt','asc').onSnapshot(s => setQueue(s.docs.map(d => ({ id:d.id, ...d.data() }))));
     return () => { u1&&u1(); u2&&u2(); };
   }, [docRef, queueRef]);
+
+  React.useEffect(() => {
+    if (!db) return;
+    const u = db.collection('config').doc('dnrbox').onSnapshot(s => setCfg(s.data() || {}));
+    return () => u && u();
+  }, [db]);
 
   React.useEffect(() => {
     if (!isPlayer || !docRef) return;
@@ -59702,6 +59725,23 @@ function JukeboxScreen({ go, deepLink }) {
     }
   }, [isPlayer, ytReady, nowPlaying && nowPlaying.videoId, queue.length]);
 
+  // debounced YouTube search
+  React.useEffect(() => {
+    if (!apiKey || mode !== 'search' || !searchQ.trim()) { setResults([]); setSearchErr(''); return; }
+    clearTimeout(searchDeb.current);
+    searchDeb.current = setTimeout(async () => {
+      setSearching(true); setSearchErr('');
+      try {
+        const url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12&videoEmbeddable=true&q=' + encodeURIComponent(searchQ.trim()) + '&key=' + apiKey;
+        const r = await fetch(url); const j = await r.json();
+        if (j.error) { setSearchErr(j.error.message || 'Keresési hiba'); setResults([]); }
+        else setResults((j.items||[]).filter(it=>it.id&&it.id.videoId).map(it => ({ videoId: it.id.videoId, title: decodeHtml(it.snippet.title), author: it.snippet.channelTitle, thumb: (it.snippet.thumbnails && it.snippet.thumbnails.medium && it.snippet.thumbnails.medium.url) || jukeThumb(it.id.videoId) })));
+      } catch(e) { setSearchErr('Hálózati hiba'); }
+      setSearching(false);
+    }, 450);
+    return () => clearTimeout(searchDeb.current);
+  }, [searchQ, apiKey, mode]);
+
   async function startNext() {
     if (advancingRef.current || !queueRef || !docRef) return;
     advancingRef.current = true;
@@ -59717,24 +59757,31 @@ function JukeboxScreen({ go, deepLink }) {
     advancingRef.current = false;
   }
 
-  async function addSong() {
+  async function addTrack(t) {
+    if (!queueRef) return;
+    try { await queueRef.add({ videoId:t.videoId, title:t.title, author:t.author||'', thumb:t.thumb||jukeThumb(t.videoId), addedByName:name, addedAt: Date.now() }); } catch(e){}
+  }
+  async function addFromResult(r) { await addTrack(r); setSearchQ(''); setResults([]); }
+  async function addFromLink() {
     const id = jukeYtId(addInput);
     if (!id) { setAddErr('Illessz be egy YouTube linket vagy videó ID-t'); return; }
     if (!queueRef) { setAddErr('Nincs kapcsolat'); return; }
     setAdding(true); setAddErr('');
     const meta = await jukeFetchMeta(id);
-    try {
-      await queueRef.add({ videoId:id, title:meta.title, author:meta.author, thumb:jukeThumb(id), addedByName:name, addedAt: Date.now() });
-      setAddInput('');
-    } catch(e) { setAddErr('Nem sikerült hozzáadni'); }
-    setAdding(false);
+    await addTrack({ videoId:id, title:meta.title, author:meta.author, thumb:jukeThumb(id) });
+    setAddInput(''); setAdding(false);
   }
   function removeItem(qid) { if (queueRef) queueRef.doc(qid).delete().catch(()=>{}); }
   function togglePlay() { const p = playerRef.current; if (!p) return; try { paused ? p.playVideo() : p.pauseVideo(); } catch(e){} }
   function skip() { startNext(); }
   function commitName() { const n = nameInput.trim(); if (!n) return; try { localStorage.setItem('dnrbox_name', n); } catch(e){} setName(n); }
+  function openSettings() { setSetOpen(true); setSetStep('code'); setSetCode(''); setSetErr(false); setKeyInput(apiKey || ''); }
+  function submitSetCode() { if (setCode.trim() === '2019') { setSetStep('key'); setSetErr(false); } else setSetErr(true); }
+  function saveKey() { if (db) db.collection('config').doc('dnrbox').set({ ytApiKey: keyInput.trim() }, { merge:true }).catch(()=>{}); setSetOpen(false); }
 
   const secLabel = { fontFamily:T.font, fontSize:12, fontWeight:T.weightTitle, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em' };
+  const inputStyle = { width:'100%', minWidth:0, boxSizing:'border-box', fontFamily:T.font, fontSize:14, fontWeight:T.weightBody, padding:'12px 14px', borderRadius:13, border:`1.5px solid ${T.inkMute}33`, background:T.surfaceMuted, color:T.ink, outline:'none' };
+  const segBtn = (on) => ({ border:'none', borderRadius:8, padding:'6px 10px', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, cursor:'pointer', background: on?T.surface:'transparent', color: on?T.ink:T.inkMute, boxShadow: on?'0 1px 3px rgba(0,0,0,0.12)':'none' });
 
   // ── Name gate ──
   if (!name) {
@@ -59797,13 +59844,50 @@ function JukeboxScreen({ go, deepLink }) {
           )}
 
           <div style={{ background:T.surface, borderRadius:18, padding:14, boxShadow:T.shadow }}>
-            <div style={{ ...secLabel, marginBottom:9 }}>➕ Zene hozzáadása</div>
-            <div style={{ display:'flex', gap:8 }}>
-              <input value={addInput} onChange={e=>{ setAddInput(e.target.value); setAddErr(''); }} onKeyDown={e=>{ if(e.key==='Enter') addSong(); }} placeholder="YouTube link vagy ID" style={{ flex:1, minWidth:0, boxSizing:'border-box', fontFamily:T.font, fontSize:14, fontWeight:T.weightBody, padding:'12px 14px', borderRadius:13, border:`1.5px solid ${T.inkMute}33`, background:T.surfaceMuted, color:T.ink, outline:'none' }} />
-              <div style={{ flexShrink:0 }}><PrimaryButton onClick={addSong} disabled={adding} big={false} size="md" style={{ width:'auto', padding:'0 18px' }}>{adding?'…':'Hozzáad'}</PrimaryButton></div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:10 }}>
+              <div style={secLabel}>➕ Zene hozzáadása</div>
+              {apiKey && (
+                <div style={{ display:'flex', gap:3, background:T.surfaceMuted, borderRadius:10, padding:3 }}>
+                  <button onClick={()=>setMode('search')} style={segBtn(mode==='search')}>🔍 Keresés</button>
+                  <button onClick={()=>setMode('link')} style={segBtn(mode==='link')}>🔗 Link</button>
+                </div>
+              )}
             </div>
-            {addErr && <div style={{ fontFamily:T.font, fontSize:12, fontWeight:T.weightBody, color:T.coral, marginTop:8 }}>{addErr}</div>}
-            <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightBody, color:T.inkMute, marginTop:8 }}>Tipp: hosszú mixek és DJ-szettek is mehetnek 🎧</div>
+
+            {apiKey && mode==='search' ? (
+              <React.Fragment>
+                <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="Előadó vagy szám címe…" style={inputStyle} />
+                {searching && <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, marginTop:8 }}>Keresés…</div>}
+                {searchErr && <div style={{ fontFamily:T.font, fontSize:12, color:T.coral, marginTop:8 }}>{searchErr}</div>}
+                {results.length > 0 && (
+                  <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:10 }}>
+                    {results.map(r => (
+                      <button key={r.videoId} onClick={()=>addFromResult(r)} style={{ display:'flex', alignItems:'center', gap:10, textAlign:'left', background:T.surfaceMuted, border:'none', borderRadius:12, padding:'7px 8px', cursor:'pointer', width:'100%' }}>
+                        <img src={r.thumb} style={{ width:52, height:39, objectFit:'cover', borderRadius:8, flexShrink:0 }} />
+                        <div style={{ minWidth:0, flex:1 }}>
+                          <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink, lineHeight:1.25, ...clamp2 }}>{r.title}</div>
+                          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightBody, color:T.inkSoft, marginTop:1 }}>{r.author}</div>
+                        </div>
+                        <span style={{ width:26, height:26, borderRadius:'50%', background:T.mint, color:'#fff', display:'grid', placeItems:'center', fontSize:16, fontWeight:900, flexShrink:0 }}>+</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </React.Fragment>
+            ) : (
+              <React.Fragment>
+                <div style={{ display:'flex', gap:8 }}>
+                  <input value={addInput} onChange={e=>{ setAddInput(e.target.value); setAddErr(''); }} onKeyDown={e=>{ if(e.key==='Enter') addFromLink(); }} placeholder="YouTube link vagy ID" style={inputStyle} />
+                  <div style={{ flexShrink:0 }}><PrimaryButton onClick={addFromLink} disabled={adding} big={false} size="md" style={{ width:'auto', padding:'0 18px' }}>{adding?'…':'Hozzáad'}</PrimaryButton></div>
+                </div>
+                {addErr && <div style={{ fontFamily:T.font, fontSize:12, fontWeight:T.weightBody, color:T.coral, marginTop:8 }}>{addErr}</div>}
+                <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightBody, color:T.inkMute, marginTop:8 }}>Tipp: hosszú mixek és DJ-szettek is mehetnek 🎧</div>
+              </React.Fragment>
+            )}
+
+            <div style={{ marginTop:10, textAlign:'right' }}>
+              <button onClick={openSettings} style={{ background:'none', border:'none', color:T.inkMute, fontSize:11, fontWeight:T.weightBody, cursor:'pointer', fontFamily:T.font }}>⚙️ {apiKey ? 'Keresés kulcs' : 'Keresés bekapcsolása'}</button>
+            </div>
           </div>
 
           <div>
@@ -59828,6 +59912,35 @@ function JukeboxScreen({ go, deepLink }) {
           </div>
         </div>
       </div>
+
+      {setOpen && (
+        <div onClick={()=>setSetOpen(false)} style={{ position:'fixed', inset:0, zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.5)', backdropFilter:'blur(3px)', WebkitBackdropFilter:'blur(3px)', padding:24 }}>
+          <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:340, background:T.surface, borderRadius:22, padding:'22px 20px', boxShadow:'0 24px 60px rgba(0,0,0,0.4)' }}>
+            {setStep==='code' ? (
+              <React.Fragment>
+                <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textAlign:'center', marginBottom:4 }}>🔒 Keresés beállítása</div>
+                <div style={{ fontFamily:T.font, fontSize:13, fontWeight:T.weightBody, color:T.inkSoft, textAlign:'center', marginBottom:16 }}>Add meg a kódot</div>
+                <input autoFocus value={setCode} onChange={e=>{ setSetCode(e.target.value); setSetErr(false); }} onKeyDown={e=>{ if(e.key==='Enter') submitSetCode(); }} inputMode="numeric" placeholder="Kód" style={{ ...inputStyle, textAlign:'center', letterSpacing:'0.3em', fontSize:22, fontWeight:T.weightTitle }} />
+                {setErr && <div style={{ fontFamily:T.font, fontSize:12, color:T.coral, textAlign:'center', marginTop:8 }}>Hibás kód</div>}
+                <div style={{ display:'flex', gap:10, marginTop:16 }}>
+                  <button onClick={()=>setSetOpen(false)} style={{ flex:1, padding:'12px', borderRadius:12, border:`1.5px solid ${T.inkMute}33`, background:'transparent', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.inkSoft, cursor:'pointer' }}>Mégsem</button>
+                  <div style={{ flex:1 }}><PrimaryButton onClick={submitSetCode} big={false} size="md">Tovább</PrimaryButton></div>
+                </div>
+              </React.Fragment>
+            ) : (
+              <React.Fragment>
+                <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textAlign:'center', marginBottom:4 }}>🔑 YouTube API kulcs</div>
+                <div style={{ fontFamily:T.font, fontSize:12, fontWeight:T.weightBody, color:T.inkSoft, textAlign:'center', marginBottom:14, lineHeight:1.45 }}>YouTube Data API v3 kulcs. Zárd a domainre a Google Cloud Console-ban. Üresen hagyva kikapcsol.</div>
+                <input autoFocus value={keyInput} onChange={e=>setKeyInput(e.target.value)} placeholder="AIza…" style={{ ...inputStyle, fontFamily:'monospace', fontSize:13 }} />
+                <div style={{ display:'flex', gap:10, marginTop:16 }}>
+                  <button onClick={()=>setSetOpen(false)} style={{ flex:1, padding:'12px', borderRadius:12, border:`1.5px solid ${T.inkMute}33`, background:'transparent', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.inkSoft, cursor:'pointer' }}>Mégsem</button>
+                  <div style={{ flex:1 }}><PrimaryButton onClick={saveKey} big={false} size="md">Mentés</PrimaryButton></div>
+                </div>
+              </React.Fragment>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
