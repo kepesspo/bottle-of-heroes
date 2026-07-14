@@ -34600,7 +34600,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.865';
+const APP_VERSION = 'v9.866';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -59684,6 +59684,17 @@ function JukeboxScreen({ go, deepLink }) {
     return () => clearInterval(iv);
   }, [isPlayer, docRef]);
 
+  // keep the player device awake while it's the jukebox
+  React.useEffect(() => {
+    if (!isPlayer || !('wakeLock' in navigator)) return;
+    let lock = null;
+    const acquire = async () => { try { lock = await navigator.wakeLock.request('screen'); } catch(e){} };
+    acquire();
+    const onVis = () => { if (document.visibilityState === 'visible') acquire(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { document.removeEventListener('visibilitychange', onVis); try { lock && lock.release(); } catch(e){} };
+  }, [isPlayer]);
+
   React.useEffect(() => {
     if (!isPlayer) return;
     let cancelled = false;
@@ -59749,12 +59760,14 @@ function JukeboxScreen({ go, deepLink }) {
     if (advancingRef.current || !queueRef || !docRef) return;
     advancingRef.current = true;
     try {
-      const snap = await queueRef.orderBy('addedAt','asc').limit(1).get();
+      const snap = await queueRef.get();
       if (snap.empty) { await docRef.set({ nowPlaying: null }, { merge:true }); }
       else {
-        const d = snap.docs[0]; const item = d.data();
+        const docs = snap.docs.map(d => ({ ref:d.ref, ...d.data() }));
+        docs.sort((a,b) => (b.voteCount||0)-(a.voteCount||0) || (a.addedAt||0)-(b.addedAt||0));
+        const item = docs[0];
         await docRef.set({ nowPlaying: { videoId:item.videoId, title:item.title, author:item.author||'', thumb:item.thumb||'', addedByName:item.addedByName||'', startedAt: Date.now() } }, { merge:true });
-        await d.ref.delete();
+        await item.ref.delete();
       }
     } catch(e) { console.error('startNext', e); }
     advancingRef.current = false;
@@ -59762,8 +59775,16 @@ function JukeboxScreen({ go, deepLink }) {
 
   async function addTrack(t) {
     if (!queueRef) return;
-    try { await queueRef.add({ videoId:t.videoId, title:t.title, author:t.author||'', thumb:t.thumb||jukeThumb(t.videoId), addedByName:name, addedAt: Date.now() }); } catch(e){}
+    try { await queueRef.add({ videoId:t.videoId, title:t.title, author:t.author||'', thumb:t.thumb||jukeThumb(t.videoId), addedByName:name, addedAt: Date.now(), voteCount:0, votes:{} }); } catch(e){}
   }
+  const voteKey = (name||'').replace(/[^a-zA-Z0-9]/g,'_') || 'x';
+  function toggleVote(q) {
+    if (!queueRef) return;
+    const voted = !!(q.votes && q.votes[voteKey]);
+    const FV = firebase.firestore.FieldValue;
+    queueRef.doc(q.id).update({ ['votes.'+voteKey]: voted ? FV.delete() : true, voteCount: FV.increment(voted ? -1 : 1) }).catch(()=>{});
+  }
+  const sortedQueue = [...queue].sort((a,b) => (b.voteCount||0)-(a.voteCount||0) || (a.addedAt||0)-(b.addedAt||0));
   async function addFromResult(r) { await addTrack(r); setSearchQ(''); setResults([]); }
   async function addFromLink() {
     const id = jukeYtId(addInput);
@@ -59907,7 +59928,10 @@ function JukeboxScreen({ go, deepLink }) {
               <div style={{ textAlign:'center', color:T.inkMute, fontFamily:T.font, fontSize:13, fontWeight:T.weightBody, padding:'22px 0' }}>Üres a sor. Te lehetsz az első! 🎵</div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {queue.map((q,i) => (
+                {sortedQueue.map((q,i) => {
+                  const voted = !!(q.votes && q.votes[voteKey]);
+                  const vc = q.voteCount || 0;
+                  return (
                   <div key={q.id} style={{ display:'flex', alignItems:'center', gap:11, background:T.surface, borderRadius:14, padding:'8px 10px', boxShadow:T.shadow }}>
                     <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.inkMute, width:18, textAlign:'center', flexShrink:0 }}>{i+1}</div>
                     <img src={q.thumb || jukeThumb(q.videoId)} style={{ width:54, height:40, objectFit:'cover', borderRadius:9, flexShrink:0 }} />
@@ -59915,9 +59939,14 @@ function JukeboxScreen({ go, deepLink }) {
                       <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13.5, color:T.ink, lineHeight:1.25, ...clamp2 }}>{q.title}</div>
                       <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightBody, color:T.inkSoft, marginTop:2 }}>{q.addedByName?`dobta: ${q.addedByName}`:''}</div>
                     </div>
-                    <button onClick={()=>removeItem(q.id)} aria-label="Törlés" style={{ width:30, height:30, borderRadius:9, border:'none', background:'transparent', color:T.inkMute, fontSize:15, cursor:'pointer', flexShrink:0 }}>✕</button>
+                    <button onClick={()=>toggleVote(q)} aria-label="Szavazás" style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', width:38, minHeight:38, borderRadius:11, border: voted?'none':`1.5px solid ${T.inkMute}33`, background: voted?T.mint:'transparent', color: voted?'#fff':T.inkSoft, cursor:'pointer', flexShrink:0, padding:'3px 0', lineHeight:1 }}>
+                      <span style={{ fontSize:13 }}>▲</span>
+                      <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, marginTop:1 }}>{vc}</span>
+                    </button>
+                    <button onClick={()=>removeItem(q.id)} aria-label="Törlés" style={{ width:28, height:28, borderRadius:9, border:'none', background:'transparent', color:T.inkMute, fontSize:14, cursor:'pointer', flexShrink:0 }}>✕</button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
