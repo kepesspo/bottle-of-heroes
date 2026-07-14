@@ -34600,7 +34600,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.857';
+const APP_VERSION = 'v9.858';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -47965,12 +47965,33 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
   );
 }
 
+// Busz: nagy, középre igazított, kinyomható „kapott korty" overlay
+function BusDrinkOverlay({ drinks, name, card, onClose }) {
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:400, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.55)', backdropFilter:'blur(3px)', WebkitBackdropFilter:'blur(3px)', animation:'backdropFade .2s ease', padding:20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ position:'relative', width:'100%', maxWidth:340, borderRadius:32, background:'linear-gradient(160deg,#ec5545,#c0281f)', padding:'40px 26px 26px', display:'flex', flexDirection:'column', alignItems:'center', gap:8, boxShadow:'0 24px 70px rgba(192,40,31,0.6), 0 0 0 1.5px rgba(255,255,255,0.18)', animation:'resultShakeIn .5s ease-out' }}>
+        <button onClick={onClose} aria-label="Bezárás" style={{ position:'absolute', top:12, right:12, width:34, height:34, borderRadius:'50%', border:'none', background:'rgba(255,255,255,0.22)', color:'#fff', fontSize:18, lineHeight:1, cursor:'pointer', display:'grid', placeItems:'center', zIndex:2 }}>✕</button>
+        <div style={{ fontSize:58, lineHeight:1 }}>🍺</div>
+        {name && <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color:'rgba(255,255,255,0.92)' }}>{name}</div>}
+        <div style={{ display:'flex', alignItems:'baseline', gap:8, marginTop:2 }}>
+          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:92, color:'#fff', lineHeight:0.9, textShadow:'0 6px 24px rgba(0,0,0,0.28)' }}>{drinks}</span>
+          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:26, color:'rgba(255,255,255,0.95)' }}>korty</span>
+        </div>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:'rgba(255,255,255,0.92)', marginTop:2 }}>Rossz tipp!{card ? ` ${card.value}${card.suit}` : ''}</div>
+        <div style={{ marginTop:8, fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.6)' }}>koppints a bezáráshoz</div>
+      </div>
+    </div>
+  );
+}
+
 function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFooter, onSetBuszSwitch }) {
   const isOnline = !!roomCode;
   const [buszState, setBuszState] = useState(null);
   const [zsulliAnim, setZsulliAnim] = useState(null);
   const [ready, setReady] = useState(false);
   const [guessResult, setGuessResult] = useState(null);
+  const [drinkBurst, setDrinkBurst] = useState(null); // online host: nagy „kapott korty" overlay
+  const prevRiderDrinksRef = useRef(null);
   const [lastCardFail, setLastCardFail] = useState(false);
   const [takenIds, setTakenIds] = useState([]);
   const [showQR, setShowQR] = useState(false);
@@ -47983,6 +48004,28 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
   const hostUnlockTimerRef = React.useRef(null);
   const hostUnlockRafRef = React.useRef(null);
   const hostUnlockStartRef = React.useRef(null);
+  // Online host: figyeljük a rider korty-változást és nagyban mutassuk középen
+  React.useEffect(() => {
+    if (!isOnline) return;
+    const cur = (buszState && buszState.phase === 'bus') ? (buszState.busRiderDrinks || {}) : null;
+    if (!cur) { prevRiderDrinksRef.current = cur; return; }
+    const prev = prevRiderDrinksRef.current;
+    if (prev) {
+      for (const pid in cur) {
+        const delta = (cur[pid] || 0) - (prev[pid] || 0);
+        if (delta > 0) {
+          const pl = (players || []).find(x => x.id === pid);
+          setDrinkBurst({ drinks: delta, name: pl?.name || '', ts: Date.now() });
+        }
+      }
+    }
+    prevRiderDrinksRef.current = cur;
+  }, [isOnline, buszState && buszState.phase, JSON.stringify((buszState && buszState.busRiderDrinks) || {})]);
+  React.useEffect(() => {
+    if (!drinkBurst) return;
+    const tm = setTimeout(() => setDrinkBurst(null), 6000);
+    return () => clearTimeout(tm);
+  }, [drinkBurst]);
   const startHostUnlockPress = (pid) => {
     setHostUnlockPressId(pid); setHostUnlockProgress(0);
     hostUnlockStartRef.current = Date.now();
@@ -48210,7 +48253,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
         }
       }, 1000);
     }
-    else setTimeout(() => setGuessResult(null), myRes.correct ? 1800 : 2200);
+    else setTimeout(() => setGuessResult(null), myRes.correct ? 1800 : 6000);
     if (roomCode) {
       try {
         const snap = await firebase.firestore().collection('rooms').doc(roomCode).get();
@@ -48555,6 +48598,14 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
               {guessResult.bonus ? (guessResult.correct ? t('busGenius') : `💡✗ Nem sikerült! ${guessResult.drinks||1} korty!`) : guessResult.correct ? (guessResult.done ? t('busCompleted') : t('busCorrect')) : `✗ Rossz! ${guessResult.drinks} kortynyi!`}
             </div>
           </div>
+        )}
+        {/* nagy, kinyomható „kapott korty" — offline host (saját tipp) */}
+        {!isOnline && guessResult && !guessResult.correct && (guessResult.drinks||0) > 0 && (
+          <BusDrinkOverlay drinks={guessResult.drinks} name={currentRider?.name} card={guessResult.card} onClose={() => setGuessResult(null)} />
+        )}
+        {/* nagy, kinyomható „kapott korty" — online host (rider tippje Firebase-ből) */}
+        {isOnline && drinkBurst && (
+          <BusDrinkOverlay drinks={drinkBurst.drinks} name={drinkBurst.name} onClose={() => setDrinkBurst(null)} />
         )}
         {/* K/N buttons — only show on host in offline mode; online players use their own device */}
         {!guessResult && !isOnline && (
@@ -55489,7 +55540,7 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
     const resultCard = correct ? (drawnCards[drawnCards.length-1] || posCard) : posCard;
     setBusGuessResult({ correct, done, card: resultCard, step, drinks: correct ? 0 : step+1 });
     if (busResultTimerRef.current) clearTimeout(busResultTimerRef.current);
-    busResultTimerRef.current = setTimeout(() => setBusGuessResult(null), correct ? 1800 : 2200);
+    busResultTimerRef.current = setTimeout(() => setBusGuessResult(null), correct ? 1800 : 6000);
   }, [buszState]);
 
   const player = players.find(p => p.id === playerId);
@@ -55669,7 +55720,7 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
         const nextCurrent = [...busRiders].filter(rid=>!newDone[rid]).sort((a,b)=>(newPositions[a]||0)-(newPositions[b]||0))[0] || busRiders[0];
         const myRes = results[playerId];
         setBusGuessResult({correct:myRes.correct, done:myRes.done, bonus:isBonus, card:drawnCard, step:myStep, drinks:myRes.drinks});
-        setTimeout(() => setBusGuessResult(null), myRes.correct ? 1800 : 2200);
+        setTimeout(() => setBusGuessResult(null), myRes.correct ? 1800 : 6000);
         const rPlayers = snap.data()?.players || [];
         const updatedPlayers = rPlayers.map(p => { const d=results[p.id]?.drinks||0; return d>0?{...p,drinks:(p.drinks||0)+d}:p; });
         const newPositionDrawnCards2 = {...(st.busPositionDrawnCards||{}), [myStep]: drawnCard};
@@ -55843,6 +55894,10 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
                   : busGuessResult.correct ? (busGuessResult.done ? `🎉 Teljesítve! Leszálltál!${busGuessResult.card ? ` (${busGuessResult.card.value}${busGuessResult.card.suit})` : ''}` : `✓ Helyes!${busGuessResult.card ? ` (${busGuessResult.card.value}${busGuessResult.card.suit})` : ''} Előre!`) : `✗ ${busGuessResult.card ? `${busGuessResult.card.value}${busGuessResult.card.suit} — ` : ''}Rossz tipp! ${busGuessResult.drinks||1} korty!`}
               </div>
             </div>
+          )}
+          {/* nagy, kinyomható „kapott korty" — observer */}
+          {busGuessResult && !busGuessResult.waiting && !busGuessResult.correct && (busGuessResult.drinks||0) > 0 && (
+            <BusDrinkOverlay drinks={busGuessResult.drinks} card={busGuessResult.card} onClose={() => setBusGuessResult(null)} />
           )}
 
           {/* K/N buttons or waiting state */}
