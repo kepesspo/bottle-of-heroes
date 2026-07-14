@@ -34600,7 +34600,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.861';
+const APP_VERSION = 'v9.862';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -59608,14 +59608,239 @@ function SzerkesztesTab({ players, setPlayers, turn, setTurn, pendingCommit, set
 }
 
 // ─── APP ROUTER ───────────────────────────────────────────────
+function jukeYtId(s) {
+  s = (s || '').trim();
+  if (/^[\w-]{11}$/.test(s)) return s;
+  const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|\/v\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+function jukeThumb(id) { return `https://i.ytimg.com/vi/${id}/mqdefault.jpg`; }
+async function jukeFetchMeta(id) {
+  try {
+    const r = await fetch('https://noembed.com/embed?url=https://www.youtube.com/watch?v=' + id);
+    const j = await r.json();
+    return { title: j.title || 'YouTube videó', author: j.author_name || '' };
+  } catch (e) { return { title: 'YouTube videó', author: '' }; }
+}
+
+function JukeboxScreen({ go, deepLink }) {
+  const hasFb = typeof firebase !== 'undefined';
+  const db = React.useMemo(() => hasFb ? firebase.firestore() : null, [hasFb]);
+  const docRef = React.useMemo(() => db ? db.collection('jukebox').doc('main') : null, [db]);
+  const queueRef = React.useMemo(() => docRef ? docRef.collection('queue') : null, [docRef]);
+
+  const [name, setName] = React.useState(() => { try { return localStorage.getItem('dnrbox_name') || ''; } catch(e){ return ''; } });
+  const [nameInput, setNameInput] = React.useState('');
+  const [queue, setQueue] = React.useState([]);
+  const [nowPlaying, setNowPlaying] = React.useState(null);
+  const [beat, setBeat] = React.useState(0);
+  const [isPlayer, setIsPlayer] = React.useState(false);
+  const [addInput, setAddInput] = React.useState('');
+  const [adding, setAdding] = React.useState(false);
+  const [addErr, setAddErr] = React.useState('');
+  const [ytReady, setYtReady] = React.useState(false);
+  const [paused, setPaused] = React.useState(false);
+  const playerRef = React.useRef(null);
+  const advancingRef = React.useRef(false);
+  const otherPlayerActive = !!beat && (Date.now() - beat < 25000) && !isPlayer;
+  const clamp2 = { display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' };
+
+  React.useEffect(() => {
+    if (!docRef || !queueRef) return;
+    const u1 = docRef.onSnapshot(s => { const d = s.data()||{}; setNowPlaying(d.nowPlaying || null); setBeat(d.playerHeartbeat || 0); });
+    const u2 = queueRef.orderBy('addedAt','asc').onSnapshot(s => setQueue(s.docs.map(d => ({ id:d.id, ...d.data() }))));
+    return () => { u1&&u1(); u2&&u2(); };
+  }, [docRef, queueRef]);
+
+  React.useEffect(() => {
+    if (!isPlayer || !docRef) return;
+    const tick = () => docRef.set({ playerHeartbeat: Date.now() }, { merge:true }).catch(()=>{});
+    tick();
+    const iv = setInterval(tick, 10000);
+    return () => clearInterval(iv);
+  }, [isPlayer, docRef]);
+
+  React.useEffect(() => {
+    if (!isPlayer) return;
+    let cancelled = false;
+    function ensureApi(cb) {
+      if (window.YT && window.YT.Player) { cb(); return; }
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => { prev && prev(); cb(); };
+      if (!document.getElementById('yt-iframe-api')) {
+        const s = document.createElement('script'); s.id = 'yt-iframe-api'; s.src = 'https://www.youtube.com/iframe_api';
+        document.head.appendChild(s);
+      }
+    }
+    ensureApi(() => {
+      if (cancelled || playerRef.current) { if (playerRef.current) setYtReady(true); return; }
+      playerRef.current = new window.YT.Player('dnrbox-yt', {
+        height:'100%', width:'100%',
+        playerVars:{ autoplay:1, playsinline:1, rel:0, modestbranding:1 },
+        events:{
+          onReady: () => setYtReady(true),
+          onStateChange: (e) => {
+            if (e.data === window.YT.PlayerState.ENDED) startNext();
+            if (e.data === window.YT.PlayerState.PLAYING) setPaused(false);
+            if (e.data === window.YT.PlayerState.PAUSED) setPaused(true);
+          },
+        },
+      });
+    });
+    return () => { cancelled = true; };
+  }, [isPlayer]);
+
+  React.useEffect(() => {
+    if (!isPlayer || !ytReady || !playerRef.current) return;
+    if (nowPlaying && nowPlaying.videoId) {
+      let cur = null; try { cur = playerRef.current.getVideoData(); } catch(e){}
+      if (!cur || cur.video_id !== nowPlaying.videoId) {
+        try { playerRef.current.loadVideoById(nowPlaying.videoId); } catch(e){}
+      }
+    } else if (!nowPlaying && queue.length > 0) {
+      startNext();
+    }
+  }, [isPlayer, ytReady, nowPlaying && nowPlaying.videoId, queue.length]);
+
+  async function startNext() {
+    if (advancingRef.current || !queueRef || !docRef) return;
+    advancingRef.current = true;
+    try {
+      const snap = await queueRef.orderBy('addedAt','asc').limit(1).get();
+      if (snap.empty) { await docRef.set({ nowPlaying: null }, { merge:true }); }
+      else {
+        const d = snap.docs[0]; const item = d.data();
+        await docRef.set({ nowPlaying: { videoId:item.videoId, title:item.title, author:item.author||'', thumb:item.thumb||'', addedByName:item.addedByName||'', startedAt: Date.now() } }, { merge:true });
+        await d.ref.delete();
+      }
+    } catch(e) { console.error('startNext', e); }
+    advancingRef.current = false;
+  }
+
+  async function addSong() {
+    const id = jukeYtId(addInput);
+    if (!id) { setAddErr('Illessz be egy YouTube linket vagy videó ID-t'); return; }
+    if (!queueRef) { setAddErr('Nincs kapcsolat'); return; }
+    setAdding(true); setAddErr('');
+    const meta = await jukeFetchMeta(id);
+    try {
+      await queueRef.add({ videoId:id, title:meta.title, author:meta.author, thumb:jukeThumb(id), addedByName:name, addedAt: Date.now() });
+      setAddInput('');
+    } catch(e) { setAddErr('Nem sikerült hozzáadni'); }
+    setAdding(false);
+  }
+  function removeItem(qid) { if (queueRef) queueRef.doc(qid).delete().catch(()=>{}); }
+  function togglePlay() { const p = playerRef.current; if (!p) return; try { paused ? p.playVideo() : p.pauseVideo(); } catch(e){} }
+  function skip() { startNext(); }
+  function commitName() { const n = nameInput.trim(); if (!n) return; try { localStorage.setItem('dnrbox_name', n); } catch(e){} setName(n); }
+
+  const secLabel = { fontFamily:T.font, fontSize:12, fontWeight:T.weightTitle, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em' };
+
+  // ── Name gate ──
+  if (!name) {
+    return (
+      <div style={{ position:'fixed', inset:0, background:T.bg, fontFamily:T.font, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, padding:28 }}>
+        <div style={{ fontSize:56 }}>📻</div>
+        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:32, color:T.ink, letterSpacing:T.letterDisplay }}>DNR Box</div>
+        <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center', maxWidth:300, lineHeight:1.5, fontWeight:T.weightBody }}>Közös lejátszási lista — mindenki dobhat be zenét a telefonjáról. Hogy hívnak?</div>
+        <input value={nameInput} onChange={e=>setNameInput(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') commitName(); }} placeholder="A neved" style={{ width:'100%', maxWidth:300, boxSizing:'border-box', textAlign:'center', fontFamily:T.font, fontSize:18, fontWeight:T.weightTitle, padding:'14px', borderRadius:16, border:`2px solid ${T.inkMute}33`, background:T.surface, color:T.ink, outline:'none' }} />
+        <div style={{ width:'100%', maxWidth:300 }}><PrimaryButton onClick={commitName} disabled={!nameInput.trim()} big={false} size="lg">Belépés</PrimaryButton></div>
+      </div>
+    );
+  }
+
+  const np = nowPlaying;
+  return (
+    <div style={{ position:'fixed', inset:0, background:T.bg, fontFamily:T.font, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+      <AppBar title="DNR Box" onBack={()=>go('home')} right={
+        <button onClick={()=>setIsPlayer(v=>!v)} style={{ display:'flex', alignItems:'center', gap:5, height:36, padding:'0 12px', borderRadius:12, border: isPlayer?'none':`1.5px solid ${T.inkMute}44`, background:isPlayer?T.mint:'transparent', color:isPlayer?'#fff':T.inkSoft, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' }}>
+          {isPlayer ? '🔊 Lejátszó' : '📺 Lejátszó'}
+        </button>
+      } />
+
+      <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
+        {isPlayer && (
+          <div style={{ padding:'12px 16px 0', maxWidth:640, margin:'0 auto' }}>
+            <div style={{ borderRadius:18, overflow:'hidden', boxShadow:T.shadow, background:'#000' }}>
+              <div style={{ position:'relative', width:'100%', paddingTop:'56.25%' }}>
+                <div id="dnrbox-yt" style={{ position:'absolute', inset:0 }} />
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:10, marginTop:10 }}>
+              <PrimaryButton onClick={togglePlay} tone="mint" big={false} size="md">{paused?'▶ Folytatás':'⏸ Szünet'}</PrimaryButton>
+              <PrimaryButton onClick={skip} tone="coral" big={false} size="md">⏭ Következő</PrimaryButton>
+            </div>
+          </div>
+        )}
+
+        <div style={{ padding:'16px', maxWidth:640, margin:'0 auto', display:'flex', flexDirection:'column', gap:14 }}>
+          {otherPlayerActive && (
+            <div style={{ background:T.mintSoft, borderRadius:14, padding:'10px 14px', fontFamily:T.font, fontSize:13, fontWeight:T.weightBody, color:T.ink, display:'flex', alignItems:'center', gap:9 }}>
+              <span style={{ width:9, height:9, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
+              Egy lejátszó eszköz már aktív — csak dobd be a zenéket.
+            </div>
+          )}
+
+          {!isPlayer && (
+            np ? (
+              <div style={{ display:'flex', gap:13, alignItems:'center', background:T.surface, borderRadius:20, padding:14, boxShadow:T.shadow }}>
+                <img src={np.thumb || jukeThumb(np.videoId)} style={{ width:88, height:66, objectFit:'cover', borderRadius:12, flexShrink:0 }} />
+                <div style={{ minWidth:0, flex:1 }}>
+                  <div style={{ fontFamily:T.font, fontSize:10, fontWeight:T.weightTitle, letterSpacing:'0.12em', textTransform:'uppercase', color:T.mint }}>▶ Most szól</div>
+                  <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink, marginTop:3, lineHeight:1.25, ...clamp2 }}>{np.title}</div>
+                  <div style={{ fontFamily:T.font, fontSize:12, fontWeight:T.weightBody, color:T.inkSoft, marginTop:3 }}>{np.author}{np.addedByName?` · dobta: ${np.addedByName}`:''}</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ textAlign:'center', color:T.inkMute, fontFamily:T.font, fontSize:14, fontWeight:T.weightBody, padding:'10px 0' }}>Épp semmi sem szól — dobj be valamit! 🎶</div>
+            )
+          )}
+
+          <div style={{ background:T.surface, borderRadius:18, padding:14, boxShadow:T.shadow }}>
+            <div style={{ ...secLabel, marginBottom:9 }}>➕ Zene hozzáadása</div>
+            <div style={{ display:'flex', gap:8 }}>
+              <input value={addInput} onChange={e=>{ setAddInput(e.target.value); setAddErr(''); }} onKeyDown={e=>{ if(e.key==='Enter') addSong(); }} placeholder="YouTube link vagy ID" style={{ flex:1, minWidth:0, boxSizing:'border-box', fontFamily:T.font, fontSize:14, fontWeight:T.weightBody, padding:'12px 14px', borderRadius:13, border:`1.5px solid ${T.inkMute}33`, background:T.surfaceMuted, color:T.ink, outline:'none' }} />
+              <div style={{ flexShrink:0 }}><PrimaryButton onClick={addSong} disabled={adding} big={false} size="md" style={{ width:'auto', padding:'0 18px' }}>{adding?'…':'Hozzáad'}</PrimaryButton></div>
+            </div>
+            {addErr && <div style={{ fontFamily:T.font, fontSize:12, fontWeight:T.weightBody, color:T.coral, marginTop:8 }}>{addErr}</div>}
+            <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightBody, color:T.inkMute, marginTop:8 }}>Tipp: hosszú mixek és DJ-szettek is mehetnek 🎧</div>
+          </div>
+
+          <div>
+            <div style={{ ...secLabel, marginBottom:10, paddingLeft:2 }}>Következik ({queue.length})</div>
+            {queue.length === 0 ? (
+              <div style={{ textAlign:'center', color:T.inkMute, fontFamily:T.font, fontSize:13, fontWeight:T.weightBody, padding:'22px 0' }}>Üres a sor. Te lehetsz az első! 🎵</div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {queue.map((q,i) => (
+                  <div key={q.id} style={{ display:'flex', alignItems:'center', gap:11, background:T.surface, borderRadius:14, padding:'8px 10px', boxShadow:T.shadow }}>
+                    <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.inkMute, width:18, textAlign:'center', flexShrink:0 }}>{i+1}</div>
+                    <img src={q.thumb || jukeThumb(q.videoId)} style={{ width:54, height:40, objectFit:'cover', borderRadius:9, flexShrink:0 }} />
+                    <div style={{ minWidth:0, flex:1 }}>
+                      <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13.5, color:T.ink, lineHeight:1.25, ...clamp2 }}>{q.title}</div>
+                      <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightBody, color:T.inkSoft, marginTop:2 }}>{q.addedByName?`dobta: ${q.addedByName}`:''}</div>
+                    </div>
+                    <button onClick={()=>removeItem(q.id)} aria-label="Törlés" style={{ width:30, height:30, borderRadius:9, border:'none', background:'transparent', color:T.inkMute, fontSize:15, cursor:'pointer', flexShrink:0 }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BottleApp() {
   const _initRoom = React.useMemo(() => { try { return new URLSearchParams(window.location.search).get('room') || ''; } catch(e) { return ''; } }, []);
   const _initScreen = React.useMemo(() => { try { return new URLSearchParams(window.location.search).get('screen') || ''; } catch(e) { return ''; } }, []);
   const _deepLink = _initScreen === 'events' || _initScreen === 'calendar';
-  const [screen, setScreen] = useState(() => _initRoom ? 'observer' : _deepLink ? 'log' : 'home');
+  const _jukebox = _initScreen === 'jukebox';
+  const [screen, setScreen] = useState(() => _initRoom ? 'observer' : _jukebox ? 'jukebox' : _deepLink ? 'log' : 'home');
   const [editEventId, setEditEventId] = React.useState(null);
   const [showOnboarding, setShowOnboarding] = React.useState(() => {
-    try { return !localStorage.getItem('boh_onboarded') && !_initRoom && !_deepLink; } catch(e) { return false; }
+    try { return !localStorage.getItem('boh_onboarded') && !_initRoom && !_deepLink && !_jukebox; } catch(e) { return false; }
   });
   const _initRoomConsumedRef = React.useRef(false);
   const [prev, setPrev] = useState(null);
@@ -59799,6 +60024,7 @@ function BottleApp() {
         {screen==='home'     && <HomeScreen     go={go} onStartGame={onStartGame} onQuickGame={onQuickGame} setTheme={handleSetTheme} currentTheme={appTheme} setLang={handleSetLang} currentLang={appLang} resumeRoomData={resumeRoomData} onResume={goResume} />}
         {screen==='stats'    && <StatsScreen    go={go} onOpenObserver={openObserver} />}
         {screen==='log'      && <EventLogScreen go={go} goEdit={goEdit} deepLink={_deepLink} />}
+        {screen==='jukebox'  && <JukeboxScreen go={go} deepLink={_jukebox} />}
         {screen==='admin'    && <AdminScreen go={go} />}
         {screen==='create'   && <EventCreateScreen go={go} editId={editEventId} deepLink={_deepLink} />}
         {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
