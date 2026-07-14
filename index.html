@@ -34608,7 +34608,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.868';
+const APP_VERSION = 'v9.869';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -59642,8 +59642,13 @@ function JukeboxScreen({ go, deepLink }) {
   const docRef = React.useMemo(() => db ? db.collection('jukebox').doc('main') : null, [db]);
   const queueRef = React.useMemo(() => docRef ? docRef.collection('queue') : null, [docRef]);
 
-  const [name, setName] = React.useState(() => { try { return localStorage.getItem('dnrbox_name') || ''; } catch(e){ return ''; } });
-  const [nameInput, setNameInput] = React.useState('');
+  const [name] = React.useState(() => {
+    try {
+      let n = localStorage.getItem('dnrbox_name');
+      if (!n) { n = 'Vendég ' + (1000 + Math.floor(Math.random()*9000)); localStorage.setItem('dnrbox_name', n); }
+      return n;
+    } catch(e) { return 'Vendég'; }
+  });
   const [queue, setQueue] = React.useState([]);
   const [nowPlaying, setNowPlaying] = React.useState(null);
   const [beat, setBeat] = React.useState(0);
@@ -59811,7 +59816,6 @@ function JukeboxScreen({ go, deepLink }) {
   function removeItem(qid) { if (queueRef) queueRef.doc(qid).delete().catch(()=>{}); }
   function togglePlay() { const p = playerRef.current; if (!p) return; try { paused ? p.playVideo() : p.pauseVideo(); } catch(e){} }
   function skip() { startNext(); }
-  function commitName() { const n = nameInput.trim(); if (!n) return; try { localStorage.setItem('dnrbox_name', n); } catch(e){} setName(n); }
   function openSettings() { setSetOpen(true); setSetStep('code'); setSetCode(''); setSetErr(false); setKeyInput(apiKey || ''); }
   function submitSetCode() { if (setCode.trim() === '2019') { setSetStep('key'); setSetErr(false); } else setSetErr(true); }
   function saveKey() { if (db) db.collection('config').doc('dnrbox').set({ ytApiKey: keyInput.trim() }, { merge:true }).catch(()=>{}); setSetOpen(false); }
@@ -59819,19 +59823,6 @@ function JukeboxScreen({ go, deepLink }) {
   const secLabel = { fontFamily:T.font, fontSize:12, fontWeight:T.weightTitle, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em' };
   const inputStyle = { width:'100%', minWidth:0, boxSizing:'border-box', fontFamily:T.font, fontSize:14, fontWeight:T.weightBody, padding:'12px 14px', borderRadius:13, border:`1.5px solid ${T.inkMute}33`, background:T.surfaceMuted, color:T.ink, outline:'none' };
   const segBtn = (on) => ({ border:'none', borderRadius:8, padding:'6px 10px', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, cursor:'pointer', background: on?T.surface:'transparent', color: on?T.ink:T.inkMute, boxShadow: on?'0 1px 3px rgba(0,0,0,0.12)':'none' });
-
-  // ── Name gate ──
-  if (!name) {
-    return (
-      <div style={{ position:'fixed', inset:0, background:T.bg, fontFamily:T.font, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, padding:28 }}>
-        <div style={{ fontSize:56 }}>📻</div>
-        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:32, color:T.ink, letterSpacing:T.letterDisplay }}>DNR Box</div>
-        <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center', maxWidth:300, lineHeight:1.5, fontWeight:T.weightBody }}>Közös lejátszási lista — mindenki dobhat be zenét a telefonjáról. Hogy hívnak?</div>
-        <input value={nameInput} onChange={e=>setNameInput(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') commitName(); }} placeholder="A neved" style={{ width:'100%', maxWidth:300, boxSizing:'border-box', textAlign:'center', fontFamily:T.font, fontSize:18, fontWeight:T.weightTitle, padding:'14px', borderRadius:16, border:`2px solid ${T.inkMute}33`, background:T.surface, color:T.ink, outline:'none' }} />
-        <div style={{ width:'100%', maxWidth:300 }}><PrimaryButton onClick={commitName} disabled={!nameInput.trim()} big={false} size="lg">Belépés</PrimaryButton></div>
-      </div>
-    );
-  }
 
   const np = nowPlaying;
   return (
