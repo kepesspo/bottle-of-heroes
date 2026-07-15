@@ -33982,6 +33982,15 @@ window.triggerHaptic = function() {
   window.deleteRoom = function(code) {
     return db.collection('rooms').doc(code).delete().catch(function(e) { console.warn('deleteRoom', e); });
   };
+  // A statisztika (bp_tournaments) által hivatkozott szobakódok — ezek a szobák
+  // az admin felületről nem törölhetők, különben a Torna előzmények "Megnyit" linkje meghal.
+  window.getStatRoomCodes = function() {
+    return db.collection('bp_tournaments').get().then(function(snap) {
+      var codes = {};
+      snap.docs.forEach(function(d) { var rc = d.data().roomCode; if (rc) codes[rc] = true; });
+      return codes;
+    }).catch(function() { return {}; });
+  };
 
   window.getAnnouncement = function() {
     return db.collection('config').doc('announcement').get().then(function(d) {
@@ -34625,7 +34634,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.891';
+const APP_VERSION = 'v9.892';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -37553,14 +37562,21 @@ function AdminRooms() {
   const [rooms, setRooms] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [deleting, setDeleting] = React.useState(null);
+  const [statCodes, setStatCodes] = React.useState({}); // statisztikához kötött szobakódok
 
   function load() {
     setLoading(true);
-    window.getRooms && window.getRooms().then(r => { setRooms(r); setLoading(false); });
+    Promise.all([
+      window.getRooms ? window.getRooms() : Promise.resolve([]),
+      window.getStatRoomCodes ? window.getStatRoomCodes() : Promise.resolve({}),
+    ]).then(([r, sc]) => { setRooms(r); setStatCodes(sc || {}); setLoading(false); });
   }
   React.useEffect(() => { load(); }, []);
 
+  const isProtected = id => !!statCodes[id];
+
   function deleteRoom(id) {
+    if (isProtected(id)) return; // statisztikához kötött szoba — nem törölhető
     setDeleting(id);
     window.deleteRoom && window.deleteRoom(id).then(() => { setDeleting(null); load(); });
   }
@@ -37595,12 +37611,14 @@ function AdminRooms() {
       </div>
       {(() => {
         const weekAgo = Date.now() - 7 * 86400000;
-        const old = rooms.filter(r => { try { const d = r.createdAt && (r.createdAt.toDate ? r.createdAt.toDate() : new Date(r.createdAt)); return d && d.getTime() < weekAgo; } catch(e) { return false; } });
+        const oldAll = rooms.filter(r => { try { const d = r.createdAt && (r.createdAt.toDate ? r.createdAt.toDate() : new Date(r.createdAt)); return d && d.getTime() < weekAgo; } catch(e) { return false; } });
+        const old = oldAll.filter(r => !isProtected(r.id)); // a statisztikás szobákat kihagyjuk
+        const skipped = oldAll.length - old.length;
         if (!old.length) return null;
         return (
           <button onClick={() => { setLoading(true); Promise.all(old.map(r => window.deleteRoom(r.id))).finally(load); }}
             style={{ width:'100%', padding:'11px', borderRadius:T.r?.md||16, border:'none', background:T.coralSoft, fontFamily:T.font, fontWeight:800, fontSize:13, color:T.coral, cursor:'pointer', marginBottom:12 }}>
-            🧹 {old.length} db 1 hétnél régebbi szoba törlése
+            🧹 {old.length} db 1 hétnél régebbi szoba törlése{skipped > 0 ? ` (${skipped} statisztikás kihagyva)` : ''}
           </button>
         );
       })()}
@@ -37614,6 +37632,9 @@ function AdminRooms() {
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.mint, letterSpacing:2 }}>{r.id}</div>
+                {isProtected(r.id) && (
+                  <span title="A Statisztika Torna előzményei hivatkoznak rá" style={{ fontFamily:T.font, fontSize:10, fontWeight:800, color:'#B8860B', background:'rgba(237,209,122,0.35)', padding:'2px 8px', borderRadius:999, whiteSpace:'nowrap' }}>🏆 Statisztika</span>
+                )}
                 {r.players && <div style={{ fontFamily:T.font, fontSize:12, color:T.sub }}>{r.players.length} játékos</div>}
               </div>
               <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, marginTop:2 }}>
@@ -37623,9 +37644,15 @@ function AdminRooms() {
             <button onClick={() => window.open(window.location.pathname + '?room=' + r.id, '_blank')} title="Belépés observerként" style={{ width:34, height:34, borderRadius:9, border:'none', background:'rgba(37,181,114,0.1)', display:'grid', placeItems:'center', cursor:'pointer', flexShrink:0 }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.mint} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
-            <button onClick={() => deleteRoom(r.id)} disabled={deleting===r.id} style={{ width:34, height:34, borderRadius:T.r?.sm||12, border:'none', background:T.coralSoft, display:'grid', placeItems:'center', cursor:'pointer', opacity:deleting===r.id?0.5:1 }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.coral} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-            </button>
+            {isProtected(r.id) ? (
+              <div title="Statisztikához kötve — nem törölhető" style={{ width:34, height:34, borderRadius:T.r?.sm||12, background:T.surfaceMuted, display:'grid', placeItems:'center', flexShrink:0 }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.inkMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+              </div>
+            ) : (
+              <button onClick={() => deleteRoom(r.id)} disabled={deleting===r.id} style={{ width:34, height:34, borderRadius:T.r?.sm||12, border:'none', background:T.coralSoft, display:'grid', placeItems:'center', cursor:'pointer', opacity:deleting===r.id?0.5:1 }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.coral} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+              </button>
+            )}
           </div>
         </div>
       ))}
