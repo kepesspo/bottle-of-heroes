@@ -34683,7 +34683,7 @@ window.bohSound = (function () {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.902';
+const APP_VERSION = 'v9.903';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -42780,6 +42780,118 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult, difficulty }) {
 // ═══════════════ Lobby reakciók — lebegő emoji/szöveg amíg várakoznak ═══════════════
 const LOBBY_QUICK_EMOJIS = ['🍺','🎉','🔥','😂','👍','🙌','🍻','😱','❤️','💩'];
 
+// ═══════════════ Egységes lobby komponensek (Busz / Blackjack / Ország-Város) ═══════════════
+// Egységes státusz-pill készlet a csatlakozási listákhoz
+const LOBBY_PILLS = {
+  host:   { bg:'#EDE4FB', fg:'#7C5CC4', label:'🎮 Host' },
+  me:     { bg:'#DCF3EA', fg:'#3DA888', label:'✓ Ez vagy te' },
+  joined: { bg:'#DCF3EA', fg:'#3DA888', label:'✓ Csatlakozott' },
+  ready:  { bg:'#DCF3EA', fg:'#3DA888', label:'✓ Kész' },
+  taken:  { bg:'#FBE3DE', fg:'#E8604C', label:'🔒 Foglalt' },
+  free:   { bg:'#F1EAD9', fg:'#4A5878', label:'Szabad' },
+  wait:   { bg:'#F1EAD9', fg:'#8A93A8', label:'Várakozás…' },
+};
+
+// Egy játékos-sor az egységes lobby listában.
+// pill: kulcs a LOBBY_PILLS-ből VAGY { label, bg, fg } objektum. dim: inaktív megjelenés.
+function LobbyRow({ player, pill, dim, highlight, onClick, pressing, progress, onHoldStart, onHoldEnd }) {
+  const p = typeof pill === 'string' ? LOBBY_PILLS[pill] : pill;
+  const clickable = !!onClick;
+  return (
+    <div style={{ position:'relative', borderRadius:12, overflow:'hidden' }}>
+      <div
+        onClick={onClick}
+        onMouseDown={onHoldStart}
+        onMouseUp={onHoldEnd}
+        onMouseLeave={onHoldEnd}
+        onTouchStart={onHoldStart ? (e) => { e.preventDefault(); onHoldStart(); } : undefined}
+        onTouchEnd={onHoldEnd}
+        onTouchCancel={onHoldEnd}
+        style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 8px', borderRadius:12,
+          background: highlight ? T.mintSoft : 'transparent',
+          opacity: dim && !pressing ? 0.45 : 1,
+          cursor: clickable || onHoldStart ? 'pointer' : 'default',
+          transition:'opacity .15s, background .15s', WebkitUserSelect:'none' }}>
+        <PlayerAvatar player={player} size={32} />
+        <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{player?.name}</div>
+        {p && <span style={{ flexShrink:0, fontFamily:T.font, fontSize:10, fontWeight:800, padding:'4px 10px', borderRadius:999, background: pressing ? T.coralSoft : p.bg, color: pressing ? T.coral : p.fg, letterSpacing:'0.03em', whiteSpace:'nowrap' }}>{pressing ? '🔓 Tartsd…' : p.label}</span>}
+      </div>
+      {pressing && <div style={{ position:'absolute', bottom:0, left:0, height:3, background:T.coral, borderRadius:999, width:`${progress || 0}%`, transition:'none' }} />}
+    </div>
+  );
+}
+
+// Fehér kártya fejléccel + n/N számlálóval — a sorok (LobbyRow) gyerekként jönnek
+function LobbyList({ title, count, total, children, style }) {
+  return (
+    <div style={{ background:T.surface, borderRadius:18, padding:'12px 14px', boxShadow:T.shadow, display:'flex', flexDirection:'column', gap:3, width:'100%', boxSizing:'border-box', ...style }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:5 }}>
+        <div style={{ fontFamily:T.font, fontSize:11, fontWeight:800, letterSpacing:'0.09em', color:T.inkSoft, textTransform:'uppercase' }}>{title || 'Csatlakozott játékosok'}</div>
+        {count !== undefined && <span style={{ fontFamily:T.font, fontSize:11, fontWeight:900, color:T.mint, background:T.mintSoft, padding:'2px 10px', borderRadius:999 }}>{count} / {total}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// Egységes szobakód-kártya QR gombbal (Busz-stílus)
+function RoomCodeCard({ roomCode, onShowQR }) {
+  return (
+    <div style={{ background:T.surface, borderRadius:18, padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, boxShadow:T.shadow, width:'100%', boxSizing:'border-box' }}>
+      <div>
+        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:800, letterSpacing:'0.1em', color:T.inkSoft, textTransform:'uppercase' }}>{t('roomCode')}</div>
+        <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:28, color:T.mint, letterSpacing:'0.14em' }}>{roomCode}</div>
+        <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>Ezen a kódon csatlakozz</div>
+      </div>
+      <button onClick={onShowQR} style={{ width:56, height:56, borderRadius:14, background:T.ink, border:'none', cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="12" height="12" rx="2" fill="white"/><rect x="4" y="4" width="8" height="8" rx="1" fill="#1a2540"/><rect x="18" y="2" width="12" height="12" rx="2" fill="white"/><rect x="20" y="4" width="8" height="8" rx="1" fill="#1a2540"/><rect x="2" y="18" width="12" height="12" rx="2" fill="white"/><rect x="4" y="20" width="8" height="8" rx="1" fill="#1a2540"/><rect x="18" y="18" width="5" height="5" rx="1" fill="white"/><rect x="25" y="18" width="5" height="5" rx="1" fill="white"/><rect x="18" y="25" width="5" height="5" rx="1" fill="white"/><rect x="25" y="25" width="5" height="5" rx="1" fill="white"/></svg>
+      </button>
+    </div>
+  );
+}
+
+// Egységes "Ki a host?" képernyő — MINDEN online játéknál ez az ELSŐ lépés
+function HostPickScreen({ emoji, players, takenIds, onConfirm, onSkip, skipLabel }) {
+  const [pendingId, setPendingId] = React.useState(null);
+  const pendingPlayer = pendingId ? (players || []).find(p => p.id === pendingId) : null;
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:200, background:T.bg, display:'flex', flexDirection:'column' }}>
+      <div style={{ flexShrink:0, textAlign:'center', padding:'max(28px, env(safe-area-inset-top)) 18px 10px' }}>
+        <div style={{ fontSize:44 }}>{emoji || '🎮'}</div>
+        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginTop:6 }}>Ki a host?</div>
+        <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:4 }}>Ő kezeli a fő telefont — válaszd ki magad</div>
+      </div>
+      <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'6px 18px' }}>
+        <div style={{ display:'flex', flexDirection:'column', gap:8, paddingBottom:12 }}>
+          {(players || []).map(p => {
+            const taken = (takenIds || []).includes(p.id);
+            const selected = pendingId === p.id;
+            return (
+              <button key={p.id} onClick={!taken ? () => setPendingId(p.id) : undefined}
+                style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 15px', background: selected ? `${p.color || T.mint}18` : T.surface, border:`2px solid ${selected ? (p.color || T.mint) : 'transparent'}`, borderRadius:16, cursor: taken ? 'default' : 'pointer', boxShadow:T.shadow, textAlign:'left', width:'100%', opacity: taken ? 0.45 : 1, transition:'background .15s, border-color .15s' }}>
+                <PlayerAvatar player={p} size={40} />
+                <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>{p.name}</div>
+                {selected && <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill={p.color || T.mint}/><path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div style={{ flexShrink:0, padding:'8px 18px', paddingBottom:'max(10px, env(safe-area-inset-bottom))', display:'flex', flexDirection:'column', gap:6 }}>
+        <button onClick={() => pendingId && onConfirm(pendingId)} disabled={!pendingId}
+          style={{ width:'100%', minHeight:56, border:'none', borderRadius:999, background: pendingId ? (pendingPlayer?.color || T.mint) : T.mintSoft, color: pendingId ? '#fff' : 'rgba(26,42,74,0.4)', fontFamily:T.font, fontWeight:900, fontSize:17, cursor: pendingId ? 'pointer' : 'default', boxShadow: pendingId ? T.shadow : 'none' }}>
+          {pendingPlayer ? `Én vagyok: ${pendingPlayer.name} 🎮` : 'Válaszd ki magad'}
+        </button>
+        {onSkip && (
+          <button onClick={onSkip} style={{ width:'100%', padding:'10px', border:'none', background:'transparent', color:T.inkSoft, fontFamily:T.font, fontWeight:700, fontSize:13, cursor:'pointer' }}>
+            {skipLabel || 'A host nem játszik (csak vezérli) →'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function LobbyReactionsOverlay({ code }) {
   const [items, setItems] = React.useState([]);
   const seenRef = React.useRef(new Set());
@@ -47486,6 +47598,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
   const [hostViewMode, setHostViewMode] = React.useState('host'); // 'host' | 'player' — a házigazda is játszhat
   const hostSelfIdRef = React.useRef(null); // a host által választott játékos-id, váltások közt megmarad
   const bjHostPlaysEnabled = !!(gameMeta?.blackjackConfig?.hostPlays);
+  const [bjHostPickDone, setBjHostPickDone] = React.useState(false); // egységes flow: host-kérdés az elején (megválaszolva/kihagyva)
   React.useEffect(() => {
     if (onSetBuszSwitch) onSetBuszSwitch((isOnline && bjHostPlaysEnabled) ? { fn: () => setHostViewMode(m => m === 'host' ? 'player' : 'host'), badge: 0 } : null);
   }, [isOnline, gameMeta]);
@@ -47613,6 +47726,23 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     update({ ...bjState, stacks: { ...(bjState.stacks || {}), [pid]: newStack }, chips: { ...(bjState.chips || {}), [pid]: newStack }, cashedOut: { ...(bjState.cashedOut || {}), [pid]: false }, brokeDrank: { ...(bjState.brokeDrank || {}), [pid]: false } });
   }
 
+  {/* ── EGYSÉGES FLOW 1. lépés: host kiválasztása — MÉG a csatlakozási lobby előtt ── */}
+  if (isOnline && bjHostPlaysEnabled && !hostSelfIdRef.current && !bjHostPickDone) {
+    return (
+      <HostPickScreen
+        emoji="🂡"
+        players={players}
+        takenIds={takenIds}
+        onConfirm={(pid) => {
+          hostSelfIdRef.current = pid;
+          setBjHostPickDone(true);
+          try { firebase.firestore().collection('rooms').doc(roomCode).update({ bjTakenIds: firebase.firestore.FieldValue.arrayUnion(pid), bjHostPid: pid }); } catch(e) {}
+        }}
+        onSkip={() => setBjHostPickDone(true)}
+      />
+    );
+  }
+
   if (isOnline && hostViewMode === 'player' && room) {
     return <BlackjackObserverView room={room} code={roomCode} onLeave={() => setHostViewMode('host')} keepClaimOnUnmount={true} initialPlayerId={hostSelfIdRef.current} onPlayerIdChange={pid => { hostSelfIdRef.current = pid; }} onSwitchToHost={() => setHostViewMode('host')} />;
   }
@@ -47633,25 +47763,20 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     const allChosen = joined.length > 0 && chosenCount === joined.length;
     return (
       <div style={{ padding:'0 6px 12px' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-          <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontSize:12, color:T.inkSoft, lineHeight:1.35 }}>A játékosok a telefonjukon csatlakoznak — mindenki az osztó (a ház) ellen játszik!</div>
-          {roomUrl && (
-            <button onClick={() => setShowQR(true)} style={{ flexShrink:0, background:'transparent', border:`1.5px solid ${T.surfaceMuted}`, borderRadius:20, padding:'8px 14px', fontFamily:T.font, fontSize:13, fontWeight:800, color:T.inkSoft, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
-              <span>📱</span> QR
-            </button>
-          )}
-        </div>
-        <div style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:T.shadow, marginBottom:12 }}>
-          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightTitle, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Csatlakozott játékosok ({joined.length})</div>
-          {joined.length === 0 && <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', padding:'10px 0' }}>Még senki — mutasd a QR kódot! 📱</div>}
-          {joined.map(p => (
-            <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'6px 0' }}>
-              <BJAvatar p={p} size={30} />
-              <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink }}>{p.name}</span>
-              <span style={{ marginLeft:'auto', fontFamily:T.font, fontSize:12, fontWeight:T.weightTitle, color: ((bjState && bjState.stacks) || {})[p.id] !== undefined ? T.mint : T.inkSoft }}>{((bjState && bjState.stacks) || {})[p.id] !== undefined ? `✓ Kész · ${stackOf(p.id)} 🍺` : 'választ… 🍺'}</span>
-            </div>
-          ))}
-        </div>
+        <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, lineHeight:1.35, marginBottom:10 }}>A játékosok a telefonjukon csatlakoznak — mindenki az osztó (a ház) ellen játszik!</div>
+        {roomCode && <div style={{ marginBottom:12 }}><RoomCodeCard roomCode={roomCode} onShowQR={() => setShowQR(true)} /></div>}
+        <LobbyList title="Csatlakozott játékosok" count={joined.length} total={players.length} style={{ marginBottom:12 }}>
+          {players.map(p => {
+            const isJoined = takenIds.includes(p.id);
+            const chosen = ((bjState && bjState.stacks) || {})[p.id] !== undefined;
+            const isHostP = p.id === (room?.bjHostPid || null);
+            const pill = isHostP && !chosen ? 'host'
+              : isJoined && chosen ? { bg:'#DCF3EA', fg:'#3DA888', label:`✓ Kész · ${stackOf(p.id)} 🍺` }
+              : isJoined ? { bg:'#F1EAD9', fg:'#4A5878', label:'választ… 🍺' }
+              : 'wait';
+            return <LobbyRow key={p.id} player={p} pill={pill} dim={!isJoined && !isHostP} />;
+          })}
+        </LobbyList>
         <button onClick={hostStart} disabled={!allChosen} style={{ width:'100%', padding:'14px', borderRadius:16, background: allChosen ? T.mint : T.surfaceMuted, border:'none', fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff', cursor: allChosen ? 'pointer' : 'default' }}>
           {allChosen ? `Kezdés (${joined.length} játékos)` : joined.length === 0 ? 'Kezdés (0 játékos)' : `Várakozás a készlet-választásra… (${chosenCount}/${joined.length})`}
         </button>
@@ -48012,24 +48137,25 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
           <div style={{ height:'100%', overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'0 18px' }}>
             <div style={{ display:'flex', flexDirection:'column', gap:8, paddingBottom:16 }}>
               {selectable.map(p => {
-                const isTaken = taken.includes(p.id);
+                const isHostP = p.id === (room?.bjHostPid || null) && p.id !== initialPlayerId;
+                const isTaken = taken.includes(p.id) || isHostP;
                 const selected = pendingId === p.id;
                 const pressing = unlockPressId === p.id;
                 return (
                   <div key={p.id} style={{ position:'relative', borderRadius:16, overflow:'hidden' }}>
                     <button
                       onClick={!isTaken ? () => setPendingId(p.id) : undefined}
-                      onMouseDown={isTaken ? () => startUnlockPress(p.id) : undefined}
-                      onMouseUp={isTaken ? cancelUnlockPress : undefined}
-                      onMouseLeave={isTaken ? cancelUnlockPress : undefined}
-                      onTouchStart={isTaken ? (e) => { e.preventDefault(); startUnlockPress(p.id); } : undefined}
-                      onTouchEnd={isTaken ? cancelUnlockPress : undefined}
-                      onTouchCancel={isTaken ? cancelUnlockPress : undefined}
+                      onMouseDown={isTaken && !isHostP ? () => startUnlockPress(p.id) : undefined}
+                      onMouseUp={isTaken && !isHostP ? cancelUnlockPress : undefined}
+                      onMouseLeave={isTaken && !isHostP ? cancelUnlockPress : undefined}
+                      onTouchStart={isTaken && !isHostP ? (e) => { e.preventDefault(); startUnlockPress(p.id); } : undefined}
+                      onTouchEnd={isTaken && !isHostP ? cancelUnlockPress : undefined}
+                      onTouchCancel={isTaken && !isHostP ? cancelUnlockPress : undefined}
                       style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background: pressing ? `${T.coral}10` : selected ? `${p.color}18` : T.surface, border:`2px solid ${pressing ? T.coral : selected ? p.color : isTaken ? T.coral+'30' : 'transparent'}`, borderRadius:16, cursor: isTaken ? 'default' : 'pointer', boxShadow: selected ? `0 0 0 1px ${p.color}40, ${T.shadow}` : T.shadow, textAlign:'left', width:'100%', opacity: isTaken && !pressing ? 0.5 : 1, transition:'background .15s, border-color .15s', WebkitUserSelect:'none' }}>
                       <BJAvatar p={p} size={42} />
                       <div style={{ flex:1 }}>
                         <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>{p.name}</div>
-                        <div style={{ fontFamily:T.font, fontSize:12, color: isTaken ? T.coral : T.inkSoft, marginTop:2 }}>{pressing ? '🔓 Tartsd nyomva…' : isTaken ? '🔒 Foglalt' : 'Elérhető'}</div>
+                        <div style={{ fontFamily:T.font, fontSize:12, color: isHostP ? '#7C5CC4' : isTaken ? T.coral : T.inkSoft, marginTop:2 }}>{isHostP ? '🎮 Host' : pressing ? '🔓 Tartsd nyomva…' : isTaken ? '🔒 Foglalt' : 'Elérhető'}</div>
                       </div>
                       {selected && <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill={p.color}/><path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                     </button>
@@ -48526,7 +48652,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
   }, [isOnline, buszState?.phase, gameMeta?.buszConfig?.szelviharEnabled]);
 
   const initGame = async () => {
-    if (isOnline) { try { await firebase.firestore().collection('rooms').doc(roomCode).update({ buszTakenIds: [] }); } catch(e) {} }
+    if (isOnline) { try { await firebase.firestore().collection('rooms').doc(roomCode).update({ buszTakenIds: hostPlayerId ? [hostPlayerId] : [] }); } catch(e) {} }
     const cfg = gameMeta?.buszConfig || {};
     const cardsPerPlayer = cfg.cardsPerPlayer || 6;
     const pyramidRows = cfg.pyramidRows || 5;
@@ -48681,7 +48807,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
   };
 
   // PlayScreen signals — must be before any early return (Rules of Hooks)
-  const shouldHideFooter = (hostPlaysEnabled && !hostPlayerId) || (hostPlaysEnabled && hostPlayerId && hostViewMode === 'player' && !!buszState && isOnline);
+  const shouldHideFooter = (hostPlaysEnabled && !hostPlayerId && !!buszState) || (hostPlaysEnabled && hostPlayerId && hostViewMode === 'player' && !!buszState && isOnline);
   React.useEffect(() => { setTakenIds([]); }, [gameIdx]);
   React.useEffect(() => { onSetHideFooter && onSetHideFooter(shouldHideFooter); }, [shouldHideFooter]);
   React.useEffect(() => () => { onSetHideFooter && onSetHideFooter(false); }, []);
@@ -48713,6 +48839,20 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
   );
 
   // ── Init screen ──────────────────────────────────────────────────────────
+  {/* ── EGYSÉGES FLOW 1. lépés: host kiválasztása — MÉG a lobby előtt ── */}
+  if (isOnline && !buszState && hostPlaysEnabled && !hostPlayerId && !hostPickCancelled) return (
+    <HostPickScreen
+      emoji="🚌"
+      players={players}
+      takenIds={takenIds}
+      onConfirm={(pid) => {
+        setHostPlayerId(pid);
+        try { firebase.firestore().collection('rooms').doc(roomCode).update({ buszTakenIds: firebase.firestore.FieldValue.arrayUnion(pid), buszHostPid: pid }); } catch(e) {}
+      }}
+      onSkip={() => setHostPickCancelled(true)}
+    />
+  );
+
   if (!buszState) return (
     <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16,width:'100%',paddingTop:4,flex:'1 1 auto'}}>
       {isOnline && roomCode && (
@@ -48736,19 +48876,30 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
         </div>
       )}
       {showQR && roomCode && <RoomQR roomCode={roomCode} onClose={()=>setShowQR(false)} />}
-      <div style={{width:'100%',display:'flex',alignItems:'center',gap:10}}>
-        <div style={{display:'flex',alignItems:'center'}}>
-          {players.slice(0,4).map((p,idx)=>(
-            <PlayerAvatar key={p.id} player={p} size={42} style={{ border:`2.5px solid ${T.bg}`, marginLeft:idx?-10:0, zIndex:players.length-idx, boxShadow:'0 1px 4px rgba(0,0,0,0.15)' }} />
+      {/* Egységes csatlakozási lista — mindenki látszik, státusz-pill-lel */}
+      {isOnline ? (
+        <LobbyList title="Csatlakozott játékosok" count={takenIds.length} total={players.length}>
+          {players.map(p => (
+            <LobbyRow key={p.id} player={p}
+              pill={hostPlayerId === p.id ? 'host' : takenIds.includes(p.id) ? 'joined' : 'wait'}
+            />
           ))}
-          {players.length>4&&<div style={{width:42,height:42,borderRadius:'50%',background:T.surfaceMuted,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:700,fontSize:13,color:T.inkSoft,border:`2.5px solid ${T.bg}`,marginLeft:-10}}>+{players.length-4}</div>}
+        </LobbyList>
+      ) : (
+        <div style={{width:'100%',display:'flex',alignItems:'center',gap:10}}>
+          <div style={{display:'flex',alignItems:'center'}}>
+            {players.slice(0,4).map((p,idx)=>(
+              <PlayerAvatar key={p.id} player={p} size={42} style={{ border:`2.5px solid ${T.bg}`, marginLeft:idx?-10:0, zIndex:players.length-idx, boxShadow:'0 1px 4px rgba(0,0,0,0.15)' }} />
+            ))}
+            {players.length>4&&<div style={{width:42,height:42,borderRadius:'50%',background:T.surfaceMuted,display:'grid',placeItems:'center',fontFamily:T.font,fontWeight:700,fontSize:13,color:T.inkSoft,border:`2.5px solid ${T.bg}`,marginLeft:-10}}>+{players.length-4}</div>}
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontFamily:T.font,fontWeight:700,fontSize:15,color:T.ink}}>{players.length} {t('busReady')}</div>
+          </div>
         </div>
-        <div style={{flex:1}}>
-          <div style={{fontFamily:T.font,fontWeight:700,fontSize:15,color:T.ink}}>{isOnline?takenIds.length:players.length} {t('busReady')}</div>
-          {isOnline&&<div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:1}}>{t('busAutoStart')}</div>}
-        </div>
-      </div>
-      <PrimaryButton onClick={initGame} disabled={players.length<2}>{t('startGameBtn')}</PrimaryButton>
+      )}
+      <PrimaryButton onClick={initGame} disabled={players.length<2}>{isOnline ? `${t('startGameBtn')} (${takenIds.length}/${players.length}) ▶` : t('startGameBtn')}</PrimaryButton>
+      {isOnline && <div style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.inkSoft,textAlign:'center',marginTop:-8}}>{t('busAutoStart')}</div>}
       {/* Amíg várunk — lebegő emoji/szöveg reakciók, a képernyő aljára igazítva */}
       {isOnline && roomCode && (
         <>
@@ -51389,28 +51540,14 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
     </div>
   );
 
-  // ── HOST: játékosválasztó (host is játszik) ──
+  // ── EGYSÉGES FLOW 1. lépés: host kiválasztása ──
   if (phase === 'pick') return (
-    <div style={{display:'flex',flexDirection:'column',gap:10,width:'100%'}}>
-      <div style={{textAlign:'center',padding:'6px 0 4px'}}>
-        <div style={{fontSize:44}}>🌍</div>
-        <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:20,color:T.ink,textTransform:'uppercase',letterSpacing:T.letterDisplay,marginTop:4}}>Ki vagy te?</div>
-        <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,marginTop:3}}>A host is játszik — válaszd ki magad!</div>
-      </div>
-      {pl.map(p => {
-        const sel = hostPid === p.id;
-        return (
-          <button key={p.id} onClick={() => setHostPid(p.id)} style={{display:'flex',alignItems:'center',gap:12,padding:'13px 16px',borderRadius:16,border:`2px solid ${sel?(p.color||T.mint):'transparent'}`,background:sel?`${p.color||T.mint}18`:T.surface,cursor:'pointer',width:'100%',boxShadow:T.shadow,textAlign:'left'}}>
-            <OVFJAvatar p={p} size={40} />
-            <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:16,color:T.ink,flex:1}}>{p.name}</span>
-            {sel && <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill={p.color||T.mint}/><path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-          </button>
-        );
-      })}
-      <PrimaryButton onClick={() => hostPid && setPhase('lobby')} disabled={!hostPid} style={{marginTop:4}}>
-        {hostPid ? `Én vagyok ${pl.find(p=>p.id===hostPid)?.name}!` : 'Válassz nevet'}
-      </PrimaryButton>
-    </div>
+    <HostPickScreen
+      emoji="🌍"
+      players={pl}
+      takenIds={[]}
+      onConfirm={(pid) => { setHostPid(pid); setPhase('lobby'); }}
+    />
   );
 
   // ── HOST: lobby ──
@@ -51430,26 +51567,20 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
           ))}
         </div>
       </div>
-      <button onClick={() => setShowQR(true)} style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10,padding:'14px',borderRadius:18,border:`2px solid ${T.mint}`,background:T.mintSoft,color:T.mint,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,cursor:'pointer',boxShadow:T.shadow,width:'100%'}}>
-        <span style={{fontSize:20}}>📱</span> QR kód — Csatlakozás
-      </button>
-      <div style={{background:T.surface,borderRadius:18,padding:'14px 16px',boxShadow:T.shadow}}>
-        <div style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:10}}>Csatlakozott játékosok</div>
-        <div style={{display:'flex',flexDirection:'column',gap:8}}>
-          {pl.map(p => {
-            const joined = claimedPids.has(p.id);
-            const isHost = p.id === hostPid;
-            return (
-              <div key={p.id} style={{display:'flex',alignItems:'center',gap:10,opacity:joined?1:0.55}}>
-                <OVFJAvatar p={p} size={30} />
-                <span style={{fontFamily:T.font,fontSize:14,fontWeight:T.weightTitle,color:T.ink,flex:1}}>{p.name}{isHost?' (Te)':''}</span>
-                <span style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:joined?T.mint:T.inkSoft,background:joined?T.mintSoft:T.surfaceMuted,padding:'3px 10px',borderRadius:999}}>{joined ? '✓ Kész' : 'Várakozás…'}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      <PrimaryButton onClick={startRound}>🎰 Kezdés!</PrimaryButton>
+      <RoomCodeCard roomCode={roomCode} onShowQR={() => setShowQR(true)} />
+      {(() => {
+        const joinedCount = pl.filter(p => claimedPids.has(p.id) || p.id === hostPid).length;
+        return (
+          <LobbyList title="Csatlakozott játékosok" count={joinedCount} total={pl.length}>
+            {pl.map(p => {
+              const joined = claimedPids.has(p.id);
+              const isHost = p.id === hostPid;
+              return <LobbyRow key={p.id} player={p} pill={isHost ? 'host' : joined ? 'ready' : 'wait'} dim={!joined && !isHost} />;
+            })}
+          </LobbyList>
+        );
+      })()}
+      <PrimaryButton onClick={startRound}>🎰 Kezdés! ({pl.filter(p => claimedPids.has(p.id) || p.id === hostPid).length}/{pl.length}) ▶</PrimaryButton>
       {/* Amíg várunk — lebegő emoji/szöveg reakciók (host is látja + küldhet) */}
       {roomCode && (
         <>
@@ -51654,24 +51785,25 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
           <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,marginTop:4}}>Válaszd ki a neved a listából</div>
         </div>
         {players.map(p => {
-          const isTaken = taken.includes(p.id) || p.id === ovfj.hostPid;
+          const isHostP = p.id === ovfj.hostPid;
+          const isTaken = taken.includes(p.id) || isHostP;
           const selected = pendingId === p.id;
           const pressing = unlockPressId === p.id;
           return (
             <div key={p.id} style={{position:'relative',borderRadius:16,overflow:'hidden'}}>
               <button
                 onClick={!isTaken ? () => setPendingId(p.id) : undefined}
-                onMouseDown={isTaken ? () => startUnlockPress(p.id) : undefined}
-                onMouseUp={isTaken ? cancelUnlockPress : undefined}
-                onMouseLeave={isTaken ? cancelUnlockPress : undefined}
-                onTouchStart={isTaken ? (e) => { e.preventDefault(); startUnlockPress(p.id); } : undefined}
-                onTouchEnd={isTaken ? cancelUnlockPress : undefined}
-                onTouchCancel={isTaken ? cancelUnlockPress : undefined}
+                onMouseDown={isTaken && !isHostP ? () => startUnlockPress(p.id) : undefined}
+                onMouseUp={isTaken && !isHostP ? cancelUnlockPress : undefined}
+                onMouseLeave={isTaken && !isHostP ? cancelUnlockPress : undefined}
+                onTouchStart={isTaken && !isHostP ? (e) => { e.preventDefault(); startUnlockPress(p.id); } : undefined}
+                onTouchEnd={isTaken && !isHostP ? cancelUnlockPress : undefined}
+                onTouchCancel={isTaken && !isHostP ? cancelUnlockPress : undefined}
                 style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',background:pressing?`${T.coral}10`:selected?`${p.color||T.mint}18`:T.surface,border:`2px solid ${pressing?T.coral:selected?(p.color||T.mint):isTaken?T.coral+'30':'transparent'}`,borderRadius:16,cursor:isTaken?'default':'pointer',boxShadow:T.shadow,textAlign:'left',width:'100%',opacity:isTaken&&!pressing?0.5:1,transition:'background .15s, border-color .15s',WebkitUserSelect:'none'}}>
                 <OVFJAvatar p={p} size={42} />
                 <div style={{flex:1}}>
                   <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:16,color:T.ink}}>{p.name}</div>
-                  <div style={{fontFamily:T.font,fontSize:12,color:isTaken?T.coral:T.inkSoft,marginTop:2}}>{pressing ? '🔓 Tartsd nyomva…' : isTaken ? '🔒 Foglalt' : 'Elérhető'}</div>
+                  <div style={{fontFamily:T.font,fontSize:12,color:isHostP?'#7C5CC4':isTaken?T.coral:T.inkSoft,marginTop:2}}>{isHostP ? '🎮 Host' : pressing ? '🔓 Tartsd nyomva…' : isTaken ? '🔒 Foglalt' : 'Elérhető'}</div>
                 </div>
                 {selected && <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill={p.color||T.mint}/><path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
               </button>
@@ -56124,24 +56256,25 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
           <div style={{ height:'100%', overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'0 18px' }}>
             <div style={{ display:'flex', flexDirection:'column', gap:8, paddingBottom:16 }}>
               {players.map(p => {
-                const taken = (room.buszTakenIds||[]).includes(p.id);
+                const isHostP = p.id === room.buszHostPid;
+                const taken = (room.buszTakenIds||[]).includes(p.id) || isHostP;
                 const selected = pendingId === p.id;
                 const pressing = unlockPressId === p.id;
                 return (
                   <div key={p.id} style={{ position:'relative', borderRadius:16, overflow:'hidden' }}>
                     <button
                       onClick={!taken ? () => setPendingId(p.id) : undefined}
-                      onMouseDown={taken ? () => startUnlockPress(p.id) : undefined}
-                      onMouseUp={taken ? cancelUnlockPress : undefined}
-                      onMouseLeave={taken ? cancelUnlockPress : undefined}
-                      onTouchStart={taken ? (e) => { e.preventDefault(); startUnlockPress(p.id); } : undefined}
-                      onTouchEnd={taken ? cancelUnlockPress : undefined}
-                      onTouchCancel={taken ? cancelUnlockPress : undefined}
+                      onMouseDown={taken && !isHostP ? () => startUnlockPress(p.id) : undefined}
+                      onMouseUp={taken && !isHostP ? cancelUnlockPress : undefined}
+                      onMouseLeave={taken && !isHostP ? cancelUnlockPress : undefined}
+                      onTouchStart={taken && !isHostP ? (e) => { e.preventDefault(); startUnlockPress(p.id); } : undefined}
+                      onTouchEnd={taken && !isHostP ? cancelUnlockPress : undefined}
+                      onTouchCancel={taken && !isHostP ? cancelUnlockPress : undefined}
                       style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', background: pressing ? `${T.coral}10` : selected ? `${p.color}18` : T.surface, border:`2px solid ${pressing ? T.coral : selected ? p.color : taken ? T.coral+'30' : 'transparent'}`, borderRadius:16, cursor:taken?'default':'pointer', boxShadow: selected ? `0 0 0 1px ${p.color}40, ${T.shadow}` : T.shadow, textAlign:'left', width:'100%', opacity:taken&&!pressing?0.5:1, transition:'background .15s, border-color .15s', WebkitUserSelect:'none' }}>
                       <PlayerAvatar player={p} size={42} />
                       <div style={{ flex:1 }}>
                         <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:16, color:T.ink }}>{p.name}</div>
-                        <div style={{ fontFamily:T.font, fontSize:12, color:taken?T.coral:T.inkSoft, marginTop:2 }}>{pressing ? '🔓 Tartsd nyomva…' : taken ? '🔒 Foglalt' : (buszState ? `${(buszState.hands?.[p.id]||[]).length} lap a kezében` : 'Elérhető')}</div>
+                        <div style={{ fontFamily:T.font, fontSize:12, color: isHostP ? '#7C5CC4' : taken?T.coral:T.inkSoft, marginTop:2 }}>{isHostP ? '🎮 Host' : pressing ? '🔓 Tartsd nyomva…' : taken ? '🔒 Foglalt' : (buszState ? `${(buszState.hands?.[p.id]||[]).length} lap a kezében` : 'Elérhető')}</div>
                       </div>
                       {selected && <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill={p.color}/><path d="M7 13l3 3 7-7" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                     </button>
