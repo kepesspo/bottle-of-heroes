@@ -268,12 +268,14 @@
 
     .home-inner {
       display:flex; flex-direction:column; align-items:center;
-      gap:28px; padding:52px 22px calc(44px + env(safe-area-inset-bottom));
+      gap:28px; padding:52px 22px 28px;
       max-width:1080px; margin:auto; width:100%; box-sizing:border-box;
     }
     .home-brand      { display:flex; flex-direction:column; align-items:center; gap:18px; }
     .home-brand-text { display:flex; flex-direction:column; align-items:center; gap:10px; }
     .home-actions    { display:flex; flex-direction:column; gap:14px; width:100%; max-width:360px; }
+    .home-dock-wrap  { flex-shrink:0; width:100%; box-sizing:border-box; padding:14px 22px calc(18px + env(safe-area-inset-bottom)); }
+    .home-dock       { max-width:1080px; margin:0 auto; }
     @media (max-width:759px) {
       .home-inner { padding-top:84px; }
     }
@@ -289,10 +291,12 @@
       .home-brand      { align-items:flex-start; flex:1; }
       .home-brand-text { align-items:flex-start; }
       .home-actions    { max-width:300px; flex-shrink:0; }
+      .home-dock       { max-width:492px; margin:0 0 0 auto; }
     }
     @media (min-width:1100px) {
       .home-inner   { gap:96px; padding:64px 80px; }
       .home-actions { max-width:340px; }
+      .home-dock    { max-width:532px; }
     }
 
     @keyframes gameSlideOut { 0%{opacity:1;transform:translateX(0)} 100%{opacity:0;transform:translateX(-48px)} }
@@ -34620,7 +34624,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.877';
+const APP_VERSION = 'v9.878';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -39064,13 +39068,11 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
     }
   }, []);
   const _evDockSub = nextEvent
-    ? `${new Date(nextEvent.date).toLocaleDateString(currentLang==='en'?'en-US':'hu-HU',{ month:'short', day:'numeric' })} · ${nextEvent.title}`
+    ? `${currentLang==='en'?'Next':'Köv'}: ${new Date(nextEvent.date).toLocaleDateString(currentLang==='en'?'en-US':'hu-HU',{ month:'short', day:'numeric' })}`
     : (currentLang==='en' ? 'Party calendar · RSVP' : 'Bulinaptár · RSVP');
-  const _boxDockSub = boxInfo && boxInfo.np && boxInfo.np.title
-    ? `▶ ${boxInfo.np.title}`
-    : (boxInfo && boxInfo.queueLen > 0
-      ? (currentLang==='en' ? `${boxInfo.queueLen} in queue` : `${boxInfo.queueLen} szám a sorban`)
-      : (currentLang==='en' ? 'Shared jukebox' : 'Közös jukebox'));
+  const _boxDockSub = boxInfo
+    ? (boxInfo.np ? (currentLang==='en' ? '🟢 Active' : '🟢 Aktív') : (currentLang==='en' ? '⚪ Not active' : '⚪ Nem aktív'))
+    : (currentLang==='en' ? 'Shared jukebox' : 'Közös jukebox');
 
   const greetHi = currentLang === 'en' ? 'Hey, team!' : 'Szia, csapat!';
   const _greetDays = currentLang === 'en'
@@ -39079,7 +39081,7 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
   const greetSub = `${_greetDays[new Date().getDay()]} · ${APP_VERSION}`;
 
   return (
-    <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg, position:'relative', overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
+    <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg, position:'relative' }}>
       {showInstall && <InstallModal onClose={() => setShowInstall(false)} />}
       {isPlayful && (
         <div style={{ position:'absolute', inset:0, overflow:'hidden', pointerEvents:'none', zIndex:0 }}>
@@ -39090,6 +39092,7 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
           <span style={{ position:'absolute', top:'58%', right:'22%', width:7, height:7, borderRadius:'50%', background:T.coral, opacity:0.45 }} />
         </div>
       )}
+      <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', display:'flex', flexDirection:'column' }}>
       <div className="home-inner">
         <div className="home-brand">
           {announcement && (
@@ -39337,35 +39340,38 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
 
           </div>
           )}
-          {/* DNR dokk — a család többi appja, élő infókkal; böngészőben mellette a telepítés link */}
-          <div style={{ width:'100%' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', margin:'0 6px 8px' }}>
-              <div style={{ fontFamily:T.font, fontSize:10, fontWeight:800, letterSpacing:'0.18em', textTransform:'uppercase', color:T.inkSoft, opacity:0.85 }}>DNR · A többi app</div>
-              {!isStandalone && (
-                <button onClick={() => setShowInstall(true)} style={{ display:'flex', alignItems:'center', gap:5, border:'none', background:'transparent', cursor:'pointer', padding:'2px 0', fontFamily:T.font, fontWeight:800, fontSize:11, color:T.mint, WebkitTapHighlightColor:'transparent' }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.mint} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v13M8 12l4 4 4-4"/><rect x="3" y="18" width="18" height="3" rx="1.5" fill={T.mint} stroke="none"/></svg>
-                  {t('addToHome')}
-                </button>
-              )}
-            </div>
-            <div style={{ display:'flex', gap:12 }}>
-              <button onClick={() => go('log')} style={{ flex:1, minWidth:0, display:'flex', alignItems:'center', gap:10, padding:'11px 12px', background:T.surface, borderRadius:18, cursor:'pointer', textAlign:'left', border: isPlayful ? `2.5px solid ${T.ink}` : 'none', boxShadow: isPlayful ? `0 4px 0 ${T.ink}` : T.shadow, WebkitTapHighlightColor:'transparent' }}>
-                <img src="assets/dnr_events_icon.png" style={{ width:40, height:40, borderRadius:11, flexShrink:0 }} />
-                <div style={{ minWidth:0, flex:1 }}>
-                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, lineHeight:1.05 }}>Events</div>
-                  <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.inkSoft, marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{_evDockSub}</div>
-                </div>
-                <span style={{ color:T.inkMute, fontWeight:900, fontSize:16, flexShrink:0 }}>›</span>
+        </div>
+      </div>
+      </div>
+      {/* DNR dokk — a család többi appja, élő infókkal, mindig a képernyő alján, elválasztva a fenti tartalomtól */}
+      <div className="home-dock-wrap" style={{ background:T.bg, boxShadow:`0 -8px 20px -12px rgba(20,30,50,0.18)`, position:'relative', zIndex:5 }}>
+        <div className="home-dock">
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', margin:'0 6px 8px' }}>
+            <div style={{ fontFamily:T.font, fontSize:10, fontWeight:800, letterSpacing:'0.18em', textTransform:'uppercase', color:T.inkSoft, opacity:0.85 }}>DNR · A többi app</div>
+            {!isStandalone && (
+              <button onClick={() => setShowInstall(true)} style={{ display:'flex', alignItems:'center', gap:5, border:'none', background:'transparent', cursor:'pointer', padding:'2px 0', fontFamily:T.font, fontWeight:800, fontSize:11, color:T.mint, WebkitTapHighlightColor:'transparent' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.mint} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v13M8 12l4 4 4-4"/><rect x="3" y="18" width="18" height="3" rx="1.5" fill={T.mint} stroke="none"/></svg>
+                {t('addToHome')}
               </button>
-              <button onClick={() => go('jukebox')} style={{ flex:1, minWidth:0, display:'flex', alignItems:'center', gap:10, padding:'11px 12px', background:T.surface, borderRadius:18, cursor:'pointer', textAlign:'left', border: isPlayful ? `2.5px solid ${T.ink}` : 'none', boxShadow: isPlayful ? `0 4px 0 ${T.ink}` : T.shadow, WebkitTapHighlightColor:'transparent' }}>
-                <img src="assets/dnr_box_icon.png" style={{ width:40, height:40, borderRadius:11, flexShrink:0 }} />
-                <div style={{ minWidth:0, flex:1 }}>
-                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, lineHeight:1.05 }}>Box</div>
-                  <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.inkSoft, marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{_boxDockSub}</div>
-                </div>
-                <span style={{ color:T.inkMute, fontWeight:900, fontSize:16, flexShrink:0 }}>›</span>
-              </button>
-            </div>
+            )}
+          </div>
+          <div style={{ display:'flex', gap:12 }}>
+            <button onClick={() => go('log')} style={{ flex:1, minWidth:0, display:'flex', alignItems:'center', gap:10, padding:'11px 12px', background:T.surface, borderRadius:18, cursor:'pointer', textAlign:'left', border: isPlayful ? `2.5px solid ${T.ink}` : 'none', boxShadow: isPlayful ? `0 4px 0 ${T.ink}` : T.shadow, WebkitTapHighlightColor:'transparent' }}>
+              <img src="assets/dnr_events_icon.png" style={{ width:40, height:40, borderRadius:11, flexShrink:0 }} />
+              <div style={{ minWidth:0, flex:1 }}>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, lineHeight:1.05 }}>Events</div>
+                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.inkSoft, marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{_evDockSub}</div>
+              </div>
+              <span style={{ color:T.inkMute, fontWeight:900, fontSize:16, flexShrink:0 }}>›</span>
+            </button>
+            <button onClick={() => go('jukebox')} style={{ flex:1, minWidth:0, display:'flex', alignItems:'center', gap:10, padding:'11px 12px', background:T.surface, borderRadius:18, cursor:'pointer', textAlign:'left', border: isPlayful ? `2.5px solid ${T.ink}` : 'none', boxShadow: isPlayful ? `0 4px 0 ${T.ink}` : T.shadow, WebkitTapHighlightColor:'transparent' }}>
+              <img src="assets/dnr_box_icon.png" style={{ width:40, height:40, borderRadius:11, flexShrink:0 }} />
+              <div style={{ minWidth:0, flex:1 }}>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, lineHeight:1.05 }}>Box</div>
+                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.inkSoft, marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{_boxDockSub}</div>
+              </div>
+              <span style={{ color:T.inkMute, fontWeight:900, fontSize:16, flexShrink:0 }}>›</span>
+            </button>
           </div>
         </div>
       </div>
