@@ -189,6 +189,7 @@
     @keyframes slideUp    { from{transform:translateY(100%)} to{transform:translateY(0)} }
     @keyframes alertPulse { 0%,100%{box-shadow:0 0 0 0 rgba(244,160,74,0)} 50%{box-shadow:0 0 0 6px rgba(244,160,74,0.35)} }
     @keyframes vinylSpin  { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+    @keyframes lobbyFloatUp { 0%{transform:translateY(0) scale(0.85);opacity:0} 12%{transform:translateY(-14px) scale(1);opacity:1} 78%{opacity:1} 100%{transform:translateY(-360px) scale(1);opacity:0} }
     @keyframes cardFlipIn  { 0%{transform:rotateY(90deg);opacity:0} 100%{transform:rotateY(0deg);opacity:1} }
     @keyframes coin3DFlip {
   0%   { transform: perspective(600px) rotateY(0deg)   scaleX(1); }
@@ -34624,7 +34625,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.884';
+const APP_VERSION = 'v9.885';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -42679,6 +42680,90 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult, difficulty }) {
   );
 }
 
+// ═══════════════ Lobby reakciók — lebegő emoji/szöveg amíg várakoznak ═══════════════
+const LOBBY_QUICK_EMOJIS = ['🍺','🎉','🔥','😂','👍','🙌','🍻','😱','❤️','💩'];
+
+function LobbyReactionsOverlay({ code }) {
+  const [items, setItems] = React.useState([]);
+  const seenRef = React.useRef(new Set());
+  const readyRef = React.useRef(false);
+
+  React.useEffect(() => {
+    seenRef.current = new Set();
+    readyRef.current = false;
+    if (!code || typeof firebase === 'undefined') return;
+    let unsub = null;
+    try {
+      unsub = firebase.firestore().collection('rooms').doc(code).collection('lobbyChat')
+        .orderBy('ts', 'desc').limit(12)
+        .onSnapshot(snap => {
+          snap.docChanges().forEach(ch => {
+            if (ch.type !== 'added') return;
+            const id = ch.doc.id;
+            if (seenRef.current.has(id)) return;
+            seenRef.current.add(id);
+            if (!readyRef.current) return; // ne animáljuk le a régi (belépéskor már meglévő) üzeneteket
+            const d = ch.doc.data() || {};
+            const item = { id, kind: d.kind, value: d.value, from: d.from, left: 8 + Math.random() * 74, dur: 3.6 + Math.random() * 1.4 };
+            setItems(cur => [...cur, item]);
+            setTimeout(() => setItems(cur => cur.filter(i => i.id !== id)), (item.dur + 0.3) * 1000);
+          });
+          readyRef.current = true;
+        }, () => {});
+    } catch (e) {}
+    return () => { if (unsub) unsub(); };
+  }, [code]);
+
+  if (!code) return null;
+  return (
+    <div style={{ position:'fixed', inset:0, pointerEvents:'none', overflow:'hidden', zIndex:640 }}>
+      {items.map(it => (
+        <div key={it.id} style={{ position:'absolute', left:`${it.left}%`, bottom:0, animation:`lobbyFloatUp ${it.dur}s ease-out forwards`, maxWidth:220 }}>
+          {it.kind === 'emoji' ? (
+            <div style={{ fontSize:38, textAlign:'center', filter:'drop-shadow(0 2px 6px rgba(0,0,0,0.25))' }}>{it.value}</div>
+          ) : (
+            <div style={{ background:T.surface, padding:'8px 14px', borderRadius:16, boxShadow:T.shadow, fontFamily:T.font, fontSize:13, color:T.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+              <b style={{ color:T.mint }}>{it.from || 'Valaki'}:</b> {it.value}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LobbyReactionSender({ code, myName, style }) {
+  const [text, setText] = React.useState('');
+  const send = (kind, value) => {
+    if (!code || typeof firebase === 'undefined') return;
+    try {
+      firebase.firestore().collection('rooms').doc(code).collection('lobbyChat').add({
+        kind, value, from: myName || 'Valaki', ts: firebase.firestore.FieldValue.serverTimestamp(),
+      }).catch(() => {});
+    } catch (e) {}
+  };
+  const sendText = () => {
+    const v = text.trim().slice(0, 60);
+    if (!v) return;
+    send('text', v);
+    setText('');
+  };
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:8, width:'100%', ...style }}>
+      <div style={{ display:'flex', gap:6, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
+        {LOBBY_QUICK_EMOJIS.map(e => (
+          <button key={e} onClick={() => send('emoji', e)} style={{ flexShrink:0, width:40, height:40, borderRadius:12, border:'none', background:T.surfaceMuted, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center' }}>{e}</button>
+        ))}
+      </div>
+      <div style={{ display:'flex', gap:8 }}>
+        <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendText(); }} placeholder="Írj valamit…" maxLength={60}
+          style={{ flex:1, minWidth:0, padding:'10px 14px', borderRadius:999, border:`1.5px solid ${T.surfaceMuted}`, background:T.surface, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+        <button onClick={sendText} disabled={!text.trim()} style={{ flexShrink:0, padding:'0 18px', borderRadius:999, border:'none', background: text.trim() ? T.mint : T.surfaceMuted, color: text.trim() ? '#fff' : T.inkMute, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, cursor: text.trim() ? 'pointer' : 'default' }}>Küldés</button>
+      </div>
+    </div>
+  );
+}
+
 function RoomQR({ roomCode, onClose }) {
   const url = location.origin + location.pathname + '?room=' + roomCode;
   const wrapRef = React.useRef(null);
@@ -42706,6 +42791,7 @@ function RoomQR({ roomCode, onClose }) {
   };
   return (
     <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.72)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,padding:24}}>
+      <LobbyReactionsOverlay code={roomCode} />
       <div onClick={e=>e.stopPropagation()} style={{background:T.surface,borderRadius:24,padding:28,display:'flex',flexDirection:'column',alignItems:'center',gap:14,width:'100%',maxWidth:320,boxShadow:'0 8px 40px rgba(0,0,0,0.4)'}}>
         <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:17,color:T.ink}}>Csatlakozási QR kód</div>
         <div ref={wrapRef} style={{width:220,height:220,display:'grid',placeItems:'center',background:'#fff',borderRadius:12,overflow:'hidden'}}>
@@ -42714,6 +42800,9 @@ function RoomQR({ roomCode, onClose }) {
         <div style={{fontFamily:'monospace',fontWeight:700,fontSize:28,color:T.mint,letterSpacing:'0.18em'}}>{roomCode}</div>
         <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,textAlign:'center',lineHeight:1.5}}>{t('busQrSub')}</div>
         <button onClick={copyLink} style={{width:'100%',padding:'12px',background:T.mint,color:'#fff',border:'none',borderRadius:12,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:15,cursor:'pointer'}}>🔗 Link másolása</button>
+        <div style={{width:'100%',height:1,background:T.surfaceMuted,margin:'2px 0'}} />
+        <div style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.07em',alignSelf:'flex-start'}}>Amíg várunk…</div>
+        <LobbyReactionSender code={roomCode} myName="Host" />
         <button onClick={onClose} style={{width:'100%',padding:'11px',background:'transparent',color:T.inkSoft,border:`1.5px solid ${T.surfaceMuted}`,borderRadius:12,fontFamily:T.font,fontWeight:700,fontSize:14,cursor:'pointer'}}>{t('busClose')}</button>
       </div>
     </div>
@@ -47805,8 +47894,12 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
   // ── Várakozás a kezdésre (mint a busznál) ──
   if (!bj) return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, minHeight:0, overflow:'hidden' }}>
+      <LobbyReactionsOverlay code={code} />
       {Header}
       <div style={{ flex:1, display:'grid', placeItems:'center', fontFamily:T.font, fontSize:15, color:T.inkSoft }}>Várakozás a házigazdára… 📱</div>
+      <div style={{ flexShrink:0, padding:`0 16px max(16px, env(safe-area-inset-bottom))` }}>
+        <LobbyReactionSender code={code} myName={players.find(p => p.id === playerId)?.name} />
+      </div>
     </div>
   );
 
@@ -51368,20 +51461,24 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
 
   // ── Várakozás a kezdésre ──
   if (!phase || phase === 'pick' || phase === 'lobby') return (
-    <div style={pageOuter}><div style={pageInner}>
-      <Hdr />
-      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:18,padding:'40px 0'}}>
-        <div style={{width:150,height:150,borderRadius:34,background:T.surfaceMuted,display:'grid',placeItems:'center',boxShadow:T.shadow}}>
-          <span style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:84,color:T.inkMute,lineHeight:1}}>?</span>
+    <div style={pageOuter}>
+      <LobbyReactionsOverlay code={code} />
+      <div style={pageInner}>
+        <Hdr />
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:18,padding:'40px 0'}}>
+          <div style={{width:150,height:150,borderRadius:34,background:T.surfaceMuted,display:'grid',placeItems:'center',boxShadow:T.shadow}}>
+            <span style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:84,color:T.inkMute,lineHeight:1}}>?</span>
+          </div>
+          <div style={{fontFamily:T.font,fontSize:15,fontWeight:T.weightTitle,color:T.inkSoft,textAlign:'center'}}>A betű hamarosan felfedi magát…</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:6,justifyContent:'center',maxWidth:320}}>
+            {OVFJ_CATS.map(c => (
+              <span key={c.key} style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.inkSoft,background:T.surfaceMuted,padding:'4px 10px',borderRadius:999}}>{c.emoji} {c.label}</span>
+            ))}
+          </div>
         </div>
-        <div style={{fontFamily:T.font,fontSize:15,fontWeight:T.weightTitle,color:T.inkSoft,textAlign:'center'}}>A betű hamarosan felfedi magát…</div>
-        <div style={{display:'flex',flexWrap:'wrap',gap:6,justifyContent:'center',maxWidth:320}}>
-          {OVFJ_CATS.map(c => (
-            <span key={c.key} style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.inkSoft,background:T.surfaceMuted,padding:'4px 10px',borderRadius:999}}>{c.emoji} {c.label}</span>
-          ))}
-        </div>
+        <LobbyReactionSender code={code} myName={myPlayer?.name} style={{marginTop:8}} />
       </div>
-    </div></div>
+    </div>
   );
 
   // ── Betűsorsolás ──
@@ -55737,12 +55834,17 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
 
   // ── Waiting for game to start ────────────────────────────────────────────
   if (!buszState || !['pyramid','bus','done'].includes(buszState.phase)) return (
-    <div style={{ position:'fixed', inset:0, zIndex:100, background:T.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:14, padding:`max(24px, calc(env(safe-area-inset-top) + 8px)) 24px 24px` }}>
-      <PlayerAvatar player={player} size={54} />
-      <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Helló, {player.name}!</div>
-      <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>Várakozás a játék indítására…</div>
-      <div style={{ display:'flex', gap:6 }}>{[0,1,2].map(i=><span key={i} style={{ width:8, height:8, borderRadius:'50%', background:T.mint, animation:`dotBounce 1.2s ${i*0.15}s infinite ease-in-out` }}/>)}</div>
-
+    <div style={{ position:'fixed', inset:0, zIndex:100, background:T.bg, display:'flex', flexDirection:'column' }}>
+      <LobbyReactionsOverlay code={roomCode} />
+      <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:14, padding:`max(24px, calc(env(safe-area-inset-top) + 8px)) 24px 12px` }}>
+        <PlayerAvatar player={player} size={54} />
+        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Helló, {player.name}!</div>
+        <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>Várakozás a játék indítására…</div>
+        <div style={{ display:'flex', gap:6 }}>{[0,1,2].map(i=><span key={i} style={{ width:8, height:8, borderRadius:'50%', background:T.mint, animation:`dotBounce 1.2s ${i*0.15}s infinite ease-in-out` }}/>)}</div>
+      </div>
+      <div style={{ flexShrink:0, padding:`12px 20px max(16px, env(safe-area-inset-bottom))` }}>
+        <LobbyReactionSender code={roomCode} myName={player.name} />
+      </div>
     </div>
   );
 
