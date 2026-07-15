@@ -34625,7 +34625,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.890';
+const APP_VERSION = 'v9.891';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -48208,7 +48208,7 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
 }
 
 // Busz: nagy, középre igazított, kinyomható „kapott korty" overlay
-function BusDrinkOverlay({ drinks, name, card, fromName, onClose }) {
+function BusDrinkOverlay({ drinks, name, card, fromName, unit, onClose }) {
   // Rezgés amikor kortyot kapsz (Android/Chrome — iOS Safari nem támogatja a Vibration API-t)
   React.useEffect(() => { try { if (navigator.vibrate) navigator.vibrate([220, 90, 220]); } catch(e) {} }, []);
   return (
@@ -48219,7 +48219,7 @@ function BusDrinkOverlay({ drinks, name, card, fromName, onClose }) {
         {name && <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color:'rgba(255,255,255,0.92)' }}>{name}</div>}
         <div style={{ display:'flex', alignItems:'baseline', gap:8, marginTop:2 }}>
           <span style={{ fontFamily:T.font, fontWeight:900, fontSize:92, color:'#fff', lineHeight:0.9, textShadow:'0 6px 24px rgba(0,0,0,0.28)' }}>{drinks}</span>
-          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:26, color:'rgba(255,255,255,0.95)' }}>korty</span>
+          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:26, color:'rgba(255,255,255,0.95)' }}>{unit || 'korty'}</span>
         </div>
         <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:'rgba(255,255,255,0.92)', marginTop:2 }}>{fromName ? `${fromName} küldte! 🎁` : <>Rossz tipp!{card ? ` ${card.value}${card.suit}` : ''}</>}</div>
         <div style={{ marginTop:8, fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.6)' }}>koppints a bezáráshoz</div>
@@ -48388,7 +48388,8 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
     if (isZsulli) { setZsulliAnim(card.value); }
     const flipInitialDrinks = {};
     players.forEach(p => { flipInitialDrinks[p.id] = p.drinks || 0; });
-    await persist({...st, pyramid:newPyramid, nextFlipIdx:idx+1, valueCounts:newCounts, flipInitialDrinks});
+    // zsulliEvent → a csatlakozott játékosok telefonján is felugrik a ZSÜLLI overlay
+    await persist({...st, pyramid:newPyramid, nextFlipIdx:idx+1, valueCounts:newCounts, flipInitialDrinks, ...(isZsulli ? { zsulliEvent: { value: card.value, ts: Date.now() } } : {})});
   };
 
   const endPyramid = async () => {
@@ -55772,10 +55773,24 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
     const n = (lg.assigned||{})[playerId] || 0;
     if (n > 0 && lg.giverId !== playerId) {
       const ts = lg.ts;
-      setGiftNotice({ name: lg.giverName || '?', n, ts });
+      setGiftNotice({ name: lg.giverName || '?', n, ts, shot: !!lg.shot });
       setTimeout(() => setGiftNotice(cur => (cur && cur.ts === ts) ? null : cur), 8000);
     }
   }, [buszState && buszState.lastGift && buszState.lastGift.ts, playerId]);
+
+  // ZSÜLLI — a host flipje után minden játékos telefonján felugrik középen
+  const [zsulliNotice, setZsulliNotice] = useState(null);
+  const lastZsulliTsRef = React.useRef(undefined);
+  React.useEffect(() => {
+    const ze = buszState && buszState.zsulliEvent;
+    if (lastZsulliTsRef.current === undefined) { lastZsulliTsRef.current = ze ? ze.ts : null; return; }
+    if (!ze || ze.ts === lastZsulliTsRef.current) return;
+    lastZsulliTsRef.current = ze.ts;
+    setZsulliNotice({ value: ze.value, ts: ze.ts });
+    try { if (navigator.vibrate) navigator.vibrate([220, 90, 220]); } catch(e) {}
+    const ts = ze.ts;
+    setTimeout(() => setZsulliNotice(cur => (cur && cur.ts === ts) ? null : cur), 10000);
+  }, [buszState && buszState.zsulliEvent && buszState.zsulliEvent.ts]);
 
   const releasePlayer = React.useCallback((pid) => {
     if (!pid || !roomCode) return;
@@ -56304,7 +56319,8 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
     const totalDrinks = drinks * cardIds.length;
     const newHand = myHand.filter(c => !cardIds.includes(c.id));
     setSelectedCardIds([]);
-    setGiftTarget({ pool:totalDrinks, assigned:{}, cardValue:lastFlipped.value });
+    // Az 1. sor (1 korty) házi szabály szerint SHOT — a banner/kiosztó ezt írja ki
+    setGiftTarget({ pool:totalDrinks, assigned:{}, cardValue:lastFlipped.value, shot: lastFlipped.rowIdx === 0 });
     try {
       await firebase.firestore().collection('rooms').doc(roomCode).update({
         [`buszState.hands.${playerId}`]: newHand,
@@ -56328,6 +56344,7 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
   const commitGift = async () => {
     if (!giftTarget || giftTarget.pool > 0) return;
     const assigned = {...(giftTarget.assigned||{})};
+    const isShot = !!giftTarget.shot;
     setGiftTarget(null);
     const total = Object.values(assigned).reduce((s,n)=>s+(n||0),0);
     if (total <= 0) return;
@@ -56339,7 +56356,7 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
         const ps = snap.data()?.players || [];
         tr.update(ref, {
           players: ps.map(p => (assigned[p.id]||0) > 0 ? {...p, drinks:(p.drinks||0)+assigned[p.id]} : p),
-          'buszState.lastGift': { giverId: playerId, giverName: player?.name || '?', assigned, ts: Date.now() },
+          'buszState.lastGift': { giverId: playerId, giverName: player?.name || '?', assigned, shot: isShot, ts: Date.now() },
         });
       });
     } catch(e) { console.error('commitGift', e); }
@@ -56351,9 +56368,23 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', background:T.bg }}>
-      {/* Kapott korty — nagy result banner, a küldő nevével */}
+      {/* Kapott korty/shot — nagy result banner, a küldő nevével */}
       {giftNotice && (
-        <BusDrinkOverlay drinks={giftNotice.n} name={player?.name} fromName={giftNotice.name} onClose={() => setGiftNotice(null)} />
+        <BusDrinkOverlay drinks={giftNotice.n} name={player?.name} fromName={giftNotice.name} unit={giftNotice.shot ? 'shot' : 'korty'} onClose={() => setGiftNotice(null)} />
+      )}
+      {/* ZSÜLLI — nagy középső overlay minden játékosnál */}
+      {zsulliNotice && (
+        <div onClick={() => setZsulliNotice(null)} style={{ position:'fixed', inset:0, zIndex:400, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(14,14,24,0.75)', animation:'fadeIn .2s', padding:20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background:T.surface, borderRadius:24, padding:'32px 40px', textAlign:'center', animation:'popIn .3s cubic-bezier(.2,.9,.3,1.4)', minWidth:240 }}>
+            <div style={{ fontSize:52 }}>🍻</div>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:36, color:T.mint, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginTop:8 }}>ZSÜLLI!</div>
+            <div style={{ fontFamily:T.font, fontSize:15, color:T.ink, marginTop:10 }}>{t('busZsulliMsg')} <b style={{ color:T.mint }}>{zsulliNotice.value}</b></div>
+            <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:4 }}>{t('busZsulliDrink')}</div>
+            <div style={{ marginTop:20 }}>
+              <PrimaryButton onClick={() => setZsulliNotice(null)}>OK</PrimaryButton>
+            </div>
+          </div>
+        </div>
       )}
       {/* ── Scrollable content ── */}
       <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'12px 14px 8px', display:'flex', flexDirection:'column', gap:10 }}>
@@ -56487,8 +56518,8 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
             <div style={{ background:`linear-gradient(135deg, ${T.mint}22, ${T.mint}08)`, padding:'20px 20px 16px', borderBottom:`1px solid ${T.mint}25` }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                 <div>
-                  <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:T.mint, lineHeight:1 }}>{giftTarget.pool > 0 ? `${giftTarget.pool} korty` : '✓ Kész!'}</div>
-                  <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:4 }}>{giftTarget.pool > 0 ? 'Kioszthatod — koppints a névre' : 'Minden korty ki van osztva'}</div>
+                  <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:T.mint, lineHeight:1 }}>{giftTarget.pool > 0 ? `${giftTarget.pool} ${giftTarget.shot ? 'shot' : 'korty'}` : '✓ Kész!'}</div>
+                  <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:4 }}>{giftTarget.pool > 0 ? 'Kioszthatod — koppints a névre' : (giftTarget.shot ? 'Minden shot ki van osztva' : 'Minden korty ki van osztva')}</div>
                 </div>
                 <div style={{ fontSize:36, lineHeight:1 }}>🍺</div>
               </div>
