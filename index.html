@@ -34634,7 +34634,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.893';
+const APP_VERSION = 'v9.894';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -46878,6 +46878,7 @@ const IMPOSZTOR_SZAVAK_SHUFFLED = (() => {
 
 function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
   const [impostorIdx, setImpostorIdx] = useState(0);
+  const [startIdx, setStartIdx] = useState(0); // körönként random kezdőjátékos
   const [wordIdx, setWordIdx] = useState(0);
   const [phase, setPhase] = useState('reveal');
   const [revealStep, setRevealStep] = useState(0);
@@ -46892,10 +46893,14 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
 
   useEffect(() => {
     setImpostorIdx(Math.floor(Math.random() * players.length));
+    setStartIdx(Math.floor(Math.random() * players.length));
     setWordIdx(gameIdx % IMPOSZTOR_SZAVAK_SHUFFLED.length);
     setPhase('reveal'); setRevealStep(0); setHolding(false); setVotes({}); setVoteStep(0);
     setTimerTotal(0); setTimerEnd(0); setTimerLeft(0); setVoteReady(false); resultFiredRef.current = false;
   }, [gameIdx]);
+
+  // A felfedés/szavazás sorrendje a random kezdőtől indul körbe
+  const ord = players.map((_, i) => players[(startIdx + i) % players.length]);
 
   useEffect(() => {
     if (!timerEnd) return;
@@ -46910,9 +46915,9 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
   const word = IMPOSZTOR_SZAVAK_SHUFFLED[wordIdx];
 
   if (phase === 'reveal') {
-    const pl = players[revealStep];
+    const pl = ord[revealStep];
     if (!pl) return null;
-    const isImpostor = revealStep === impostorIdx;
+    const isImpostor = pl.id === players[impostorIdx]?.id;
     return (
       <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
 
@@ -46923,7 +46928,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
             {pl.name} jön
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:3 }}>
-            {players.map((p,i) => (
+            {ord.map((p,i) => (
               <div key={p.id} style={{ width:7, height:7, borderRadius:'50%', background: i < revealStep ? T.mint : i === revealStep ? pl.color : T.inkMute+'40' }} />
             ))}
             <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginLeft:3 }}>{revealStep+1}/{players.length}</div>
@@ -46977,7 +46982,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
   }
 
   if (phase === 'vote') {
-    const voter = players[voteStep];
+    const voter = ord[voteStep];
     if (!voter) return null;
     const alreadyVoted = votes[voter.id] !== undefined;
     return (
@@ -47035,7 +47040,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
             {voter.name} szavaz
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:3 }}>
-            {players.map((p,i) => (
+            {ord.map((p,i) => (
               <div key={p.id} style={{ width:7, height:7, borderRadius:'50%', background: i < voteStep ? T.mint : i === voteStep ? voter.color : T.inkMute+'40' }} />
             ))}
             <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginLeft:3 }}>{voteStep+1}/{players.length}</div>
@@ -47043,7 +47048,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
         </div>
         <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center', width:'100%' }}>
           {players.map((p, pIdx) => {
-            if (pIdx === voteStep) return null;
+            if (p.id === voter.id) return null;
             const picked = votes[voter.id] === pIdx;
             return (
               <button key={p.id} disabled={alreadyVoted || !voteReady} onClick={() => {
