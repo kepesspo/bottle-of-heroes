@@ -34625,7 +34625,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.885';
+const APP_VERSION = 'v9.886';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -60241,7 +60241,39 @@ function BottleApp() {
 
   const [roomCode, setRoomCode] = React.useState(null);
   const [creatingRoom, setCreatingRoom] = React.useState(false);
+  const [roomCreateError, setRoomCreateError] = React.useState(null);
+  const pendingRoomCodeRef = React.useRef(null);
   const roomUnsubRef = React.useRef(null);
+
+  // A szoba-létrehozás hibáját NEM nyeljük el némán: kiírjuk, és a felhasználó dönt
+  // (újrapróbálás vagy offline indítás). Szinkron dobás ellen is védve (pl. érvénytelen payload).
+  const attemptRoomCreate = (code) => {
+    setRoomCreateError(null);
+    setCreatingRoom(true);
+    let roomCreatePromise;
+    try {
+      roomCreatePromise = (typeof createRoom === 'function')
+        ? createRoom(code, players.map(p=>({...p})), selectedGames, gameMeta)
+        : Promise.reject(new Error('createRoom nem elérhető (Firebase nem töltődött be?)'));
+    } catch (e) { roomCreatePromise = Promise.reject(e); }
+    const roomCreateTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Időtúllépés (15 mp) — a szerver nem válaszolt')), 15000));
+    Promise.race([roomCreatePromise, roomCreateTimeout])
+      .then(() => {
+        setRoomCode(code);
+        if (roomUnsubRef.current) roomUnsubRef.current();
+        if (typeof subscribeRoom === 'function') {
+          roomUnsubRef.current = subscribeRoom(code, data => {
+            if (data && data.players) setPlayers(data.players);
+          });
+        }
+        setCreatingRoom(false); setPrev(screen); setScreen('play');
+      })
+      .catch((e) => {
+        console.error('createRoom failed:', e);
+        const msg = e ? ((e.code ? e.code + ' — ' : '') + (e.message || String(e))) : 'ismeretlen hiba';
+        setRoomCreateError(msg);
+      });
+  };
 
   const goEdit = (eventId) => { setEditEventId(eventId); setScreen('create'); };
   const go = (next) => {
@@ -60249,7 +60281,7 @@ function BottleApp() {
     if (next === 'play') {
       setScoreHistory([]);
       const code = generateRoomCode();
-      setCreatingRoom(true);
+      pendingRoomCodeRef.current = code;
       if ((selectedGames || []).includes('beerpong')) {
         try { localStorage.setItem('boh_bp_resume', JSON.stringify({ code, players: players.map(p=>({...p})), selectedGames, gameMeta: {...gameMeta, _resumeBpState: null} })); } catch(e) {}
       }
@@ -60258,22 +60290,7 @@ function BottleApp() {
         hist.unshift({ code, games: selectedGames || [], ts: Date.now() });
         localStorage.setItem('boh_room_hist', JSON.stringify(hist.slice(0, 15)));
       } catch(e) {}
-      const roomCreatePromise = (typeof createRoom === 'function')
-        ? createRoom(code, players.map(p=>({...p})), selectedGames, gameMeta)
-        : Promise.reject(new Error('createRoom unavailable'));
-      const roomCreateTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('room create timeout')), 7000));
-      Promise.race([roomCreatePromise, roomCreateTimeout])
-        .then(() => {
-          setRoomCode(code);
-          if (roomUnsubRef.current) roomUnsubRef.current();
-          if (typeof subscribeRoom === 'function') {
-            roomUnsubRef.current = subscribeRoom(code, data => {
-              if (data && data.players) setPlayers(data.players);
-            });
-          }
-          setCreatingRoom(false); setPrev(screen); setScreen('play');
-        })
-        .catch(() => { setCreatingRoom(false); setPrev(screen); setScreen('play'); });
+      attemptRoomCreate(code);
       return;
     }
     setPrev(screen); setScreen(next);
@@ -60350,17 +60367,31 @@ function BottleApp() {
         {screen==='observer' && <ObserverScreen go={go} initialCode={observerInitCode || (!_initRoomConsumedRef.current && _initRoom ? (_initRoomConsumedRef.current = true, _initRoom) : '')} onJoinAsHost={goJoinAsHost} />}
       </div>
       {creatingRoom && (
-        <div style={{ position:'fixed', inset:0, background:T.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, zIndex:100 }}>
-          <div style={{ position:'relative', width:160, height:120, marginBottom:8 }}>
-            <div style={{ position:'absolute', left:'50%', top:0, transform:'translateX(-50%)', fontSize:56, animation:'floatBob 2.0s ease-in-out infinite', filter:'drop-shadow(0 6px 14px rgba(0,0,0,0.18))' }}>🔗</div>
-            <div style={{ position:'absolute', left:10, bottom:10, fontSize:30, animation:'floatBob 1.8s 0.3s ease-in-out infinite' }}>🍺</div>
-            <div style={{ position:'absolute', right:10, bottom:6, fontSize:28, animation:'floatBob 2.2s 0.6s ease-in-out infinite' }}>🥂</div>
-            {[{l:20,s:9,d:0},{l:60,s:6,d:0.2},{l:100,s:8,d:0.5},{l:130,s:7,d:0.35}].map((b,i)=>(
-              <div key={i} style={{ position:'absolute', left:b.l, top:30+(i%3)*18, width:b.s, height:b.s, borderRadius:'50%', background:`${T.mint}45`, animation:`floatBob 2.0s ${b.d}s ease-in-out infinite` }} />
-            ))}
-          </div>
-          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Szoba létrehozása…</div>
-          <div style={{ display:'flex', gap:6 }}>{[0,1,2].map(i => <span key={i} style={{ width:10, height:10, borderRadius:'50%', background:T.mint, animation:`dotBounce 1.2s ${i*0.15}s infinite ease-in-out` }}/>)}</div>
+        <div style={{ position:'fixed', inset:0, background:T.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, zIndex:100, padding:24 }}>
+          {!roomCreateError ? (
+            <>
+              <div style={{ position:'relative', width:160, height:120, marginBottom:8 }}>
+                <div style={{ position:'absolute', left:'50%', top:0, transform:'translateX(-50%)', fontSize:56, animation:'floatBob 2.0s ease-in-out infinite', filter:'drop-shadow(0 6px 14px rgba(0,0,0,0.18))' }}>🔗</div>
+                <div style={{ position:'absolute', left:10, bottom:10, fontSize:30, animation:'floatBob 1.8s 0.3s ease-in-out infinite' }}>🍺</div>
+                <div style={{ position:'absolute', right:10, bottom:6, fontSize:28, animation:'floatBob 2.2s 0.6s ease-in-out infinite' }}>🥂</div>
+                {[{l:20,s:9,d:0},{l:60,s:6,d:0.2},{l:100,s:8,d:0.5},{l:130,s:7,d:0.35}].map((b,i)=>(
+                  <div key={i} style={{ position:'absolute', left:b.l, top:30+(i%3)*18, width:b.s, height:b.s, borderRadius:'50%', background:`${T.mint}45`, animation:`floatBob 2.0s ${b.d}s ease-in-out infinite` }} />
+                ))}
+              </div>
+              <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>Szoba létrehozása…</div>
+              <div style={{ display:'flex', gap:6 }}>{[0,1,2].map(i => <span key={i} style={{ width:10, height:10, borderRadius:'50%', background:T.mint, animation:`dotBounce 1.2s ${i*0.15}s infinite ease-in-out` }}/>)}</div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize:56 }}>⚠️</div>
+              <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, textAlign:'center' }}>Nem sikerült a szoba létrehozása</div>
+              <div style={{ fontFamily:'monospace', fontSize:12, color:T.coral, background:T.surface, borderRadius:12, padding:'12px 16px', maxWidth:340, width:'100%', boxSizing:'border-box', wordBreak:'break-word', boxShadow:T.shadow }}>{roomCreateError}</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:10, width:'100%', maxWidth:340 }}>
+                <button onClick={() => attemptRoomCreate(pendingRoomCodeRef.current || generateRoomCode())} style={{ width:'100%', padding:'15px', borderRadius:16, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff', cursor:'pointer' }}>🔄 Újrapróbálom</button>
+                <button onClick={() => { setCreatingRoom(false); setRoomCreateError(null); setPrev(screen); setScreen('play'); }} style={{ width:'100%', padding:'13px', borderRadius:16, border:`1.5px solid ${T.surfaceMuted}`, background:'transparent', fontFamily:T.font, fontWeight:700, fontSize:14, color:T.inkSoft, cursor:'pointer' }}>Indítás offline (kód nélkül)</button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
