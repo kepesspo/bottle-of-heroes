@@ -34634,7 +34634,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.898';
+const APP_VERSION = 'v9.899';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -50512,13 +50512,15 @@ function KoPapirGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
       const pm = {};
       if (cd < od && challenger) pm[challenger.id] = 1;
       else if (od < cd && opponent) pm[opponent.id] = 1;
-      const winnerName = cd < od ? challenger?.name : od < cd ? opponent?.name : null;
-      onResult && onResult({
-        correct: !!winnerName,
-        playerName: winnerName,
-        drinks: Object.values(newTotal).reduce((s,v)=>s+v,0),
-        subtitle: winnerName ? `${winnerName} nyert!` : 'Döntetlen!',
-      });
+      if (cd !== od) {
+        // 1 nyertes + 1 vesztes — a vesztes SAJÁT össz-kortya jelenik meg (nem a kettő összege)
+        const winner = cd < od ? challenger : opponent;
+        const loser  = cd < od ? opponent  : challenger;
+        const loserDrinks = Math.max(cd, od);
+        onResult && onResult({ winners:[winner].filter(Boolean), losers:[loser].filter(Boolean), drinks: loserDrinks, winNote:'+1 pont', loseNote:'összesen az 5 körben' });
+      } else {
+        onResult && onResult({ correct:true, playerName:null, drinks:0, subtitle:`Döntetlen! 🤝 (${cd}–${od})` });
+      }
       onAdvance && onAdvance(newTotal, pm);
     } else {
       setRound(r => r + 1);
@@ -50588,8 +50590,9 @@ function KoPapirGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
         <PlayerCard p={opponent} drinks={totalDrinks[opponent?.id]} />
       </div>
 
-      {/* DrinkDistributor */}
+      {/* DrinkDistributor — key={round}: minden új körben nullázott korty-mezőkkel indul */}
       <DrinkDistributor
+        key={round}
         players={roundPlayers}
         title={`${round}. kör — kortyok`}
         onFinish={confirmRound}
