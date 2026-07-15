@@ -34634,7 +34634,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.899';
+const APP_VERSION = 'v9.900';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -39961,12 +39961,12 @@ function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
           </>
         )}
 
-        {/* Visszavágó toggle — only for SE or grp→SE finals */}
-        {(!tournament.startsWith('grp_') ? tournament === 'se' : tournament.endsWith('_se')) && (
+        {/* Visszavágó toggle — SE, körmérkőzés és grp-döntők */}
+        {(!tournament.startsWith('grp_') ? (tournament === 'se' || tournament === 'rr') : true) && (
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'none' }}>
             <div>
               <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{t('rematchLabel')}</div>
-              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>Egyenes kiesésnél a vesztes kérhet visszavágót (1x/meccs)</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>Minden meccs két menetes — az összesített pohárszám dönt (1x/meccs)</div>
             </div>
             <Toggle on={config.visszavago??false} onChange={() => setConfig(c => ({...c, visszavago: !(c.visszavago ?? false)}))} />
           </div>
@@ -43370,14 +43370,21 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   // ── RR confirm ────────────────────────────────────────────────────────────
   const handleRRConfirm = (matches, idx, setMatchesCB, onFinish) => {
     const m = matches[idx];
-    const isDraw = cups1 === cups2;
-    const winner = isDraw ? null : (cups1 > cups2 ? m.p1 : m.p2);
-    const loser  = isDraw ? null : (cups1 > cups2 ? m.p2 : m.p1);
     const score  = { p1: cups1, p2: cups2 };
-
-    const loserScore2 = cups1 > cups2 ? cups2 : cups1;
-    const winnerScore2 = cups1 > cups2 ? cups1 : cups2;
-    const cupDiff2 = Math.max(1, Math.abs(winnerScore2 - loserScore2));
+    // Visszavágó (két menet): az összesített pohárszám dönt; egyenlő → döntetlen
+    let isDraw, winner, loser, cupDiff2;
+    if (m.score1) {
+      const totP1 = (m.score1.p1 || 0) + cups1, totP2 = (m.score1.p2 || 0) + cups2;
+      isDraw = totP1 === totP2;
+      winner = isDraw ? null : (totP1 > totP2 ? m.p1 : m.p2);
+      loser  = isDraw ? null : (totP1 > totP2 ? m.p2 : m.p1);
+      cupDiff2 = Math.max(1, Math.abs(totP1 - totP2));
+    } else {
+      isDraw = cups1 === cups2;
+      winner = isDraw ? null : (cups1 > cups2 ? m.p1 : m.p2);
+      loser  = isDraw ? null : (cups1 > cups2 ? m.p2 : m.p1);
+      cupDiff2 = Math.max(1, Math.abs(cups1 - cups2));
+    }
     const newDrink = { ...drinkMap };
     if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + cupDiff2;
     setDrinkMap(newDrink);
@@ -43403,7 +43410,12 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     }
 
     setMatchesCB(prev => {
-      const nm = prev.map((mm, i) => i === idx ? { ...mm, winner, loser, score, draw: isDraw } : mm);
+      const nm = prev.map((mm, i) => {
+        if (i !== idx) return mm;
+        const upd = { ...mm, winner, loser, score, draw: isDraw };
+        if (mm.score1) { upd.scores = [mm.score1, score]; delete upd.score1; }
+        return upd;
+      });
       const nextIdx = nm.findIndex(mm => mm.winner === null && !mm.draw);
       if (nextIdx !== -1) {
         setRrIdx(nextIdx);
@@ -43828,9 +43840,11 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     if (phaseLabel) bracketPart = phaseLabel.toUpperCase() + (bracketPart ? ' · ' + bracketPart : '');
 
     const winnerP = cups1 !== cups2 ? (cups1 > cups2 ? currentMatch.p1 : currentMatch.p2) : null;
-    const matchKey = seCurRound + '_' + seCurMatch;
-    const isVissza = VISSZAVAGO && visszavagoUsedRef.current.has(matchKey);
-    const visszaLabel = isVissza ? '⚔️ VISSZAVÁGÓ' : (VISSZAVAGO ? '1. MECCS' : null);
+    const isRRMode = TOURNAMENT === 'rr' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'rr');
+    const matchKey = isRRMode ? ('rr_' + rrIdx) : (seCurRound + '_' + seCurMatch);
+    const visszaApplies = VISSZAVAGO && (isSEFinals || isRRMode);
+    const isVissza = visszaApplies && visszavagoUsedRef.current.has(matchKey);
+    const visszaLabel = isVissza ? '⚔️ VISSZAVÁGÓ' : (visszaApplies ? '1. MECCS' : null);
 
     return (
       <div style={{ width:'100%', background:T.surface, borderRadius:22, padding:'16px 18px 18px', boxShadow:T.shadow }}>
@@ -43937,16 +43951,24 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         {!visszavagoOffer && (
           <button onClick={() => {
             if (!canConfirm) return;
-            const matchKey = seCurRound + '_' + seCurMatch;
-            const loserP = cups1 > cups2 ? currentMatch?.p2 : cups2 > cups1 ? currentMatch?.p1 : currentMatch?.p2; // draw: any player, visszavágó still fires
-            if (isSEFinals && !visszavagoUsedRef.current.has(matchKey)) {
+            const seKey = seCurRound + '_' + seCurMatch;
+            if (isSEFinals && !visszavagoUsedRef.current.has(seKey)) {
               // automatikus visszavágó — mentsük el az 1. eredményt, azonnal indul
-              visszavagoUsedRef.current.add(matchKey);
+              visszavagoUsedRef.current.add(seKey);
               setSeRounds(prev => {
                 const nr = prev.map(r => r.map(mm => ({...mm})));
                 nr[seCurRound][seCurMatch].score1 = { p1: cups1, p2: cups2 };
                 return nr;
               });
+              setCups1(0); setCups2(0); resetTimer();
+              return;
+            }
+            // Körmérkőzés (rr / grp-döntő rr): ugyanaz a két-menetes visszavágó
+            const rrMode = TOURNAMENT === 'rr' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'rr');
+            const rrKey = 'rr_' + rrIdx;
+            if (VISSZAVAGO && rrMode && !rrDone && !visszavagoUsedRef.current.has(rrKey)) {
+              visszavagoUsedRef.current.add(rrKey);
+              setRrMatches(prev => prev.map((mm, i) => i === rrIdx ? { ...mm, score1: { p1: cups1, p2: cups2 } } : mm));
               setCups1(0); setCups2(0); resetTimer();
               return;
             }
@@ -44030,7 +44052,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           <div key={s.player.id} style={{ display:'grid', gridTemplateColumns:'20px 1fr 80px 36px 42px 32px', gap:'0 6px', alignItems:'center', padding:'6px 0', borderBottom: i < st.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none' }}>
             <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:12, color: i===0 ? T.yellow : T.inkSoft }}>{i+1}</div>
             <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
-              <PlayerAvatar player={hydObs(s.player)} size={24} />
+              <PlayerAvatar player={s.player} size={24} />
               <div style={{ fontFamily:T.font, fontWeight: i===0?700:400, fontSize:13, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.player.name}</div>
             </div>
             <div style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft, textAlign:'center' }}>{s.wins}-{s.losses}-{s.draws}</div>
