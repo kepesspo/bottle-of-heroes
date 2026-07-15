@@ -34634,7 +34634,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.894';
+const APP_VERSION = 'v9.895';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -52637,7 +52637,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'ritmus') return <RitmusGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'szamsor') return <SzamsorGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'tabu') return <TabuGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
-  if (gameId === 'mutasd') return <MutasdGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'mutasd') return <MutasdGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'matek') return <MatekGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
   if (gameId === 'reakcio') return <ReakcioGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
    if (gameId === 'ovfj') return <OVFJGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onResult={onResult} />;
@@ -57884,7 +57884,7 @@ function FarkasosGame({ players, gameIdx, onAdvance, onResult }) {
 }
 
 // ── Mutasd Ne Mondd ────────────────────────────────────────────────────────────
-function MutasdGame({ gameIdx, challenger, onAdvance, onResult }) {
+function MutasdGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
   const word = MUTASD_SZAVAK[gameIdx % MUTASD_SZAVAK.length];
   const [phase, setPhase] = useState('ready');
   const [timeLeft, setTimeLeft] = useState(15);
@@ -57909,10 +57909,14 @@ function MutasdGame({ gameIdx, challenger, onAdvance, onResult }) {
     advancedRef.current = true;
     clearInterval(ivRef.current);
     if (won) {
-      onResult && onResult({ correct: true, playerName: challenger?.name||'', drinks:0, subtitle: (challenger?.name||'') + ' sikeresen mutogatta — +1 pont!' });
-      onAdvance && onAdvance({}, challenger ? {[challenger.id]:1} : {});
+      // Kitalálták → a mutogató ÉS a kitaláló is pontot kap
+      const winners = [challenger, opponent].filter(Boolean);
+      onResult && onResult({ winners, winNote: 'Kitalálva — +1 pont mindkettőnek! 🎭' });
+      const pm = {};
+      winners.forEach(p => { pm[p.id] = 1; });
+      onAdvance && onAdvance({}, pm);
     } else {
-      onResult && onResult({ correct: false, playerName: challenger?.name||'', drinks:1, subtitle: (challenger?.name||'') + ' iszik 1-et!' });
+      onResult && onResult({ losers: [challenger].filter(Boolean), drinks:1, loseNote: (challenger?.name||'') + ' iszik 1-et!' });
       onAdvance && onAdvance(challenger ? {[challenger.id]:1} : {}, {});
     }
   };
