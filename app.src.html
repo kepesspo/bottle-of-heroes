@@ -34683,7 +34683,7 @@ window.bohSound = (function () {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.903';
+const APP_VERSION = 'v9.904';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -42851,13 +42851,15 @@ function RoomCodeCard({ roomCode, onShowQR }) {
 }
 
 // Egységes "Ki a host?" képernyő — MINDEN online játéknál ez az ELSŐ lépés
-function HostPickScreen({ emoji, players, takenIds, onConfirm, onSkip, skipLabel }) {
+function HostPickScreen({ emoji, banner, players, takenIds, onConfirm, onSkip, skipLabel }) {
   const [pendingId, setPendingId] = React.useState(null);
   const pendingPlayer = pendingId ? (players || []).find(p => p.id === pendingId) : null;
   return (
-    <div style={{ position:'fixed', inset:0, zIndex:200, background:T.bg, display:'flex', flexDirection:'column' }}>
+    <div style={{ position:'fixed', inset:0, zIndex:1400, background:T.bg, display:'flex', flexDirection:'column' }}>
       <div style={{ flexShrink:0, textAlign:'center', padding:'max(28px, env(safe-area-inset-top)) 18px 10px' }}>
-        <div style={{ fontSize:44 }}>{emoji || '🎮'}</div>
+        {banner
+          ? <img src={banner} alt="" style={{ width:'78%', maxWidth:300, height:'auto', display:'block', margin:'0 auto' }} />
+          : <div style={{ fontSize:44 }}>{emoji || '🎮'}</div>}
         <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginTop:6 }}>Ki a host?</div>
         <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginTop:4 }}>Ő kezeli a fő telefont — válaszd ki magad</div>
       </div>
@@ -47604,8 +47606,8 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
   }, [isOnline, gameMeta]);
   React.useEffect(() => () => { onSetBuszSwitch && onSetBuszSwitch(null); }, []);
   React.useEffect(() => {
-    if (onSetHideFooter) onSetHideFooter(isOnline && hostViewMode === 'player');
-  }, [isOnline, hostViewMode]);
+    if (onSetHideFooter) onSetHideFooter(isOnline && (hostViewMode === 'player' || (bjHostPlaysEnabled && !bjHostPickDone && !hostSelfIdRef.current)));
+  }, [isOnline, hostViewMode, bjHostPickDone, bjHostPlaysEnabled]);
   React.useEffect(() => () => { onSetHideFooter && onSetHideFooter(false); }, []);
   const [hostGiftNotice, setHostGiftNotice] = React.useState(null);
   const hostGiftTsRef = React.useRef(undefined);
@@ -47731,6 +47733,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     return (
       <HostPickScreen
         emoji="🂡"
+        banner={IMGS['blackjack_banner.png']}
         players={players}
         takenIds={takenIds}
         onConfirm={(pid) => {
@@ -48807,7 +48810,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
   };
 
   // PlayScreen signals — must be before any early return (Rules of Hooks)
-  const shouldHideFooter = (hostPlaysEnabled && !hostPlayerId && !!buszState) || (hostPlaysEnabled && hostPlayerId && hostViewMode === 'player' && !!buszState && isOnline);
+  const shouldHideFooter = (isOnline && hostPlaysEnabled && !hostPlayerId && !hostPickCancelled) || (hostPlaysEnabled && !hostPlayerId && !!buszState) || (hostPlaysEnabled && hostPlayerId && hostViewMode === 'player' && !!buszState && isOnline);
   React.useEffect(() => { setTakenIds([]); }, [gameIdx]);
   React.useEffect(() => { onSetHideFooter && onSetHideFooter(shouldHideFooter); }, [shouldHideFooter]);
   React.useEffect(() => () => { onSetHideFooter && onSetHideFooter(false); }, []);
@@ -48843,6 +48846,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
   if (isOnline && !buszState && hostPlaysEnabled && !hostPlayerId && !hostPickCancelled) return (
     <HostPickScreen
       emoji="🚌"
+      banner={IMGS['busz_banner.png']}
       players={players}
       takenIds={takenIds}
       onConfirm={(pid) => {
@@ -51544,6 +51548,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
   if (phase === 'pick') return (
     <HostPickScreen
       emoji="🌍"
+      banner={IMGS['ovfj_banner.png']}
       players={pl}
       takenIds={[]}
       onConfirm={(pid) => { setHostPid(pid); setPhase('lobby'); }}
