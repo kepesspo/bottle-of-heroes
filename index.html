@@ -34632,9 +34632,58 @@ window.triggerHaptic = function() {
 <script type="text/babel">
 const { useState, useEffect, useRef, useMemo } = React;
 
+// ── 🔊 Hangeffektek — Web Audio, asset nélkül (offline is működik) ─────────────
+// iOS: az AudioContext az első felhasználói gesztus után oldódik fel — addig némán kihagyjuk.
+window.bohSound = (function () {
+  let ctx = null;
+  const get = () => {
+    try {
+      if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      return ctx;
+    } catch (e) { return null; }
+  };
+  const beep = (c, freq, t0, dur, vol, type) => {
+    const o = c.createOscillator(), g = c.createGain();
+    o.connect(g); g.connect(c.destination);
+    o.type = type || 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, c.currentTime + t0);
+    g.gain.linearRampToValueAtTime(vol, c.currentTime + t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + t0 + dur);
+    o.start(c.currentTime + t0); o.stop(c.currentTime + t0 + dur + 0.05);
+  };
+  const whoosh = (c, t0, dur, vol) => {
+    const len = Math.ceil(c.sampleRate * dur);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource(); src.buffer = buf;
+    const f = c.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.1;
+    f.frequency.setValueAtTime(280, c.currentTime + t0);
+    f.frequency.exponentialRampToValueAtTime(2600, c.currentTime + t0 + dur * 0.6);
+    f.frequency.exponentialRampToValueAtTime(400, c.currentTime + t0 + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, c.currentTime + t0);
+    g.gain.linearRampToValueAtTime(vol, c.currentTime + t0 + dur * 0.25);
+    g.gain.linearRampToValueAtTime(0, c.currentTime + t0 + dur);
+    src.connect(f); f.connect(g); g.connect(c.destination);
+    src.start(c.currentTime + t0); src.stop(c.currentTime + t0 + dur);
+  };
+  return function (name) {
+    const c = get(); if (!c) return;
+    try {
+      if (name === 'win')       { beep(c, 523, 0, 0.15, 0.22); beep(c, 659, 0.12, 0.15, 0.22); beep(c, 784, 0.24, 0.3, 0.26); }
+      else if (name === 'lose')  { beep(c, 330, 0, 0.2, 0.24, 'triangle'); beep(c, 247, 0.18, 0.32, 0.24, 'triangle'); }
+      else if (name === 'zsulli'){ beep(c, 880, 0, 0.11, 0.2); beep(c, 1108, 0.09, 0.11, 0.2); beep(c, 1318, 0.18, 0.26, 0.24); }
+      else if (name === 'szelvihar') { whoosh(c, 0, 1.1, 0.45); }
+      else if (name === 'alert') { beep(c, 988, 0, 0.1, 0.26, 'square'); beep(c, 988, 0.16, 0.1, 0.26, 'square'); }
+    } catch (e) {}
+  };
+})();
+
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.900';
+const APP_VERSION = 'v9.901';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -43744,7 +43793,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         stats[m.p2.id].thrown   += (s.p2||0);
         stats[m.p2.id].received += (s.p1||0);
       };
-      if (m.scores) { m.scores.forEach(addSet); if (m.score) addSet(m.score); }
+      // scores = [1. menet, 2. menet]; a m.score a 2. menettel azonos → NEM adjuk hozzá még egyszer
+      if (m.scores) { m.scores.forEach(addSet); }
       else if (m.score1) { addSet(m.score1); if (m.score) addSet(m.score); }
       else if (m.score) addSet(m.score);
     };
@@ -48342,6 +48392,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
     if (!ann || ann.ts === lastSzelviharAnnRef.current) return;
     lastSzelviharAnnRef.current = ann.ts;
     setSzelviharNotice({ name: ann.name, ts: ann.ts });
+    if (typeof window.bohSound === 'function') window.bohSound('szelvihar');
     const ts = ann.ts;
     setTimeout(() => setSzelviharNotice(cur => (cur && cur.ts === ts) ? null : cur), 7000);
   }, [buszState && buszState.szelviharAnnounce && buszState.szelviharAnnounce.ts]);
@@ -48489,8 +48540,10 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
     const card = st.pyramid[idx];
     const newPyramid = st.pyramid.map((c,i) => i===idx ? {...c,faceUp:true} : c);
     const newCounts = {...st.valueCounts, [card.value]:(st.valueCounts[card.value]||0)+1};
-    const isZsulli = newCounts[card.value] >= 4;
-    if (isZsulli) { setZsulliAnim(card.value); }
+    // Zsülli csak akkor, ha a beállításokban be van kapcsolva (alapból be)
+    const zsulliOn = gameMeta?.buszConfig?.zsulliEnabled !== false;
+    const isZsulli = zsulliOn && newCounts[card.value] >= 4;
+    if (isZsulli) { setZsulliAnim(card.value); if (typeof window.bohSound === 'function') window.bohSound('zsulli'); }
     const flipInitialDrinks = {};
     players.forEach(p => { flipInitialDrinks[p.id] = p.drinks || 0; });
     // zsulliEvent → a csatlakozott játékosok telefonján is felugrik a ZSÜLLI overlay
@@ -48805,8 +48858,8 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
           </div>
         )}
 
-        {/* Zsülli counter */}
-        {zsulliCount > 0 && (
+        {/* Zsülli counter — csak ha a zsülli be van kapcsolva */}
+        {zsulliCount > 0 && gameMeta?.buszConfig?.zsulliEnabled !== false && (
           <div style={{alignSelf:'flex-end',display:'flex',alignItems:'center',gap:5,padding:'4px 10px',background:`${T.mint}18`,borderRadius:999,border:`1px solid ${T.mint}44`}}>
             <span style={{fontSize:14}}>🍻</span>
             <span style={{fontFamily:T.font,fontWeight:700,fontSize:12,color:T.mint}}>{zsulliCount}× Zsülli</span>
@@ -54647,6 +54700,13 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     const subtitle = (d === 1 && diffDrinks > 1) ? null : res.subtitle;
     const ts = Date.now();
     setGameResult({ ...res, drinks: scaled, subtitle, ts });
+    // 🔊 banner hang: van nyertes / pozitív semleges → win, egyébként lose
+    if (typeof window.bohSound === 'function') {
+      const hasW = (res.winners || []).length > 0;
+      const hasL = (res.losers || []).length > 0;
+      const positive = hasW || (!hasL && scaled === 0 && res.correct !== false);
+      window.bohSound(positive ? 'win' : 'lose');
+    }
     if (roomCode && typeof syncRoom === 'function') {
       syncRoom(roomCode, { gameEvent: { correct: !!res.correct, playerName: res.playerName || null, drinks: scaled, subtitle: subtitle || null, ts } });
     }
@@ -55911,6 +55971,7 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
     if (!ze || ze.ts === lastZsulliTsRef.current) return;
     lastZsulliTsRef.current = ze.ts;
     setZsulliNotice({ value: ze.value, ts: ze.ts });
+    if (typeof window.bohSound === 'function') window.bohSound('zsulli');
     try { if (navigator.vibrate) navigator.vibrate([220, 90, 220]); } catch(e) {}
     const ts = ze.ts;
     setTimeout(() => setZsulliNotice(cur => (cur && cur.ts === ts) ? null : cur), 10000);
@@ -55937,6 +55998,7 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
     lastSzelviharTsRef.current = sv.ts;
     if (sv.targetPid !== playerId || !busWatchingRef.current) return;
     setSzelviharBtn({ ts: sv.ts });
+    if (typeof window.bohSound === 'function') window.bohSound('alert');
     try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch(e) {}
     const ts = sv.ts;
     setTimeout(() => setSzelviharBtn(cur => (cur && cur.ts === ts) ? null : cur), 3000);
@@ -55949,6 +56011,7 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
     if (!ann || ann.ts === lastSzelviharAnnPRef.current) return;
     lastSzelviharAnnPRef.current = ann.ts;
     setSzelviharPlayerNotice({ name: ann.name, ts: ann.ts });
+    if (typeof window.bohSound === 'function') window.bohSound('szelvihar');
     try { if (navigator.vibrate) navigator.vibrate([220, 90, 220]); } catch(e) {}
     const ts = ann.ts;
     setTimeout(() => setSzelviharPlayerNotice(cur => (cur && cur.ts === ts) ? null : cur), 7000);
