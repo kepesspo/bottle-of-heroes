@@ -34634,7 +34634,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.892';
+const APP_VERSION = 'v9.893';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -40023,6 +40023,15 @@ function BuszConfigSheet({ config, setConfig, onClose }) {
               <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>{t('busHostPlaysSub')}</div>
             </div>
             <Toggle on={hostPlaysOn} onChange={() => setConfig(c => ({...c, hostPlays: !hostPlaysOn}))} />
+          </div>
+        ); })()}
+        {(() => { const szelviharOn = config.szelviharEnabled === true; return (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'none' }}>
+            <div>
+              <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>🌪 Szélvihar</span>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>A buszt néző leszállt játékosoknál random felugró gomb — új osztást fúj</div>
+            </div>
+            <Toggle on={szelviharOn} onChange={() => setConfig(c => ({...c, szelviharEnabled: !szelviharOn}))} />
           </div>
         ); })()}
 
@@ -48297,6 +48306,18 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
     const tm = setTimeout(() => setDrinkBurst(null), 6000);
     return () => clearTimeout(tm);
   }, [drinkBurst]);
+  // 🌪 Szélvihar bejelentés — mindenkinél felugrik, aki a szobát nézi (host is)
+  const [szelviharNotice, setSzelviharNotice] = useState(null);
+  const lastSzelviharAnnRef = React.useRef(undefined);
+  React.useEffect(() => {
+    const ann = buszState && buszState.szelviharAnnounce;
+    if (lastSzelviharAnnRef.current === undefined) { lastSzelviharAnnRef.current = ann ? ann.ts : null; return; }
+    if (!ann || ann.ts === lastSzelviharAnnRef.current) return;
+    lastSzelviharAnnRef.current = ann.ts;
+    setSzelviharNotice({ name: ann.name, ts: ann.ts });
+    const ts = ann.ts;
+    setTimeout(() => setSzelviharNotice(cur => (cur && cur.ts === ts) ? null : cur), 7000);
+  }, [buszState && buszState.szelviharAnnounce && buszState.szelviharAnnounce.ts]);
   const startHostUnlockPress = (pid) => {
     setHostUnlockPressId(pid); setHostUnlockProgress(0);
     hostUnlockStartRef.current = Date.now();
@@ -48383,6 +48404,36 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
       setBuszState(newState);
     }
   };
+
+  // ── 🌪 Szélvihar ütemező (host) ──────────────────────────────────────────
+  // Random 3-10 percenként EGY véletlen leszállt/nem-buszozó NÉZŐNÉL felugrik a
+  // szélvihar gomb 3 mp-re — ha rányom, a busznál új osztás jön. Csak akkor fut,
+  // ha a Busz beállításokban a Szélvihar kapcsoló be van kapcsolva.
+  const szelviharTimerRef = useRef(null);
+  useEffect(() => {
+    const enabled = gameMeta?.buszConfig?.szelviharEnabled === true;
+    if (!isOnline || !enabled || buszState?.phase !== 'bus') { clearTimeout(szelviharTimerRef.current); return; }
+    const randomDelay = () => 180000 + Math.random() * 420000; // 3-10 perc
+    const fire = () => {
+      const st = stRef.current;
+      if (!st || st.phase !== 'bus') return;
+      const watchers = Object.keys(st.busWatchers || {}).filter(pid =>
+        st.busWatchers[pid] && (!(st.busRiders || []).includes(pid) || (st.busRiderDone || {})[pid]));
+      if (!watchers.length) { szelviharTimerRef.current = setTimeout(fire, 45000); return; } // most senki nem nézi — próba később
+      const target = watchers[Math.floor(Math.random() * watchers.length)];
+      try { firebase.firestore().collection('rooms').doc(roomCode).update({ 'buszState.szelvihar': { targetPid: target, ts: Date.now() } }); } catch(e) {}
+      // ha 5 mp múlva sem ütötték le, töröljük az eseményt
+      setTimeout(() => {
+        const st2 = stRef.current;
+        if (st2 && st2.szelvihar && st2.szelvihar.targetPid === target) {
+          try { firebase.firestore().collection('rooms').doc(roomCode).update({ 'buszState.szelvihar': null }); } catch(e) {}
+        }
+      }, 5000);
+      szelviharTimerRef.current = setTimeout(fire, randomDelay());
+    };
+    szelviharTimerRef.current = setTimeout(fire, window.__szelviharTestDelay || randomDelay());
+    return () => clearTimeout(szelviharTimerRef.current);
+  }, [isOnline, buszState?.phase, gameMeta?.buszConfig?.szelviharEnabled]);
 
   const initGame = async () => {
     if (isOnline) { try { await firebase.firestore().collection('rooms').doc(roomCode).update({ buszTakenIds: [] }); } catch(e) {} }
@@ -48888,6 +48939,16 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
         {/* nagy, kinyomható „kapott korty" — online host (rider tippje Firebase-ből) */}
         {isOnline && drinkBurst && (
           <BusDrinkOverlay drinks={drinkBurst.drinks} name={drinkBurst.name} onClose={() => setDrinkBurst(null)} />
+        )}
+        {/* 🌪 Szélvihar bejelentés — host képernyő */}
+        {szelviharNotice && (
+          <div onClick={() => setSzelviharNotice(null)} style={{ position:'fixed', inset:0, zIndex:410, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(14,14,24,0.7)', animation:'fadeIn .2s', padding:20 }}>
+            <div style={{ background:T.surface, borderRadius:24, padding:'32px 36px', textAlign:'center', animation:'popIn .3s cubic-bezier(.2,.9,.3,1.4)', maxWidth:320 }}>
+              <div style={{ fontSize:56 }}>🌪</div>
+              <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:32, color:T.coral, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginTop:8 }}>Szélvihar!</div>
+              <div style={{ fontFamily:T.font, fontSize:15, color:T.ink, marginTop:10 }}><b>{szelviharNotice.name}</b> elfújta a lapokat — új osztás! 🃏</div>
+            </div>
+          </div>
         )}
         {/* K/N buttons — only show on host in offline mode; online players use their own device */}
         {!guessResult && !isOnline && (
@@ -55819,6 +55880,68 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
     setTimeout(() => setZsulliNotice(cur => (cur && cur.ts === ts) ? null : cur), 10000);
   }, [buszState && buszState.zsulliEvent && buszState.zsulliEvent.ts]);
 
+  // ── 🚌 Busz nézőmód (leszállt / nem-buszozó játékosoknak) + 🌪 szélvihar ──
+  const [busWatching, setBusWatching] = useState(false);
+  const [szelviharBtn, setSzelviharBtn] = useState(null); // { ts } — 3 mp-ig él
+  const [szelviharPlayerNotice, setSzelviharPlayerNotice] = useState(null);
+  const busWatchingRef = React.useRef(false);
+  React.useEffect(() => { busWatchingRef.current = busWatching; }, [busWatching]);
+  // néző jelenlét szinkron — a host ebből tudja, kinél jelenhet meg a szélvihar
+  React.useEffect(() => {
+    if (!busWatching || !playerId || !roomCode) return;
+    try { firebase.firestore().collection('rooms').doc(roomCode).update({ ['buszState.busWatchers.' + playerId]: true }).catch(() => {}); } catch(e) {}
+    return () => { try { firebase.firestore().collection('rooms').doc(roomCode).update({ ['buszState.busWatchers.' + playerId]: false }).catch(() => {}); } catch(e) {} };
+  }, [busWatching, playerId, roomCode]);
+  // szélvihar cél — ha én vagyok és épp nézem a buszt, 3 mp-ig látszik a gomb
+  const lastSzelviharTsRef = React.useRef(undefined);
+  React.useEffect(() => {
+    const sv = buszState && buszState.szelvihar;
+    if (lastSzelviharTsRef.current === undefined) { lastSzelviharTsRef.current = sv ? sv.ts : null; return; }
+    if (!sv || sv.ts === lastSzelviharTsRef.current) return;
+    lastSzelviharTsRef.current = sv.ts;
+    if (sv.targetPid !== playerId || !busWatchingRef.current) return;
+    setSzelviharBtn({ ts: sv.ts });
+    try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch(e) {}
+    const ts = sv.ts;
+    setTimeout(() => setSzelviharBtn(cur => (cur && cur.ts === ts) ? null : cur), 3000);
+  }, [buszState && buszState.szelvihar && buszState.szelvihar.ts, playerId]);
+  // szélvihar bejelentés — mindenkinél felugrik
+  const lastSzelviharAnnPRef = React.useRef(undefined);
+  React.useEffect(() => {
+    const ann = buszState && buszState.szelviharAnnounce;
+    if (lastSzelviharAnnPRef.current === undefined) { lastSzelviharAnnPRef.current = ann ? ann.ts : null; return; }
+    if (!ann || ann.ts === lastSzelviharAnnPRef.current) return;
+    lastSzelviharAnnPRef.current = ann.ts;
+    setSzelviharPlayerNotice({ name: ann.name, ts: ann.ts });
+    try { if (navigator.vibrate) navigator.vibrate([220, 90, 220]); } catch(e) {}
+    const ts = ann.ts;
+    setTimeout(() => setSzelviharPlayerNotice(cur => (cur && cur.ts === ts) ? null : cur), 7000);
+  }, [buszState && buszState.szelviharAnnounce && buszState.szelviharAnnounce.ts]);
+  // szélvihar gomb megnyomva → új osztás a buszon
+  const tapSzelvihar = async () => {
+    setSzelviharBtn(null);
+    try {
+      const snap = await firebase.firestore().collection('rooms').doc(roomCode).get();
+      const st = snap.data()?.buszState;
+      if (!st || st.phase !== 'bus' || !st.szelvihar || st.szelvihar.targetPid !== playerId) return;
+      const deckCount = st.settings?.deckCount || 1;
+      const busStepsC = st.settings?.busSteps || 6;
+      const busRouteCards = shuffleDeck(generateDeck(deckCount)).slice(0, busStepsC);
+      const busDrawDeck = shuffleDeck(generateDeck(deckCount));
+      const newPositions = { ...(st.busRiderPositions || {}) };
+      const newDrawn = { ...(st.busRiderDrawnCards || {}) };
+      (st.busRiders || []).forEach(rid => { if (!(st.busRiderDone || {})[rid]) { newPositions[rid] = 0; newDrawn[rid] = []; } });
+      await firebase.firestore().collection('rooms').doc(roomCode).update({ buszState: {
+        ...st, busRouteCards, busDrawDeck,
+        busRiderPositions: newPositions, busRiderDrawnCards: newDrawn,
+        busPositionDrawnCards: {}, busRiderPendingGuesses: {},
+        busRevealedPositions: [1, 3].filter(i => i < busStepsC),
+        szelvihar: null,
+        szelviharAnnounce: { name: (players.find(p => p.id === playerId)?.name) || '?', ts: Date.now() },
+      }});
+    } catch(e) { console.error('szelvihar redeal', e); }
+  };
+
   const releasePlayer = React.useCallback((pid) => {
     if (!pid || !roomCode) return;
     try { firebase.firestore().collection('rooms').doc(roomCode).update({ buszTakenIds: firebase.firestore.FieldValue.arrayRemove(pid) }); } catch(e) {}
@@ -55969,6 +56092,86 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
   // ── Bus phase ────────────────────────────────────────────────────────────
   if (buszState.phase === 'bus' || buszState.phase === 'done') {
     const onBus = buszState.busRiders?.includes(playerId);
+
+    // ── 🚌 Nézőmód: élő, csak-olvasható busz-tábla (leszálltak / nem-buszozók) ──
+    if (busWatching && buszState.phase === 'bus') {
+      const wRoute = buszState.busRouteCards || [];
+      const wRevealed = buszState.busRevealedPositions || [1, 3];
+      const wDrawn = buszState.busPositionDrawnCards || {};
+      const wRiders = (buszState.busRiders || []).map(rid => players.find(p => p.id === rid)).filter(Boolean);
+      const wPos = buszState.busRiderPositions || {};
+      const wDone = buszState.busRiderDone || {};
+      const wSteps = buszState.settings?.busSteps || wRoute.length || 6;
+      return (
+        <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', background:T.bg }}>
+          <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'14px 18px 16px', display:'flex', flexDirection:'column', gap:14 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <button onClick={() => setBusWatching(false)} style={{ width:36, height:36, borderRadius:'50%', background:T.surface, border:'none', cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0, boxShadow:T.shadow }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke={T.inkSoft} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>👀 Busz élőben</div>
+              <span style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, background:T.surfaceMuted, padding:'4px 10px', borderRadius:999 }}>csak nézed</span>
+            </div>
+            {/* Útvonal kártyák */}
+            <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>{t('busStops')}</div>
+              <div style={{ display:'flex', gap:4, overflowX:'auto', paddingBottom:2 }}>
+                {wRoute.map((card, i) => (
+                  <div key={i} style={{ flexShrink:0 }}><PlayingCard card={card} size='lg' faceDown={!wRevealed.includes(i)} /></div>
+                ))}
+              </div>
+              <div style={{ display:'flex', gap:4 }}>
+                {wRoute.map((_, i) => wDrawn[i]
+                  ? <div key={i} style={{ flexShrink:0 }}><PlayingCard card={wDrawn[i]} size='lg' /></div>
+                  : <div key={i} style={{ width:56, height:78, borderRadius:8, flexShrink:0, border:`1.5px dashed ${T.inkMute}25` }} />)}
+              </div>
+              <div style={{ display:'flex', gap:4 }}>
+                {wRoute.map((_, i) => (
+                  <div key={i} style={{ width:56, textAlign:'center', fontFamily:T.font, fontSize:11, color:T.inkSoft, flexShrink:0 }}>{i + 1}</div>
+                ))}
+              </div>
+            </div>
+            {/* Buszozók állása */}
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Buszozók</div>
+              {wRiders.map(rp => {
+                const done = !!wDone[rp.id];
+                const isTurn = buszState.currentTurnRiderId === rp.id && !done;
+                return (
+                  <div key={rp.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', background:T.surface, borderRadius:14, boxShadow:T.shadow, border:`2px solid ${isTurn ? T.mint : 'transparent'}` }}>
+                    <PlayerAvatar player={rp} size={34} />
+                    <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{rp.name}</div>
+                    {isTurn && <span style={{ fontFamily:T.font, fontSize:11, fontWeight:800, color:T.mint }}>Ő jön</span>}
+                    <span style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color: done ? T.mint : T.inkSoft }}>{done ? '✓ Leszállt' : `${wPos[rp.id] || 0}/${wSteps}`}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          {/* 🌪 Szélvihar gomb — 3 mp-ig, csak a kisorsolt nézőnél */}
+          {szelviharBtn && (
+            <div style={{ position:'fixed', inset:0, zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(14,14,24,0.6)', animation:'fadeIn .15s' }}>
+              <button onClick={tapSzelvihar} style={{ width:190, height:190, borderRadius:'50%', border:'none', background:'linear-gradient(160deg,#5A7EF0,#3A54C0)', color:'#fff', cursor:'pointer', boxShadow:'0 0 0 16px rgba(90,126,240,0.28), 0 0 0 32px rgba(90,126,240,0.12)', animation:'popIn .2s cubic-bezier(.2,.9,.3,1.4)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4 }}>
+                <span style={{ fontSize:56, lineHeight:1 }}>🌪</span>
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:20, textTransform:'uppercase', letterSpacing:'0.06em' }}>Szélvihar!</span>
+                <span style={{ fontFamily:T.font, fontSize:11, opacity:0.85 }}>Nyomd meg gyorsan!</span>
+              </button>
+            </div>
+          )}
+          {/* 🌪 Szélvihar bejelentés */}
+          {szelviharPlayerNotice && (
+            <div onClick={() => setSzelviharPlayerNotice(null)} style={{ position:'fixed', inset:0, zIndex:410, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(14,14,24,0.7)', animation:'fadeIn .2s', padding:20 }}>
+              <div style={{ background:T.surface, borderRadius:24, padding:'32px 36px', textAlign:'center', animation:'popIn .3s cubic-bezier(.2,.9,.3,1.4)', maxWidth:320 }}>
+                <div style={{ fontSize:56 }}>🌪</div>
+                <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:32, color:T.coral, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginTop:8 }}>Szélvihar!</div>
+                <div style={{ fontFamily:T.font, fontSize:15, color:T.ink, marginTop:10 }}><b>{szelviharPlayerNotice.name}</b> elfújta a lapokat — új osztás! 🃏</div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     if (!onBus) {
       const nobusMsgs = [
         { emoji:'🏖️', title:'Megúsztad!', sub:'Nem nálad volt a legtöbb lap — pack your bags, te nem utazol.' },
@@ -55984,6 +56187,9 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
           <div style={{ fontSize:64 }}>{nm.emoji}</div>
           <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:24, color:T.mint, textTransform:'uppercase', letterSpacing:T.letterDisplay, textAlign:'center' }}>{nm.title}</div>
           <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center', lineHeight:1.6, maxWidth:260 }}>{nm.sub}</div>
+          {buszState.phase === 'bus' && (
+            <button onClick={() => setBusWatching(true)} style={{ marginTop:6, padding:'14px 28px', borderRadius:999, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)' }}>👀 Buszozás nézése</button>
+          )}
           {onSwitchToHost && (
             <button onClick={onSwitchToHost} style={{ marginTop:8, padding:'13px 26px', borderRadius:999, border:'none', background:T.surface, color:T.ink, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, cursor:'pointer', boxShadow:T.shadow }}>← Vissza a host nézethez</button>
           )}
@@ -56143,6 +56349,11 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
             </div>
           </div>
 
+          {/* Leszálltál — nézheted a többiek buszozását (belenyúlni nem tudsz) */}
+          {myDone && buszState.phase === 'bus' && (
+            <button onClick={() => setBusWatching(true)} style={{ width:'100%', padding:'13px', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)' }}>👀 Buszozás nézése</button>
+          )}
+
           {/* Card section */}
           <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
             {/* Section header */}
@@ -56207,6 +56418,16 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
                 {busGuessResult.precise
                   ? (busGuessResult.correct ? `🎯🎉 Big Pick! ${busGuessResult.card?.value||''}${busGuessResult.card?.suit||''} — Leszálltál!` : `🎯✗ Nem ${selectedPreciseValue||'?'} volt — 1 korty, vissza az ${preciseTippStep}. állomásra`)
                   : busGuessResult.correct ? (busGuessResult.done ? `🎉 Teljesítve! Leszálltál!${busGuessResult.card ? ` (${busGuessResult.card.value}${busGuessResult.card.suit})` : ''}` : `✓ Helyes!${busGuessResult.card ? ` (${busGuessResult.card.value}${busGuessResult.card.suit})` : ''} Előre!`) : `✗ ${busGuessResult.card ? `${busGuessResult.card.value}${busGuessResult.card.suit} — ` : ''}Rossz tipp! ${busGuessResult.drinks||1} korty!`}
+              </div>
+            </div>
+          )}
+          {/* 🌪 Szélvihar bejelentés — buszozóknál is */}
+          {szelviharPlayerNotice && (
+            <div onClick={() => setSzelviharPlayerNotice(null)} style={{ position:'fixed', inset:0, zIndex:410, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(14,14,24,0.7)', animation:'fadeIn .2s', padding:20 }}>
+              <div style={{ background:T.surface, borderRadius:24, padding:'32px 36px', textAlign:'center', animation:'popIn .3s cubic-bezier(.2,.9,.3,1.4)', maxWidth:320 }}>
+                <div style={{ fontSize:56 }}>🌪</div>
+                <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:32, color:T.coral, textTransform:'uppercase', letterSpacing:T.letterDisplay, marginTop:8 }}>Szélvihar!</div>
+                <div style={{ fontFamily:T.font, fontSize:15, color:T.ink, marginTop:10 }}><b>{szelviharPlayerNotice.name}</b> elfújta a lapokat — új osztás! 🃏</div>
               </div>
             </div>
           )}
