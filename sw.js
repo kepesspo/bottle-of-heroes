@@ -1,10 +1,74 @@
-// Service worker disabled — unregisters itself and clears all caches
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', e => {
+// GENERÁLT FÁJL — forrás: build.js (node build.js)
+const CACHE = 'boh-v9.902';
+
+self.addEventListener('install', (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', 'index.html']).catch(() => {})));
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))))
-      .then(() => self.registration.unregister())
-      .then(() => self.clients.matchAll({ includeUncontrolled: true }))
-      .then(clients => clients.forEach(c => c.navigate(c.url)))
+    caches.keys()
+      .then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  if (req.method !== 'GET') return; // Firestore írások/streamek érintetlenek
+  const url = new URL(req.url);
+
+  // Cross-origin: csak az ismert CDN-eket cache-eljük (cache-first)
+  if (url.origin !== location.origin) {
+    if (!/(gstatic\.com|jsdelivr\.net|cdnjs\.cloudflare\.com)$/.test(url.hostname) &&
+        !/gstatic|jsdelivr|cdnjs/.test(url.hostname)) return;
+    e.respondWith(
+      caches.open(CACHE).then((c) =>
+        c.match(req).then((hit) => hit || fetch(req).then((res) => { c.put(req, res.clone()).catch(() => {}); return res; }))
+      )
+    );
+    return;
+  }
+
+  const isNav = req.mode === 'navigate' || /(?:^|\/)index\.html$/.test(url.pathname) || url.pathname.endsWith('/');
+  if (isNav) {
+    // stale-while-revalidate: azonnal a cache-ből indul, háttérben frissít,
+    // változásnál üzen az oldalnak (frissítés-sáv)
+    e.respondWith(
+      caches.open(CACHE).then(async (c) => {
+        const cached = await c.match('index.html');
+        const network = fetch(req).then(async (res) => {
+          if (res && res.ok) {
+            const forCache = res.clone();
+            const forDiff = res.clone();
+            await c.put('index.html', forCache);
+            if (cached) {
+              const [a, b] = await Promise.all([cached.clone().text(), forDiff.text()]);
+              if (a !== b) {
+                const cs = await self.clients.matchAll({ includeUncontrolled: true });
+                cs.forEach((cl) => cl.postMessage({ type: 'boh-update' }));
+              }
+            }
+          }
+          return res;
+        }).catch(() => null);
+        return cached || network.then((r) => r || new Response('Offline', { status: 503 }));
+      })
+    );
+    return;
+  }
+
+  // Same-origin assetek (képek, manifest, mp3): cache-first + háttér frissítés
+  e.respondWith(
+    caches.open(CACHE).then((c) =>
+      c.match(req).then((hit) => {
+        const net = fetch(req).then((res) => {
+          if (res && res.ok) c.put(req, res.clone()).catch(() => {});
+          return res;
+        }).catch(() => null);
+        return hit || net.then((r) => r || new Response('', { status: 504 }));
+      })
+    )
   );
 });

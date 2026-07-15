@@ -1,9 +1,8 @@
 # Bottle of Heroes — fejlesztési összefoglaló
 
 ## Projekt
-Magyar ivós mobiljáték app. Single HTML file (`index.html`), React 18 UMD + Babel standalone, Firebase Firestore multiplayer.
+Magyar ivós mobiljáték app. React 18 UMD, Firebase Firestore multiplayer.
 
-**Aktuális verzió:** v5.66  
 **GitHub:** https://github.com/kepesspo/bottle-of-heroes  
 **Push parancs:**
 ```bash
@@ -11,10 +10,24 @@ git remote set-url origin https://<TOKEN>@github.com/kepesspo/bottle-of-heroes.g
 ```
 (Token a session kontextusában van — ne tárold fájlban!)
 
+## ⚠️ BUILD WORKFLOW (v9.902 óta) — EZT KÖVESD!
+- **FORRÁS: `app.src.html`** — MINDEN kód-szerkesztés ebben történik (JSX, `type="text/babel"`).
+- **`index.html` GENERÁLT FÁJL — SOHA ne szerkeszd kézzel!** A `node build.js` állítja elő.
+- Munkafolyamat minden változtatásnál:
+  1. szerkeszd az `app.src.html`-t (verzióbump is itt: `const APP_VERSION = '...'`)
+  2. `node build.js` — előfordítja a JSX-et (a forrásba ágyazott Babellel), production React-et
+     illeszt be a `vendor/`-ból, kidobja a Babel-standalone-t, és generálja az `sw.js`-t
+  3. tesztek az `index.html` (buildelt) ellen futnak
+  4. commitold MINDKETTŐT (`app.src.html` + `index.html` + `sw.js`)
+- Az `app.src.html` önmagában is futtatható böngészőben (dev mód, lassú — böngészőben fordít).
+- `sw.js`: cache-elő service worker (stale-while-revalidate) — a build generálja, cache-név az APP_VERSION.
+  Frissítésnél a felhasználó "Új verzió" sávot kap; az admin "kényszerített frissítés" továbbra is működik.
+
 ## Architektúra
-- Egyetlen `index.html` (~39000+ sor)
-- Minden asset (képek) base64-ben beágyazva az `IMGS` objektumba
-- Python patch scriptek (`patch_5_XX.py`) minden nagyobb változáshoz
+- Forrás: `app.src.html` (~61000 sor) → buildelt `index.html` (~2 MB)
+- Game bannerek/ikonok: `assets/` mappa (útvonal-hivatkozás az `IMGS` objektumból)
+- Beépített avatarok: `assets/avatars/char_*.png` (a CHAR_AVATARS útvonalakat hivatkozik)
+- Python patch scriptek (`patch_5_XX.py`) minden nagyobb változáshoz — az app.src.html-t patchelik!
 - Firebase Firestore compat SDK online multiplayer módhoz
 
 ## Játékok listája (24 db)
@@ -56,11 +69,12 @@ Az advance funkciók nem commitálnak azonnal — `setPendingCommit({newPlayers,
 - Beágyazva: `IMGS['<id>_banner.png']` kulcs alatt
 
 ## Fontos szabályok
-1. Minden commitnál verzióbump kötelező
-2. Nagy változásoknál Python patch script (`patch_5_XX.py`)
-3. Assert-ekkel ellenőrizni a string replacement-et
-4. `align-items:stretch` a footer rowon → egyforma magasság
-5. Pill variánsok stabil `flex:1, minWidth:0, overflow:hidden` wrapperben
+1. Minden commitnál verzióbump kötelező (az `app.src.html`-ben!)
+2. Kódot CSAK az `app.src.html`-ben szerkessz, majd `node build.js` (lásd BUILD WORKFLOW fent)
+3. Nagy változásoknál Python patch script (`patch_5_XX.py`)
+4. Assert-ekkel ellenőrizni a string replacement-et
+5. `align-items:stretch` a footer rowon → egyforma magasság
+6. Pill variánsok stabil `flex:1, minWidth:0, overflow:hidden` wrapperben
 
 ## Következő tervezett feature
 - **Ország-Város-Fiú-Lány játék** megvalósítása (egy telefon mód: betű kisorsol, játékosok szavaznak az eredményekre)
