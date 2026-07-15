@@ -34625,7 +34625,7 @@ const { useState, useEffect, useRef, useMemo } = React;
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.887';
+const APP_VERSION = 'v9.888';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -47757,6 +47757,15 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     <div style={{ flex:1, overflowY:'auto', paddingTop:8 }}>
       {showQR && roomUrl && <QRModal url={roomUrl} onClose={() => setShowQR(false)} />}
       {bjState.phase === 'joining' && <JoiningView />}
+      {/* Amíg várunk — reakciók (a JoiningView-n KÍVÜL, mert az inline komponensként
+          minden renderkor újramountolódna és elveszne a beírt szöveg) */}
+      {bjState.phase === 'joining' && isOnline && roomCode && (
+        <div style={{ padding:'0 6px 16px' }}>
+          <LobbyReactionsOverlay code={roomCode} />
+          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightTitle, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>Amíg várunk…</div>
+          <LobbyReactionSender code={roomCode} myName="Host" />
+        </div>
+      )}
       {bjState.phase === 'betting' && <BettingView />}
       {(bjState.phase === 'playing' || bjState.phase === 'dealer') && <PlayingView />}
       {bjState.phase === 'results' && <ResultsView />}
@@ -48570,6 +48579,16 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
         </div>
       </div>
       <PrimaryButton onClick={initGame} disabled={players.length<2}>{t('startGameBtn')}</PrimaryButton>
+      {/* Amíg várunk — lebegő emoji/szöveg reakciók (host is látja + küldhet) */}
+      {isOnline && roomCode && (
+        <>
+          <LobbyReactionsOverlay code={roomCode} />
+          <div style={{width:'100%'}}>
+            <div style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:8}}>Amíg várunk…</div>
+            <LobbyReactionSender code={roomCode} myName="Host" />
+          </div>
+        </>
+      )}
     </div>
   );
 
@@ -51248,6 +51267,16 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
         </div>
       </div>
       <PrimaryButton onClick={startRound}>🎰 Kezdés!</PrimaryButton>
+      {/* Amíg várunk — lebegő emoji/szöveg reakciók (host is látja + küldhet) */}
+      {roomCode && (
+        <>
+          <LobbyReactionsOverlay code={roomCode} />
+          <div style={{width:'100%'}}>
+            <div style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:8}}>Amíg várunk…</div>
+            <LobbyReactionSender code={roomCode} myName={pl.find(p=>p.id===hostPid)?.name || 'Host'} />
+          </div>
+        </>
+      )}
     </div>
   );
 
