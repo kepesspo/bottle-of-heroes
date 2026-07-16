@@ -26,7 +26,7 @@
   <script>(function(){var q=location.search;var ev=q.indexOf('screen=events')!==-1||q.indexOf('screen=calendar')!==-1;var box=q.indexOf('screen=dnrbox')!==-1;document.write('<link rel="manifest" href="'+(ev?'manifest-events.json':box?'manifest-dnrbox.json':'manifest.json')+'"/>');})();</script>
   <!-- iOS full-screen / status bar -->
   <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <script>(function(){var q=location.search;var ev=q.indexOf('screen=events')!==-1||q.indexOf('screen=calendar')!==-1;var box=q.indexOf('screen=dnrbox')!==-1;document.write('<meta name="apple-mobile-web-app-title" content="'+(ev?'DNR Events':box?'DNR BOX':'Bottle of Heroes')+'"/>');})();</script>
   <!-- Theme color (amber) -->
   <meta name="theme-color" content="#F4C57E"/>
@@ -34683,7 +34683,7 @@ window.bohSound = (function () {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.904';
+const APP_VERSION = 'v9.905';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -34918,6 +34918,7 @@ if (location.search.indexOf('screen=events') !== -1 || location.search.indexOf('
   document.documentElement.style.setProperty('--app-surface', T.surface);
   document.documentElement.style.background = bg;
   document.body.style.background = bg;
+  document.documentElement.style.background = bg;
   const tc = document.querySelector('meta[name="theme-color"]');
   if (tc) tc.setAttribute('content', bg);
 })();
@@ -40077,15 +40078,7 @@ function BuszConfigSheet({ config, setConfig, onClose }) {
             <Toggle on={bonusOn} onChange={() => setConfig(c => ({...c, bonusGuess: !bonusOn}))} />
           </div>
         ); })()}
-        {(() => { const hostPlaysOn = config.hostPlays === true; return (
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'none' }}>
-            <div>
-              <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{t('busHostPlays')}</span>
-              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>{t('busHostPlaysSub')}</div>
-            </div>
-            <Toggle on={hostPlaysOn} onChange={() => setConfig(c => ({...c, hostPlays: !hostPlaysOn}))} />
-          </div>
-        ); })()}
+
         {(() => { const szelviharOn = config.szelviharEnabled === true; return (
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'none' }}>
             <div>
@@ -40102,19 +40095,12 @@ function BuszConfigSheet({ config, setConfig, onClose }) {
 }
 
 function BlackjackConfigSheet({ config, setConfig, onClose }) {
-  const hostPlaysOn = config.hostPlays === true;
   return (
     <SheetOverlay onClose={onClose} title="Blackjack beállítások" footer={
       <button onClick={onClose} style={{ width:'100%', padding:'15px', borderRadius:16, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)' }}>{t('busDoneBtn')}</button>
     }>
       <div style={{ padding:'0 18px 8px', display:'flex', flexDirection:'column' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'none' }}>
-          <div>
-            <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>🎮 A host is játszik</span>
-            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>A házigazda is beszállhat játékosként a saját telefonján</div>
-          </div>
-          <Toggle on={hostPlaysOn} onChange={() => setConfig(cf => ({...cf, hostPlays: !hostPlaysOn}))} />
-        </div>
+        <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, padding:'13px 0', lineHeight:1.5 }}>🎮 A host a játék elején dönti el, hogy játszik-e — a "Ki a host?" képernyőn.</div>
       </div>
     </SheetOverlay>
   );
@@ -42854,7 +42840,9 @@ function RoomCodeCard({ roomCode, onShowQR }) {
 function HostPickScreen({ emoji, banner, players, takenIds, onConfirm, onSkip, skipLabel }) {
   const [pendingId, setPendingId] = React.useState(null);
   const pendingPlayer = pendingId ? (players || []).find(p => p.id === pendingId) : null;
-  return (
+  // Portál: a body alá renderelünk, hogy a játéktér animált wrapperének stacking
+  // contextje ne engedjen át semmit (QR gomb, footer) — mint a SheetOverlay-nél.
+  return ReactDOM.createPortal(
     <div style={{ position:'fixed', inset:0, zIndex:1400, background:T.bg, display:'flex', flexDirection:'column' }}>
       <div style={{ flexShrink:0, textAlign:'center', padding:'max(28px, env(safe-area-inset-top)) 18px 10px' }}>
         {banner
@@ -42890,7 +42878,8 @@ function HostPickScreen({ emoji, banner, players, takenIds, onConfirm, onSkip, s
           </button>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -47599,11 +47588,11 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
   const [hostRebuyPick, setHostRebuyPick] = React.useState(null); // pid — újra-beszállás készlet-választó
   const [hostViewMode, setHostViewMode] = React.useState('host'); // 'host' | 'player' — a házigazda is játszhat
   const hostSelfIdRef = React.useRef(null); // a host által választott játékos-id, váltások közt megmarad
-  const bjHostPlaysEnabled = !!(gameMeta?.blackjackConfig?.hostPlays);
+  const bjHostPlaysEnabled = isOnline; // a döntés a Ki a host? képernyőn születik
   const [bjHostPickDone, setBjHostPickDone] = React.useState(false); // egységes flow: host-kérdés az elején (megválaszolva/kihagyva)
   React.useEffect(() => {
-    if (onSetBuszSwitch) onSetBuszSwitch((isOnline && bjHostPlaysEnabled) ? { fn: () => setHostViewMode(m => m === 'host' ? 'player' : 'host'), badge: 0 } : null);
-  }, [isOnline, gameMeta]);
+    if (onSetBuszSwitch) onSetBuszSwitch((isOnline && !!hostSelfIdRef.current) ? { fn: () => setHostViewMode(m => m === 'host' ? 'player' : 'host'), badge: 0 } : null);
+  }, [isOnline, gameMeta, bjHostPickDone]);
   React.useEffect(() => () => { onSetBuszSwitch && onSetBuszSwitch(null); }, []);
   React.useEffect(() => {
     if (onSetHideFooter) onSetHideFooter(isOnline && (hostViewMode === 'player' || (bjHostPlaysEnabled && !bjHostPickDone && !hostSelfIdRef.current)));
@@ -48559,7 +48548,8 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
     setHostUnlockPressId(null); setHostUnlockProgress(0);
   };
   const [hostPickCancelled, setHostPickCancelled] = useState(false);
-  const hostPlaysEnabled = !!(gameMeta?.buszConfig?.hostPlays);
+  // A 'host is játszik' döntés a Ki a host? képernyőn születik (nem beállítás)
+  const hostPlaysEnabled = isOnline;
   const stRef = useRef(null);
   const autoStartRef = useRef(false);
 
@@ -48810,7 +48800,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
   };
 
   // PlayScreen signals — must be before any early return (Rules of Hooks)
-  const shouldHideFooter = (isOnline && hostPlaysEnabled && !hostPlayerId && !hostPickCancelled) || (hostPlaysEnabled && !hostPlayerId && !!buszState) || (hostPlaysEnabled && hostPlayerId && hostViewMode === 'player' && !!buszState && isOnline);
+  const shouldHideFooter = (isOnline && !hostPlayerId && !hostPickCancelled) || (isOnline && hostPlayerId && hostViewMode === 'player' && !!buszState);
   React.useEffect(() => { setTakenIds([]); }, [gameIdx]);
   React.useEffect(() => { onSetHideFooter && onSetHideFooter(shouldHideFooter); }, [shouldHideFooter]);
   React.useEffect(() => () => { onSetHideFooter && onSetHideFooter(false); }, []);
@@ -48918,7 +48908,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
   );
 
   // ── Host identity picker (if hostPlays ON and not yet selected) ─────────────
-  if (hostPlaysEnabled && !hostPlayerId && !hostPickCancelled) {
+  if (isOnline && !hostPlayerId && !hostPickCancelled) {
     const hostPendingPlayer = hostPendingId ? players.find(p => p.id === hostPendingId) : null;
     const confirmHostSelection = () => {
       if (!hostPendingId) return;
@@ -60770,12 +60760,14 @@ function BottleApp() {
     document.documentElement.style.setProperty('--app-surface', T.surface);
     document.documentElement.style.background = bg;
     document.body.style.background = bg;
+  document.documentElement.style.background = bg;
     const tc = document.querySelector('meta[name="theme-color"]');
     if (tc) tc.setAttribute('content', bg);
   };
 
   React.useEffect(() => {
     document.body.style.background = T.bg;
+    document.documentElement.style.background = T.bg;
     document.documentElement.style.background = T.bg;
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = T.bg;
