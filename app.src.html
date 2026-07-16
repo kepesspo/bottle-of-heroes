@@ -34683,7 +34683,7 @@ window.bohSound = (function () {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.908';
+const APP_VERSION = 'v9.909';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -42808,9 +42808,11 @@ function LobbyRow({ player, pill, dim, highlight, onClick, pressing, progress, o
 }
 
 // Fehér kártya fejléccel + n/N számlálóval — a sorok (LobbyRow) gyerekként jönnek
-function LobbyList({ title, count, total, children, style, collapsedCount = 3 }) {
+const _lobbyListOpenMap = {}; // stateKey → nyitott állapot (túléli a komponens újramountolását)
+function LobbyList({ title, count, total, children, style, collapsedCount = 3, stateKey }) {
   const rows = React.Children.toArray(children);
-  const [open, setOpen] = React.useState(false);
+  const [open, _setOpen] = React.useState(() => stateKey ? !!_lobbyListOpenMap[stateKey] : false);
+  const setOpen = (fn) => _setOpen(o => { const v = typeof fn === 'function' ? fn(o) : fn; if (stateKey) _lobbyListOpenMap[stateKey] = v; return v; });
   const canCollapse = rows.length > collapsedCount;
   const visible = canCollapse && !open ? rows.slice(0, collapsedCount) : rows;
   return (
@@ -47793,7 +47795,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     return (
       <div style={{ padding:'0 6px 12px' }}>
         {roomCode && <div style={{ marginBottom:12 }}><LobbyTicketCard desc="Tegyél tétet kortyokban és játssz az osztó ellen — Hit, Stand vagy Double Down. Aki veszít, megissza a tétjét, aki nyer, kiosztja. A Blackjack másfélszeresét ér!" roomCode={roomCode} onShowQR={() => setShowQR(true)} /></div>}
-        <LobbyList title="Csatlakozott játékosok" count={joined.length} total={players.length} style={{ marginBottom:12 }}>
+        <LobbyList title="Csatlakozott játékosok" count={joined.length} total={players.length} style={{ marginBottom:12 }} stateKey={"bj_" + roomCode}>
           {[...players].sort((a,b) => {
             const rank = p => p.id === (room?.bjHostPid || null) ? 0 : takenIds.includes(p.id) ? 1 : 2;
             return rank(a) - rank(b);
@@ -48033,7 +48035,7 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
   return (
     <div style={{ flex:1, overflowY:'auto', paddingTop:8 }}>
       {showQR && roomUrl && <QRModal url={roomUrl} onClose={() => setShowQR(false)} />}
-      {bjState.phase === 'joining' && <JoiningView />}
+      {bjState.phase === 'joining' && JoiningView()}
       {/* Amíg várunk — reakciók (a JoiningView-n KÍVÜL, mert az inline komponensként
           minden renderkor újramountolódna és elveszne a beírt szöveg) */}
       {bjState.phase === 'joining' && isOnline && roomCode && (
@@ -48894,7 +48896,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
       {showQR && roomCode && <RoomQR roomCode={roomCode} onClose={()=>setShowQR(false)} />}
       {/* Egységes csatlakozási lista — mindenki látszik, státusz-pill-lel */}
       {isOnline ? (
-        <LobbyList title="Csatlakozott játékosok" count={takenIds.length} total={players.length}>
+        <LobbyList title="Csatlakozott játékosok" count={takenIds.length} total={players.length} stateKey={"busz_" + roomCode}>
           {[...players].sort((a,b) => {
             const rank = p => p.id === hostPlayerId ? 0 : takenIds.includes(p.id) ? 1 : 2;
             return rank(a) - rank(b);
@@ -51578,7 +51580,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
       {(() => {
         const joinedCount = pl.filter(p => claimedPids.has(p.id) || p.id === hostPid).length;
         return (
-          <LobbyList title="Csatlakozott játékosok" count={joinedCount} total={pl.length}>
+          <LobbyList title="Csatlakozott játékosok" count={joinedCount} total={pl.length} stateKey={"ovfj_" + roomCode}>
             {[...pl].sort((a,b) => {
               const rank = p => p.id === hostPid ? 0 : claimedPids.has(p.id) ? 1 : 2;
               return rank(a) - rank(b);
