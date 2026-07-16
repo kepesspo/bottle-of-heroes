@@ -34683,7 +34683,7 @@ window.bohSound = (function () {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.906';
+const APP_VERSION = 'v9.907';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -42808,14 +42808,51 @@ function LobbyRow({ player, pill, dim, highlight, onClick, pressing, progress, o
 }
 
 // Fehér kártya fejléccel + n/N számlálóval — a sorok (LobbyRow) gyerekként jönnek
-function LobbyList({ title, count, total, children, style }) {
+function LobbyList({ title, count, total, children, style, collapsedCount = 3 }) {
+  const rows = React.Children.toArray(children);
+  const [open, setOpen] = React.useState(false);
+  const canCollapse = rows.length > collapsedCount;
+  const visible = canCollapse && !open ? rows.slice(0, collapsedCount) : rows;
   return (
     <div style={{ background:T.surface, borderRadius:18, padding:'12px 14px', boxShadow:T.shadow, display:'flex', flexDirection:'column', gap:3, width:'100%', boxSizing:'border-box', ...style }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:5 }}>
         <div style={{ fontFamily:T.font, fontSize:11, fontWeight:800, letterSpacing:'0.09em', color:T.inkSoft, textTransform:'uppercase' }}>{title || 'Csatlakozott játékosok'}</div>
         {count !== undefined && <span style={{ fontFamily:T.font, fontSize:11, fontWeight:900, color:T.mint, background:T.mintSoft, padding:'2px 10px', borderRadius:999 }}>{count} / {total}</span>}
       </div>
-      {children}
+      <div style={ canCollapse && open ? { maxHeight:236, overflowY:'auto', WebkitOverflowScrolling:'touch' } : undefined }>
+        {visible}
+      </div>
+      {canCollapse && (
+        <button onClick={() => setOpen(o => !o)} style={{ border:'none', background:'transparent', padding:'7px 0 2px', fontFamily:T.font, fontWeight:800, fontSize:12, color:T.mint, cursor:'pointer' }}>
+          {open ? '▲ Kevesebb' : `▼ Mind a ${rows.length} játékos`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Egységes "jegy" kártya: játék-leírás + szaggatott elválasztó + szobakód + QR (Busz-stílus)
+function LobbyTicketCard({ desc, roomCode, onShowQR }) {
+  return (
+    <div style={{ background:T.surface, borderRadius:20, width:'100%', boxSizing:'border-box', boxShadow:T.shadow, overflow:'hidden' }}>
+      <div style={{ padding:'16px 20px 12px' }}>
+        <div style={{ fontFamily:T.font, fontSize:14, fontWeight:600, color:T.ink, lineHeight:1.5 }}>{desc}</div>
+      </div>
+      <div style={{ display:'flex', alignItems:'stretch', margin:'0 -1px', position:'relative' }}>
+        <div style={{ width:20, height:20, borderRadius:'50%', background:T.bg, border:`1.5px solid ${T.surfaceMuted}`, position:'absolute', left:-10, top:'50%', transform:'translateY(-50%)', zIndex:2 }}/>
+        <div style={{ flex:1, borderTop:`1.5px dashed ${T.surfaceMuted}`, margin:'0 10px' }}/>
+        <div style={{ width:20, height:20, borderRadius:'50%', background:T.bg, border:`1.5px solid ${T.surfaceMuted}`, position:'absolute', right:-10, top:'50%', transform:'translateY(-50%)', zIndex:2 }}/>
+      </div>
+      <div style={{ padding:'12px 20px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+        <div>
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.09em', marginBottom:2 }}>{t('roomCode')}</div>
+          <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:34, color:T.mint, letterSpacing:'0.18em' }}>{roomCode}</div>
+          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>{t('busJoinCode')}</div>
+        </div>
+        <button onClick={onShowQR} style={{ width:64, height:64, borderRadius:14, background:T.ink, color:'#fff', border:'none', cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="12" height="12" rx="2" fill="white"/><rect x="4" y="4" width="8" height="8" rx="1" fill="#1a2540"/><rect x="18" y="2" width="12" height="12" rx="2" fill="white"/><rect x="20" y="4" width="8" height="8" rx="1" fill="#1a2540"/><rect x="2" y="18" width="12" height="12" rx="2" fill="white"/><rect x="4" y="20" width="8" height="8" rx="1" fill="#1a2540"/><rect x="18" y="18" width="5" height="5" rx="1" fill="white"/><rect x="25" y="18" width="5" height="5" rx="1" fill="white"/><rect x="18" y="25" width="5" height="5" rx="1" fill="white"/><rect x="25" y="25" width="5" height="5" rx="1" fill="white"/></svg>
+        </button>
+      </div>
     </div>
   );
 }
@@ -47755,10 +47792,12 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
     const allChosen = joined.length > 0 && chosenCount === joined.length;
     return (
       <div style={{ padding:'0 6px 12px' }}>
-        <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, lineHeight:1.35, marginBottom:10 }}>A játékosok a telefonjukon csatlakoznak — mindenki az osztó (a ház) ellen játszik!</div>
-        {roomCode && <div style={{ marginBottom:12 }}><RoomCodeCard roomCode={roomCode} onShowQR={() => setShowQR(true)} /></div>}
+        {roomCode && <div style={{ marginBottom:12 }}><LobbyTicketCard desc="A játékosok a telefonjukon csatlakoznak — mindenki az osztó (a ház) ellen játszik!" roomCode={roomCode} onShowQR={() => setShowQR(true)} /></div>}
         <LobbyList title="Csatlakozott játékosok" count={joined.length} total={players.length} style={{ marginBottom:12 }}>
-          {players.map(p => {
+          {[...players].sort((a,b) => {
+            const rank = p => p.id === (room?.bjHostPid || null) ? 0 : takenIds.includes(p.id) ? 1 : 2;
+            return rank(a) - rank(b);
+          }).map(p => {
             const isJoined = takenIds.includes(p.id);
             const chosen = ((bjState && bjState.stacks) || {})[p.id] !== undefined;
             const isHostP = p.id === (room?.bjHostPid || null);
@@ -48850,30 +48889,16 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
   if (!buszState) return (
     <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16,width:'100%',paddingTop:4,flex:'1 1 auto'}}>
       {isOnline && roomCode && (
-        <div style={{background:T.surface,borderRadius:20,width:'100%',boxSizing:'border-box',boxShadow:T.shadow,overflow:'hidden'}}>
-          <div style={{padding:'16px 20px 12px'}}>
-            <div style={{fontFamily:T.font,fontSize:14,fontWeight:600,color:T.ink,lineHeight:1.5}}>{t('busDesc')}</div>
-          </div>
-          <div style={{display:'flex',alignItems:'stretch',margin:'0 -1px',position:'relative'}}>
-            <div style={{width:20,height:20,borderRadius:'50%',background:T.bg,border:`1.5px solid ${T.surfaceMuted}`,position:'absolute',left:-10,top:'50%',transform:'translateY(-50%)',zIndex:2}}/>
-            <div style={{flex:1,borderTop:`1.5px dashed ${T.surfaceMuted}`,margin:'0 10px'}}/>
-            <div style={{width:20,height:20,borderRadius:'50%',background:T.bg,border:`1.5px solid ${T.surfaceMuted}`,position:'absolute',right:-10,top:'50%',transform:'translateY(-50%)',zIndex:2}}/>
-          </div>
-          <div style={{padding:'12px 20px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
-            <div>
-              <div style={{fontFamily:T.font,fontSize:11,color:T.inkSoft,textTransform:'uppercase',letterSpacing:'0.09em',marginBottom:2}}>{t('roomCode')}</div>
-              <div style={{fontFamily:'monospace',fontWeight:700,fontSize:34,color:T.mint,letterSpacing:'0.18em'}}>{roomCode}</div>
-              <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:2}}>{t('busJoinCode')}</div>
-            </div>
-            <button onClick={()=>setShowQR(true)} style={{width:64,height:64,borderRadius:14,background:T.ink,color:'#fff',border:'none',cursor:'pointer',display:'grid',placeItems:'center',flexShrink:0,fontSize:28}}><svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="12" height="12" rx="2" fill="white"/><rect x="4" y="4" width="8" height="8" rx="1" fill="#1a2540"/><rect x="18" y="2" width="12" height="12" rx="2" fill="white"/><rect x="20" y="4" width="8" height="8" rx="1" fill="#1a2540"/><rect x="2" y="18" width="12" height="12" rx="2" fill="white"/><rect x="4" y="20" width="8" height="8" rx="1" fill="#1a2540"/><rect x="18" y="18" width="5" height="5" rx="1" fill="white"/><rect x="25" y="18" width="5" height="5" rx="1" fill="white"/><rect x="18" y="25" width="5" height="5" rx="1" fill="white"/><rect x="25" y="25" width="5" height="5" rx="1" fill="white"/></svg></button>
-          </div>
-        </div>
+        <LobbyTicketCard desc={t('busDesc')} roomCode={roomCode} onShowQR={()=>setShowQR(true)} />
       )}
       {showQR && roomCode && <RoomQR roomCode={roomCode} onClose={()=>setShowQR(false)} />}
       {/* Egységes csatlakozási lista — mindenki látszik, státusz-pill-lel */}
       {isOnline ? (
         <LobbyList title="Csatlakozott játékosok" count={takenIds.length} total={players.length}>
-          {players.map(p => (
+          {[...players].sort((a,b) => {
+            const rank = p => p.id === hostPlayerId ? 0 : takenIds.includes(p.id) ? 1 : 2;
+            return rank(a) - rank(b);
+          }).map(p => (
             <LobbyRow key={p.id} player={p}
               pill={hostPlayerId === p.id ? 'host' : takenIds.includes(p.id) ? 'joined' : 'wait'}
             />
@@ -48892,7 +48917,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
           </div>
         </div>
       )}
-      <PrimaryButton onClick={initGame} disabled={players.length<2}>{isOnline ? `${t('startGameBtn')} (${takenIds.length}/${players.length}) ▶` : t('startGameBtn')}</PrimaryButton>
+      <PrimaryButton onClick={initGame} disabled={players.length<2}>{isOnline ? `${t('startGameBtn')} (${takenIds.length}/${players.length})` : t('startGameBtn')}</PrimaryButton>
       {isOnline && <div style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.inkSoft,textAlign:'center',marginTop:-8}}>{t('busAutoStart')}</div>}
       {/* Amíg várunk — lebegő emoji/szöveg reakciók, a képernyő aljára igazítva */}
       {isOnline && roomCode && (
@@ -51549,25 +51574,15 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
   if (phase === 'lobby') return (
     <div style={{display:'flex',flexDirection:'column',gap:12,width:'100%'}}>
       {showQR && joinUrl && <QRModal url={joinUrl} onClose={() => setShowQR(false)} />}
-      <div style={{background:T.surface,borderRadius:18,padding:'16px',boxShadow:T.shadow}}>
-        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:8}}>
-          <span style={{fontSize:26}}>🌍</span>
-          <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:17,color:T.ink,flex:1,letterSpacing:T.letterDisplay}}>Ország-Város</div>
-          <span style={{fontFamily:T.font,fontSize:12,fontWeight:T.weightTitle,color:T.mint,background:T.mintSoft,padding:'4px 12px',borderRadius:999}}>{round} / {totalRounds} kör</span>
-        </div>
-        <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,lineHeight:1.5}}>Betűt sorsolunk, mindenki a saját telefonján tölti ki a 8 kategóriát. Az első kész után 10 mp marad. Utána 👍/👎 szavazás — minden érvényes szó 1 pont.</div>
-        <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:10}}>
-          {OVFJ_CATS.map(c => (
-            <span key={c.key} style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.inkSoft,background:T.surfaceMuted,padding:'4px 10px',borderRadius:999}}>{c.emoji} {c.label}</span>
-          ))}
-        </div>
-      </div>
-      <RoomCodeCard roomCode={roomCode} onShowQR={() => setShowQR(true)} />
+      <LobbyTicketCard desc="Betűt sorsolunk, mindenki a saját telefonján tölti ki a 8 kategóriát. Az első kész után 10 mp marad, utána szavazás — minden érvényes szó 1 pont." roomCode={roomCode} onShowQR={() => setShowQR(true)} />
       {(() => {
         const joinedCount = pl.filter(p => claimedPids.has(p.id) || p.id === hostPid).length;
         return (
           <LobbyList title="Csatlakozott játékosok" count={joinedCount} total={pl.length}>
-            {pl.map(p => {
+            {[...pl].sort((a,b) => {
+              const rank = p => p.id === hostPid ? 0 : claimedPids.has(p.id) ? 1 : 2;
+              return rank(a) - rank(b);
+            }).map(p => {
               const joined = claimedPids.has(p.id);
               const isHost = p.id === hostPid;
               return <LobbyRow key={p.id} player={p} pill={isHost ? 'host' : joined ? 'ready' : 'wait'} dim={!joined && !isHost} />;
@@ -51575,7 +51590,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
           </LobbyList>
         );
       })()}
-      <PrimaryButton onClick={startRound}>🎰 Kezdés! ({pl.filter(p => claimedPids.has(p.id) || p.id === hostPid).length}/{pl.length}) ▶</PrimaryButton>
+      <PrimaryButton onClick={startRound}>Kezdés ({pl.filter(p => claimedPids.has(p.id) || p.id === hostPid).length}/{pl.length})</PrimaryButton>
       {/* Amíg várunk — lebegő emoji/szöveg reakciók (host is látja + küldhet) */}
       {roomCode && (
         <>
