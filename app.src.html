@@ -34717,7 +34717,7 @@ window.bohSound = (function () {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.918';
+const APP_VERSION = 'v9.919';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -52785,6 +52785,16 @@ function HajimeGame({ gameIdx, players, onAdvance, onResult }) {
 }
 
 // ─── SZÓLÁNC ────────────────────────────────────────────────────────────────
+// Modul szinten, hogy render közben NE mountolódjon újra (inline komponensként
+// minden újrarender visszajátszotta a popIn animációt → "pattogott" a kártya).
+function SzolancWrap({children, style={}}) {
+  return (
+    <div style={{background:'#F6C842', borderRadius:20, padding:'16px', display:'flex', flexDirection:'column', gap:14, overflowY:'auto', ...style}}>
+      {children}
+    </div>
+  );
+}
+
 function SzolancGame({ gameIdx, players, onAdvance, onResult, onSetHideFooter }) {
   const LISTS = [
     { cat:'Gyümölcsök 🍎', words:['alma','körte','szilva','barack','szőlő','dinnye','eper','málna','cseresznye','banán','narancs','citrom','mangó','ananász','kivi'] },
@@ -52865,19 +52875,13 @@ function SzolancGame({ gameIdx, players, onAdvance, onResult, onSetHideFooter })
     }
   };
 
-  // ── Közös wrapper: arany háttér ───────────────────────────────────────────
-  const Wrap = ({children, style={}}) => (
-    <div style={{background:SZ_BG, borderRadius:20, padding:'16px', display:'flex', flexDirection:'column', gap:14, overflowY:'auto', ...style}}>
-      {children}
-    </div>
-  );
 
   // ── DONE képernyő ─────────────────────────────────────────────────────────
   if (done !== null) {
     const win = !done.failName;
     const correctChain = done.correctChain || S.chain;
     return (
-      <Wrap>
+      <SzolancWrap>
         <div style={{
           background: win ? SZ_GREEN : SZ_RED,
           borderRadius:20, padding:'24px 16px', textAlign:'center',
@@ -52914,14 +52918,14 @@ function SzolancGame({ gameIdx, players, onAdvance, onResult, onSetHideFooter })
             </div>
           </div>
         )}
-      </Wrap>
+      </SzolancWrap>
     );
   }
 
   // ── READY fázis ───────────────────────────────────────────────────────────
   if (S.phase === 'ready') {
     return (
-      <Wrap>
+      <SzolancWrap>
         <div style={{background:SZ_CARD,borderRadius:20,padding:'24px 16px',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
           <div style={{
             width:72,height:72,borderRadius:'50%',
@@ -52950,7 +52954,7 @@ function SzolancGame({ gameIdx, players, onAdvance, onResult, onSetHideFooter })
           padding:'14px',fontFamily:T.font,fontWeight:900,fontSize:17,color:T.ink,
           cursor:'pointer',boxShadow:'0 4px 14px rgba(0,0,0,.15)',width:'100%',
         }}>▶ Indítás</button>
-      </Wrap>
+      </SzolancWrap>
     );
   }
 
@@ -52960,7 +52964,7 @@ function SzolancGame({ gameIdx, players, onAdvance, onResult, onSetHideFooter })
     const isCorrect = S.phase === 'correct';
     const wordNum = Math.min(S.showIdx + 1, S.chain.length);
     return (
-      <Wrap>
+      <SzolancWrap>
         <div style={{
           background:SZ_CARD, borderRadius:20,
           padding:'32px 24px', display:'flex', flexDirection:'column',
@@ -52996,7 +53000,7 @@ function SzolancGame({ gameIdx, players, onAdvance, onResult, onSetHideFooter })
             </div>
           </div>
         )}
-      </Wrap>
+      </SzolancWrap>
     );
   }
 
@@ -53004,7 +53008,7 @@ function SzolancGame({ gameIdx, players, onAdvance, onResult, onSetHideFooter })
   if (S.phase === 'recall') {
     const remaining = S.chain.length - S.tapped.length;
     return (
-      <Wrap>
+      <SzolancWrap>
         <div style={{fontFamily:T.font,fontWeight:700,fontSize:14,color:T.ink,textAlign:'center'}}>
           Koppints a szavakra a helyes sorrendben!
         </div>
@@ -53069,7 +53073,7 @@ function SzolancGame({ gameIdx, players, onAdvance, onResult, onSetHideFooter })
         <div style={{fontFamily:T.font,fontSize:13,color:T.ink,textAlign:'center',fontWeight:600,opacity:.75}}>
           {remaining > 0 ? `Még ${remaining} szó a sorból` : '✓ Kész!'}
         </div>
-      </Wrap>
+      </SzolancWrap>
     );
   }
 
