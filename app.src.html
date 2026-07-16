@@ -34739,7 +34739,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.925';
+const APP_VERSION = 'v9.926';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -38439,6 +38439,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
   const [editCodeVal, setEditCodeVal] = React.useState('');
   const [editCodeErr, setEditCodeErr] = React.useState(false);
   const [editingDetailId, setEditingDetailId] = React.useState(null);
+  const [imgZoom, setImgZoom] = React.useState(null); // nagyított borítókép URL
   const evT = useEventsTheme();
   // Use events theme only on deep link; otherwise use the app's global theme
   const T = deepLink ? evT : (THEMES[localStorage.getItem('boh_theme')] || THEMES['warm']);
@@ -38633,11 +38634,18 @@ function EventLogScreen({ go, goEdit, deepLink }) {
               </div>
             </div>
           )}
-          {/* Cover image */}
+          {/* Cover image — koppintásra nagyítható */}
           {ev.image && (
-            <div style={{ borderRadius:16, overflow:'hidden', marginBottom:12, boxShadow:T.shadow }}>
+            <div onClick={() => setImgZoom(ev.image)} style={{ borderRadius:16, overflow:'hidden', marginBottom:12, boxShadow:T.shadow, cursor:'pointer' }}>
               <img src={ev.image} style={{ width:'100%', objectFit:'cover', maxHeight:200, display:'block' }} />
             </div>
+          )}
+          {imgZoom && ReactDOM.createPortal(
+            <div onClick={() => setImgZoom(null)} style={{ position:'fixed', inset:0, zIndex:2000, background:'rgba(0,0,0,0.88)', display:'flex', alignItems:'center', justifyContent:'center', padding:16, animation:'backdropFade .2s ease', touchAction:'pinch-zoom' }}>
+              <img src={imgZoom} onClick={e => e.stopPropagation()} style={{ maxWidth:'100%', maxHeight:'92vh', borderRadius:14, objectFit:'contain', boxShadow:'0 20px 60px rgba(0,0,0,0.6)', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.2)' }} />
+              <button onClick={() => setImgZoom(null)} aria-label="Bezárás" style={{ position:'fixed', top:'max(16px, calc(env(safe-area-inset-top) + 6px))', right:16, width:40, height:40, borderRadius:'50%', border:'none', background:'rgba(255,255,255,0.18)', color:'#fff', fontSize:20, lineHeight:1, cursor:'pointer', display:'grid', placeItems:'center' }}>✕</button>
+            </div>,
+            document.body
           )}
           {/* Title */}
           <div style={{ background:T.surface, borderRadius:18, padding:'18px', marginBottom:12, boxShadow:T.shadow }}>
