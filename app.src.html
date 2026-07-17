@@ -34721,6 +34721,15 @@ window.bohSound = (function () {
   };
 })();
 
+// Becsült elfogyasztott mennyiség: 1 korty ≈ 2,5 cl
+function bohVolCl(drinks) { return drinks * 2.5; }
+function bohVolLabel(cl) { return cl < 100 ? '~' + Math.round(cl) + ' cl' : '~' + (cl/100).toFixed(1).replace('.', ',') + ' l'; }
+function bohVolEquiv(cl) {
+  if (cl < 25) return null;
+  if (cl < 150) { const k = Math.round(cl/50*2)/2; return '≈ ' + String(k).replace('.', ',') + ' korsó sör'; }
+  const b = Math.round(cl/75*2)/2; return '≈ ' + String(b).replace('.', ',') + ' üveg bor';
+}
+
 // Lebegő "+1" / "+2 korty" jelzés egy elem fölött (mikro-animáció, pontosztásnál)
 window.bohFloat = function (el, text, color) {
   try {
@@ -34739,7 +34748,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.935';
+const APP_VERSION = 'v9.936';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -35116,7 +35125,7 @@ const TR = {
     mostDrinks: 'Legtöbb korty',
     pointStat: 'pont',
     drinkStat: 'korty',
-    alcoholUnits: 'Becsült alkohol egységek',
+    alcoholUnits: 'Becsült elfogyasztott mennyiség',
     observer: 'Megfigyelő',
     history: 'Előzmény',
     recentRooms: 'Korábbi szobák',
@@ -35382,7 +35391,7 @@ const TR = {
     mostDrinks: 'Most Drinks',
     pointStat: 'pt',
     drinkStat: 'drinks',
-    alcoholUnits: 'Estimated Alcohol Units',
+    alcoholUnits: 'Estimated Amount Consumed',
     observer: 'Observer',
     history: 'History',
     recentRooms: 'Recent Rooms',
@@ -40480,7 +40489,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   const selectAll = () => setSelectedGames((activeFilters.length > 0 ? visibleGames : GAMES.filter(g=>!_hiddenGames.includes(g.id))).filter(g=>!SOLO_IDS.has(g.id)&&!g.comingSoon).map(g=>g.id));
   const clearAll = () => setSelectedGames([]);
   const shuffle = () => {
-    const pool = GAMES.filter(g=>g.id!=='busz'&&g.id!=='beerpong'&&g.id!=='powerhour'&&g.id!=='ovfj'&&!g.comingSoon&&!_hiddenGames.includes(g.id));
+    const pool = GAMES.filter(g=>!['busz','beerpong','powerhour','ovfj','blackjack','farkasos'].includes(g.id)&&!g.comingSoon&&!_hiddenGames.includes(g.id));
     const n = 4 + Math.floor(Math.random()*4);
     setSelectedGames([...pool].sort(()=>Math.random()-.5).slice(0,n).map(g=>g.id));
   };
@@ -56434,9 +56443,10 @@ function EndScreen({ players, go, resetGame, lastRound, scoreHistory }) {
                 <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink }}>{t('alcoholUnits')}</div>
               </div>
               {[...players].sort((a,b)=>b.drinks-a.drinks).map(p => {
-                const units = +(p.drinks * 0.2).toFixed(1);
+                const cl = bohVolCl(p.drinks);
                 const barPct = Math.min(100, (p.drinks / Math.max(1, ...players.map(x=>x.drinks))) * 100);
-                const color = units < 2 ? T.mint : units < 4 ? T.yellow : T.coral;
+                const color = cl < 75 ? T.mint : cl < 200 ? T.yellow : T.coral;
+                const equiv = bohVolEquiv(cl);
                 return (
                   <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10 }}>
                     <PlayerAvatar player={p} size={28} />
@@ -56446,13 +56456,16 @@ function EndScreen({ players, go, resetGame, lastRound, scoreHistory }) {
                         <div style={{ height:'100%', width:`${barPct}%`, background:color, borderRadius:3, transition:'width .6s cubic-bezier(.2,.9,.3,1)' }} />
                       </div>
                     </div>
-                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color, flexShrink:0 }}>~{units}e</div>
+                    <div style={{ textAlign:'right', flexShrink:0 }}>
+                      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color }}>{bohVolLabel(cl)}</div>
+                      {equiv && <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkMute, marginTop:1 }}>{equiv}</div>}
+                    </div>
                   </div>
                 );
               })}
               <div style={{ marginTop:4, padding:'10px 12px', background:`${T.coral}12`, borderRadius:10, borderLeft:`3px solid ${T.coral}` }}>
                 <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, lineHeight:1.55 }}>
-                  ⚠️ <strong style={{ color:T.ink }}>Csak becslés.</strong> 1 korty ≈ 0.5 dl sör ≈ 0.2 egység. Nem orvosi tanács — igyál vizet és felelősen!
+                  ⚠️ <strong style={{ color:T.ink }}>Csak becslés.</strong> 1 korty ≈ 2-3 cl itallal számolva (2,5 cl). Nem orvosi tanács — igyál vizet és felelősen!
                 </div>
               </div>
             </div>
@@ -56499,7 +56512,7 @@ function LeaderRow({ p, rank, maxScore, showScores=true }) {
       {showScores && <div style={{ position:'relative', display:'flex', alignItems:'center', gap:6, color:T.coral }}>
         <BohIcon name="beer" size={14} />
         <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, fontVariantNumeric:'tabular-nums', color:T.ink }}>{p.drinks}</div>
-        {p.drinks > 0 && <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkMute, lineHeight:1 }}>~{(p.drinks*0.2).toFixed(1)}e</div>}
+        {p.drinks > 0 && <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkMute, lineHeight:1 }}>{bohVolLabel(bohVolCl(p.drinks))}</div>}
       </div>}
     </div>
   );
