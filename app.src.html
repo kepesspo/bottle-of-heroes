@@ -34756,7 +34756,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.954';
+const APP_VERSION = 'v9.955';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -34781,6 +34781,21 @@ function useAppDesign() {
     return () => { _appDesignSubs.delete(setD); };
   }, []);
   return d;
+}
+
+// Mód-függő kontúr/árnyék tokenek EGY helyen definiálva.
+// Szabály: ink kontúr + kemény eltolt árnyék = Playful; lágy szórt árnyék = Classic.
+// (Az ikonok és a kabala márkaelemek — mindkét módban azonosak.)
+function usePfTokens() {
+  const playful = useAppDesign() === 'playful';
+  return {
+    playful,
+    border: playful ? `2.5px solid ${T.ink}` : 'none',
+    borderThin: playful ? `2px solid ${T.ink}` : 'none',
+    shadowCard: playful ? `0 6px 0 ${T.ink}` : '0 24px 64px rgba(0,0,0,0.3)',
+    shadow: playful ? `0 4px 0 ${T.ink}` : T.shadow,
+    shadowSm: playful ? `0 3px 0 ${T.ink}` : T.shadow,
+  };
 }
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
@@ -55069,6 +55084,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const [drinkPulse, setDrinkPulse] = useState(false);
   const [scorePulse, setScorePulse] = useState(false);
   const [starAnim, setStarAnim] = useState(false);
+  const pf = usePfTokens();
   const [roundPopup, setRoundPopup] = useState(null); // {round, wildcard, leaving}
   const [activeWildcard, setActiveWildcard] = useState(null); // {emoji, text, round} — a kör alatt végig látható szabály
   const [wcPunishOpen, setWcPunishOpen] = useState(false);
@@ -55559,10 +55575,10 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       {/* ── Aktív wildcard szabály sáv ── */}
       {activeWildcard && (
         <div style={{ flexShrink:0, maxWidth:960, width:'100%', margin:'0 auto', boxSizing:'border-box', padding:'2px 16px 6px' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10, background:T.surfaceMuted, border:`2px solid ${T.ink}`, borderRadius:14, padding:'7px 12px', boxShadow:`0 3px 0 ${T.ink}`, animation:'popIn .3s cubic-bezier(.2,.9,.3,1.2)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, background: pf.playful ? T.surfaceMuted : T.surface, border:pf.borderThin, borderLeft: pf.playful ? `2px solid ${T.ink}` : `4px solid ${T.yellow}`, borderRadius:14, padding:'7px 12px', boxShadow: pf.playful ? `0 3px 0 ${T.ink}` : '0 3px 12px rgba(20,30,50,0.10)', animation:'popIn .3s cubic-bezier(.2,.9,.3,1.2)' }}>
             <span style={{ fontSize:22, flexShrink:0, lineHeight:1 }}>{activeWildcard.emoji}</span>
             <div onClick={() => setRoundPopup({ round: activeWildcard.round, wildcard: activeWildcard, showRound: false, leaving: false })} style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:12, lineHeight:1.3, color:T.ink, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden', cursor:'pointer' }}>{activeWildcard.text}</div>
-            <button onClick={() => setWcPunishOpen(true)} style={{ flexShrink:0, border:`2px solid ${T.ink}`, borderRadius:10, background:T.yellow, color:T.ink, fontFamily:T.font, fontWeight:900, fontSize:11.5, padding:'6px 10px', cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
+            <button onClick={() => setWcPunishOpen(true)} style={{ flexShrink:0, border:pf.borderThin, borderRadius:10, background: pf.playful ? T.yellow : T.ink, color: pf.playful ? T.ink : T.yellow, fontFamily:T.font, fontWeight:900, fontSize:11.5, padding: pf.playful ? '6px 10px' : '8px 10px', cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
               <BohIcon name="beer" size={13} />Szabályszegő?
             </button>
           </div>
@@ -55709,10 +55725,10 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
             })()}
             {roundPopup.wildcard && (
               <>
-                <div style={{ background:T.surfaceMuted, border:`2.5px solid ${T.ink}`, borderRadius:24, padding:'22px 22px 24px', boxShadow:`0 6px 0 ${T.ink}`, position:'relative', overflow:'visible' }}>
+                <div style={{ background: pf.playful ? T.surfaceMuted : T.surface, border:pf.border, borderRadius: pf.playful ? 24 : 28, padding:'22px 22px 24px', boxShadow: pf.playful ? pf.shadowCard : '0 18px 48px rgba(0,0,0,0.28)', position:'relative', overflow:'visible' }}>
                   <div style={{ position:'absolute', top:10, left:14, fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink, lineHeight:1, pointerEvents:'none' }}>♦</div>
                   <div style={{ position:'absolute', bottom:10, right:14, fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink, lineHeight:1, transform:'rotate(180deg)', pointerEvents:'none' }}>♦</div>
-                  <div style={{ display:'inline-block', fontFamily:T.font, fontWeight:900, fontSize:11, color:T.ink, textTransform:'uppercase', letterSpacing:'0.16em', background:T.yellow, border:`2px solid ${T.ink}`, borderRadius:999, padding:'5px 12px' }}>{t('wildcardRound')}</div>
+                  <div style={{ display:'inline-block', fontFamily:T.font, fontWeight:900, fontSize:11, color:T.ink, textTransform:'uppercase', letterSpacing:'0.16em', background:T.yellow, border:pf.borderThin, borderRadius:999, padding:'5px 12px' }}>{t('wildcardRound')}</div>
                   <div style={{ fontSize:42, margin:'14px 0 10px', animation:'wobble 2.5s ease-in-out infinite' }}>{roundPopup.wildcard.emoji}</div>
                   <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, lineHeight:1.35 }}>{roundPopup.wildcard.text}</div>
                 </div>
@@ -56015,7 +56031,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       {showInfo && <GameInfoModal game={currentGame} onClose={() => setShowInfo(false)} />}
       {groupDrinkOverlay && (
         <div style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.72)', zIndex:60, display:'flex', alignItems:'center', justifyContent:'center', padding:28, animation:'fadeIn .2s' }}>
-          <div style={{ background:T.surface, borderRadius:28, padding:'32px 28px 28px', width:'100%', maxWidth:340, display:'flex', flexDirection:'column', alignItems:'center', gap:16, boxShadow:'0 24px 64px rgba(0,0,0,0.3)', animation:'popIn .3s cubic-bezier(.2,.9,.3,1.3)' }}>
+          <div style={{ background: pf.playful ? T.surfaceMuted : T.surface, border:pf.border, borderRadius: pf.playful ? 24 : 28, padding:'32px 28px 28px', width:'100%', maxWidth:340, display:'flex', flexDirection:'column', alignItems:'center', gap:16, boxShadow:pf.shadowCard, animation:'popIn .3s cubic-bezier(.2,.9,.3,1.3)' }}>
             <BohIcon name="beer" size={48} />
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, textAlign:'center', letterSpacing:'-0.02em' }}>{t('groupDrink')}</div>
             <div style={{ fontFamily:T.font, fontSize:15, color:T.inkSoft, textAlign:'center', lineHeight:1.5 }}>Mindenki iszik</div>
@@ -56030,20 +56046,20 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       )}
       {wcPunishOpen && activeWildcard && (
         <div onClick={() => setWcPunishOpen(false)} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.72)', zIndex:60, display:'flex', alignItems:'center', justifyContent:'center', padding:28, animation:'fadeIn .2s' }}>
-          <div onClick={e => e.stopPropagation()} style={{ background:T.surfaceMuted, border:`2.5px solid ${T.ink}`, borderRadius:24, padding:'26px 22px 22px', width:'100%', maxWidth:340, boxShadow:`0 6px 0 ${T.ink}`, animation:'popIn .3s cubic-bezier(.2,.9,.3,1.3)' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: pf.playful ? T.surfaceMuted : T.surface, border:pf.border, borderRadius: pf.playful ? 24 : 28, padding:'26px 22px 22px', width:'100%', maxWidth:340, boxShadow:pf.shadowCard, animation:'popIn .3s cubic-bezier(.2,.9,.3,1.3)' }}>
             <div style={{ textAlign:'center', fontSize:34, lineHeight:1, marginBottom:8 }}>{activeWildcard.emoji}</div>
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, textAlign:'center', marginBottom:4 }}>Ki szegte meg a szabályt?</div>
             <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, textAlign:'center', marginBottom:14, lineHeight:1.4 }}>{activeWildcard.text}</div>
             <div style={{ display:'flex', flexDirection:'column', gap:8, maxHeight:'42vh', overflowY:'auto' }}>
               {players.filter(p => p.active !== false).map(p => (
-                <button key={p.id} onClick={() => punishWildcard(p.id)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:14, border:`2px solid ${T.ink}`, background:T.surface, boxShadow:`0 2px 0 ${T.ink}`, cursor:'pointer', textAlign:'left' }}>
+                <button key={p.id} onClick={() => punishWildcard(p.id)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:14, border:pf.borderThin, background: pf.playful ? T.surface : T.surfaceMuted, boxShadow: pf.playful ? `0 2px 0 ${T.ink}` : 'none', cursor:'pointer', textAlign:'left' }}>
                   <PlayerAvatar player={p} size={36} />
                   <span style={{ flex:1, fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
                   <BohIcon name="beer" size={16} />
                 </button>
               ))}
             </div>
-            <button onClick={() => setWcPunishOpen(false)} style={{ width:'100%', marginTop:12, padding:'12px 0', borderRadius:14, border:`2px solid ${T.ink}55`, background:'transparent', color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:14, cursor:'pointer' }}>Mégse</button>
+            <button onClick={() => setWcPunishOpen(false)} style={{ width:'100%', marginTop:12, padding:'12px 0', borderRadius:14, border: pf.playful ? `2px solid ${T.ink}55` : 'none', background: pf.playful ? 'transparent' : T.surfaceMuted, color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:14, cursor:'pointer' }}>Mégse</button>
           </div>
         </div>
       )}
