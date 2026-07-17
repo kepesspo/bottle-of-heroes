@@ -34756,7 +34756,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.950';
+const APP_VERSION = 'v9.951';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -61456,23 +61456,13 @@ function BottleApp() {
         document.body
       )}
       {showOnboarding && <OnboardingOverlay onDone={() => setShowOnboarding(false)} />}
-      {/* creatingRoom alatt rejtve: az iOS a status bar színét az alatta lévő görgethető
-          tartalomból mintázza, és a Games képernyő fehér appbarja fehérre festené a sávot */}
-      <div key={screen} style={{ height:'100dvh', width:'100%', display:'flex', flexDirection:'column', overflow:'hidden', boxSizing:'border-box', paddingTop:'env(safe-area-inset-top)', visibility: creatingRoom ? 'hidden' : 'visible', animation:`slide${dir>0?'In':'Back'} .35s cubic-bezier(.2,.85,.3,1.05)` }}>
-        {screen==='home'     && <HomeScreen     go={go} onStartGame={onStartGame} onQuickGame={onQuickGame} setTheme={handleSetTheme} currentTheme={appTheme} setLang={handleSetLang} currentLang={appLang} resumeRoomData={resumeRoomData} onResume={goResume} />}
-        {screen==='stats'    && <StatsScreen    go={go} onOpenObserver={openObserver} />}
-        {screen==='log'      && <EventLogScreen go={go} goEdit={goEdit} deepLink={_deepLink} />}
-        {screen==='jukebox'  && <JukeboxScreen go={go} deepLink={_jukebox} />}
-        {screen==='admin'    && <AdminScreen go={go} />}
-        {screen==='create'   && <EventCreateScreen go={go} editId={editEventId} deepLink={_deepLink} />}
-        {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
-        {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
-        {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} gameMeta={gameMeta} setGameMeta={setGameMeta} setLastGameRound={setLastGameRound} setScoreHistory={setScoreHistory} />}
-        {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} lastRound={lastGameRound} scoreHistory={scoreHistory} />}
-        {screen==='observer' && <ObserverScreen go={go} initialCode={observerInitCode || (!_initRoomConsumedRef.current && _initRoom ? (_initRoomConsumedRef.current = true, _initRoom) : '')} onJoinAsHost={goJoinAsHost} />}
-      </div>
-      {creatingRoom && (
-        <div style={{ position:'fixed', top:'calc(-1 * env(safe-area-inset-top))', left:0, right:0, bottom:0, background:T.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, zIndex:100, padding:'calc(24px + env(safe-area-inset-top)) 24px 24px' }}>
+      {/* creatingRoom: NEM fixed overlay, hanem a normál képernyő-konténer tartalma —
+          az iOS a status bar színét a folyamban lévő tartalomból veszi, a fixed
+          rétegeket üresnek látja (fehér sávot adna). Így úgy viselkedik, mint a
+          játék képernyő, ahol a sáv színe bizonyítottan jó. */}
+      <div key={creatingRoom ? 'creating' : screen} style={{ height:'100dvh', width:'100%', display:'flex', flexDirection:'column', overflow:'hidden', boxSizing:'border-box', paddingTop:'env(safe-area-inset-top)', animation:`slide${dir>0?'In':'Back'} .35s cubic-bezier(.2,.85,.3,1.05)` }}>
+        {creatingRoom ? (
+        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, padding:24 }}>
           {!roomCreateError ? (
             <>
               <div style={{ position:'relative', width:'100%', maxWidth:420, height:150, marginBottom:8, overflow:'hidden' }}>
@@ -61500,7 +61490,20 @@ function BottleApp() {
             </>
           )}
         </div>
-      )}
+        ) : (<>
+        {screen==='home'     && <HomeScreen     go={go} onStartGame={onStartGame} onQuickGame={onQuickGame} setTheme={handleSetTheme} currentTheme={appTheme} setLang={handleSetLang} currentLang={appLang} resumeRoomData={resumeRoomData} onResume={goResume} />}
+        {screen==='stats'    && <StatsScreen    go={go} onOpenObserver={openObserver} />}
+        {screen==='log'      && <EventLogScreen go={go} goEdit={goEdit} deepLink={_deepLink} />}
+        {screen==='jukebox'  && <JukeboxScreen go={go} deepLink={_jukebox} />}
+        {screen==='admin'    && <AdminScreen go={go} />}
+        {screen==='create'   && <EventCreateScreen go={go} editId={editEventId} deepLink={_deepLink} />}
+        {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
+        {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
+        {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} gameMeta={gameMeta} setGameMeta={setGameMeta} setLastGameRound={setLastGameRound} setScoreHistory={setScoreHistory} />}
+        {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} lastRound={lastGameRound} scoreHistory={scoreHistory} />}
+        {screen==='observer' && <ObserverScreen go={go} initialCode={observerInitCode || (!_initRoomConsumedRef.current && _initRoom ? (_initRoomConsumedRef.current = true, _initRoom) : '')} onJoinAsHost={goJoinAsHost} />}
+        </>)}
+      </div>
     </div>
   );
 }
