@@ -34748,7 +34748,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.944';
+const APP_VERSION = 'v9.945';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -55162,17 +55162,28 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     }
   }, [gameIdx]);
 
-  // Csoportos ivászat — random 5-10 perces timer
+  // Csoportos ivászat — random 5-10 perces timer.
+  // Nem játék közben ugrik fel: a timer csak "esedékesre" állítja, és a
+  // KÖVETKEZŐ kör/játék kezdete után jelenik meg, hogy ne zavarja a játékost.
+  const groupDrinkDueRef = React.useRef(false);
   React.useEffect(() => {
     if (!groupDrinkEnabled) return;
     const ms = (5 + Math.random() * 5) * 60 * 1000;
+    const t = setTimeout(() => { groupDrinkDueRef.current = true; }, ms);
+    return () => clearTimeout(t);
+  }, [groupDrinkEnabled, groupDrinkOverlay]); // re-arm after each event
+  React.useEffect(() => {
+    if (!groupDrinkEnabled || !groupDrinkDueRef.current || groupDrinkOverlay) return;
+    // kör-/játékváltás történt és esedékes → a körindító felirat után jövünk
     const t = setTimeout(() => {
+      if (!groupDrinkDueRef.current) return;
+      groupDrinkDueRef.current = false;
       const diff = currentGame.difficulty;
       const drinks = diff === 'nehéz' ? 3 : diff === 'közepes' ? 2 : 1;
       setGroupDrinkOverlay({ drinks });
-    }, ms);
+    }, 1800);
     return () => clearTimeout(t);
-  }, [groupDrinkEnabled, groupDrinkOverlay]); // re-arm after each event
+  }, [gameIdx, round]);
 
   const processPendingDrinks = () => {
     if (!roomCode || typeof popPendingDrinks!=='function') return;
