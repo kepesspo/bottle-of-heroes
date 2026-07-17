@@ -34756,7 +34756,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.952';
+const APP_VERSION = 'v9.953';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -35095,7 +35095,7 @@ const TR = {
     modeGroup: 'Csoportos ivás',
     modeGroupInfo: 'Vesztes esetén az egész csapat iszik egyet, nem csak a vesztes játékos.',
     modeWildcard: 'Wildcard körök',
-    modeWildcardInfo: 'Megadott körönként megjelenik egy random különleges szabály (pl. bal kézzel inni, pókerpofa kör). A szabály a teljes kör alatt látható marad, és a szabályszegőnek egy koppintással kortyot oszthatsz.',
+    modeWildcardInfo: 'Megadott körönként megjelenik egy random különleges szabály (pl. bal kézzel inni, pókerpofa kör). A szabály a következő wildcard körig érvényben marad, és a szabályszegőnek egy koppintással kortyot oszthatsz.',
     diffEasy: 'Könnyű',
     diffEasyNote: 'Hosszabb időzítők, megbocsátóbb feltételek. Ajánlott új játékosoknak.',
     diffMid: 'Közepes',
@@ -35356,7 +35356,7 @@ const TR = {
     modeGroup: 'Group Drinking',
     modeGroupInfo: 'On a loss, the whole team drinks, not just the losing player.',
     modeWildcard: 'Wildcard Rounds',
-    modeWildcardInfo: 'Every Nth round begins with a random special rule (e.g. drink with left hand, poker face round). The rule stays visible for the whole round, and rule-breakers can be given a sip with one tap.',
+    modeWildcardInfo: 'Every Nth round begins with a random special rule (e.g. drink with left hand, poker face round). The rule stays active until the next wildcard round, and rule-breakers can be given a sip with one tap.',
     diffEasy: 'Easy',
     diffEasyNote: 'Longer timers, more forgiving conditions. Recommended for new players.',
     diffMid: 'Medium',
@@ -55338,9 +55338,13 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                 const showCounter = gameMeta?.showRoundCounter !== false;
         const wcFreq = gameMeta?.wildcardFreq || 5;
         const isWildcardRound = gameMeta?.modes?.includes('wildcard') && newRound % wcFreq === 0;
-        const wc = isWildcardRound ? WILDCARDS[Math.floor(Math.random() * WILDCARDS.length)] : null;
+        // Az aktív wildcard a KÖVETKEZŐ wildcard körig érvényben marad (pl. freq 3: 3-5. kör),
+        // akkor új kártya váltja — ami nem lehet ugyanaz, mint az előző.
+        const wc = isWildcardRound ? (() => {
+          const pool = (activeWildcard && WILDCARDS.length > 1) ? WILDCARDS.filter(w => w.text !== activeWildcard.text) : WILDCARDS;
+          return pool[Math.floor(Math.random() * pool.length)];
+        })() : null;
         if (isWildcardRound && wc) setActiveWildcard({ ...wc, round: newRound });
-        else setActiveWildcard(null);
         // Show popup if: counter is on OR it's a wildcard round
         if (showCounter || isWildcardRound) {
           setRoundPopup({ round: newRound, wildcard: wc, showRound: showCounter, leaving: false });
