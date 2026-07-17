@@ -34748,7 +34748,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.943';
+const APP_VERSION = 'v9.944';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -47230,6 +47230,18 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult }) {
       if (amt > 0) drinkMap[pid] = (drinkMap[pid]||0) + amt;
     });
     if (onAdvance) onAdvance(drinkMap, pointsMap);
+    if (onResult) {
+      const winnersArr = players.filter(p => bets[p.id]?.horseId === raceWinner);
+      const drinkersArr = players.filter(p => (drinkMap[p.id]||0) > 0);
+      if (winnersArr.length || drinkersArr.length) {
+        onResult({
+          winners: winnersArr,
+          losers: drinkersArr,
+          winNote: winnersArr.length ? '+1 pont' : '',
+          loseNote: drinkersArr.map(p => `${p.name} ${drinkMap[p.id]}🍺`).join(', '),
+        });
+      }
+    }
   };
 
   const getRanks = (pos) => {
@@ -55096,15 +55108,20 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   }, [gameResult && gameResult.ts]);
 
   const recentOpponentRef = React.useRef(null);
+  const _oppKeyRef = React.useRef(null);
   useEffect(() => {
-    if (currentGame.category !== 'Páros') { setSelectedOpponent(null); return; }
+    if (currentGame.category !== 'Páros') { if (selectedOpponent) setSelectedOpponent(null); _oppKeyRef.current = null; return; }
     const others = activePlayers.filter(p => p.id !== currentPlayer?.id);
     if (others.length === 0) return;
+    const key = turn + '_' + gameIdx;
+    // ha ehhez a körhöz már sorsoltunk ÉS az ellenfél még érvényes, nem sorsolunk újra
+    if (_oppKeyRef.current === key && selectedOpponent && selectedOpponent.id !== currentPlayer?.id && others.some(p => p.id === selectedOpponent.id)) return;
     const pool = others.length > 1 ? others.filter(p => p.id !== recentOpponentRef.current) : others;
     const pick = pool[Math.floor(Math.random() * pool.length)];
     recentOpponentRef.current = pick.id;
+    _oppKeyRef.current = key;
     setSelectedOpponent(pick);
-  }, [turn, gameIdx]);
+  }, [turn, gameIdx, players.length, selectedOpponent]);
 
   // Polling fallback: pull latest player state from Firestore every 2s
   useEffect(() => {
