@@ -34756,7 +34756,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.947';
+const APP_VERSION = 'v9.948';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = (() => { try { return localStorage.getItem('boh_home_design') === 'playful' ? 'playful' : 'classic'; } catch(e) { return 'classic'; } })();
@@ -35077,7 +35077,6 @@ const TR = {
     themePlaying: 'MOST ŐK',
     gameOver: 'Játék vége! 🎉',
     pointsProgress: 'Pontok alakulása',
-    bonusEvent: 'Bónusz esemény!',
     groupDrink: 'Csoportos Ivászat!',
     groupBtn: 'Csoport',
     startGame: 'Játék indítása!',
@@ -35093,8 +35092,6 @@ const TR = {
     livesSub: 'Játékosnak legyen életszáma',
     modePoints: 'Pontgyűjtés',
     modePointsInfo: 'A játékosok minden győztes körnél csillagot kapnak. A legtöbb csillaggal rendelkező játékos nyeri a meccset.',
-    modeBonus: 'Bónusz képernyő',
-    modeBonusInfo: 'Minden kör végén megjelenik egy rövid összefoglaló: ki nyert pontot és ki iszik.',
     modeGroup: 'Csoportos ivás',
     modeGroupInfo: 'Vesztes esetén az egész csapat iszik egyet, nem csak a vesztes játékos.',
     modeWildcard: 'Wildcard körök',
@@ -35107,8 +35104,6 @@ const TR = {
     diffHardNote: 'Rövidebb időzítők. Gyors reflexek kellenek.',
     diffExtreme: 'Extrém',
     diffExtremeNote: 'Minimális idő, maximum nyomás. Csak a legbátrabbaknak!',
-    bonusLeaderDrinks: 'A vezető iszik — {n} korty',
-    bonusComebackPoints: 'Az utolsó helyen álló visszakapaszkodik — +{n} pont',
     obsRoundChange: 'Körváltás',
     roundWord: 'Kör',
     chooseGames: 'Válassz játékokat a kezdéshez!',
@@ -35343,7 +35338,6 @@ const TR = {
     themePlaying: 'PLAYING',
     gameOver: 'Game Over! 🎉',
     pointsProgress: 'Points Progress',
-    bonusEvent: 'Bonus Event!',
     groupDrink: 'Group Drinking!',
     groupBtn: 'Group',
     startGame: 'Start Game!',
@@ -35359,8 +35353,6 @@ const TR = {
     livesSub: 'Give players a life count',
     modePoints: 'Point Scoring',
     modePointsInfo: 'Players earn a star for every winning round. The player with the most stars wins the match.',
-    modeBonus: 'Bonus Screen',
-    modeBonusInfo: 'A brief summary appears after each round: who scored a point and who drinks.',
     modeGroup: 'Group Drinking',
     modeGroupInfo: 'On a loss, the whole team drinks, not just the losing player.',
     modeWildcard: 'Wildcard Rounds',
@@ -35373,8 +35365,6 @@ const TR = {
     diffHardNote: 'Shorter timers. Quick reflexes needed.',
     diffExtreme: 'Extreme',
     diffExtremeNote: 'Minimal time, maximum pressure. For the bravest only!',
-    bonusLeaderDrinks: 'The leader drinks — {n} sips',
-    bonusComebackPoints: 'Last place makes a comeback — +{n} point',
     obsRoundChange: 'Round Change',
     roundWord: 'Round',
     chooseGames: 'Choose games to get started!',
@@ -41212,7 +41202,6 @@ function GameSettingsContent({ meta, setMeta, onDone, go }) {
 
   const modes = [
     { id:'points',   icon:'star',     label:t('modePoints'),   info:t('modePointsInfo') },
-    { id:'bonus',    icon:'gift',     label:t('modeBonus'),    info:t('modeBonusInfo') },
     { id:'group',    icon:'beer',     label:t('modeGroup'),    info:t('modeGroupInfo') },
     { id:'wildcard', icon:'wildcard', label:t('modeWildcard'), info:t('modeWildcardInfo') },
   ];
@@ -55103,10 +55092,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const gameOrderMode = gameMeta?.gameOrder || 'random';
   const [randomOrder, setRandomOrder] = useState(() => []);
   const groupDrinkEnabled = (gameMeta?.modes || []).includes('group');
-  const bonusEnabled = (gameMeta?.modes || []).includes('bonus');
   const [groupDrinkOverlay, setGroupDrinkOverlay] = useState(null); // { drinks }
-  const [bonusOverlay, setBonusOverlay] = useState(null); // { type, player, drinks } | null
-  const bonusPendingRef = React.useRef(null);
   const undoRef = React.useRef(null); // stores previous state for undo
   const playersRef = React.useRef(players);
   React.useEffect(() => { playersRef.current = players; }, [players]);
@@ -55354,25 +55340,6 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const commitPending = () => {
     if (!pendingCommit || transitioning) return;
     const {newPlayers, fb, newTurn, newGameIdx, newRound} = pendingCommit;
-    // 10% bónusz esély
-    if (bonusEnabled && Math.random() < 0.10 && newPlayers.length >= 2) {
-      const sorted = [...newPlayers].sort((a,b) => (b.points-a.points)||(a.drinks-b.drinks));
-      const first = sorted[0];
-      const minPoints = sorted[sorted.length - 1].points;
-      const lastTied = sorted.filter(p => p.points === minPoints);
-      if (!lastTied.length) return commitRound(newPlayers, fb, newTurn, newGameIdx, newRound);
-      const last = lastTied[Math.floor(Math.random() * lastTied.length)];
-      const type = Math.random() < 0.5 ? 'top' : 'last';
-      // top: leader drinks 2 extra (catch-up: others benefit)
-      // last: lowest scorer gets +1 point (comeback mechanic)
-      const bonus = type === 'top'
-        ? { type:'top', player: first, drinks: 2 }
-        : { type:'last', player: last, points: 1 };
-      bonusPendingRef.current = {newPlayers, fb, newTurn, newGameIdx, newRound, bonus};
-      setPendingCommit(null);
-      setBonusOverlay(bonus);
-      return;
-    }
     setPendingCommit(null);
     commitRound(newPlayers, fb, newTurn, newGameIdx, newRound);
   };
@@ -55391,21 +55358,6 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       try { localStorage.setItem('boh_session', JSON.stringify({ players: p, turn: t, gameIdx: g, round: r, selectedGames, gameMeta })); } catch(e) {}
       if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { players: p, turn: t, gameIdx: g, round: r });
     }, 480);
-  };
-
-  const dismissBonus = () => {
-    const p = bonusPendingRef.current;
-    if (!p) return;
-    bonusPendingRef.current = null;
-    setBonusOverlay(null);
-    // Apply bonus drinks to players
-    const { bonus, newPlayers, fb, newTurn, newGameIdx, newRound } = p;
-    const updated = newPlayers.map(pl => {
-      if (bonus.type === 'top' && pl.id === bonus.player.id) return {...pl, drinks: pl.drinks + bonus.drinks};
-      if (bonus.type === 'last' && pl.id === bonus.player.id) return {...pl, points: pl.points + (bonus.points||1)};
-      return pl;
-    });
-    commitRound(updated, fb, newTurn, newGameIdx, newRound);
   };
 
   const diffDrinks = gameMeta?.difficulty === 'extreme' ? 5 : gameMeta?.difficulty === 'hard' ? 3 : gameMeta?.difficulty === 'mid' ? 2 : 1;
@@ -56031,36 +55983,6 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               setPlayers(prev => prev.map(p => ({...p, drinks: p.drinks + groupDrinkOverlay.drinks})));
               setGroupDrinkOverlay(null);
             }} style={{ width:'100%', padding:'16px 0', borderRadius:16, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:T.shadow, marginTop:4 }}>Megiszom! <BohIcon name="cheers" size={17} style={{ marginLeft:4, verticalAlign:'-0.18em' }} /></button>
-          </div>
-        </div>
-      )}
-      {bonusOverlay && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.72)', zIndex:60, display:'flex', alignItems:'center', justifyContent:'center', padding:28, animation:'fadeIn .2s' }}>
-          <div style={{ background:T.surface, borderRadius:28, padding:'32px 28px 28px', width:'100%', maxWidth:340, display:'flex', flexDirection:'column', alignItems:'center', gap:14, boxShadow:'0 24px 64px rgba(0,0,0,0.3)', animation:'popIn .3s cubic-bezier(.2,.9,.3,1.3)' }}>
-            <div style={{ fontSize:52, lineHeight:1 }}>{bonusOverlay.type === 'top' ? '😅' : '🌟'}</div>
-            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink, textAlign:'center', letterSpacing:'-0.02em' }}>{t('bonusEvent')}</div>
-            {bonusOverlay.type === 'top' ? (
-              <>
-                <PlayerAvatar player={bonusOverlay.player} size={52} />
-                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:17, color:T.ink }}>{bonusOverlay.player.name} iszik!</div>
-                <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', lineHeight:1.5 }}>{t('bonusLeaderDrinks').replace('{n}', bonusOverlay.drinks)}</div>
-                <div style={{ display:'flex', gap:8, justifyContent:'center', flexWrap:'wrap' }}>
-                  {[].map((r,i) => (
-                    <div key={r.id + '_' + i} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
-                      <PlayerAvatar player={r} size={38} />
-                      <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft }}>{r.name}</div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <PlayerAvatar player={bonusOverlay.player} size={52} />
-                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:17, color:T.ink }}>{bonusOverlay.player.name}</div>
-                <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center', lineHeight:1.5 }}>{t('bonusComebackPoints').replace('{n}', bonusOverlay.points||1)}</div>
-              </>
-            )}
-            <button onClick={dismissBonus} style={{ width:'100%', padding:'16px 0', borderRadius:16, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:T.shadow, marginTop:4 }}>Értettem, tovább!</button>
           </div>
         </div>
       )}
