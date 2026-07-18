@@ -34733,6 +34733,32 @@ window.bohHaptic = function (kind) {
   } catch (e) {}
 };
 
+// Hangos műsorvezető — böngészős TTS, lehetőleg magyar hanggal
+window.bohSpeak = (function () {
+  var voice = null;
+  function pick() {
+    try {
+      var vs = (window.speechSynthesis && window.speechSynthesis.getVoices()) || [];
+      voice = vs.filter(function (v) { return /^hu/i.test(v.lang); })[0] || null;
+    } catch (e) {}
+  }
+  try { if (window.speechSynthesis) { window.speechSynthesis.onvoiceschanged = pick; pick(); } } catch (e) {}
+  return function (text, opts) {
+    try {
+      if (!window.speechSynthesis || !text) return;
+      var u = new SpeechSynthesisUtterance(String(text));
+      u.lang = 'hu-HU';
+      if (!voice) pick();
+      if (voice) u.voice = voice;
+      u.rate = (opts && opts.rate) || 1.03;
+      u.pitch = (opts && opts.pitch) || 1.05;
+      u.volume = (opts && typeof opts.volume === 'number') ? opts.volume : 1;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  };
+})();
+
 // Becsült elfogyasztott mennyiség: 1 korty ≈ 2,5 cl
 function bohVolCl(drinks) { return drinks * 2.5; }
 function bohVolLabel(cl) { return cl < 100 ? '~' + Math.round(cl) + ' cl' : '~' + (cl/100).toFixed(1).replace('.', ',') + ' l'; }
@@ -34760,7 +34786,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.975';
+const APP_VERSION = 'v9.976';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -41226,6 +41252,19 @@ function GameSettingsContent({ meta, setMeta, onDone, go }) {
         onChange={() => setMeta({...meta, hydrationReminder: !meta.hydrationReminder})}
         infoKey="hydration"
         infoText="30 percenként megjelenik egy 'Igyál egy pohár vizet!' értesítés. 60 másodpercig nem lehet eltüntetni — addig a játék szünetel."
+      />
+      <ToggleRow
+        icon="party"
+        label="Hangos műsorvezető"
+        value={!!meta.ttsHost}
+        onChange={() => {
+          const next = !meta.ttsHost;
+          setMeta({...meta, ttsHost: next});
+          // Bekapcsoláskor egy koppintáson belül megszólal → iOS-en is feloldja a beszédet
+          if (next && typeof window.bohSpeak === 'function') window.bohSpeak('Műsorvezető bekapcsolva!');
+        }}
+        infoKey="ttshost"
+        infoText="A telefon hangosan bekonferálja a köröket, a wildcardokat és az eredményeket. (A böngésző beszédszintézisét használja — magyar hanggal, ahol elérhető.)"
       />
     </div>
   );
@@ -55185,6 +55224,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       setGroupDrinkOverlay({ drinks });
       if (typeof window.bohSound === 'function') window.bohSound('cheers');
       if (typeof window.bohHaptic === 'function') window.bohHaptic('success');
+      if (gameMeta?.ttsHost && typeof window.bohSpeak === 'function') window.bohSpeak('Csoportos ivászat! Mindenki iszik ' + drinks + ' kortyot!');
     }, 1800);
     return () => clearTimeout(t);
   }, [gameIdx, round]);
@@ -55276,6 +55316,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           setActiveWildcard({ ...wc, round: newRound });
           if (typeof window.bohSound === 'function') window.bohSound('wildcard');
           if (typeof window.bohHaptic === 'function') window.bohHaptic('success');
+          if (gameMeta?.ttsHost && typeof window.bohSpeak === 'function') window.bohSpeak('Wildcard kör! ' + (wc.text || ''));
           // Szerencsekör: véletlen aktív játékos kap +1 pontot, és a banner kiírja, ki
           if (wc.effect === 'lucky') {
             const activePl = newPlayers.filter(p => p.active !== false);
@@ -55283,10 +55324,12 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               const lucky = activePl[Math.floor(Math.random() * activePl.length)];
               setPlayers(prev => prev.map(p => p.id === lucky.id ? { ...p, points: (p.points||0) + 1 } : p));
               setTimeout(() => setGameResult({ winners:[lucky], winNote:'+1 pont', subtitle:`${lucky.name} — Szerencsekör!`, drinks:0, effect:'lucky', ts:Date.now() }), 500);
+              if (gameMeta?.ttsHost && typeof window.bohSpeak === 'function') setTimeout(() => window.bohSpeak('Szerencsekör! ' + lucky.name + ' kapott egy pontot!'), 700);
             }
           }
         }
         // Show popup if: counter is on OR it's a wildcard round
+        if (showCounter && !isWildcardRound && gameMeta?.ttsHost && typeof window.bohSpeak === 'function') window.bohSpeak(newRound + '. kör');
         if (showCounter || isWildcardRound) {
           setRoundPopup({ round: newRound, wildcard: wc, showRound: showCounter, leaving: false });
           const duration = isWildcardRound ? null : 1500; // wildcard: stays until tapped
@@ -55359,6 +55402,16 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       const positive = hasW || (!hasL && scaled === 0 && res.correct !== false);
       window.bohSound(positive ? 'win' : 'lose');
       if (typeof window.bohHaptic === 'function') window.bohHaptic(positive ? 'success' : 'error');
+    }
+    if (gameMeta?.ttsHost && typeof window.bohSpeak === 'function') {
+      const nm = x => typeof x === 'string' ? x : (x && x.name) || '';
+      const wn = (r.winners || []).map(nm).filter(Boolean);
+      const ls = (r.losers || []).map(nm).filter(Boolean);
+      let say = wcEffect === 'reverse' ? 'Fordított kör! ' : wcEffect === 'double' ? 'Dupla kör! ' : '';
+      if (wn.length) say += wn.join(', ') + (wn.length > 1 ? ' nyertek! ' : ' nyert! ');
+      if (ls.length) say += ls.join(', ') + (ls.length > 1 ? ' isznak' : ' iszik') + (scaled > 0 ? ' ' + scaled + ' kortyot' : '') + '!';
+      else if (!wn.length && r.subtitle) say += r.subtitle;
+      if (say.trim()) window.bohSpeak(say);
     }
     if (roomCode && typeof syncRoom === 'function') {
       syncRoom(roomCode, { gameEvent: { correct: !!res.correct, playerName: res.playerName || null, drinks: scaled, subtitle: subtitle || null, ts } });
