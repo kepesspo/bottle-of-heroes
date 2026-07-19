@@ -34794,7 +34794,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.986';
+const APP_VERSION = 'v9.987';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -38485,6 +38485,7 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
     }
     return null;
   });
+  const [type, setType] = React.useState(init.type === 'shot' ? 'shot' : 'cocktail');
   const [note, setNote] = React.useState(init.note || '');
   const valid = name.trim().length > 0;
   const strColor = s => s >= 3 ? T.coral : s === 2 ? (T.yellow || '#F4C95A') : T.mint;
@@ -38493,7 +38494,7 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
   const card = { background:T.surface, borderRadius:18, padding:'16px', boxShadow:T.shadow, marginBottom:12 };
   const save = () => {
     if (!valid) return;
-    onSave({ name:name.trim(), emoji:(emoji||'').trim()||'🍹', str, ing:ing.split('\n').map(s => s.trim()).filter(Boolean), step:step.trim(), by: creator ? (creator.name || '') : (init.byId ? '' : (init.by || '')), byId: creator ? creator.id : '', note:note.trim() });
+    onSave({ name:name.trim(), emoji:(emoji||'').trim()||'🍹', type, str, ing:ing.split('\n').map(s => s.trim()).filter(Boolean), step:step.trim(), by: creator ? (creator.name || '') : (init.byId ? '' : (init.by || '')), byId: creator ? creator.id : '', note:note.trim() });
   };
   return (
     <div style={{ position:'fixed', inset:0, zIndex:80, background:T.bg, display:'flex', flexDirection:'column' }}>
@@ -38505,6 +38506,14 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
           <div style={{ display:'flex', gap:10 }}>
             <input value={emoji} onChange={e => setEmoji(e.target.value)} style={{ ...inpStyle, width:58, flexShrink:0, textAlign:'center', fontSize:22, padding:'11px 4px' }} />
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Pl. Dini bombája" style={{ ...inpStyle, flex:1, width:'auto', minWidth:0 }} />
+          </div>
+          <div style={{ marginTop:14 }}>
+            {label('Típus')}
+            <div style={{ display:'flex', gap:8 }}>
+              {[['cocktail','Koktél 🍹'],['shot','Shot 🥃']].map(([v,l]) => (
+                <button key={v} onClick={() => { setType(v); setEmoji(em => (em === '🍹' || em === '🥃') ? (v === 'shot' ? '🥃' : '🍹') : em); }} style={{ flex:1, padding:'11px 0', borderRadius:13, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background: type === v ? T.mint : T.bg, color: type === v ? '#fff' : T.inkSoft, boxShadow: type === v ? `0 4px 12px ${T.mint}55` : 'none', transition:'all .15s' }}>{l}</button>
+              ))}
+            </div>
           </div>
           <div style={{ marginTop:14 }}>
             {label('Erősség')}
@@ -38574,6 +38583,7 @@ function BarScreen({ go, deepLink }) {
   const [sheetId, setSheetId] = React.useState(null);
   const [form, setForm] = React.useState(null);
   const [confirmDel, setConfirmDel] = React.useState(false);
+  const [ownFilter, setOwnFilter] = React.useState('all');
   const db = (typeof firebase !== 'undefined') ? firebase.firestore() : null;
 
   React.useEffect(() => {
@@ -38644,6 +38654,7 @@ function BarScreen({ go, deepLink }) {
   });
   const medalFor = {};
   ownSorted.filter(d => avgOf(d.id).n > 0).slice(0, 3).forEach((d, i) => { medalFor[d.id] = ['🥇','🥈','🥉'][i]; });
+  const ownShown = ownFilter === 'all' ? ownSorted : ownSorted.filter(d => (d.type === 'shot' ? 'shot' : 'cocktail') === ownFilter);
 
   let recipeList = DRINKS.filter(d => d.type === tab);
   if (avail.size) recipeList = [...recipeList].sort((a,b) => (canMake(b) - canMake(a)));
@@ -38687,7 +38698,10 @@ function BarScreen({ go, deepLink }) {
               <span style={{ fontFamily:T.font, fontWeight:700, fontSize:11.5, color:T.inkSoft, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{(bp && bp.name) || ''}</span>
             </div>
           ); })() : null}
-          <div style={{ marginTop:5 }}><StrDots s={d.str || 2} /></div>
+          <div style={{ marginTop:5, display:'flex', alignItems:'center', gap:7 }}>
+            <StrDots s={d.str || 2} />
+            {d.custom && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:10, color:T.inkSoft, background:T.surfaceMuted, borderRadius:999, padding:'2px 8px', flexShrink:0 }}>{d.type === 'shot' ? '🥃 Shot' : '🍹 Koktél'}</span>}
+          </div>
         </div>
         <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:3, flexShrink:0 }}>
           <Stars value={avg} size={13} />
@@ -38708,6 +38722,11 @@ function BarScreen({ go, deepLink }) {
           </div>
           <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, marginBottom:2 }}>Mi kevertük 🍸</div>
           <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginBottom:10 }}>A DNR-eken készült keverések — koppints egy italra a részletekhez és az értékeléshez.</div>
+          <div style={{ display:'flex', gap:7, marginBottom:12 }}>
+            {[['all','Mind'],['cocktail','🍹 Koktél'],['shot','🥃 Shot']].map(([k,l]) => { const on = ownFilter === k; return (
+              <button key={k} onClick={() => setOwnFilter(k)} style={{ padding:'7px 14px', borderRadius:999, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:12.5, background: on ? T.mint : T.surface, color: on ? '#fff' : T.ink, boxShadow: on ? `0 3px 0 ${T.mintDeep||T.mint}66, 0 6px 14px ${T.mint}33` : T.shadow }}>{l}</button>
+            ); })}
+          </div>
           {own === null ? (
             <div style={{ textAlign:'center', padding:30, fontFamily:T.font, color:T.sub }}>Betöltés…</div>
           ) : ownSorted.length === 0 ? (
@@ -38719,7 +38738,8 @@ function BarScreen({ go, deepLink }) {
             </div>
           ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {ownSorted.map(d => <DrinkCard key={d.id} d={d} medal={medalFor[d.id]} />)}
+              {ownShown.map(d => <DrinkCard key={d.id} d={d} medal={medalFor[d.id]} />)}
+              {ownShown.length === 0 && <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, textAlign:'center', padding:'18px 0' }}>Ebben a kategóriában még nincs keverés.</div>}
             </div>
           )}
           <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:20, lineHeight:1.5 }}>Idd felelősséggel! 🍸</div>
@@ -38765,7 +38785,10 @@ function BarScreen({ go, deepLink }) {
                 <span style={{ fontSize:40, lineHeight:1, flexShrink:0 }}>{d.emoji || '🍹'}</span>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontFamily:T.font, fontWeight:900, fontSize:19, color:T.ink, lineHeight:1.15 }}>{d.name}</div>
-                  <div style={{ marginTop:5 }}><StrDots s={d.str || 2} /></div>
+                  <div style={{ marginTop:5, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                    <StrDots s={d.str || 2} />
+                    {d.custom && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, color:T.inkSoft, background:T.surfaceMuted, borderRadius:999, padding:'2px 8px' }}>{d.type === 'shot' ? '🥃 Shot' : '🍹 Koktél'}</span>}
+                  </div>
                 </div>
                 <button onClick={() => setSheetId(null)} style={{ border:'none', background:T.surfaceMuted, color:T.inkSoft, width:32, height:32, borderRadius:'50%', cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, flexShrink:0 }}>✕</button>
               </div>
