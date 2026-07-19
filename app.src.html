@@ -10,12 +10,16 @@
     var q=location.search;
     var isEv=q.indexOf('screen=events')!==-1||q.indexOf('screen=calendar')!==-1;
     var isBox=q.indexOf('screen=dnrbox')!==-1;
+    var isBar=q.indexOf('screen=bar')!==-1;
     if(isEv){
       document.write('<link rel="apple-touch-icon" sizes="1024x1024" href="assets/dnr_events_icon.png"/>');
       document.write('<link rel="icon" type="image/png" sizes="512x512" href="assets/dnr_events_icon.png"/>');
     } else if(isBox){
       document.write('<link rel="apple-touch-icon" sizes="1024x1024" href="assets/dnr_box_icon.png"/>');
       document.write('<link rel="icon" type="image/png" sizes="512x512" href="assets/dnr_box_icon.png"/>');
+    } else if(isBar){
+      document.write('<link rel="apple-touch-icon" sizes="1024x1024" href="assets/dnr_pub_icon.png"/>');
+      document.write('<link rel="icon" type="image/png" sizes="512x512" href="assets/dnr_pub_icon.png"/>');
     } else {
       document.write('<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"/>');
       document.write('<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png"/>');
@@ -23,11 +27,11 @@
     }
   })();</script>
   <!-- Web App Manifest — written by inline script so iOS reads correct manifest at parse time -->
-  <script>(function(){var q=location.search;var ev=q.indexOf('screen=events')!==-1||q.indexOf('screen=calendar')!==-1;var box=q.indexOf('screen=dnrbox')!==-1;document.write('<link rel="manifest" href="'+(ev?'manifest-events.json':box?'manifest-dnrbox.json':'manifest.json')+'"/>');})();</script>
+  <script>(function(){var q=location.search;var ev=q.indexOf('screen=events')!==-1||q.indexOf('screen=calendar')!==-1;var box=q.indexOf('screen=dnrbox')!==-1;var bar=q.indexOf('screen=bar')!==-1;document.write('<link rel="manifest" href="'+(ev?'manifest-events.json':box?'manifest-dnrbox.json':bar?'manifest-bar.json':'manifest.json')+'"/>');})();</script>
   <!-- iOS full-screen / status bar -->
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <script>(function(){var q=location.search;var ev=q.indexOf('screen=events')!==-1||q.indexOf('screen=calendar')!==-1;var box=q.indexOf('screen=dnrbox')!==-1;document.write('<meta name="apple-mobile-web-app-title" content="'+(ev?'DNR Events':box?'DNR BOX':'Bottle of Heroes')+'"/>');})();</script>
+  <script>(function(){var q=location.search;var ev=q.indexOf('screen=events')!==-1||q.indexOf('screen=calendar')!==-1;var box=q.indexOf('screen=dnrbox')!==-1;var bar=q.indexOf('screen=bar')!==-1;document.write('<meta name="apple-mobile-web-app-title" content="'+(ev?'DNR Events':box?'DNR BOX':bar?'DNR Pub':'Bottle of Heroes')+'"/>');})();</script>
   <!-- Theme color (amber) -->
   <meta name="theme-color" content="#F4C57E"/>
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
@@ -42,6 +46,10 @@
         document.title = 'DNR BOX';
         var mb = document.querySelector('meta[name="apple-mobile-web-app-title"]');
         if (mb) mb.setAttribute('content', 'DNR BOX');
+      } else if (location.search.indexOf('screen=bar') !== -1) {
+        document.title = 'DNR Pub';
+        var mp = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+        if (mp) mp.setAttribute('content', 'DNR Pub');
       }
     })();
   </script>
@@ -34786,7 +34794,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.984';
+const APP_VERSION = 'v9.985';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -38529,7 +38537,7 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
   );
 }
 
-function BarScreen({ go }) {
+function BarScreen({ go, deepLink }) {
   const [view, setView] = React.useState('own');
   const [tab, setTab] = React.useState('cocktail');
   const [avail, setAvail] = React.useState(() => new Set());
@@ -38661,7 +38669,7 @@ function BarScreen({ go }) {
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
-      <AppBar title={view === 'recipes' ? 'Receptek' : 'Pub'} onBack={() => { if (view === 'recipes') setView('own'); else go('home'); }} />
+      <AppBar title={view === 'recipes' ? 'Receptek' : (deepLink ? 'DNR Pub' : 'Pub')} onBack={deepLink && view !== 'recipes' ? null : () => { if (view === 'recipes') setView('own'); else go('home'); }} />
       {view === 'own' && (
         <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'14px 16px 40px', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
           <div style={{ display:'flex', gap:10, marginBottom:16 }}>
@@ -61761,10 +61769,11 @@ function BottleApp() {
   const _initScreen = React.useMemo(() => { try { return new URLSearchParams(window.location.search).get('screen') || ''; } catch(e) { return ''; } }, []);
   const _deepLink = _initScreen === 'events' || _initScreen === 'calendar';
   const _jukebox = _initScreen === 'dnrbox';
-  const [screen, setScreen] = useState(() => _initRoom ? 'observer' : _jukebox ? 'jukebox' : _deepLink ? 'log' : 'home');
+  const _barApp = _initScreen === 'bar';
+  const [screen, setScreen] = useState(() => _initRoom ? 'observer' : _jukebox ? 'jukebox' : _barApp ? 'bar' : _deepLink ? 'log' : 'home');
   const [editEventId, setEditEventId] = React.useState(null);
   const [showOnboarding, setShowOnboarding] = React.useState(() => {
-    try { return !localStorage.getItem('boh_onboarded') && !_initRoom && !_deepLink && !_jukebox; } catch(e) { return false; }
+    try { return !localStorage.getItem('boh_onboarded') && !_initRoom && !_deepLink && !_jukebox && !_barApp; } catch(e) { return false; }
   });
   const _initRoomConsumedRef = React.useRef(false);
   const [prev, setPrev] = useState(null);
@@ -62017,7 +62026,7 @@ function BottleApp() {
         ) : (<>
         {screen==='home'     && <HomeScreen     go={go} onStartGame={onStartGame} onQuickGame={onQuickGame} setTheme={handleSetTheme} currentTheme={appTheme} setLang={handleSetLang} currentLang={appLang} resumeRoomData={resumeRoomData} onResume={goResume} />}
         {screen==='stats'    && <StatsScreen    go={go} onOpenObserver={openObserver} />}
-        {screen==='bar'      && <BarScreen      go={go} />}
+        {screen==='bar'      && <BarScreen      go={go} deepLink={_barApp} />}
         {screen==='log'      && <EventLogScreen go={go} goEdit={goEdit} deepLink={_deepLink} />}
         {screen==='jukebox'  && <JukeboxScreen go={go} deepLink={_jukebox} />}
         {screen==='admin'    && <AdminScreen go={go} />}
