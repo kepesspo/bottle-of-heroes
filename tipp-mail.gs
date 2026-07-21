@@ -40,7 +40,7 @@ function doPost(e) {
       '<div style="font-family:Arial,Helvetica,sans-serif;max-width:460px;margin:0 auto;color:#1A2A4A">' +
         '<div style="background:#2FA35F;color:#fff;border-radius:16px 16px 0 0;padding:20px 24px">' +
           '<div style="font-size:13px;letter-spacing:.12em;text-transform:uppercase;opacity:.85">DNR Games</div>' +
-          '<div style="font-size:22px;font-weight:900;margin-top:2px">' + _esc(title) + ' 🎯</div>' +
+          '<div style="font-size:22px;font-weight:900;margin-top:2px">' + _esc(title) + ' &#127919;</div>' +
         '</div>' +
         '<div style="background:#F7F7F4;border-radius:0 0 16px 16px;padding:24px">' +
           '<p style="font-size:15px;margin:0 0 14px">' + _esc(greeting) + '</p>' +
@@ -49,7 +49,7 @@ function doPost(e) {
             '<span style="display:inline-block;background:#1A2A4A;color:#fff;font-size:30px;font-weight:900;letter-spacing:.28em;padding:14px 26px;border-radius:12px">' + _esc(code) + '</span>' +
           '</div>' +
           '<p style="font-size:13px;color:#5A6478;margin:0 0 4px">A folyamat: nyisd meg a Tippbajnokságot, válaszd ki magad, írd be ezt a kódot — és kész, tippelhetsz!</p>' +
-          '<p style="font-size:13px;color:#5A6478;margin:14px 0 0">Jó tippelést! 🍻<br>DNR Games</p>' +
+          '<p style="font-size:13px;color:#5A6478;margin:14px 0 0">Jó tippelést! &#127867;<br>DNR Games</p>' +
         '</div>' +
       '</div>';
 
