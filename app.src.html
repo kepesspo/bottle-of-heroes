@@ -33932,6 +33932,7 @@ window.triggerHaptic = function() {
     if (profile.phone) data.phone = profile.phone;
     if (profile.birthday) data.birthday = profile.birthday;
     if (profile.img) data.img = profile.img;
+    if (profile.email !== undefined) data.email = profile.email || firebase.firestore.FieldValue.delete();
     return ref.set(data, { merge: true }).then(function() { return ref.id; });
   };
   window.getStats = function(profileId) {
@@ -34802,7 +34803,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.993';
+const APP_VERSION = 'v9.994';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36941,6 +36942,7 @@ function AdminProfiles() {
   const [name, setName] = React.useState('');
   const [nickname, setNickname] = React.useState('');
   const [phone, setPhone] = React.useState('');
+  const [email, setEmail] = React.useState('');
   const [birthday, setBirthday] = React.useState('');
   const [color, setColor] = React.useState('#E8631A');
   const [saving, setSaving] = React.useState(false);
@@ -36957,6 +36959,7 @@ function AdminProfiles() {
   const [epName, setEpName] = React.useState('');
   const [epNickname, setEpNickname] = React.useState('');
   const [epPhone, setEpPhone] = React.useState('');
+  const [epEmail, setEpEmail] = React.useState('');
   const [epBirthday, setEpBirthday] = React.useState('');
   const [epColor, setEpColor] = React.useState('#E8631A');
   const [epAvatarId, setEpAvatarId] = React.useState(null);
@@ -37027,10 +37030,11 @@ function AdminProfiles() {
     const prof = { name: name.trim(), color };
     if (nickname.trim()) prof.nickname = nickname.trim();
     if (phone.trim()) prof.phone = phone.trim();
+    if (email.trim()) prof.email = email.trim();
     if (birthday) prof.birthday = birthday;
     if (avatarId) { const av = CHAR_AVATARS.find(a => a.id === avatarId); if (av) { prof.img = av.img; prof.avatarId = av.id; } }
     window.saveProfile(prof).then(() => {
-      setSaving(false); setShowForm(false); setName(''); setNickname(''); setPhone(''); setBirthday(''); setColor('#E8631A'); setAvatarId(null); load();
+      setSaving(false); setShowForm(false); setName(''); setNickname(''); setPhone(''); setEmail(''); setBirthday(''); setColor('#E8631A'); setAvatarId(null); load();
     }).catch(() => setSaving(false));
   }
 
@@ -37047,6 +37051,7 @@ function AdminProfiles() {
     setEpName(p.name || '');
     setEpNickname(p.nickname || '');
     setEpPhone(p.phone || '');
+    setEpEmail(p.email || '');
     setEpBirthday(p.birthday || '');
     setEpColor(p.color || '#E8631A');
     setEpAvatarId(p.avatarId || null);
@@ -37065,6 +37070,7 @@ function AdminProfiles() {
     const prof = { id: p.id, name: epName.trim(), color: epColor };
     if (epNickname.trim()) prof.nickname = epNickname.trim();
     if (epPhone.trim()) prof.phone = epPhone.trim();
+    prof.email = epEmail.trim();
     if (epBirthday) prof.birthday = epBirthday;
     if (epAvatarId) {
       const av = CHAR_AVATARS.find(a => a.id === epAvatarId);
@@ -37127,6 +37133,8 @@ function AdminProfiles() {
           <TextInput value={nickname} onChange={e => setNickname(e.target.value)} placeholder="pl. Péter" style={{ marginBottom:12 }} />
           <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Telefonszám <span style={{ fontWeight:400, textTransform:'none', fontSize:10 }}>(opcionális)</span></div>
           <TextInput value={phone} onChange={e => setPhone(e.target.value)} placeholder="+36 30 123 4567" type="tel" style={{ marginBottom:12 }} />
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>E-mail <span style={{ fontWeight:400, textTransform:'none', fontSize:10 }}>(opcionális — tippbajnoksághoz)</span></div>
+          <TextInput value={email} onChange={e => setEmail(e.target.value)} placeholder="pl. peter@email.hu" type="email" style={{ marginBottom:12 }} />
           <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Születésnap <span style={{ fontWeight:400, textTransform:'none', fontSize:10 }}>(opcionális)</span></div>
           <input value={birthday} onChange={e => setBirthday(e.target.value)} type="date" style={{ width:'100%', boxSizing:'border-box', padding:'10px 14px', height:44, borderRadius:T.r?.sm||12, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none', marginBottom:12, WebkitAppearance:'none', appearance:'none', lineHeight:'normal' }} />
           <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>Szín</div>
@@ -37186,6 +37194,7 @@ function AdminProfiles() {
                   {p.birthday && p.birthday.slice(5,10) === todayMD && <span style={{ fontSize:16 }}>🎂</span>}
                 </div>
                 {p.nickname && <div style={{ fontFamily:T.font, fontSize:12, color:T.sub }}>{p.nickname}</div>}
+                {p.email && <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, display:'flex', alignItems:'center', gap:4, marginTop:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>✉️ {p.email}</div>}
                 <div style={{ display:'flex', gap:8, marginTop:2, flexWrap:'wrap' }}>
                   {rsvpCnt>0 && <span style={{fontFamily:T.font,fontSize:11,color:T.mint,fontWeight:700}}>✓ {rsvpCnt} esemény</span>}
                   {(st.totalDrinks!=null||st.totalSessions!=null) ? <span style={{fontFamily:T.font,fontSize:11,color:T.sub,display:'inline-flex',alignItems:'center',gap:3}}><BohIcon name="beer" size={11} /> {st.totalDrinks||0} · <BohIcon name="star" size={11} /> {st.totalPoints||0} · <BohIcon name="trophy" size={11} /> {st.totalSessions>0?Math.round((st.totalWins||0)/st.totalSessions*100)+'%':'—'}</span> : null}
@@ -37217,6 +37226,8 @@ function AdminProfiles() {
                   <TextInput value={epNickname} onChange={e => setEpNickname(e.target.value)} style={{ marginBottom:10, fontSize:14, padding:'10px 12px' }} />
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, marginBottom:4 }}>Telefonszám</div>
                   <TextInput value={epPhone} onChange={e => setEpPhone(e.target.value)} type="tel" style={{ marginBottom:10, fontSize:14, padding:'10px 12px' }} />
+                  <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, marginBottom:4 }}>E-mail <span style={{ fontWeight:400, fontSize:10, color:T.inkMute }}>(tippbajnoksághoz)</span></div>
+                  <TextInput value={epEmail} onChange={e => setEpEmail(e.target.value)} type="email" placeholder="pl. peter@email.hu" style={{ marginBottom:10, fontSize:14, padding:'10px 12px' }} />
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, marginBottom:4 }}>Születésnap</div>
                   <input value={epBirthday} onChange={e => setEpBirthday(e.target.value)} type="date" style={{ width:'100%', boxSizing:'border-box', padding:'10px 12px', height:44, borderRadius:T.r?.sm||12, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none', marginBottom:10, WebkitAppearance:'none', appearance:'none', lineHeight:'normal' }} />
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, marginBottom:6 }}>Szín</div>
