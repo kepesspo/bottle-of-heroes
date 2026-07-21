@@ -34802,7 +34802,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.992';
+const APP_VERSION = 'v9.993';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -38411,6 +38411,8 @@ function AdminBingo() {
   const [title, setTitle] = React.useState('VB Bingó');
   const [items, setItems] = React.useState(null);
   const [tippTitle, setTippTitle] = React.useState('Tippbajnokság');
+  const [tippRequireCode, setTippRequireCode] = React.useState(false);
+  const [tippMailUrl, setTippMailUrl] = React.useState('');
   const [questions, setQuestions] = React.useState([]);
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
@@ -38422,6 +38424,8 @@ function AdminBingo() {
       setMode((c && c.mode === 'tipp') ? 'tipp' : 'bingo');
       setTitle((c && c.title) || 'VB Bingó');
       setTippTitle((c && c.tippTitle) || 'Tippbajnokság');
+      setTippRequireCode(!!(c && c.tippRequireCode));
+      setTippMailUrl((c && c.tippMailUrl) || '');
       setQuestions((c && Array.isArray(c.questions)) ? c.questions.map(q => ({ id: q.id || ('q_' + Math.random().toString(36).slice(2,8)), q: q.q || '', options: Array.isArray(q.options) ? q.options.slice() : ['',''], points: q.points || 1, correct: (q.correct == null ? null : q.correct) })) : []);
       setItems((c && Array.isArray(c.items) && c.items.length) ? c.items.map(it => ({ e: it.e || '', t: it.t || '' })) : BINGO_ITEMS.map(it => ({ e: it.e, t: it.t })));
     }).catch(() => { setItems(BINGO_ITEMS.map(it => ({ e: it.e, t: it.t }))); });
@@ -38455,13 +38459,13 @@ function AdminBingo() {
       if (correct != null && correct >= opts.length) correct = null;
       return { id: q.id, q: (q.q || '').trim(), options: opts, points: Math.max(1, parseInt(q.points) || 1), correct: (correct == null ? null : correct) };
     }).filter(q => q.q && q.options.length >= 2);
-    return Object.assign({ enabled, mode, title: (title || '').trim() || 'VB Bingó', items: cleanItems, tippTitle: (tippTitle || '').trim() || 'Tippbajnokság', questions: cleanQ }, over || {});
+    return Object.assign({ enabled, mode, title: (title || '').trim() || 'VB Bingó', items: cleanItems, tippTitle: (tippTitle || '').trim() || 'Tippbajnokság', tippRequireCode, tippMailUrl: (tippMailUrl || '').trim(), questions: cleanQ }, over || {});
   };
   const save = () => persist(buildPayload());
   const reset = () => {
     const d = BINGO_ITEMS.map(it => ({ e: it.e, t: it.t }));
-    setEnabled(true); setMode('bingo'); setTitle('VB Bingó'); setItems(d); setTippTitle('Tippbajnokság'); setQuestions([]);
-    persist({ enabled: true, mode: 'bingo', title: 'VB Bingó', items: d, tippTitle: 'Tippbajnokság', questions: [] });
+    setEnabled(true); setMode('bingo'); setTitle('VB Bingó'); setItems(d); setTippTitle('Tippbajnokság'); setQuestions([]); setTippRequireCode(false);
+    persist({ enabled: true, mode: 'bingo', title: 'VB Bingó', items: d, tippTitle: 'Tippbajnokság', tippRequireCode: false, tippMailUrl: (tippMailUrl || '').trim(), questions: [] });
   };
 
   if (items === null) return <div style={{ textAlign:'center', padding:30, fontFamily:T.font, color:T.sub }}>Betöltés…</div>;
@@ -38518,6 +38522,23 @@ function AdminBingo() {
           <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
             <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:7 }}>Bajnokság neve</div>
             <input value={tippTitle} onChange={e => { setTippTitle(e.target.value); markDirty(); }} placeholder="Tippbajnokság" style={{ ...inpS, width:'100%' }} />
+          </div>
+          {/* Kódos védelem */}
+          <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
+              <div>
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>E-mailes kódvédelem</div>
+                <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>{tippRequireCode ? 'A tippeléshez kód kell (e-mailben)' : 'Bárki tippelhet kód nélkül'}</div>
+              </div>
+              <Toggle on={tippRequireCode} onChange={() => { setTippRequireCode(v => !v); markDirty(); }} />
+            </div>
+            {tippRequireCode && (
+              <div style={{ marginTop:11 }}>
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6 }}>E-mail küldő URL (Google Apps Script)</div>
+                <input value={tippMailUrl} onChange={e => { setTippMailUrl(e.target.value); markDirty(); }} placeholder="https://script.google.com/macros/s/…/exec" style={{ ...inpS, width:'100%' }} />
+                <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, marginTop:6, lineHeight:1.5 }}>Ide illeszd be a saját Google Apps Script webapp „…/exec" linkjét (a DNR Gmailből küld). URL nélkül a kódkérés nem tud e-mailt küldeni.</div>
+              </div>
+            )}
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:12, marginBottom:12 }}>
             {questions.map((q, qi) => (
@@ -38689,6 +38710,13 @@ function BingoScreen({ go }) {
   const [who, setWho] = React.useState(() => { try { return localStorage.getItem('boh_bingo_who') || null; } catch(e) { return null; } });
   const [marksAll, setMarksAll] = React.useState({});
   const [tippAll, setTippAll] = React.useState({});
+  const [tippAuth, setTippAuth] = React.useState({});
+  const [gateEmail, setGateEmail] = React.useState('');
+  const [gateCode, setGateCode] = React.useState('');
+  const [gateSending, setGateSending] = React.useState(false);
+  const [gateSent, setGateSent] = React.useState(false);
+  const [gateErr, setGateErr] = React.useState('');
+  const [unlockTick, setUnlockTick] = React.useState(0);
   const [loaded, setLoaded] = React.useState(false);
   const [celebrate, setCelebrate] = React.useState(null);
   const [confirmReset, setConfirmReset] = React.useState(false);
@@ -38702,7 +38730,8 @@ function BingoScreen({ go }) {
     const un = db.collection('config').doc('bingo').onSnapshot(d => { setMarksAll((d && d.exists && d.data()) || {}); setLoaded(true); }, () => setLoaded(true));
     const un2 = db.collection('config').doc('bingoConfig').onSnapshot(d => setCfg((d && d.exists && d.data()) || null), () => {});
     const un3 = db.collection('config').doc('tippAnswers').onSnapshot(d => setTippAll((d && d.exists && d.data()) || {}), () => {});
-    return () => { try { un(); } catch(e) {} try { un2(); } catch(e) {} try { un3(); } catch(e) {} };
+    const un4 = db.collection('config').doc('tippAuth').onSnapshot(d => setTippAuth((d && d.exists && d.data()) || {}), () => {});
+    return () => { try { un(); } catch(e) {} try { un2(); } catch(e) {} try { un3(); } catch(e) {} try { un4(); } catch(e) {} };
   }, []);
 
   const mode = (cfg && cfg.mode === 'tipp') ? 'tipp' : 'bingo';
@@ -38712,7 +38741,7 @@ function BingoScreen({ go }) {
   const questions = (cfg && Array.isArray(cfg.questions)) ? cfg.questions : [];
   const headTitle = (mode === 'tipp' ? tippTitle : bingoTitle) + (mode === 'tipp' ? ' 🎯' : ' ⚽');
 
-  const pickWho = id => { setWho(id); prevBingos.current = null; setConfirmReset(false); try { localStorage.setItem('boh_bingo_who', id || ''); } catch(e) {} };
+  const pickWho = id => { setWho(id); prevBingos.current = null; setConfirmReset(false); setGateEmail(''); setGateCode(''); setGateSent(false); setGateErr(''); try { localStorage.setItem('boh_bingo_who', id || ''); } catch(e) {} };
   const whoProf = profiles.find(p => p.id === who) || null;
 
   // ── BINGÓ logika ──
@@ -38747,8 +38776,48 @@ function BingoScreen({ go }) {
   // ── TIPP logika ──
   const myTips = tippAll[who] || {};
   const anyResolved = questions.some(q => q.correct != null && q.correct !== '');
+
+  // ── Kódos szerkesztés-védelem (e-mailes) ──
+  const requireCode = !!(cfg && cfg.tippRequireCode);
+  const mailUrl = (cfg && cfg.tippMailUrl) || '';
+  const authRec = who ? tippAuth[who] : null;
+  const storedCode = who ? (() => { try { return localStorage.getItem('boh_tipp_code_' + who) || ''; } catch(e) { return ''; } })() : '';
+  const unlocked = !requireCode || !!(authRec && authRec.code && storedCode && storedCode.toUpperCase() === String(authRec.code).toUpperCase());
+  const genCode = () => { let s = ''; const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; for (let i = 0; i < 6; i++) s += A[Math.floor(Math.random() * A.length)]; return s; };
+  const sendCodeMail = (to, code) => {
+    if (!mailUrl) return Promise.resolve();
+    const payload = { to, name: (whoProf && whoProf.name) || '', code, title: tippTitle };
+    return fetch(mailUrl, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }).catch(() => {});
+  };
+  const requestCode = () => {
+    const email = gateEmail.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setGateErr('Adj meg egy érvényes e-mail címet.'); return; }
+    if (!mailUrl) { setGateErr('Az e-mail küldés még nincs beállítva (admin).'); return; }
+    setGateErr(''); setGateSending(true);
+    const code = (authRec && authRec.code) ? authRec.code : genCode();
+    const rec = { email, code, at: Date.now() };
+    // az e-mailt egyből a profilhoz is csatoljuk (ha még nem volt / megváltozott)
+    if (db && (!whoProf || whoProf.email !== email)) db.collection('profiles').doc(who).set({ email }, { merge: true }).catch(() => {});
+    const done = () => { setGateSending(false); setGateSent(true); };
+    if (db) db.collection('config').doc('tippAuth').set({ [who]: rec }, { merge: true }).then(() => sendCodeMail(email, code)).then(done).catch(() => { sendCodeMail(email, code).finally(done); });
+    else { sendCodeMail(email, code).finally(done); }
+  };
+  const submitCode = () => {
+    const c = gateCode.trim().toUpperCase();
+    if (!authRec || !authRec.code) { setGateErr('Előbb kérj kódot e-mailben.'); return; }
+    if (c !== String(authRec.code).toUpperCase()) { setGateErr('Hibás kód.'); return; }
+    try { localStorage.setItem('boh_tipp_code_' + who, c); } catch(e) {}
+    setGateErr(''); setGateCode(''); setUnlockTick(t => t + 1);
+  };
+  // ismert e-mail előkitöltése (profil vagy korábbi kódkérés alapján), ha a mező üres
+  React.useEffect(() => {
+    const em = (authRec && authRec.email) || (whoProf && whoProf.email) || '';
+    if (em && !gateEmail) setGateEmail(em);
+  }, [who, whoProf && whoProf.email, authRec && authRec.email]);
+
   const setTip = (qid, oi) => {
     if (!who) return;
+    if (requireCode && !unlocked) return; // kód nélkül nem szerkeszthető
     const q = questions.find(x => x.id === qid);
     if (q && q.correct != null && q.correct !== '') return; // feloldott kérdés zárolt
     const next = { ...(tippAll[who] || {}), [qid]: oi };
@@ -38815,9 +38884,35 @@ function BingoScreen({ go }) {
               <Avatar pr={whoProf} size={30} />
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13.5, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{(whoProf && whoProf.name) || '—'} tippjei</div>
-                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkSoft }}>{answeredCount}/{questions.length} kitöltve{myScore.resolved ? ` · ${myScore.pts} pont (${myScore.correct}/${myScore.resolved})` : ''}</div>
+                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkSoft }}>{answeredCount}/{questions.length} kitöltve{myScore.resolved ? ` · ${myScore.pts} pont (${myScore.correct}/${myScore.resolved})` : ''}{requireCode && (unlocked ? ' · 🔓' : ' · 🔒')}</div>
               </div>
             </div>
+            {requireCode && !unlocked && (
+              <div style={{ background:T.surface, borderRadius:16, padding:'14px', boxShadow:T.shadow, marginBottom:12, border:`1.5px solid ${T.coral}44` }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                  <span style={{ fontSize:18, lineHeight:1 }}>🔒</span>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink }}>Kód kell a szerkesztéshez</span>
+                </div>
+                <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, lineHeight:1.5, marginBottom:11 }}>Add meg az e-mail címed — küldünk egy egyedi kódot, amivel csak te tudod szerkeszteni a tippjeidet.</div>
+                {gateSent && (
+                  <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.mintDeep || T.mint, background:T.mintSoft, borderRadius:10, padding:'9px 11px', marginBottom:10 }}>✉️ Elküldtük a kódot ide: {gateEmail || (authRec && authRec.email) || ''}. Nézd meg a postafiókod (a Spam mappát is)!</div>
+                )}
+                <div style={{ display:'flex', gap:7, marginBottom:9 }}>
+                  <input value={gateEmail} onChange={e => { setGateEmail(e.target.value); setGateErr(''); }} placeholder="pl. te@email.hu" type="email" style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'11px 12px', borderRadius:11, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+                  <button onClick={requestCode} disabled={gateSending} style={{ padding:'11px 14px', borderRadius:11, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:13, cursor:'pointer', flexShrink:0, opacity: gateSending ? 0.6 : 1 }}>{gateSending ? '…' : (authRec ? 'Újraküldés' : 'Kód kérése')}</button>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:8, margin:'4px 0 9px' }}>
+                  <div style={{ flex:1, height:1, background:T.border }} />
+                  <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkMute }}>Már van kódod?</span>
+                  <div style={{ flex:1, height:1, background:T.border }} />
+                </div>
+                <div style={{ display:'flex', gap:7 }}>
+                  <input value={gateCode} onChange={e => { setGateCode(e.target.value); setGateErr(''); }} placeholder="6 jegyű kód" maxLength={8} style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'11px 12px', borderRadius:11, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:15, fontWeight:800, letterSpacing:'0.14em', textTransform:'uppercase', color:T.ink, outline:'none' }} />
+                  <button onClick={submitCode} style={{ padding:'11px 18px', borderRadius:11, border:'none', background:T.ink, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:13, cursor:'pointer', flexShrink:0 }}>Feloldás</button>
+                </div>
+                {gateErr && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11.5, color:T.coral, marginTop:8 }}>{gateErr}</div>}
+              </div>
+            )}
             {questions.length === 0 ? (
               <div style={{ background:T.surface, borderRadius:18, padding:'26px 18px', boxShadow:T.shadow, textAlign:'center' }}>
                 <div style={{ fontSize:38, marginBottom:8 }}>🎯</div>
