@@ -34803,7 +34803,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.994';
+const APP_VERSION = 'v9.995';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -38424,7 +38424,10 @@ function AdminBingo() {
   const [tippTitle, setTippTitle] = React.useState('Tippbajnokság');
   const [tippRequireCode, setTippRequireCode] = React.useState(false);
   const [tippMailUrl, setTippMailUrl] = React.useState('');
-  const [questions, setQuestions] = React.useState([]);
+  const [teamsText, setTeamsText] = React.useState('');
+  const [matches, setMatches] = React.useState([]);
+  const [bWinner, setBWinner] = React.useState({ enabled: false, deadline: '', correct: '' });
+  const [bScorer, setBScorer] = React.useState({ enabled: false, deadline: '', correct: '' });
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
   const [dirty, setDirty] = React.useState(false);
@@ -38437,24 +38440,23 @@ function AdminBingo() {
       setTippTitle((c && c.tippTitle) || 'Tippbajnokság');
       setTippRequireCode(!!(c && c.tippRequireCode));
       setTippMailUrl((c && c.tippMailUrl) || '');
-      setQuestions((c && Array.isArray(c.questions)) ? c.questions.map(q => ({ id: q.id || ('q_' + Math.random().toString(36).slice(2,8)), q: q.q || '', options: Array.isArray(q.options) ? q.options.slice() : ['',''], points: q.points || 1, correct: (q.correct == null ? null : q.correct) })) : []);
+      setTeamsText((c && Array.isArray(c.teams)) ? c.teams.join('\n') : '');
+      setMatches((c && Array.isArray(c.matches)) ? c.matches.map(m => ({ id: m.id || ('m_' + Math.random().toString(36).slice(2,8)), home: m.home || '', away: m.away || '', kickoff: m.kickoff || '', knockout: !!m.knockout, hs: (m.hs == null ? '' : String(m.hs)), as: (m.as == null ? '' : String(m.as)) })) : []);
+      setBWinner(Object.assign({ enabled: false, deadline: '', correct: '' }, (c && c.bonusWinner) || {}));
+      setBScorer(Object.assign({ enabled: false, deadline: '', correct: '' }, (c && c.bonusScorer) || {}));
       setItems((c && Array.isArray(c.items) && c.items.length) ? c.items.map(it => ({ e: it.e || '', t: it.t || '' })) : BINGO_ITEMS.map(it => ({ e: it.e, t: it.t })));
     }).catch(() => { setItems(BINGO_ITEMS.map(it => ({ e: it.e, t: it.t }))); });
   }, []);
   const markDirty = () => { setDirty(true); setSaved(false); };
 
-  // bingo mezők
   const updItem = (i, f, v) => { setItems(l => l.map((w, j) => j === i ? { ...w, [f]: v } : w)); markDirty(); };
   const delItem = (i) => { setItems(l => l.filter((_, j) => j !== i)); markDirty(); };
   const addItem = () => { setItems(l => [...l, { e: '⚽', t: '' }]); markDirty(); };
-  // tipp kérdések
-  const addQ = () => { setQuestions(l => [...l, { id: 'q_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5), q: '', options: ['',''], points: 1, correct: null }]); markDirty(); };
-  const updQ = (i, f, v) => { setQuestions(l => l.map((q, j) => j === i ? { ...q, [f]: v } : q)); markDirty(); };
-  const delQ = (i) => { setQuestions(l => l.filter((_, j) => j !== i)); markDirty(); };
-  const updOpt = (qi, oi, v) => { setQuestions(l => l.map((q, j) => j === qi ? { ...q, options: q.options.map((o, k) => k === oi ? v : o) } : q)); markDirty(); };
-  const addOpt = (qi) => { setQuestions(l => l.map((q, j) => j === qi ? { ...q, options: [...q.options, ''] } : q)); markDirty(); };
-  const delOpt = (qi, oi) => { setQuestions(l => l.map((q, j) => { if (j !== qi) return q; const options = q.options.filter((_, k) => k !== oi); let correct = q.correct; if (correct != null) { if (correct === oi) correct = null; else if (correct > oi) correct = correct - 1; } return { ...q, options, correct }; })); markDirty(); };
-  const setCorrect = (qi, oi) => { setQuestions(l => l.map((q, j) => j === qi ? { ...q, correct: q.correct === oi ? null : oi } : q)); markDirty(); };
+  const addMatch = () => { setMatches(l => [...l, { id: 'm_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5), home: '', away: '', kickoff: '', knockout: false, hs: '', as: '' }]); markDirty(); };
+  const updM = (i, f, v) => { setMatches(l => l.map((m, j) => j === i ? { ...m, [f]: v } : m)); markDirty(); };
+  const delM = (i) => { setMatches(l => l.filter((_, j) => j !== i)); markDirty(); };
+
+  const teamsArr = teamsText.split('\n').map(s => s.trim()).filter(Boolean);
 
   const persist = (payload) => {
     setSaving(true);
@@ -38464,41 +38466,60 @@ function AdminBingo() {
   };
   const buildPayload = (over) => {
     const cleanItems = (items || []).map(w => ({ e: (w.e || '').trim() || '⚽', t: (w.t || '').trim() })).filter(w => w.t);
-    const cleanQ = (questions || []).map(q => {
-      const opts = (q.options || []).map(o => (o || '').trim()).filter(Boolean);
-      let correct = q.correct;
-      if (correct != null && correct >= opts.length) correct = null;
-      return { id: q.id, q: (q.q || '').trim(), options: opts, points: Math.max(1, parseInt(q.points) || 1), correct: (correct == null ? null : correct) };
-    }).filter(q => q.q && q.options.length >= 2);
-    return Object.assign({ enabled, mode, title: (title || '').trim() || 'VB Bingó', items: cleanItems, tippTitle: (tippTitle || '').trim() || 'Tippbajnokság', tippRequireCode, tippMailUrl: (tippMailUrl || '').trim(), questions: cleanQ }, over || {});
+    const cleanM = (matches || []).map(m => ({
+      id: m.id, home: (m.home || '').trim(), away: (m.away || '').trim(), kickoff: m.kickoff || '', knockout: !!m.knockout,
+      hs: (m.hs === '' || m.hs == null) ? null : Math.max(0, parseInt(m.hs) || 0),
+      as: (m.as === '' || m.as == null) ? null : Math.max(0, parseInt(m.as) || 0),
+    })).filter(m => m.home && m.away && m.kickoff);
+    const bw = { enabled: !!bWinner.enabled, deadline: bWinner.deadline || '', correct: (bWinner.correct || '').trim(), teams: teamsArr };
+    const bs = { enabled: !!bScorer.enabled, deadline: bScorer.deadline || '', correct: (bScorer.correct || '').trim(), teams: teamsArr };
+    return Object.assign({ enabled, mode, title: (title || '').trim() || 'VB Bingó', items: cleanItems, tippTitle: (tippTitle || '').trim() || 'Tippbajnokság', tippRequireCode, tippMailUrl: (tippMailUrl || '').trim(), teams: teamsArr, matches: cleanM, bonusWinner: bw, bonusScorer: bs, questions: [] }, over || {});
   };
   const save = () => persist(buildPayload());
   const reset = () => {
     const d = BINGO_ITEMS.map(it => ({ e: it.e, t: it.t }));
-    setEnabled(true); setMode('bingo'); setTitle('VB Bingó'); setItems(d); setTippTitle('Tippbajnokság'); setQuestions([]); setTippRequireCode(false);
-    persist({ enabled: true, mode: 'bingo', title: 'VB Bingó', items: d, tippTitle: 'Tippbajnokság', tippRequireCode: false, tippMailUrl: (tippMailUrl || '').trim(), questions: [] });
+    setEnabled(true); setMode('bingo'); setTitle('VB Bingó'); setItems(d); setTippTitle('Tippbajnokság'); setTippRequireCode(false); setMatches([]); setTeamsText(''); setBWinner({ enabled:false, deadline:'', correct:'' }); setBScorer({ enabled:false, deadline:'', correct:'' });
+    persist({ enabled: true, mode: 'bingo', title: 'VB Bingó', items: d, tippTitle: 'Tippbajnokság', tippRequireCode: false, tippMailUrl: (tippMailUrl || '').trim(), teams: [], matches: [], bonusWinner: { enabled:false }, bonusScorer: { enabled:false }, questions: [] });
   };
 
   if (items === null) return <div style={{ textAlign:'center', padding:30, fontFamily:T.font, color:T.sub }}>Betöltés…</div>;
   const validCount = items.filter(w => (w.t || '').trim()).length;
   const tooFew = validCount < 24;
-  const validQ = questions.filter(q => (q.q || '').trim() && (q.options || []).filter(o => (o || '').trim()).length >= 2).length;
+  const validM = matches.filter(m => (m.home||'').trim() && (m.away||'').trim() && m.kickoff).length;
   const inpS = { boxSizing:'border-box', padding:'9px 11px', borderRadius:10, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:13.5, color:T.ink, outline:'none' };
+  const dtS = { ...inpS, WebkitAppearance:'none', appearance:'none' };
+  const lbl = txt => <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:7 }}>{txt}</div>;
+  const BonusCard = ({ title:bt, emoji, bn, setBn }) => (
+    <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:10 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>{emoji} {bt} <span style={{ fontWeight:700, fontSize:11, color:T.inkMute }}>(+25)</span></div>
+        <Toggle on={bn.enabled} onChange={() => { setBn({ ...bn, enabled: !bn.enabled }); markDirty(); }} />
+      </div>
+      {bn.enabled && (
+        <div style={{ marginTop:10 }}>
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, fontWeight:700, marginBottom:4 }}>Határidő (torna kezdete)</div>
+          <input type="datetime-local" value={bn.deadline || ''} onChange={e => { setBn({ ...bn, deadline: e.target.value }); markDirty(); }} style={{ ...dtS, width:'100%', height:42 }} />
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, fontWeight:700, margin:'9px 0 4px' }}>Helyes válasz (a torna után)</div>
+          <select value={bn.correct || ''} onChange={e => { setBn({ ...bn, correct: e.target.value }); markDirty(); }} style={{ ...inpS, width:'100%', height:40 }}>
+            <option value="">— még nincs —</option>
+            {teamsArr.map(tm => <option key={tm} value={tm}>{tm}</option>)}
+          </select>
+          {teamsArr.length === 0 && <div style={{ fontFamily:T.font, fontSize:10.5, color:T.coral, marginTop:5 }}>Előbb adj meg csapatokat a Csapatok mezőben.</div>}
+        </div>
+      )}
+    </div>
+  );
   return (
     <div style={{ padding:16 }}>
       <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
         <span style={{ fontSize:20, lineHeight:1 }}>{mode === 'tipp' ? '🎯' : '⚽'}</span>
         <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>Bingó / Tipp bajnokság</span>
       </div>
-
-      {/* Mód-választó */}
       <div style={{ display:'flex', gap:8, marginBottom:12 }}>
         {[['bingo','⚽ Bingó'],['tipp','🎯 Tipp bajnokság']].map(([k,l]) => (
           <button key={k} onClick={() => { setMode(k); markDirty(); }} style={{ flex:1, padding:'11px 0', borderRadius:13, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:13.5, background: mode === k ? T.mint : T.surface, color: mode === k ? '#fff' : T.inkSoft, boxShadow: mode === k ? `0 4px 12px ${T.mint}55` : T.shadow }}>{l}</button>
         ))}
       </div>
-
-      {/* Megjelenítés kapcsoló */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
         <div>
           <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>Megjelenítés a főképernyőn</div>
@@ -38511,7 +38532,7 @@ function AdminBingo() {
         <React.Fragment>
           <div style={{ fontFamily:T.font, fontSize:12.5, color:T.sub, marginBottom:12 }}>A kártya 24 mezőt sorsol ki (középen fix DÖNTŐ), ezért legalább 24 mező kell — kevesebbnél a beépített lista marad érvényben. <span style={{ fontWeight:800, color: tooFew ? T.coral : T.mint }}>{validCount} mező</span></div>
           <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
-            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:7 }}>Cím / tematika</div>
+            {lbl('Cím / tematika')}
             <input value={title} onChange={e => { setTitle(e.target.value); markDirty(); }} placeholder="VB Bingó" style={{ ...inpS, width:'100%' }} />
           </div>
           {tooFew && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.coral, background:T.coralSoft, borderRadius:10, padding:'8px 12px', marginBottom:10 }}>Legalább 24 mező kell — jelenleg {validCount}.</div>}
@@ -38529,10 +38550,14 @@ function AdminBingo() {
         </React.Fragment>
       ) : (
         <React.Fragment>
-          <div style={{ fontFamily:T.font, fontSize:12.5, color:T.sub, marginBottom:12 }}>Vegyél fel tippkérdéseket opciókkal és pontértékkel. A döntő után jelöld meg a <b>helyes választ</b> (a ✓ gombbal) — ekkor a játékosok pontot kapnak, és zárolódik a kérdés. <span style={{ fontWeight:800, color: validQ ? T.mint : T.coral }}>{validQ} érvényes kérdés</span></div>
+          <div style={{ fontFamily:T.font, fontSize:12.5, color:T.sub, marginBottom:12 }}>Mérkőzés-eredmény tippelés. Vegyél fel mérkőzéseket kezdési idővel; a döntő/meccs után írd be a <b>végeredményt</b> — a pontok (5/3/2/1) automatikusan kiszámolódnak. <span style={{ fontWeight:800, color: validM ? T.mint : T.coral }}>{validM} mérkőzés</span></div>
           <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
-            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:7 }}>Bajnokság neve</div>
+            {lbl('Bajnokság neve')}
             <input value={tippTitle} onChange={e => { setTippTitle(e.target.value); markDirty(); }} placeholder="Tippbajnokság" style={{ ...inpS, width:'100%' }} />
+          </div>
+          <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
+            {lbl('Csapatok (soronként egy) — a bónuszokhoz')}
+            <textarea value={teamsText} onChange={e => { setTeamsText(e.target.value); markDirty(); }} rows={3} placeholder={'Argentína\nFranciaország\nSpanyolország'} style={{ ...inpS, width:'100%', resize:'vertical', lineHeight:1.5 }} />
           </div>
           {/* Kódos védelem */}
           <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
@@ -38545,47 +38570,49 @@ function AdminBingo() {
             </div>
             {tippRequireCode && (
               <div style={{ marginTop:11 }}>
-                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6 }}>E-mail küldő URL (Google Apps Script)</div>
+                {lbl('E-mail küldő URL (Google Apps Script)')}
                 <input value={tippMailUrl} onChange={e => { setTippMailUrl(e.target.value); markDirty(); }} placeholder="https://script.google.com/macros/s/…/exec" style={{ ...inpS, width:'100%' }} />
-                <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, marginTop:6, lineHeight:1.5 }}>Ide illeszd be a saját Google Apps Script webapp „…/exec" linkjét (a DNR Gmailből küld). URL nélkül a kódkérés nem tud e-mailt küldeni.</div>
               </div>
             )}
           </div>
-          <div style={{ display:'flex', flexDirection:'column', gap:12, marginBottom:12 }}>
-            {questions.map((q, qi) => (
-              <div key={q.id} style={{ background:T.surface, borderRadius:14, padding:'12px', boxShadow:T.shadow, borderLeft: (q.correct != null) ? `4px solid ${T.mint}` : '4px solid transparent' }}>
-                <div style={{ display:'flex', gap:7, alignItems:'flex-start', marginBottom:9 }}>
-                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkMute, marginTop:9 }}>{qi+1}.</span>
-                  <textarea value={q.q} onChange={e => updQ(qi, 'q', e.target.value)} placeholder="Kérdés — pl. Ki nyeri a döntőt?" rows={2} style={{ ...inpS, flex:1, minWidth:0, resize:'vertical' }} />
-                  <button onClick={() => delQ(qi)} style={{ padding:'8px 9px', borderRadius:9, border:'none', background:T.coralSoft, color:T.coral, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', alignSelf:'flex-start', marginTop:2 }}><BohIcon name="trash" size={13} /></button>
+          {/* Mérkőzések */}
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>Mérkőzések</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:12 }}>
+            {matches.map((m, mi) => (
+              <div key={m.id} style={{ background:T.surface, borderRadius:14, padding:'12px', boxShadow:T.shadow }}>
+                <div style={{ display:'flex', gap:6, alignItems:'center', marginBottom:8 }}>
+                  <input value={m.home} onChange={e => updM(mi, 'home', e.target.value)} placeholder="Hazai" list="tipp-teams" style={{ ...inpS, flex:1, minWidth:0 }} />
+                  <span style={{ fontFamily:T.font, fontWeight:900, color:T.inkMute }}>–</span>
+                  <input value={m.away} onChange={e => updM(mi, 'away', e.target.value)} placeholder="Vendég" list="tipp-teams" style={{ ...inpS, flex:1, minWidth:0 }} />
+                  <button onClick={() => delM(mi)} style={{ padding:'8px 9px', borderRadius:9, border:'none', background:T.coralSoft, color:T.coral, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center' }}><BohIcon name="trash" size={13} /></button>
                 </div>
-                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:9 }}>
-                  <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11.5, color:T.inkSoft }}>Pont:</span>
-                  <input type="number" min="1" value={q.points} onChange={e => updQ(qi, 'points', Math.max(1, parseInt(e.target.value) || 1))} style={{ ...inpS, width:64 }} />
+                <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:8 }}>
+                  <input type="datetime-local" value={m.kickoff || ''} onChange={e => updM(mi, 'kickoff', e.target.value)} style={{ ...dtS, flex:1, minWidth:0, height:40 }} />
+                  <label style={{ display:'flex', alignItems:'center', gap:5, fontFamily:T.font, fontWeight:700, fontSize:12, color:T.inkSoft, cursor:'pointer', flexShrink:0 }}>
+                    <input type="checkbox" checked={!!m.knockout} onChange={e => updM(mi, 'knockout', e.target.checked)} /> kieséses
+                  </label>
+                </div>
+                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                  <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11.5, color:T.inkSoft, flexShrink:0 }}>Végeredmény:</span>
+                  <input value={m.hs} onChange={e => updM(mi, 'hs', e.target.value.replace(/[^0-9]/g,''))} inputMode="numeric" placeholder="–" style={{ ...inpS, width:48, textAlign:'center', fontWeight:900, fontSize:15 }} />
+                  <span style={{ fontFamily:T.font, fontWeight:900, color:T.inkMute }}>:</span>
+                  <input value={m.as} onChange={e => updM(mi, 'as', e.target.value.replace(/[^0-9]/g,''))} inputMode="numeric" placeholder="–" style={{ ...inpS, width:48, textAlign:'center', fontWeight:900, fontSize:15 }} />
                   <div style={{ flex:1 }} />
-                  <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkMute }}>✓ = helyes válasz</span>
+                  <span style={{ fontFamily:T.font, fontSize:10, color:T.inkMute }}>meccs után</span>
                 </div>
-                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                  {q.options.map((opt, oi) => {
-                    const isCorrect = q.correct === oi;
-                    return (
-                      <div key={oi} style={{ display:'flex', gap:6, alignItems:'center' }}>
-                        <button onClick={() => setCorrect(qi, oi)} title="Helyes válasz" style={{ width:34, height:34, borderRadius:9, border: isCorrect ? `2px solid ${T.mint}` : `1.5px solid ${T.border}`, background: isCorrect ? T.mint : 'transparent', color: isCorrect ? '#fff' : T.inkMute, cursor:'pointer', flexShrink:0, fontFamily:T.font, fontWeight:900, fontSize:15, display:'flex', alignItems:'center', justifyContent:'center' }}>✓</button>
-                        <input value={opt} onChange={e => updOpt(qi, oi, e.target.value)} placeholder={'Opció ' + (oi+1)} style={{ ...inpS, flex:1, minWidth:0 }} />
-                        <button onClick={() => delOpt(qi, oi)} disabled={q.options.length <= 2} style={{ padding:'8px 9px', borderRadius:9, border:'none', background: q.options.length <= 2 ? T.surfaceMuted : T.coralSoft, color: q.options.length <= 2 ? T.inkMute : T.coral, cursor: q.options.length <= 2 ? 'default' : 'pointer', flexShrink:0, display:'flex', alignItems:'center' }}><BohIcon name="trash" size={12} /></button>
-                      </div>
-                    );
-                  })}
-                </div>
-                <button onClick={() => addOpt(qi)} style={{ marginTop:8, padding:'7px 12px', borderRadius:10, border:`1.5px dashed ${T.border}`, background:'transparent', fontFamily:T.font, fontWeight:800, fontSize:12, color:T.inkSoft, cursor:'pointer' }}>+ Opció</button>
               </div>
             ))}
           </div>
-          <button onClick={addQ} style={{ width:'100%', padding:'12px', borderRadius:14, border:`2px dashed ${T.border}`, background:'transparent', fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft, cursor:'pointer', marginBottom:14 }}>+ Új tippkérdés</button>
+          <datalist id="tipp-teams">{teamsArr.map(tm => <option key={tm} value={tm} />)}</datalist>
+          <button onClick={addMatch} style={{ width:'100%', padding:'12px', borderRadius:14, border:`2px dashed ${T.border}`, background:'transparent', fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft, cursor:'pointer', marginBottom:14 }}>+ Új mérkőzés</button>
+          {/* Bónuszok */}
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>Plusz pontok</div>
+          <BonusCard title="Végső győztes" emoji="🏆" bn={bWinner} setBn={setBWinner} />
+          <BonusCard title="Gólkirályt adó csapat" emoji="⚽" bn={bScorer} setBn={setBScorer} />
         </React.Fragment>
       )}
 
-      <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+      <div style={{ display:'flex', gap:8, alignItems:'center', marginTop:2 }}>
         <button onClick={() => { if (confirmReset) reset(); else setConfirmReset(true); }} disabled={saving} style={{ padding:'11px 14px', borderRadius:12, border:'none', background: confirmReset ? T.coral : T.surfaceMuted, color: confirmReset ? '#fff' : T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer' }}>{confirmReset ? 'Biztos? Alaphelyzet!' : 'Alaphelyzet'}</button>
         <div style={{ flex:1 }} />
         {saved && !dirty && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.mint }}>Mentve ✓</span>}
@@ -38594,7 +38621,6 @@ function AdminBingo() {
     </div>
   );
 }
-
 function AdminWildcards() {
   const [list, setList] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
@@ -38716,6 +38742,26 @@ const BINGO_LINES = (() => {
   return L;
 })();
 
+function tippOutcome(h, a) { return h > a ? 1 : (h < a ? -1 : 0); }
+function tippMatchResolved(m) { return m && m.hs != null && m.hs !== '' && m.as != null && m.as !== ''; }
+function tippHasPred(pred) { return !!(pred && pred.h != null && pred.h !== '' && pred.a != null && pred.a !== ''); }
+// Normál pontozás: 5 pontos találat, 3 gólkülönbség, 2 egyik csapat gólja, 1 kimenetel, 0 rossz
+function tippMatchPts(pred, m) {
+  if (!tippHasPred(pred) || !tippMatchResolved(m)) return null;
+  const ph = +pred.h, pa = +pred.a, ah = +m.hs, aa = +m.as;
+  if (tippOutcome(ph, pa) !== tippOutcome(ah, aa)) return { pts: 0, exact: false };
+  if (ph === ah && pa === aa) return { pts: 5, exact: true };
+  if ((ph - pa) === (ah - aa)) return { pts: 3, exact: false };
+  if (ph === ah || pa === aa) return { pts: 2, exact: false };
+  return { pts: 1, exact: false };
+}
+const TIPP_BONUS_PTS = 25;
+function tippFmtKick(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleString('hu-HU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+  catch (e) { return String(iso); }
+}
+
 function BingoScreen({ go }) {
   const [profiles, setProfiles] = React.useState([]);
   const [who, setWho] = React.useState(() => { try { return localStorage.getItem('boh_bingo_who') || null; } catch(e) { return null; } });
@@ -38784,9 +38830,17 @@ function BingoScreen({ go }) {
     .filter(x => x.n > 0)
     .sort((a, b) => (b.b - a.b) || (b.n - a.n));
 
-  // ── TIPP logika ──
-  const myTips = tippAll[who] || {};
-  const anyResolved = questions.some(q => q.correct != null && q.correct !== '');
+  // ── TIPP logika (mérkőzés-eredmény tippelés) ──
+  const matches = (cfg && Array.isArray(cfg.matches)) ? cfg.matches : [];
+  const teams = (cfg && Array.isArray(cfg.teams)) ? cfg.teams : [];
+  const bonusWinner = (cfg && cfg.bonusWinner) || { enabled: false };
+  const bonusScorer = (cfg && cfg.bonusScorer) || { enabled: false };
+  const [now, setNow] = React.useState(() => Date.now());
+  const [detailPid, setDetailPid] = React.useState(null);
+  React.useEffect(() => { const iv = setInterval(() => setNow(Date.now()), 20000); return () => clearInterval(iv); }, []);
+  const myTip = tippAll[who] || {};
+  const matchStarted = m => !!(m.kickoff && now >= new Date(m.kickoff).getTime());
+  const bonusLocked = bn => !!((bn.deadline && now >= new Date(bn.deadline).getTime()) || (bn.correct));
 
   // ── Kódos szerkesztés-védelem (e-mailes) ──
   const requireCode = !!(cfg && cfg.tippRequireCode);
@@ -38807,7 +38861,6 @@ function BingoScreen({ go }) {
     setGateErr(''); setGateSending(true);
     const code = (authRec && authRec.code) ? authRec.code : genCode();
     const rec = { email, code, at: Date.now() };
-    // az e-mailt egyből a profilhoz is csatoljuk (ha még nem volt / megváltozott)
     if (db && (!whoProf || whoProf.email !== email)) db.collection('profiles').doc(who).set({ email }, { merge: true }).catch(() => {});
     const done = () => { setGateSending(false); setGateSent(true); };
     if (db) db.collection('config').doc('tippAuth').set({ [who]: rec }, { merge: true }).then(() => sendCodeMail(email, code)).then(done).catch(() => { sendCodeMail(email, code).finally(done); });
@@ -38820,39 +38873,52 @@ function BingoScreen({ go }) {
     try { localStorage.setItem('boh_tipp_code_' + who, c); } catch(e) {}
     setGateErr(''); setGateCode(''); setUnlockTick(t => t + 1);
   };
-  // ismert e-mail előkitöltése (profil vagy korábbi kódkérés alapján), ha a mező üres
   React.useEffect(() => {
     const em = (authRec && authRec.email) || (whoProf && whoProf.email) || '';
     if (em && !gateEmail) setGateEmail(em);
   }, [who, whoProf && whoProf.email, authRec && authRec.email]);
 
-  const setTip = (qid, oi) => {
-    if (!who) return;
-    if (requireCode && !unlocked) return; // kód nélkül nem szerkeszthető
-    const q = questions.find(x => x.id === qid);
-    if (q && q.correct != null && q.correct !== '') return; // feloldott kérdés zárolt
-    const next = { ...(tippAll[who] || {}), [qid]: oi };
+  const canEdit = who && (!requireCode || unlocked);
+  const writeTip = next => {
     setTippAll(prev => ({ ...prev, [who]: next }));
     if (db) db.collection('config').doc('tippAnswers').set({ [who]: next }, { merge: true }).catch(() => {});
   };
-  const scoreOf = pid => {
-    const tips = tippAll[pid] || {};
-    let pts = 0, correct = 0, resolved = 0;
-    questions.forEach(q => {
-      if (q.correct == null || q.correct === '') return;
-      resolved++;
-      if (tips[q.id] === q.correct) { pts += (q.points || 1); correct++; }
-    });
-    return { pts, correct, resolved };
+  const setScore = (matchId, side, val) => {
+    const m = matches.find(x => x.id === matchId);
+    if (!canEdit || !m || matchStarted(m)) return; // kezdés után zárolt
+    const cur = { ...((myTip.m || {})[matchId] || {}) };
+    cur[side] = (val === '' || val == null) ? null : Math.max(0, Math.min(99, parseInt(val) || 0));
+    const mObj = { ...(myTip.m || {}), [matchId]: cur };
+    writeTip({ ...myTip, m: mObj });
   };
-  const myScore = who ? scoreOf(who) : { pts: 0, correct: 0, resolved: 0 };
-  const answeredCount = questions.filter(q => myTips[q.id] != null).length;
-  const tippBoard = Object.keys(tippAll)
-    .map(pid => ({ p: profiles.find(x => x.id === pid) || { id: pid, name: '?' }, s: scoreOf(pid) }))
-    .filter(x => Object.keys(tippAll[x.p.id] || {}).length > 0)
-    .sort((a, b) => (b.s.pts - a.s.pts) || (b.s.correct - a.s.correct));
+  const setBonus = (kind, team) => {
+    const bn = kind === 'winner' ? bonusWinner : bonusScorer;
+    if (!canEdit || !bn.enabled || bonusLocked(bn)) return;
+    writeTip({ ...myTip, [kind]: (myTip[kind] === team ? null : team) });
+  };
+
+  const scoreOf = pid => {
+    const t = tippAll[pid] || {};
+    const mm = t.m || {};
+    let pts = 0, tele = 0, tipped = 0;
+    matches.forEach(m => {
+      const pred = mm[m.id];
+      if (tippHasPred(pred)) tipped++;
+      const r = tippMatchPts(pred, m);
+      if (r) { pts += r.pts; if (r.exact) tele++; }
+    });
+    if (bonusWinner.enabled && bonusWinner.correct && t.winner === bonusWinner.correct) pts += TIPP_BONUS_PTS;
+    if (bonusScorer.enabled && bonusScorer.correct && t.scorer === bonusScorer.correct) pts += TIPP_BONUS_PTS;
+    return { pts, tele, tipped };
+  };
+  const myScore = who ? scoreOf(who) : { pts: 0, tele: 0, tipped: 0 };
+  const anyResolved = matches.some(tippMatchResolved) || !!bonusWinner.correct || !!bonusScorer.correct;
+  const standings = profiles
+    .map(p => ({ p, s: scoreOf(p.id) }))
+    .filter(x => !!tippAll[x.p.id])
+    .sort((a, b) => (b.s.pts - a.s.pts) || (b.s.tele - a.s.tele) || (b.s.tipped - a.s.tipped));
   const tippMedal = {};
-  if (anyResolved) tippBoard.filter(x => x.s.pts > 0).slice(0, 3).forEach((x, i) => { tippMedal[x.p.id] = ['🥇','🥈','🥉'][i]; });
+  if (anyResolved) standings.slice(0, 3).forEach((x, i) => { if (x.s.pts > 0) tippMedal[x.p.id] = ['🥇','🥈','🥉'][i]; });
 
   const Avatar = ({ pr, size }) => (
     <div style={{ width:size, height:size, borderRadius:'50%', background:(pr && pr.color) || '#98A2B3', overflow:'hidden', display:'grid', placeItems:'center', flexShrink:0 }}>
@@ -38895,7 +38961,7 @@ function BingoScreen({ go }) {
               <Avatar pr={whoProf} size={30} />
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13.5, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{(whoProf && whoProf.name) || '—'} tippjei</div>
-                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkSoft }}>{answeredCount}/{questions.length} kitöltve{myScore.resolved ? ` · ${myScore.pts} pont (${myScore.correct}/${myScore.resolved})` : ''}{requireCode && (unlocked ? ' · 🔓' : ' · 🔒')}</div>
+                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkSoft }}>{myScore.tipped}/{matches.length} tippelve · {myScore.pts} pont{myScore.tele ? ` · ${myScore.tele}× telitalálat 🎯` : ''}{requireCode && (unlocked ? ' · 🔓' : ' · 🔒')}</div>
               </div>
             </div>
             {requireCode && !unlocked && (
@@ -38924,72 +38990,124 @@ function BingoScreen({ go }) {
                 {gateErr && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11.5, color:T.coral, marginTop:8 }}>{gateErr}</div>}
               </div>
             )}
-            {questions.length === 0 ? (
-              <div style={{ background:T.surface, borderRadius:18, padding:'26px 18px', boxShadow:T.shadow, textAlign:'center' }}>
-                <div style={{ fontSize:38, marginBottom:8 }}>🎯</div>
-                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:5 }}>Még nincs tippkérdés</div>
-                <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, lineHeight:1.5 }}>Az admin a Bingó fülön tud tippkérdéseket felvenni.</div>
-              </div>
-            ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-                {questions.map((q, qi) => {
-                  const resolved = q.correct != null && q.correct !== '';
-                  const myPick = myTips[q.id];
-                  const gotIt = resolved && myPick === q.correct;
+            {/* Plusz pontok — végső győztes / gólkirály csapat */}
+            {(bonusWinner.enabled || bonusScorer.enabled) && (
+              <div style={{ background:T.surface, borderRadius:16, padding:'13px 14px', boxShadow:T.shadow, marginBottom:12 }}>
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:9 }}>Plusz pontok · +{TIPP_BONUS_PTS} / találat</div>
+                {[['winner','🏆 Végső győztes', bonusWinner],['scorer','⚽ Gólkirályt adó csapat', bonusScorer]].filter(([k,l,bn]) => bn.enabled).map(([k,l,bn]) => {
+                  const locked = bonusLocked(bn);
+                  const myPick = myTip[k] || null;
+                  const opts = (bn.teams && bn.teams.length) ? bn.teams : teams;
                   return (
-                    <div key={q.id} style={{ background:T.surface, borderRadius:16, padding:'13px 14px', boxShadow:T.shadow }}>
-                      <div style={{ display:'flex', alignItems:'flex-start', gap:8, marginBottom:10 }}>
-                        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14.5, color:T.ink, flex:1, minWidth:0, lineHeight:1.3 }}>{qi+1}. {q.q}</span>
-                        <span style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, color:T.mintDeep || T.mint, background:T.mintSoft, borderRadius:999, padding:'3px 9px', flexShrink:0 }}>{q.points || 1} pont</span>
+                    <div key={k} style={{ marginBottom:6 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+                        <span style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink }}>{l}</span>
+                        {locked && bn.correct && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, color:T.mintDeep || T.mint }}>helyes: {bn.correct}</span>}
                       </div>
-                      <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
-                        {(q.options || []).map((opt, oi) => {
-                          const sel = myPick === oi;
-                          const isCorrect = resolved && q.correct === oi;
-                          const selWrong = resolved && sel && !isCorrect;
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                        {opts.map(tm => {
+                          const sel = myPick === tm;
+                          const isCorrect = locked && bn.correct === tm;
+                          const selWrong = locked && sel && bn.correct && !isCorrect;
                           let bg = T.bg, border = `1.5px solid ${T.border}`, col = T.ink;
                           if (isCorrect) { bg = `${T.mint}1f`; border = `2px solid ${T.mint}`; col = T.mintDeep || T.mint; }
                           else if (selWrong) { bg = `${T.coral}18`; border = `2px solid ${T.coral}`; col = T.coral; }
                           else if (sel) { bg = T.mint; border = `2px solid ${T.mint}`; col = '#fff'; }
-                          return (
-                            <button key={oi} onClick={resolved ? undefined : () => setTip(q.id, oi)} style={{ display:'flex', alignItems:'center', gap:8, textAlign:'left', padding:'11px 13px', borderRadius:12, border, background:bg, color:col, fontFamily:T.font, fontWeight:800, fontSize:13.5, cursor: resolved ? 'default' : 'pointer', WebkitTapHighlightColor:'transparent' }}>
-                              <span style={{ flex:1, minWidth:0 }}>{opt}</span>
-                              {isCorrect && <span style={{ fontSize:14 }}>✓</span>}
-                              {selWrong && <span style={{ fontSize:14 }}>✗</span>}
-                              {sel && !resolved && <span style={{ fontSize:12, fontWeight:900 }}>TIPPED</span>}
-                            </button>
-                          );
+                          return <button key={tm} onClick={locked ? undefined : () => setBonus(k, tm)} disabled={!canEdit && !locked} style={{ padding:'8px 12px', borderRadius:999, border, background:bg, color:col, fontFamily:T.font, fontWeight:800, fontSize:12.5, cursor: locked ? 'default' : 'pointer' }}>{tm}{sel && !locked ? ' ✓' : ''}{isCorrect ? ' ✓' : ''}</button>;
                         })}
+                        {opts.length === 0 && <span style={{ fontFamily:T.font, fontSize:11.5, color:T.inkMute }}>Az admin még nem adott meg csapatokat.</span>}
                       </div>
-                      {resolved && (
-                        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11.5, color: gotIt ? (T.mintDeep || T.mint) : T.coral, marginTop:9 }}>
-                          {gotIt ? `+${q.points || 1} pont — eltaláltad! ✓` : (myPick != null ? 'Nem talált 🍺' : 'Nem tippeltél')}
-                        </div>
-                      )}
+                      {locked && !bn.correct && <div style={{ fontFamily:T.font, fontSize:10.5, color:T.inkMute, marginTop:5 }}>Lezárva — a torna végén derül ki.</div>}
                     </div>
                   );
                 })}
               </div>
             )}
-            {/* Tippbajnokság állás */}
-            {tippBoard.length > 0 && (
-              <div style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow, marginTop:14 }}>
-                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:9 }}>Tippbajnokság állás</div>
-                <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
-                  {tippBoard.map(({ p, s }) => (
-                    <div key={p.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      <Avatar pr={p} size={22} />
-                      <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12.5, color:T.ink, flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{tippMedal[p.id] ? tippMedal[p.id] + ' ' : ''}{p.name}{p.id === who ? ' (te)' : ''}</span>
-                      {s.resolved > 0 && <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkMute }}>{s.correct}/{s.resolved}</span>}
-                      <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12.5, color:T.coral }}>{s.pts} pont</span>
+            {/* Mérkőzések */}
+            {matches.length === 0 ? (
+              <div style={{ background:T.surface, borderRadius:18, padding:'26px 18px', boxShadow:T.shadow, textAlign:'center' }}>
+                <div style={{ fontSize:38, marginBottom:8 }}>🎯</div>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:5 }}>Még nincs mérkőzés</div>
+                <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, lineHeight:1.5 }}>Az admin a Bingó fülön (Tipp mód) tud mérkőzéseket felvenni.</div>
+              </div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                {matches.map((m, mi) => {
+                  const started = matchStarted(m);
+                  const resolved = tippMatchResolved(m);
+                  const pred = (myTip.m || {})[m.id] || {};
+                  const myPts = tippMatchPts(pred, m);
+                  const editable = canEdit && !started;
+                  return (
+                    <div key={m.id} style={{ background:T.surface, borderRadius:16, padding:'13px 14px', boxShadow:T.shadow, borderLeft: myPts && myPts.exact ? `4px solid ${T.mint}` : '4px solid transparent' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
+                        <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkMute }}>{tippFmtKick(m.kickoff)}</span>
+                        {m.knockout && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:9.5, color:T.coral, background:T.coralSoft, borderRadius:999, padding:'1px 7px' }}>kieséses</span>}
+                        <div style={{ flex:1 }} />
+                        {!started ? <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.mintDeep || T.mint }}>nyitva</span> : <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.inkMute }}>🔒 lezárva</span>}
+                      </div>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <span style={{ flex:1, textAlign:'right', fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.home}</span>
+                        {editable ? (
+                          <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0 }}>
+                            <input value={pred.h != null ? pred.h : ''} onChange={e => setScore(m.id, 'h', e.target.value)} inputMode="numeric" style={{ width:38, textAlign:'center', boxSizing:'border-box', padding:'7px 2px', borderRadius:9, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink, outline:'none' }} />
+                            <span style={{ fontFamily:T.font, fontWeight:900, color:T.inkMute }}>:</span>
+                            <input value={pred.a != null ? pred.a : ''} onChange={e => setScore(m.id, 'a', e.target.value)} inputMode="numeric" style={{ width:38, textAlign:'center', boxSizing:'border-box', padding:'7px 2px', borderRadius:9, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink, outline:'none' }} />
+                          </div>
+                        ) : (
+                          <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0, background:T.bg, borderRadius:9, padding:'5px 12px' }}>
+                            <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color: tippHasPred(pred) ? T.ink : T.inkMute }}>{tippHasPred(pred) ? `${pred.h} : ${pred.a}` : '– : –'}</span>
+                          </div>
+                        )}
+                        <span style={{ flex:1, textAlign:'left', fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.away}</span>
+                      </div>
+                      {resolved && (
+                        <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:8, paddingTop:8, borderTop:`1px solid ${T.inkMute}1f` }}>
+                          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11.5, color:T.inkSoft }}>Végeredmény: <b style={{ color:T.ink }}>{m.hs} : {m.as}</b></span>
+                          <div style={{ flex:1 }} />
+                          {myPts ? <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color: myPts.pts > 0 ? (T.mintDeep || T.mint) : T.coral }}>{myPts.exact ? 'Telitalálat! ' : ''}+{myPts.pts} pont</span> : <span style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkMute }}>nem tippeltél</span>}
+                        </div>
+                      )}
+                      {started && (() => {
+                        const others = standings.filter(x => x.p.id !== who && tippHasPred((tippAll[x.p.id] || {}).m ? (tippAll[x.p.id].m || {})[m.id] : null));
+                        if (!others.length) return null;
+                        return (
+                          <div style={{ marginTop:8, paddingTop:8, borderTop:`1px solid ${T.inkMute}1f`, display:'flex', flexDirection:'column', gap:5 }}>
+                            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.05em' }}>A többiek tippjei</div>
+                            {others.map(x => { const pr2 = (tippAll[x.p.id].m || {})[m.id]; const rp = tippMatchPts(pr2, m); return (
+                              <div key={x.p.id} style={{ display:'flex', alignItems:'center', gap:7 }}>
+                                <Avatar pr={x.p} size={18} />
+                                <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.ink, flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{x.p.name}</span>
+                                <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12.5, color:T.inkSoft }}>{pr2.h} : {pr2.a}</span>
+                                {rp && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, color: rp.pts>0?(T.mintDeep||T.mint):T.inkMute }}>+{rp.pts}</span>}
+                              </div>
+                            ); })}
+                          </div>
+                        );
+                      })()}
                     </div>
-                  ))}
-                </div>
-                {!anyResolved && <div style={{ fontFamily:T.font, fontSize:10.5, color:T.inkMute, marginTop:8 }}>A pontok akkor jelennek meg, ahogy az admin megjelöli a helyes válaszokat.</div>}
+                  );
+                })}
               </div>
             )}
-            {!anyResolved && questions.length > 0 && (
-              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:12, lineHeight:1.5 }}>Tippelj minden kérdésre — a döntő után kiderül, ki a bajnok! 🏆</div>
+            <div style={{ fontFamily:T.font, fontSize:10.5, color:T.inkMute, textAlign:'center', marginTop:10, lineHeight:1.5 }}>Pontozás: 5 = pontos eredmény · 3 = gólkülönbség · 2 = egyik csapat gólja · 1 = kimenetel. Kezdésig módosíthatsz; a többiek tippjei kezdés után látszanak.</div>
+            {/* Tabella */}
+            {standings.length > 0 && (
+              <div style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow, marginTop:14 }}>
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:9 }}>Tabella · koppints valakire a tippjeiért</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  {standings.map(({ p, s }, i) => (
+                    <button key={p.id} onClick={() => setDetailPid(p.id)} style={{ display:'flex', alignItems:'center', gap:8, border:'none', background: p.id === who ? T.mintSoft : 'transparent', borderRadius:10, padding:'6px 8px', cursor:'pointer', textAlign:'left', WebkitTapHighlightColor:'transparent' }}>
+                      <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.inkMute, width:18, textAlign:'center', flexShrink:0 }}>{tippMedal[p.id] || (i+1)}</span>
+                      <Avatar pr={p} size={22} />
+                      <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12.5, color:T.ink, flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}{p.id === who ? ' (te)' : ''}</span>
+                      {s.tele > 0 && <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.inkMute }}>{s.tele}🎯</span>}
+                      <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12.5, color:T.coral }}>{s.pts}</span>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontFamily:T.font, fontSize:10, color:T.inkMute, marginTop:8 }}>Holtversenynél a telitalálatok, majd a tippelt meccsek száma dönt.</div>
+              </div>
             )}
           </React.Fragment>
         ) : (
@@ -39039,6 +39157,58 @@ function BingoScreen({ go }) {
           </React.Fragment>
         )}
       </div>
+      {/* Tabella — játékos tippjei */}
+      {detailPid && (() => {
+        const dp = profiles.find(x => x.id === detailPid) || { id: detailPid, name: '?' };
+        const dt = tippAll[detailPid] || {};
+        const ds = scoreOf(detailPid);
+        const mine = detailPid === who;
+        return (
+          <div onClick={() => setDetailPid(null)} style={{ position:'fixed', top:'calc(-1 * env(safe-area-inset-top))', left:0, right:0, bottom:'calc(-1 * env(safe-area-inset-bottom))', background:'rgba(14,14,24,0.72)', zIndex:70, display:'flex', alignItems:'center', justifyContent:'center', padding:'calc(env(safe-area-inset-top) + 20px) 20px calc(env(safe-area-inset-bottom) + 20px)', boxSizing:'border-box', animation:'fadeIn .2s' }}>
+            <div onClick={e => e.stopPropagation()} style={{ background:T.bg, borderRadius:24, padding:'18px', width:'100%', maxWidth:420, maxHeight:'86vh', overflowY:'auto', WebkitOverflowScrolling:'touch', boxSizing:'border-box', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.2)' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+                <Avatar pr={dp} size={38} />
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink }}>{dp.name}{mine ? ' (te)' : ''}</div>
+                  <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11.5, color:T.inkSoft }}>{ds.pts} pont · {ds.tele}× telitalálat · {ds.tipped} tipp</div>
+                </div>
+                <button onClick={() => setDetailPid(null)} style={{ border:'none', background:T.surfaceMuted, color:T.inkSoft, width:32, height:32, borderRadius:'50%', cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, flexShrink:0 }}>✕</button>
+              </div>
+              {(bonusWinner.enabled || bonusScorer.enabled) && (
+                <div style={{ background:T.surface, borderRadius:12, padding:'10px 12px', boxShadow:T.shadow, marginBottom:10, display:'flex', flexDirection:'column', gap:5 }}>
+                  {[['winner','🏆 Végső győztes', bonusWinner],['scorer','⚽ Gólkirály-csapat', bonusScorer]].filter(([k,l,bn]) => bn.enabled).map(([k,l,bn]) => {
+                    const locked = bonusLocked(bn);
+                    const show = mine || locked;
+                    const pick = dt[k];
+                    const ok = bn.correct && pick === bn.correct;
+                    return <div key={k} style={{ display:'flex', alignItems:'center', gap:6, fontFamily:T.font, fontSize:12 }}>
+                      <span style={{ fontWeight:800, color:T.inkSoft }}>{l}:</span>
+                      <span style={{ fontWeight:800, color: bn.correct ? (ok ? (T.mintDeep||T.mint) : T.coral) : T.ink }}>{show ? (pick || '—') : '🔒'}</span>
+                      {locked && bn.correct && <span style={{ fontWeight:700, fontSize:10.5, color: ok ? (T.mintDeep||T.mint) : T.inkMute }}>{ok ? `+${TIPP_BONUS_PTS}` : ''}</span>}
+                    </div>;
+                  })}
+                </div>
+              )}
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {matches.map(m => {
+                  const started = matchStarted(m);
+                  const show = mine || started;
+                  const pred = (dt.m || {})[m.id];
+                  const rp = tippMatchPts(pred, m);
+                  return (
+                    <div key={m.id} style={{ display:'flex', alignItems:'center', gap:8, background:T.surface, borderRadius:11, padding:'8px 11px', boxShadow:T.shadow }}>
+                      <span style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:700, fontSize:12, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.home} – {m.away}</span>
+                      <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color: show ? (tippHasPred(pred) ? T.ink : T.inkMute) : T.inkMute }}>{show ? (tippHasPred(pred) ? `${pred.h}:${pred.a}` : '–:–') : '🔒'}</span>
+                      {tippMatchResolved(m) && <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkMute }}>({m.hs}:{m.as})</span>}
+                      {show && rp && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color: rp.pts>0?(T.mintDeep||T.mint):T.inkMute, minWidth:26, textAlign:'right' }}>+{rp.pts}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* BINGÓ ünneplés */}
       {celebrate && (
         <div onClick={() => setCelebrate(null)} style={{ position:'fixed', top:'calc(-1 * env(safe-area-inset-top))', left:0, right:0, bottom:'calc(-1 * env(safe-area-inset-bottom))', background:'rgba(14,14,24,0.72)', zIndex:70, display:'flex', alignItems:'center', justifyContent:'center', padding:'calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px)', boxSizing:'border-box', animation:'fadeIn .2s' }}>
