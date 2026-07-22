@@ -34835,7 +34835,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.012';
+const APP_VERSION = 'v10.013';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -39295,6 +39295,55 @@ function ingToLine(it, factor) {
   return ((sq ? sq + ' ' : '') + p.n).trim();
 }
 
+// ── DIAGNOSZTIKA: valós safe-area / viewport értékek (ideiglenes, standalone vs in-app eltéréshez) ──
+function SafeAreaDebug() {
+  const [info, setInfo] = React.useState(null);
+  React.useEffect(() => {
+    const measure = () => {
+      try {
+        const probeH = (h) => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:' + h; document.body.appendChild(d); const v = Math.round(d.getBoundingClientRect().height); document.body.removeChild(d); return v; };
+        const p = document.createElement('div');
+        p.style.cssText = 'position:fixed;left:-9999px;bottom:0;height:env(safe-area-inset-bottom);padding-top:env(safe-area-inset-top)';
+        document.body.appendChild(p);
+        const cs = getComputedStyle(p);
+        const sab = Math.round(parseFloat(cs.height) || 0);
+        const sat = Math.round(parseFloat(cs.paddingTop) || 0);
+        document.body.removeChild(p);
+        const foot = document.getElementById('drinkform-foot');
+        const fr = foot ? foot.getBoundingClientRect() : null;
+        setInfo({
+          sat, sab,
+          innerH: window.innerHeight,
+          vvH: window.visualViewport ? Math.round(window.visualViewport.height) : '-',
+          screenH: (window.screen && window.screen.height) || '-',
+          vh: probeH('100vh'), dvh: probeH('100dvh'), svh: probeH('100svh'), lvh: probeH('100lvh'),
+          footTop: fr ? Math.round(fr.top) : '-',
+          footBottom: fr ? Math.round(fr.bottom) : '-',
+          disp: (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ? 'standalone' : 'browser',
+          search: location.search || '(nincs)',
+        });
+      } catch (e) { setInfo({ err: String(e && e.message || e) }); }
+    };
+    const t = setTimeout(measure, 250);
+    return () => clearTimeout(t);
+  }, []);
+  if (!info) return null;
+  const row = (k, v) => <div key={k} style={{ display:'flex', justifyContent:'space-between', gap:10 }}><span>{k}</span><b>{String(v)}</b></div>;
+  return (
+    <div style={{ background:'#101828', color:'#7CE7B0', borderRadius:12, padding:'10px 12px', marginBottom:12, fontFamily:'monospace', fontSize:12, lineHeight:1.5 }}>
+      <div style={{ color:'#F09E8C', fontWeight:900, marginBottom:4 }}>🔧 DEBUG {APP_VERSION} · {info.disp} · {info.search}</div>
+      {info.err ? <div>hiba: {info.err}</div> : [
+        row('safe-top / safe-bottom', info.sat + ' / ' + info.sab),
+        row('innerHeight / visualVp', info.innerH + ' / ' + info.vvH),
+        row('screen.height', info.screenH),
+        row('100vh / 100dvh', info.vh + ' / ' + info.dvh),
+        row('100svh / 100lvh', info.svh + ' / ' + info.lvh),
+        row('footer top / bottom', info.footTop + ' / ' + info.footBottom),
+      ]}
+    </div>
+  );
+}
+
 // ── Pub: saját keverés űrlap (új / szerkesztés) — app design, EventForm mintára ──
 function DrinkForm({ init, profiles, onSave, onCancel }) {
   const [name, setName] = React.useState(init.name || '');
@@ -39330,6 +39379,7 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
     <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
       <AppBar title={init.id ? 'Keverés szerkesztése' : 'Új keverés'} onBack={onCancel} />
       <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', overscrollBehavior:'contain', padding:'16px 16px calc(112px + env(safe-area-inset-bottom))', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
+        <SafeAreaDebug />
         {/* Alapok */}
         <div style={card}>
           {label('Név')}
