@@ -34834,7 +34834,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.027';
+const APP_VERSION = 'v10.028';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -41104,6 +41104,63 @@ function PlayersScreen({ players, setPlayers, go }) {
   const [secretTaps, setSecretTaps] = useState(0);
   const secretTimerRef = React.useRef(null);
   const [allTimeStats, setAllTimeStats] = React.useState({});
+  const [todayEvent, setTodayEvent] = React.useState(null);
+  const [eventProfiles, setEventProfiles] = React.useState([]);
+  const [attendanceOpen, setAttendanceOpen] = React.useState(false);
+  const [attendanceChecked, setAttendanceChecked] = React.useState(() => new Set());
+
+  // Mai esemény keresése + visszaigazolt (igen/talán) profilok — gyors jelenléti lista
+  React.useEffect(() => {
+    const col = evDb();
+    if (!col) return;
+    const unsub = col.onSnapshot(snap => {
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const startOfDay = dt => { const x = new Date(dt); return new Date(x.getFullYear(), x.getMonth(), x.getDate()); };
+      const today0 = startOfDay(new Date());
+      const todays = docs.filter(ev => {
+        if (!ev.date || ev.cancelled) return false;
+        try {
+          const evStart = startOfDay(ev.date);
+          const evEnd = ev.dateTo ? startOfDay(ev.dateTo) : evStart;
+          return today0 >= evStart && today0 <= evEnd;
+        } catch(e) { return false; }
+      });
+      setTodayEvent(todays[0] || null);
+    }, () => {});
+    return () => { try { unsub(); } catch(e) {} };
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window.getProfiles === 'function') window.getProfiles().then(p => setEventProfiles(p || [])).catch(() => {});
+  }, []);
+
+  const eventConfirmed = React.useMemo(() => {
+    if (!todayEvent) return [];
+    const rsvp = todayEvent.rsvp || {};
+    const okNames = new Set(Object.entries(rsvp).filter(([, st]) => st === 'yes' || st === 'maybe').map(([name]) => name));
+    return eventProfiles.filter(p => okNames.has(p.name)).map(p => ({ ...p, _status: rsvp[p.name] }));
+  }, [todayEvent, eventProfiles]);
+
+  const openAttendance = () => {
+    const existingProfileIds = new Set(players.map(p => p.profileId).filter(Boolean));
+    setAttendanceChecked(new Set(eventConfirmed.filter(p => !existingProfileIds.has(p.id)).map(p => p.id)));
+    setAttendanceOpen(true);
+  };
+  const addFromAttendance = () => {
+    const existingProfileIds = new Set(players.map(p => p.profileId).filter(Boolean));
+    const usedColors = new Set(players.map(p => p.color));
+    const toAdd = eventConfirmed.filter(p => attendanceChecked.has(p.id) && !existingProfileIds.has(p.id));
+    const newPlayers = toAdd.map((prof, i) => {
+      const preset = PRESET_PLAYERS.find(pp => pp.id === prof.id);
+      const avatarId = prof.avatarId || preset?.avatarId || null;
+      const charAv = avatarId ? CHAR_AVATARS.find(a => a.id === avatarId) : null;
+      const color = prof.color || PLAYER_COLORS.find(c => !usedColors.has(c)) || PLAYER_COLORS[i % PLAYER_COLORS.length];
+      usedColors.add(color);
+      return { id:'p'+Date.now()+i, name: prof.nickname || prof.name, color, drinks:0, points:0, profileId: prof.id, img: prof.img || (charAv ? charAv.img : null), avatarId };
+    });
+    if (newPlayers.length) setPlayers([...players, ...newPlayers]);
+    setAttendanceOpen(false);
+  };
   React.useEffect(() => {
     if (typeof window.getAllStats !== 'function') return;
     setTimeout(() => { window.getAllStats().then(st => setAllTimeStats(st || {})); }, 0);
@@ -41173,6 +41230,16 @@ function PlayersScreen({ players, setPlayers, go }) {
       <div style={{ flex:1, minHeight:0, position:'relative' }}>
         <div style={{ height:'100%', overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
         <div className="screen-wide screen-pad" style={{ paddingTop:20, paddingBottom:20 }}>
+        {todayEvent && eventConfirmed.length > 0 && (
+          <button onClick={openAttendance} style={{ width:'100%', display:'flex', alignItems:'center', gap:10, textAlign:'left', border:'none', borderRadius:16, padding:'12px 14px', marginBottom:14, background:`linear-gradient(120deg, ${T.mint}22, ${T.mint}0d)`, boxShadow:`0 0 0 1.5px ${T.mint}55 inset`, cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
+            <span style={{ fontSize:22, lineHeight:1, flexShrink:0 }}>🎉</span>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13.5, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>Ma van: {todayEvent.title}</div>
+              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11.5, color:T.inkSoft }}>{eventConfirmed.length} fő visszaigazolt — koppints a betöltéshez</div>
+            </div>
+            <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.mintDeep||T.mint, flexShrink:0 }}>›</span>
+          </button>
+        )}
         {players.length === 0 ? (
           <div style={{ display:'flex', flexDirection:'column', gap:16, padding:'8px 0 4px' }}>
             {/* Heading with faded 0 anchor */}
@@ -41259,6 +41326,38 @@ function PlayersScreen({ players, setPlayers, go }) {
           usedProfileIds={new Set(players.filter(p => p.id !== editing && p.profileId).map(p => p.profileId))}
         />
       }
+      {attendanceOpen && ReactDOM.createPortal(
+        <div onClick={() => setAttendanceOpen(false)} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.55)', zIndex:400, display:'flex', alignItems:'center', justifyContent:'center', padding:20, animation:'fadeIn .2s' }}>
+          <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:360, maxHeight:'80vh', display:'flex', flexDirection:'column', background:T.surface, borderRadius:22, boxShadow:'0 12px 48px rgba(0,0,0,0.22)', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.4)', padding:'20px 18px' }}>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink, marginBottom:2 }}>🎉 {todayEvent && todayEvent.title}</div>
+            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginBottom:14 }}>Válaszd ki, ki van itt ténylegesen — igen és talán válaszok alapján előjelölve.</div>
+            <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', display:'flex', flexDirection:'column', gap:6 }}>
+              {eventConfirmed.map(p => {
+                const on = attendanceChecked.has(p.id);
+                const already = players.some(pl => pl.profileId === p.id);
+                return (
+                  <button key={p.id} disabled={already} onClick={() => setAttendanceChecked(s => { const n = new Set(s); n.has(p.id) ? n.delete(p.id) : n.add(p.id); return n; })}
+                    style={{ display:'flex', alignItems:'center', gap:10, border:'none', borderRadius:13, padding:'9px 10px', background: on ? T.mintSoft : T.bgSoft, cursor: already ? 'default' : 'pointer', opacity: already ? 0.5 : 1, WebkitTapHighlightColor:'transparent' }}>
+                    <div style={{ width:30, height:30, borderRadius:'50%', background:p.color||'#98A2B3', display:'grid', placeItems:'center', flexShrink:0, overflow:'hidden' }}>
+                      {p.img ? <img src={p.img} style={{ width:30, height:30, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff' }}>{(p.name||'?')[0].toUpperCase()}</span>}
+                    </div>
+                    <div style={{ flex:1, minWidth:0, textAlign:'left' }}>
+                      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink }}>{p.name}</div>
+                      <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkMute }}>{already ? 'Már a listán van' : p._status === 'yes' ? 'Visszaigazolta: igen' : 'Visszaigazolta: talán'}</div>
+                    </div>
+                    <div style={{ width:22, height:22, borderRadius:7, border: on ? 'none' : `1.5px solid ${T.border}`, background: on ? T.mint : 'transparent', color:'#fff', display:'grid', placeItems:'center', flexShrink:0, fontSize:13, fontWeight:900 }}>{on ? '✓' : ''}</div>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ display:'flex', gap:10, marginTop:14 }}>
+              <button onClick={() => setAttendanceOpen(false)} style={{ flex:1, padding:'13px', borderRadius:14, border:'none', background:T.bgSoft, color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:14, cursor:'pointer' }}>Mégse</button>
+              <button onClick={addFromAttendance} disabled={attendanceChecked.size === 0} style={{ flex:2, padding:'13px', borderRadius:14, border:'none', background: attendanceChecked.size ? T.mint : T.mintSoft, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14, cursor: attendanceChecked.size ? 'pointer' : 'default' }}>Hozzáadás ({attendanceChecked.size})</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
