@@ -34834,7 +34834,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.022';
+const APP_VERSION = 'v10.023';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -39465,6 +39465,7 @@ function BarScreen({ go, deepLink }) {
   const [rater, setRater] = React.useState(() => { try { return localStorage.getItem('boh_bar_rater') || null; } catch(e) { return null; } });
   const [pickingRater, setPickingRater] = React.useState(false);
   const [ratings, setRatings] = React.useState({});
+  const [favorites, setFavorites] = React.useState({});
   const [own, setOwn] = React.useState(null);
   const [sheetId, setSheetId] = React.useState(null);
   const [adag, setAdag] = React.useState(1);
@@ -39487,7 +39488,8 @@ function BarScreen({ go, deepLink }) {
       setOwn((qs.docs || []).map(dd => ({ ...dd.data(), id: dd.id, custom: true })));
     }, () => setOwn([]));
     const unsub3 = db.collection('config').doc('shoppingCart').onSnapshot(d => setCart((((d && d.exists && d.data()) || {}).items) || []), () => {});
-    return () => { try { unsub1(); } catch(e) {} try { unsub2(); } catch(e) {} try { unsub3(); } catch(e) {} };
+    const unsub4 = db.collection('config').doc('drinkFavorites').onSnapshot(d => setFavorites((d && d.exists && d.data()) || {}), () => {});
+    return () => { try { unsub1(); } catch(e) {} try { unsub2(); } catch(e) {} try { unsub3(); } catch(e) {} try { unsub4(); } catch(e) {} };
   }, []);
 
   const CHIPS = [
@@ -39528,6 +39530,13 @@ function BarScreen({ go, deepLink }) {
     if (db) db.collection('config').doc('drinkRatings').set({ [drinkId]: { [rater]: stars } }, { merge: true }).catch(() => {});
   };
   const avgOf = id => { const v = Object.values(ratings[id] || {}); return v.length ? { avg: v.reduce((a,b) => a+b, 0) / v.length, n: v.length } : { avg: 0, n: 0 }; };
+  const isFav = id => !!(rater && favorites[id] && favorites[id][rater]);
+  const toggleFav = id => {
+    if (!rater) { setPickingRater(true); return; }
+    const cur = !!(favorites[id] && favorites[id][rater]);
+    setFavorites(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [rater]: !cur } }));
+    if (db) db.collection('config').doc('drinkFavorites').set({ [id]: { [rater]: !cur } }, { merge: true }).catch(() => {});
+  };
   const strColor = s => s >= 3 ? T.coral : s === 2 ? (T.yellow || '#F4C95A') : T.mint;
   const profOf = id => profiles.find(p => p.id === id) || null;
 
@@ -39575,7 +39584,9 @@ function BarScreen({ go, deepLink }) {
   });
   const medalFor = {};
   ownSorted.filter(d => avgOf(d.id).n > 0).slice(0, 3).forEach((d, i) => { medalFor[d.id] = ['🥇','🥈','🥉'][i]; });
-  const ownShown = ownFilter === 'all' ? ownSorted : ownSorted.filter(d => (d.type === 'shot' ? 'shot' : 'cocktail') === ownFilter);
+  const ownShown = ownFilter === 'all' ? ownSorted
+    : ownFilter === 'fav' ? ownSorted.filter(d => isFav(d.id))
+    : ownSorted.filter(d => (d.type === 'shot' ? 'shot' : 'cocktail') === ownFilter);
 
   let recipeList = DRINKS.filter(d => d.type === tab);
   if (avail.size) recipeList = [...recipeList].sort((a,b) => (canMake(b) - canMake(a)));
@@ -39611,6 +39622,7 @@ function BarScreen({ go, deepLink }) {
           <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
             <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15.5, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{d.name}</span>
             {medal && <span style={{ fontSize:15, lineHeight:1, flexShrink:0 }}>{medal}</span>}
+            {isFav(d.id) && <span style={{ fontSize:13, lineHeight:1, flexShrink:0 }}>❤️</span>}
             {mk && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, color:T.mintDeep || T.mint, background:T.mintSoft, borderRadius:999, padding:'2px 8px', flexShrink:0 }}>✓ Kikeverhető</span>}
           </div>
           {(d.byId || d.by) ? (() => { const bp = profOf(d.byId) || (d.by ? { name: d.by } : null); return (
@@ -39649,7 +39661,7 @@ function BarScreen({ go, deepLink }) {
           <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, marginBottom:2 }}>Mi kevertük 🍸</div>
           <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginBottom:10 }}>A DNR-eken készült keverések — koppints egy italra a részletekhez és az értékeléshez.</div>
           <div style={{ display:'flex', gap:7, marginBottom:12 }}>
-            {[['all','Mind'],['cocktail','🍹 Koktél'],['shot','🥃 Shot']].map(([k,l]) => { const on = ownFilter === k; return (
+            {[['all','Mind'],['cocktail','🍹 Koktél'],['shot','🥃 Shot'],['fav','❤️ Kedvenc']].map(([k,l]) => { const on = ownFilter === k; return (
               <button key={k} onClick={() => setOwnFilter(k)} style={{ padding:'7px 14px', borderRadius:999, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:12.5, background: on ? T.mint : T.surface, color: on ? '#fff' : T.ink, boxShadow: on ? `0 3px 0 ${T.mintDeep||T.mint}66, 0 6px 14px ${T.mint}33` : T.shadow }}>{l}</button>
             ); })}
           </div>
@@ -39665,7 +39677,7 @@ function BarScreen({ go, deepLink }) {
           ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
               {ownShown.map(d => <DrinkCard key={d.id} d={d} medal={medalFor[d.id]} />)}
-              {ownShown.length === 0 && <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, textAlign:'center', padding:'18px 0' }}>Ebben a kategóriában még nincs keverés.</div>}
+              {ownShown.length === 0 && <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, textAlign:'center', padding:'18px 0' }}>{ownFilter === 'fav' ? 'Még nincs kedvenced — nyisd meg egy ital részleteit, és jelöld be a szívvel.' : 'Ebben a kategóriában még nincs keverés.'}</div>}
             </div>
           )}
           <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:20, lineHeight:1.5 }}>Idd felelősséggel! 🍸</div>
@@ -39715,6 +39727,7 @@ function BarScreen({ go, deepLink }) {
                     {d.custom && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, color:T.inkSoft, background:T.surfaceMuted, borderRadius:999, padding:'2px 8px' }}>{d.type === 'shot' ? '🥃 Shot' : '🍹 Koktél'}</span>}
                   </div>
                 </div>
+                <button onClick={() => toggleFav(d.id)} style={{ border:'none', background: isFav(d.id) ? T.coralSoft : T.surfaceMuted, color:T.coral, width:32, height:32, borderRadius:'50%', cursor:'pointer', fontSize:15, flexShrink:0, display:'grid', placeItems:'center' }}>{isFav(d.id) ? '❤️' : '🤍'}</button>
                 <button onClick={() => setSheetId(null)} style={{ border:'none', background:T.surfaceMuted, color:T.inkSoft, width:32, height:32, borderRadius:'50%', cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, flexShrink:0 }}>✕</button>
               </div>
               {d.image && (
