@@ -34803,7 +34803,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v9.995';
+const APP_VERSION = 'v9.996';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -39337,6 +39337,11 @@ function BarScreen({ go, deepLink }) {
   const [form, setForm] = React.useState(null);
   const [confirmDel, setConfirmDel] = React.useState(false);
   const [ownFilter, setOwnFilter] = React.useState('all');
+  const [cart, setCart] = React.useState([]);
+  const [cartOpen, setCartOpen] = React.useState(false);
+  const [customText, setCustomText] = React.useState('');
+  const [confirmClear, setConfirmClear] = React.useState(false);
+  const [addedId, setAddedId] = React.useState(null);
   const db = (typeof firebase !== 'undefined') ? firebase.firestore() : null;
 
   React.useEffect(() => {
@@ -39346,7 +39351,8 @@ function BarScreen({ go, deepLink }) {
     const unsub2 = db.collection('barDrinks').onSnapshot(qs => {
       setOwn((qs.docs || []).map(dd => ({ ...dd.data(), id: dd.id, custom: true })));
     }, () => setOwn([]));
-    return () => { try { unsub1(); } catch(e) {} try { unsub2(); } catch(e) {} };
+    const unsub3 = db.collection('config').doc('shoppingCart').onSnapshot(d => setCart((((d && d.exists && d.data()) || {}).items) || []), () => {});
+    return () => { try { unsub1(); } catch(e) {} try { unsub2(); } catch(e) {} try { unsub3(); } catch(e) {} };
   }, []);
 
   const CHIPS = [
@@ -39398,6 +39404,33 @@ function BarScreen({ go, deepLink }) {
     setForm(null); setView('own'); setSheetId(id);
   };
   const deleteDrink = (id) => { if (db) db.collection('barDrinks').doc(id).delete().catch(() => {}); setConfirmDel(false); setSheetId(null); };
+
+  // ── Bevásárlókosár (megosztott) ──
+  const writeCart = items => { setCart(items); if (db) db.collection('config').doc('shoppingCart').set({ items }, { merge: true }).catch(() => {}); };
+  const genCid = () => 'c_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  const addLines = (lines, from) => {
+    const items = cart.map(i => ({ ...i }));
+    (lines || []).forEach(line => {
+      const t = (line || '').trim(); if (!t) return;
+      const ex = items.find(i => !i.checked && (i.text || '').trim().toLowerCase() === t.toLowerCase());
+      if (ex) ex.qty = (ex.qty || 1) + 1;
+      else items.push({ id: genCid(), text: t, qty: 1, from: from || '', checked: false });
+    });
+    writeCart(items);
+  };
+  const addDrinkToCart = d => { addLines(d.ing || [], d.name); setAddedId(d.id); try { if (typeof window.bohHaptic === 'function') window.bohHaptic('success'); } catch(e) {} setTimeout(() => setAddedId(a => a === d.id ? null : a), 1400); };
+  const addCustom = () => { const t = customText.trim(); if (!t) return; addLines([t], ''); setCustomText(''); };
+  const toggleCartItem = id => writeCart(cart.map(i => i.id === id ? { ...i, checked: !i.checked } : i));
+  const removeCartItem = id => writeCart(cart.filter(i => i.id !== id));
+  const clearChecked = () => writeCart(cart.filter(i => !i.checked));
+  const clearAllCart = () => { writeCart([]); setConfirmClear(false); };
+  const cartCount = cart.filter(i => !i.checked).length;
+  const cartBtn = (
+    <button onClick={() => { setCartOpen(true); setConfirmClear(false); }} style={{ position:'relative', border:'none', background:T.surfaceMuted, width:40, height:40, borderRadius:12, cursor:'pointer', display:'grid', placeItems:'center', WebkitTapHighlightColor:'transparent' }}>
+      <span style={{ fontSize:18, lineHeight:1 }}>🛒</span>
+      {cartCount > 0 && <span style={{ position:'absolute', top:-5, right:-5, minWidth:18, height:18, padding:'0 4px', borderRadius:9, background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:10.5, display:'grid', placeItems:'center', boxSizing:'border-box' }}>{cartCount}</span>}
+    </button>
+  );
 
   const ownSorted = [...ownList].sort((a,b) => {
     const A = avgOf(a.id), B = avgOf(b.id);
@@ -39456,9 +39489,10 @@ function BarScreen({ go, deepLink }) {
             {d.custom && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:10, color:T.inkSoft, background:T.surfaceMuted, borderRadius:999, padding:'2px 8px', flexShrink:0 }}>{d.type === 'shot' ? '🥃 Shot' : '🍹 Koktél'}</span>}
           </div>
         </div>
-        <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:3, flexShrink:0 }}>
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4, flexShrink:0 }}>
           <Stars value={avg} size={13} />
           <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft }}>{n ? avg.toFixed(1) + ' · ' + n + ' szavazat' : '—'}</span>
+          {(d.ing && d.ing.length) ? <button onClick={e => { e.stopPropagation(); addDrinkToCart(d); }} style={{ marginTop:1, border:'none', background: addedId === d.id ? T.mint : T.surfaceMuted, color: addedId === d.id ? '#fff' : T.inkSoft, borderRadius:9, padding:'4px 9px', fontFamily:T.font, fontWeight:800, fontSize:10.5, cursor:'pointer', whiteSpace:'nowrap' }}>{addedId === d.id ? '✓ Kosárban' : '🛒 +'}</button> : null}
         </div>
       </div>
     );
@@ -39466,7 +39500,7 @@ function BarScreen({ go, deepLink }) {
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
-      <AppBar title={view === 'recipes' ? 'Receptek' : (deepLink ? 'DNR Pub' : 'Pub')} onBack={deepLink && view !== 'recipes' ? null : () => { if (view === 'recipes') setView('own'); else go('home'); }} />
+      <AppBar title={view === 'recipes' ? 'Receptek' : (deepLink ? 'DNR Pub' : 'Pub')} onBack={deepLink && view !== 'recipes' ? null : () => { if (view === 'recipes') setView('own'); else go('home'); }} right={cartBtn} />
       {view === 'own' && (
         <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'14px 16px max(40px, calc(env(safe-area-inset-bottom) + 24px))', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
           <div style={{ display:'flex', gap:10, marginBottom:16 }}>
@@ -39561,6 +39595,9 @@ function BarScreen({ go, deepLink }) {
                   {d.step ? <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkMute, marginTop:8, lineHeight:1.45 }}>{d.step}</div> : null}
                 </div>
               ) : (d.step ? <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkMute, marginTop:10, lineHeight:1.45 }}>{d.step}</div> : null)}
+              {(d.ing && d.ing.length) ? (
+                <button onClick={() => addDrinkToCart(d)} style={{ width:'100%', marginTop:10, padding:'12px 0', borderRadius:12, border:'none', background: addedId === d.id ? T.mint : T.surfaceMuted, color: addedId === d.id ? '#fff' : T.ink, fontFamily:T.font, fontWeight:800, fontSize:13.5, cursor:'pointer' }}>{addedId === d.id ? '✓ Hozzávalók a kosárban' : '🛒 Hozzávalók a kosárba'}</button>
+              ) : null}
               <div style={{ background:T.surface, borderRadius:14, padding:'12px 13px', boxShadow:T.shadow, marginTop:10 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
                   <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em' }}>Értékelések</span>
@@ -39613,6 +39650,46 @@ function BarScreen({ go, deepLink }) {
           </div>
         );
       })()}
+      {cartOpen && (
+        <div onClick={() => setCartOpen(false)} style={{ position:'fixed', top:'calc(-1 * env(safe-area-inset-top))', left:0, right:0, bottom:'calc(-1 * env(safe-area-inset-bottom))', background:'rgba(14,14,24,0.72)', zIndex:75, display:'flex', alignItems:'center', justifyContent:'center', padding:'calc(env(safe-area-inset-top) + 20px) 20px calc(env(safe-area-inset-bottom) + 20px)', boxSizing:'border-box', animation:'fadeIn .2s' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background:T.bg, borderRadius:24, padding:'18px', width:'100%', maxWidth:420, maxHeight:'86vh', display:'flex', flexDirection:'column', boxSizing:'border-box', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.2)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+              <span style={{ fontSize:24, lineHeight:1 }}>🛒</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink }}>Bevásárlókosár</div>
+                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft }}>{cart.length ? `${cartCount} megvenni · ${cart.length - cartCount} kész` : 'Üres — tegyél bele italokat vagy egyedi tételt'}</div>
+              </div>
+              <button onClick={() => setCartOpen(false)} style={{ border:'none', background:T.surfaceMuted, color:T.inkSoft, width:32, height:32, borderRadius:'50%', cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, flexShrink:0 }}>✕</button>
+            </div>
+            <div style={{ display:'flex', gap:7, marginBottom:12 }}>
+              <input value={customText} onChange={e => setCustomText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addCustom(); }} placeholder="Egyedi tétel — pl. jég, pohár, chips" style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'11px 12px', borderRadius:11, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+              <button onClick={addCustom} disabled={!customText.trim()} style={{ padding:'11px 16px', borderRadius:11, border:'none', background: customText.trim() ? T.mint : T.mintSoft, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer', flexShrink:0 }}>+</button>
+            </div>
+            <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', display:'flex', flexDirection:'column', gap:6 }}>
+              {cart.length === 0 ? (
+                <div style={{ textAlign:'center', padding:'26px 10px', fontFamily:T.font, fontSize:12.5, color:T.inkMute, lineHeight:1.5 }}>Még üres a kosár.<br/>Az italoknál a <b>🛒 +</b> gombbal tudsz hozzávalókat betenni, vagy írj be fentre egyedi tételt.</div>
+              ) : (
+                [...cart].sort((a, b) => (a.checked - b.checked)).map(it => (
+                  <div key={it.id} style={{ display:'flex', alignItems:'center', gap:10, background:T.surface, borderRadius:12, padding:'10px 12px', boxShadow:T.shadow, opacity: it.checked ? 0.55 : 1 }}>
+                    <button onClick={() => toggleCartItem(it.id)} style={{ width:26, height:26, borderRadius:8, border: it.checked ? `2px solid ${T.mint}` : `1.5px solid ${T.border}`, background: it.checked ? T.mint : 'transparent', color:'#fff', cursor:'pointer', flexShrink:0, display:'grid', placeItems:'center', fontSize:14, fontWeight:900 }}>{it.checked ? '✓' : ''}</button>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13.5, color:T.ink, textDecoration: it.checked ? 'line-through' : 'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{it.text}{(it.qty || 1) > 1 ? ` ×${it.qty}` : ''}</div>
+                      {it.from ? <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkMute, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{it.from}</div> : null}
+                    </div>
+                    <button onClick={() => removeCartItem(it.id)} style={{ border:'none', background:T.coralSoft, color:T.coral, borderRadius:8, padding:'6px 8px', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center' }}><BohIcon name="trash" size={12} /></button>
+                  </div>
+                ))
+              )}
+            </div>
+            {cart.length > 0 && (
+              <div style={{ display:'flex', gap:8, marginTop:12 }}>
+                {cart.some(i => i.checked) && <button onClick={clearChecked} style={{ flex:1, padding:'11px 0', borderRadius:12, border:'none', background:T.surfaceMuted, color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer' }}>Kész tételek törlése</button>}
+                <button onClick={() => { if (confirmClear) clearAllCart(); else setConfirmClear(true); }} style={{ flex:1, padding:'11px 0', borderRadius:12, border:'none', background: confirmClear ? T.coral : T.coralSoft, color: confirmClear ? '#fff' : T.coral, fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer' }}>{confirmClear ? 'Biztos? Mindent töröl!' : 'Kosár ürítése'}</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {form && <DrinkForm init={form} profiles={profiles} onSave={saveDrink} onCancel={() => setForm(null)} />}
     </div>
   );
