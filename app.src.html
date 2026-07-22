@@ -34834,7 +34834,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.029';
+const APP_VERSION = 'v10.030';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36298,7 +36298,7 @@ function GameImg({ g, size='full' }) {
     ? { width:'100%', height:'100%', objectFit:'contain' }
     : { width:size, height:size, objectFit:'contain' };
   return showImg
-    ? <img src={g.img} alt={g.name} referrerPolicy="no-referrer" onError={() => setFailed(true)}
+    ? <img src={g.img} alt={g.name} referrerPolicy="no-referrer" onError={() => setFailed(true)} loading="lazy" decoding="async"
         style={{ ...style, filter:'drop-shadow(0 2px 4px rgba(20,30,50,0.08))', userSelect:'none' }} draggable="false" />
     : <span style={{ fontSize: size==='full' ? 44 : Math.round(size*0.6), lineHeight:1 }}>{g.emoji}</span>;
 }
@@ -39294,6 +39294,15 @@ function ingToLine(it, factor) {
   return ((sq ? sq + ' ' : '') + p.n).trim();
 }
 
+// Kép tömörítés: WebP-et próbál (kisebb fájlméret azonos minőségnél), ha a böngésző
+// nem tudja kódolni (toDataURL csendben PNG-re esne vissza), JPEG-re esik vissza.
+function canvasToCompressedURL(canvas, quality) {
+  const q = quality || 0.72;
+  const webp = canvas.toDataURL('image/webp', q);
+  if (webp.indexOf('data:image/webp') === 0) return webp;
+  return canvas.toDataURL('image/jpeg', q);
+}
+
 // ── Pub: saját keverés űrlap (új / szerkesztés) — app design, EventForm mintára ──
 function DrinkForm({ init, profiles, onSave, onCancel }) {
   const [name, setName] = React.useState(init.name || '');
@@ -39330,7 +39339,7 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
         const canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        setImage(canvas.toDataURL('image/jpeg', 0.72));
+        setImage(canvasToCompressedURL(canvas, 0.72));
       };
       img.src = evt.target.result;
     };
@@ -39676,7 +39685,7 @@ function BarScreen({ go, deepLink }) {
     const { avg, n } = avgOf(d.id);
     return (
       <div onClick={() => openSheet(d)} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow, cursor:'pointer', display:'flex', alignItems:'center', gap:12, opacity: dim ? 0.45 : 1, border: mk ? `2px solid ${T.mint}` : '2px solid transparent' }}>
-        {d.image && <img src={d.image} style={{ width:48, height:48, borderRadius:12, objectFit:'cover', flexShrink:0 }} />}
+        {d.image && <img src={d.image} loading="lazy" decoding="async" style={{ width:48, height:48, borderRadius:12, objectFit:'cover', flexShrink:0 }} />}
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
             <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15.5, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{d.name}</span>
@@ -40449,7 +40458,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
           return (
             <div key={ev.id} onClick={() => setDetail(ev.id)} style={{ background: ev.cancelled ? T.coralSoft : T.surface, borderRadius:16, marginBottom:8, boxShadow:pfShadowE, cursor:'pointer', WebkitTapHighlightColor:'transparent', overflow:'hidden', border: ev.cancelled ? `1.5px solid ${T.coral}` : (pfBorderE || '1.5px solid transparent') }}>
               {ev.cancelled && <div style={{ background:'#ef4444', padding:'4px 14px', fontFamily:T.font, fontWeight:900, fontSize:11, color:'#fff', letterSpacing:'0.08em', textAlign:'center' }}>ELMARAD</div>}
-              {ev.image && !ev.cancelled && <div style={{ height:90, overflow:'hidden' }}><img src={ev.image} style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} /></div>}
+              {ev.image && !ev.cancelled && <div style={{ height:90, overflow:'hidden' }}><img src={ev.image} loading="lazy" decoding="async" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} /></div>}
               {/* Top row */}
               <div style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 12px 10px' }}>
                 {/* Date badge */}
@@ -40571,7 +40580,7 @@ function EventForm({ initial, onSave, onCancel, evT: formEvT }) {
         const canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        setImage(canvas.toDataURL('image/jpeg', 0.72));
+        setImage(canvasToCompressedURL(canvas, 0.72));
       };
       img.src = evt.target.result;
     };
