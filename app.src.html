@@ -34835,7 +34835,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.009';
+const APP_VERSION = 'v10.010';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -39295,6 +39295,55 @@ function ingToLine(it, factor) {
   return ((sq ? sq + ' ' : '') + p.n).trim();
 }
 
+// ── DIAGNOSZTIKA: valós safe-area / viewport értékek kiírása (ideiglenes, bottom-hiba behatárolásához) ──
+function SafeAreaDebug() {
+  const [info, setInfo] = React.useState(null);
+  React.useEffect(() => {
+    try {
+      const probeH = (h) => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:' + h; document.body.appendChild(d); const v = Math.round(d.getBoundingClientRect().height); document.body.removeChild(d); return v; };
+      const p = document.createElement('div');
+      p.style.cssText = 'position:fixed;left:-9999px;bottom:0;height:env(safe-area-inset-bottom);padding-top:env(safe-area-inset-top)';
+      document.body.appendChild(p);
+      const cs = getComputedStyle(p);
+      const sab = Math.round(parseFloat(cs.height) || 0);
+      const sat = Math.round(parseFloat(cs.paddingTop) || 0);
+      document.body.removeChild(p);
+      const foot = document.getElementById('drinkform-foot');
+      const footBottom = foot ? Math.round(foot.getBoundingClientRect().bottom) : '-';
+      setInfo({
+        sat, sab,
+        innerH: window.innerHeight,
+        docH: document.documentElement.clientHeight,
+        vvH: window.visualViewport ? Math.round(window.visualViewport.height) : '-',
+        screenH: (window.screen && window.screen.height) || '-',
+        vh: probeH('100vh'), dvh: probeH('100dvh'), svh: probeH('100svh'), lvh: probeH('100lvh'),
+        dpr: window.devicePixelRatio,
+        footBottom,
+        standalone: (window.navigator.standalone === true) || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ? 'IGEN' : 'nem',
+      });
+    } catch (e) { setInfo({ err: String(e && e.message || e) }); }
+  }, []);
+  if (!info) return null;
+  const row = (k, v) => <div key={k} style={{ display:'flex', justifyContent:'space-between', gap:10 }}><span>{k}</span><b>{String(v)}</b></div>;
+  return (
+    <div style={{ background:'#101828', color:'#7CE7B0', borderRadius:12, padding:'10px 12px', marginBottom:12, fontFamily:'monospace', fontSize:12, lineHeight:1.5 }}>
+      <div style={{ color:'#F09E8C', fontWeight:900, marginBottom:4 }}>🔧 SAFE-AREA DEBUG (v{APP_VERSION})</div>
+      {info.err ? <div>hiba: {info.err}</div> : [
+        row('standalone (PWA)', info.standalone),
+        row('safe-top / safe-bottom', info.sat + ' / ' + info.sab),
+        row('innerHeight', info.innerH),
+        row('doc.clientHeight', info.docH),
+        row('visualViewport', info.vvH),
+        row('screen.height', info.screenH),
+        row('100vh / 100dvh', info.vh + ' / ' + info.dvh),
+        row('100svh / 100lvh', info.svh + ' / ' + info.lvh),
+        row('devicePixelRatio', info.dpr),
+        row('footer.bottom (px)', info.footBottom),
+      ]}
+    </div>
+  );
+}
+
 // ── Pub: saját keverés űrlap (új / szerkesztés) — app design, EventForm mintára ──
 function DrinkForm({ init, profiles, onSave, onCancel }) {
   const [name, setName] = React.useState(init.name || '');
@@ -39330,6 +39379,7 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
     <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
       <AppBar title={init.id ? 'Keverés szerkesztése' : 'Új keverés'} onBack={onCancel} />
       <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', overscrollBehavior:'contain', padding:'16px 16px calc(92px + env(safe-area-inset-bottom))', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
+        <SafeAreaDebug />
         {/* Alapok */}
         <div style={card}>
           {label('Név')}
@@ -39412,7 +39462,7 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
       {/* Fix alsó gombsor — document.body-ba portálozva, hogy a valós fizikai aljhoz
           igazodjon (mint a felső status-sáv), függetlenül a 100dvh/animált wrapper viselkedésétől */}
       {ReactDOM.createPortal(
-        <div style={{ position:'fixed', left:0, right:0, bottom:0, zIndex:70, background:T.surface, boxShadow:'0 -4px 18px rgba(20,30,50,0.08)', borderTopLeftRadius:20, borderTopRightRadius:20, padding:'10px 16px max(10px, env(safe-area-inset-bottom))', boxSizing:'border-box' }}>
+        <div id="drinkform-foot" style={{ position:'fixed', left:0, right:0, bottom:0, zIndex:70, background:T.surface, boxShadow:'0 -4px 18px rgba(20,30,50,0.08)', borderTopLeftRadius:20, borderTopRightRadius:20, padding:'10px 16px max(10px, env(safe-area-inset-bottom))', boxSizing:'border-box' }}>
           <div style={{ display:'flex', gap:10, maxWidth:680, width:'100%', margin:'0 auto' }}>
             <button onClick={onCancel} style={{ flex:1, padding:'15px', borderRadius:16, border:'none', background:T.bg, color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer' }}>Mégse</button>
             <button onClick={save} disabled={!valid} style={{ flex:2, padding:'15px', borderRadius:16, border:'none', background: valid ? T.mint : T.border, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor: valid ? 'pointer' : 'default', boxShadow: valid ? `0 4px 14px ${T.mint}66` : 'none', transition:'all .2s' }}>Mentés</button>
