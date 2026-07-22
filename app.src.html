@@ -34842,7 +34842,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.031';
+const APP_VERSION = 'v10.032';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36903,6 +36903,69 @@ function EventCalendarView({ events, calMonth, setCalMonth, setDetail, evT: calE
   );
 }
 
+// ── Események: "Emlékek" idővonal — évekre bontva, helyszínnel, mint egy közös emlék-napló ──
+function EventHistoryView({ events, setDetail, evT: histEvT }) {
+  const T = histEvT || window.__evT || THEMES['warm'];
+  const byYear = {};
+  events.forEach(ev => {
+    if (!ev.date) return;
+    const y = new Date(ev.date).getFullYear();
+    if (!byYear[y]) byYear[y] = [];
+    byYear[y].push(ev);
+  });
+  const years = Object.keys(byYear).map(Number).sort((a,b) => b - a);
+  years.forEach(y => byYear[y].sort((a,b) => new Date(b.date) - new Date(a.date)));
+
+  if (years.length === 0) {
+    return (
+      <div style={{ textAlign:'center', padding:'50px 20px', fontFamily:T.font }}>
+        <div style={{ fontSize:48, marginBottom:14 }}>🗺️</div>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.sub }}>Még nincs elmúlt esemény, amiből emlék-napló épülne.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding:'16px 16px 40px' }}>
+      {years.map(y => (
+        <div key={y} style={{ marginBottom:26 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink }}>{y}</div>
+            <div style={{ flex:1, height:2, background:`${T.mint}44`, borderRadius:1 }} />
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11.5, color:T.sub }}>{byYear[y].length} esemény</div>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:0, position:'relative', paddingLeft:20 }}>
+            <div style={{ position:'absolute', left:5, top:6, bottom:6, width:2, background:`${T.mint}33`, borderRadius:1 }} />
+            {byYear[y].map((ev, i) => {
+              const d = new Date(ev.date);
+              const dateStr = d.toLocaleDateString('hu-HU', { month:'short', day:'numeric' });
+              return (
+                <div key={ev.id || i} onClick={() => setDetail(ev.id)} style={{ position:'relative', display:'flex', gap:12, alignItems:'flex-start', paddingBottom:18, cursor:'pointer' }}>
+                  <div style={{ position:'absolute', left:-20, top:5, width:12, height:12, borderRadius:'50%', background:T.mint, border:`2.5px solid ${T.bg}`, boxShadow:`0 0 0 2px ${T.mint}55`, flexShrink:0 }} />
+                  {ev.image ? (
+                    <img src={ev.image} loading="lazy" decoding="async" style={{ width:56, height:56, borderRadius:14, objectFit:'cover', flexShrink:0, boxShadow:T.shadow }} />
+                  ) : (
+                    <div style={{ width:56, height:56, borderRadius:14, background:T.surface, boxShadow:T.shadow, display:'grid', placeItems:'center', flexShrink:0, fontSize:24 }}>{ev.emoji || '🎉'}</div>
+                  )}
+                  <div style={{ flex:1, minWidth:0, paddingTop:2 }}>
+                    <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.mintDeep || T.mint, textTransform:'uppercase', letterSpacing:'0.05em' }}>{dateStr}</div>
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ev.title}</div>
+                    {ev.location && (
+                      <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:2 }}>
+                        <span style={{ fontSize:11 }}>📍</span>
+                        <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.sub, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ev.location}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // ── AdminScreen ────────────────────────────────────────────────────────────────
 function AdminScreen({ go }) {
@@ -40458,7 +40521,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
       {/* View switcher — full width, stats style */}
       <div style={{ padding:'10px 16px 0' }}>
         <div style={{ display:'flex', background:T.surface, borderRadius:18, padding:4, gap:0, boxShadow:T.shadow }}>
-          {[['past','Múlt'],['list','Lista'],['calendar','Naptár']].map(([key,label]) => (
+          {[['past','Múlt'],['list','Lista'],['calendar','Naptár'],['history','Emlékek']].map(([key,label]) => (
             <button key={key} onClick={() => setEvView(key)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'13px 0', borderRadius:14, border:'none', fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer', background: evView===key ? T.mint : 'transparent', color: evView===key ? '#fff' : T.inkSoft, transition:'all .2s', WebkitTapHighlightColor:'transparent' }}>
               {label}
             </button>
@@ -40472,6 +40535,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
         const isPast = ev => { const d = endOf(ev); return d ? d < now : false; };
         const shown = evView === 'past' ? [...events].filter(isPast).reverse() : events.filter(ev => !isPast(ev));
         if (evView === 'calendar') return <EventCalendarView events={events} calMonth={calMonth} setCalMonth={setCalMonth} setDetail={setDetail} evT={T} />;
+        if (evView === 'history') return <EventHistoryView events={events.filter(isPast)} setDetail={setDetail} evT={T} />;
         const todayMD2 = new Date().toISOString().slice(5,10);
         const upcomingBdays = evView === 'list' ? profiles.filter(p => p.birthday).map(p => {
           const bd = p.birthday.slice(5,10);
