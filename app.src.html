@@ -34835,7 +34835,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.005';
+const APP_VERSION = 'v10.006';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -39259,12 +39259,52 @@ function BingoScreen({ go }) {
     </div>
   );
 }
+// ── Pub: hozzávaló-kezelés — mennyiség(+mértékegység) és név szétválasztása, adag-arányosítás ──
+var ING_UNITS = ['cl','dl','ml','l','g','dkg','kg','db','tk','ek','kk','csepp','csipet','szelet','karika','gerezd','rész','adag','oz','shot','kupak','marék','marok'];
+function ingParse(it) {
+  if (it && typeof it === 'object') return { q: (it.q || '').trim(), n: (it.n || '').trim() };
+  var s = String(it || '').trim();
+  var m = s.match(/^([0-9]+(?:[.,][0-9]+)?(?:\/[0-9]+)?|½|¼|¾)\s*(\S+)?\s*([\s\S]*)$/);
+  if (m) {
+    var num = m[1], maybeUnit = m[2] || '', rest = m[3] || '';
+    if (maybeUnit && ING_UNITS.indexOf(maybeUnit.toLowerCase().replace(/\.$/, '')) >= 0) {
+      return { q: (num + ' ' + maybeUnit).trim(), n: rest.trim() };
+    }
+    return { q: num, n: ((maybeUnit ? maybeUnit + ' ' : '') + rest).trim() };
+  }
+  return { q: '', n: s };
+}
+function ingFmtNum(v) {
+  var r = Math.round(v * 100) / 100;
+  return String(r).replace('.', ',');
+}
+function ingScaleQ(q, factor) {
+  if (!q || factor === 1) return q || '';
+  var m = String(q).match(/^\s*([0-9]+(?:[.,][0-9]+)?(?:\/[0-9]+)?|½|¼|¾)\s*([\s\S]*)$/);
+  if (!m) return q;
+  var raw = m[1], base;
+  if (raw === '½') base = 0.5; else if (raw === '¼') base = 0.25; else if (raw === '¾') base = 0.75;
+  else if (raw.indexOf('/') >= 0) { var p = raw.split('/'); base = parseFloat(p[0]) / parseFloat(p[1]); }
+  else base = parseFloat(raw.replace(',', '.'));
+  if (!isFinite(base)) return q;
+  var unit = (m[2] || '').trim();
+  return (ingFmtNum(base * factor) + (unit ? ' ' + unit : '')).trim();
+}
+function ingToLine(it, factor) {
+  var p = ingParse(it), sq = ingScaleQ(p.q, factor || 1);
+  return ((sq ? sq + ' ' : '') + p.n).trim();
+}
+
 // ── Pub: saját keverés űrlap (új / szerkesztés) — app design, EventForm mintára ──
 function DrinkForm({ init, profiles, onSave, onCancel }) {
   const [name, setName] = React.useState(init.name || '');
   const [emoji, setEmoji] = React.useState(init.emoji || '🍹');
   const [str, setStr] = React.useState(init.str || 2);
-  const [ing, setIng] = React.useState((init.ing || []).join('\n'));
+  const [ingRows, setIngRows] = React.useState(() => {
+    const rows = (init.ing || []).map(ingParse).filter(r => r.q || r.n);
+    return rows.length ? rows : [{ q:'', n:'' }];
+  });
+  const [serv, setServ] = React.useState(Math.max(1, init.serv || 1));
   const [step, setStep] = React.useState(init.step || '');
   const [creator, setCreator] = React.useState(() => {
     if (init.byId) {
@@ -39283,7 +39323,8 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
   const card = { background:T.surface, borderRadius:18, padding:'16px', boxShadow:T.shadow, marginBottom:12 };
   const save = () => {
     if (!valid) return;
-    onSave({ name:name.trim(), emoji:(emoji||'').trim()||'🍹', type, str, ing:ing.split('\n').map(s => s.trim()).filter(Boolean), step:step.trim(), by: creator ? (creator.name || '') : (init.byId ? '' : (init.by || '')), byId: creator ? creator.id : '', note:note.trim() });
+    const ingOut = ingRows.map(r => ({ q:(r.q||'').trim(), n:(r.n||'').trim() })).filter(r => r.q || r.n);
+    onSave({ name:name.trim(), emoji:(emoji||'').trim()||'🍹', type, str, serv:Math.max(1, serv||1), ing:ingOut, step:step.trim(), by: creator ? (creator.name || '') : (init.byId ? '' : (init.by || '')), byId: creator ? creator.id : '', note:note.trim() });
   };
   return ReactDOM.createPortal((
     <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, boxSizing:'border-box', zIndex:80, background:T.bg, display:'flex', flexDirection:'column' }}>
@@ -39313,9 +39354,29 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
         </div>
         {/* Recept */}
         <div style={card}>
-          {label('Hozzávalók — soronként egy')}
-          <textarea value={ing} onChange={e => setIng(e.target.value)} rows={4} placeholder={'4 cl vodka\n1 dl áfonyalé\nsok jég'} style={{ ...inpStyle, resize:'vertical', lineHeight:1.55 }} />
-          <div style={{ marginTop:14 }}>
+          {label('Hozzávalók — mennyiség + hozzávaló')}
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {ingRows.map((row, i) => (
+              <div key={i} style={{ display:'flex', gap:8, alignItems:'center' }}>
+                <input value={row.q} onChange={e => setIngRows(rs => rs.map((r,j) => j===i ? { ...r, q:e.target.value } : r))} placeholder="4 cl" style={{ ...inpStyle, width:88, flexShrink:0, textAlign:'center', fontWeight:800 }} />
+                <input value={row.n} onChange={e => setIngRows(rs => rs.map((r,j) => j===i ? { ...r, n:e.target.value } : r))} placeholder="vodka" style={{ ...inpStyle, flex:1, minWidth:0 }} />
+                <button onClick={() => setIngRows(rs => rs.length > 1 ? rs.filter((_,j) => j!==i) : [{ q:'', n:'' }])} style={{ flexShrink:0, width:38, height:38, borderRadius:11, border:'none', background:T.bg, color:T.inkMute, fontFamily:T.font, fontWeight:900, fontSize:16, cursor:'pointer' }}>✕</button>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => setIngRows(rs => [...rs, { q:'', n:'' }])} style={{ marginTop:8, padding:'10px 0', width:'100%', borderRadius:12, border:`1.5px dashed ${T.inkMute}55`, background:'transparent', color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer' }}>+ Új hozzávaló</button>
+          <div style={{ marginTop:16 }}>
+            {label('Hány adagra szól?')}
+            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+              <button onClick={() => setServ(s => Math.max(1, s-1))} style={{ width:44, height:44, borderRadius:13, border:'none', background:T.bg, color:T.ink, fontFamily:T.font, fontWeight:900, fontSize:22, cursor:'pointer', lineHeight:1 }}>−</button>
+              <div style={{ minWidth:64, textAlign:'center' }}>
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink }}>{serv}</span>
+                <span style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkSoft }}> adag</span>
+              </div>
+              <button onClick={() => setServ(s => Math.min(20, s+1))} style={{ width:44, height:44, borderRadius:13, border:'none', background:T.bg, color:T.ink, fontFamily:T.font, fontWeight:900, fontSize:22, cursor:'pointer', lineHeight:1 }}>+</button>
+            </div>
+          </div>
+          <div style={{ marginTop:16 }}>
             {label('Elkészítés')}
             <textarea value={step} onChange={e => setStep(e.target.value)} rows={2} placeholder="Hogyan kevered ki?" style={{ ...inpStyle, resize:'vertical', lineHeight:1.55 }} />
           </div>
@@ -39370,6 +39431,7 @@ function BarScreen({ go, deepLink }) {
   const [ratings, setRatings] = React.useState({});
   const [own, setOwn] = React.useState(null);
   const [sheetId, setSheetId] = React.useState(null);
+  const [adag, setAdag] = React.useState(1);
   const [form, setForm] = React.useState(null);
   const [confirmDel, setConfirmDel] = React.useState(false);
   const [ownFilter, setOwnFilter] = React.useState('all');
@@ -39454,7 +39516,7 @@ function BarScreen({ go, deepLink }) {
     });
     writeCart(items);
   };
-  const addDrinkToCart = d => { addLines(d.ing || [], d.name); setAddedId(d.id); try { if (typeof window.bohHaptic === 'function') window.bohHaptic('success'); } catch(e) {} setTimeout(() => setAddedId(a => a === d.id ? null : a), 1400); };
+  const addDrinkToCart = (d, factor) => { addLines((d.ing || []).map(it => ingToLine(it, factor || 1)), d.name); setAddedId(d.id); try { if (typeof window.bohHaptic === 'function') window.bohHaptic('success'); } catch(e) {} setTimeout(() => setAddedId(a => a === d.id ? null : a), 1400); };
   const addCustom = () => { const t = customText.trim(); if (!t) return; addLines([t], ''); setCustomText(''); };
   const toggleCartItem = id => writeCart(cart.map(i => i.id === id ? { ...i, checked: !i.checked } : i));
   const removeCartItem = id => writeCart(cart.filter(i => i.id !== id));
@@ -39482,7 +39544,7 @@ function BarScreen({ go, deepLink }) {
   if (avail.size) recipeList = [...recipeList].sort((a,b) => (canMake(b) - canMake(a)));
 
   const sheetDrink = sheetId ? (ownList.find(d => d.id === sheetId) || DRINKS.find(d => d.id === sheetId) || null) : null;
-  const openSheet = d => { setConfirmDel(false); setPickingRater(false); setSheetId(d.id); };
+  const openSheet = d => { setConfirmDel(false); setPickingRater(false); setAdag(Math.max(1, d.serv || 1)); setSheetId(d.id); };
 
   const Stars = ({ value, onPick, size }) => (
     <div style={{ display:'flex', gap:2 }}>
@@ -39621,17 +39683,32 @@ function BarScreen({ go, deepLink }) {
                 </div>
               ); })() : null}
               {d.note ? <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, marginTop:3 }}>📝 {d.note}</div> : null}
-              {(d.ing && d.ing.length) ? (
+              {(d.ing && d.ing.length) ? (() => {
+                const baseServ = Math.max(1, d.serv || 1);
+                const factor = adag / baseServ;
+                return (
                 <div style={{ background:T.surface, borderRadius:14, padding:'11px 13px', boxShadow:T.shadow, marginTop:10 }}>
-                  <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6 }}>Hozzávalók</div>
-                  <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
-                    {d.ing.map((it,i) => <span key={i} style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:T.ink }}>• {it}</span>)}
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                    <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em' }}>Hozzávalók</span>
+                    <div style={{ flex:1 }} />
+                    <button onClick={() => setAdag(a => Math.max(1, a-1))} style={{ width:30, height:30, borderRadius:9, border:'none', background:T.bg, color:T.ink, fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', lineHeight:1 }}>−</button>
+                    <div style={{ minWidth:52, textAlign:'center', fontFamily:T.font }}><span style={{ fontWeight:900, fontSize:15, color:T.ink }}>{adag}</span><span style={{ fontWeight:800, fontSize:11, color:T.inkSoft }}> adag</span></div>
+                    <button onClick={() => setAdag(a => Math.min(30, a+1))} style={{ width:30, height:30, borderRadius:9, border:'none', background:T.bg, color:T.ink, fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', lineHeight:1 }}>+</button>
                   </div>
-                  {d.step ? <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkMute, marginTop:8, lineHeight:1.45 }}>{d.step}</div> : null}
+                  <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                    {d.ing.map((it,i) => { const p = ingParse(it); const q = ingScaleQ(p.q, factor); return (
+                      <div key={i} style={{ display:'flex', alignItems:'baseline', gap:10 }}>
+                        <span style={{ flexShrink:0, minWidth:62, textAlign:'right', fontFamily:T.font, fontWeight:900, fontSize:13.5, color: q ? T.mint : 'transparent' }}>{q || '•'}</span>
+                        <span style={{ fontFamily:T.font, fontSize:13.5, fontWeight:700, color:T.ink }}>{p.n || (q ? '' : String(it))}</span>
+                      </div>
+                    ); })}
+                  </div>
+                  {d.step ? <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkMute, marginTop:10, paddingTop:9, borderTop:`1px solid ${T.inkMute}1f`, lineHeight:1.45 }}>{d.step}</div> : null}
                 </div>
-              ) : (d.step ? <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkMute, marginTop:10, lineHeight:1.45 }}>{d.step}</div> : null)}
+                );
+              })() : (d.step ? <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkMute, marginTop:10, lineHeight:1.45 }}>{d.step}</div> : null)}
               {(d.ing && d.ing.length) ? (
-                <button onClick={() => addDrinkToCart(d)} style={{ width:'100%', marginTop:10, padding:'12px 0', borderRadius:12, border:'none', background: addedId === d.id ? T.mint : T.surfaceMuted, color: addedId === d.id ? '#fff' : T.ink, fontFamily:T.font, fontWeight:800, fontSize:13.5, cursor:'pointer' }}>{addedId === d.id ? '✓ Hozzávalók a kosárban' : '🛒 Hozzávalók a kosárba'}</button>
+                <button onClick={() => addDrinkToCart(d, adag / Math.max(1, d.serv || 1))} style={{ width:'100%', marginTop:10, padding:'12px 0', borderRadius:12, border:'none', background: addedId === d.id ? T.mint : T.surfaceMuted, color: addedId === d.id ? '#fff' : T.ink, fontFamily:T.font, fontWeight:800, fontSize:13.5, cursor:'pointer' }}>{addedId === d.id ? '✓ Hozzávalók a kosárban' : '🛒 Hozzávalók a kosárba'}</button>
               ) : null}
               <div style={{ background:T.surface, borderRadius:14, padding:'12px 13px', boxShadow:T.shadow, marginTop:10 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
