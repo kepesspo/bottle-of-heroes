@@ -34834,7 +34834,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.021';
+const APP_VERSION = 'v10.022';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -39315,6 +39315,27 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
   });
   const [type, setType] = React.useState(init.type === 'shot' ? 'shot' : 'cocktail');
   const [note, setNote] = React.useState(init.note || '');
+  const [image, setImage] = React.useState(init.image || null);
+  const imgInputRef = React.useRef(null);
+  function handleImageUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = evt => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 900;
+        let w = img.width, h = img.height;
+        if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        setImage(canvas.toDataURL('image/jpeg', 0.72));
+      };
+      img.src = evt.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
   const valid = name.trim().length > 0;
   const strColor = s => s >= 3 ? T.coral : s === 2 ? (T.yellow || '#F4C95A') : T.mint;
   const inpStyle = { width:'100%', boxSizing:'border-box', padding:'13px 14px', borderRadius:13, border:'none', background:T.bg, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none' };
@@ -39323,7 +39344,7 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
   const save = () => {
     if (!valid) return;
     const ingOut = ingRows.map(r => ({ q:(r.q||'').trim(), n:(r.n||'').trim() })).filter(r => r.q || r.n);
-    onSave({ name:name.trim(), emoji:(emoji||'').trim()||'🍹', type, str, serv:Math.max(1, serv||1), ing:ingOut, step:step.trim(), by: creator ? (creator.name || '') : (init.byId ? '' : (init.by || '')), byId: creator ? creator.id : '', note:note.trim() });
+    onSave({ name:name.trim(), emoji:(emoji||'').trim()||'🍹', type, str, serv:Math.max(1, serv||1), ing:ingOut, step:step.trim(), by: creator ? (creator.name || '') : (init.byId ? '' : (init.by || '')), byId: creator ? creator.id : '', note:note.trim(), image: image || null });
   };
   return (
     <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
@@ -39379,6 +39400,21 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
             <textarea value={step} onChange={e => setStep(e.target.value)} rows={2} placeholder="Hogyan kevered ki?" style={{ ...inpStyle, resize:'vertical', lineHeight:1.55 }} />
           </div>
         </div>
+        {/* Fotó */}
+        <div style={card}>
+          {label('Fotó (opcionális)')}
+          {image ? (
+            <div style={{ position:'relative', marginBottom:8, borderRadius:12, overflow:'hidden' }}>
+              <img src={image} style={{ width:'100%', objectFit:'cover', maxHeight:180, display:'block' }} />
+              <button onClick={() => { setImage(null); if (imgInputRef.current) imgInputRef.current.value=''; }} style={{ position:'absolute', top:8, right:8, width:30, height:30, borderRadius:'50%', border:'none', background:'rgba(0,0,0,0.55)', color:'#fff', fontSize:16, cursor:'pointer', display:'grid', placeItems:'center', lineHeight:1 }}>✕</button>
+            </div>
+          ) : null}
+          <label style={{ display:'flex', alignItems:'center', gap:10, background:T.bg, borderRadius:13, padding:'12px 14px', cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.inkSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <span style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>{ image ? 'Fotó cseréje…' : 'Fotó kiválasztása…' }</span>
+            <input ref={imgInputRef} type="file" accept="image/*" onChange={handleImageUpload} style={{ display:'none' }} />
+          </label>
+        </div>
         {/* Ki keverte — avataros választó */}
         {profiles.length > 0 && (
           <div style={card}>
@@ -39432,6 +39468,7 @@ function BarScreen({ go, deepLink }) {
   const [own, setOwn] = React.useState(null);
   const [sheetId, setSheetId] = React.useState(null);
   const [adag, setAdag] = React.useState(1);
+  const [imgZoom, setImgZoom] = React.useState(null);
   const [form, setForm] = React.useState(null);
   const [confirmDel, setConfirmDel] = React.useState(false);
   const [ownFilter, setOwnFilter] = React.useState('all');
@@ -39569,6 +39606,7 @@ function BarScreen({ go, deepLink }) {
     const { avg, n } = avgOf(d.id);
     return (
       <div onClick={() => openSheet(d)} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow, cursor:'pointer', display:'flex', alignItems:'center', gap:12, opacity: dim ? 0.45 : 1, border: mk ? `2px solid ${T.mint}` : '2px solid transparent' }}>
+        {d.image && <img src={d.image} style={{ width:48, height:48, borderRadius:12, objectFit:'cover', flexShrink:0 }} />}
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
             <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15.5, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{d.name}</span>
@@ -39679,6 +39717,11 @@ function BarScreen({ go, deepLink }) {
                 </div>
                 <button onClick={() => setSheetId(null)} style={{ border:'none', background:T.surfaceMuted, color:T.inkSoft, width:32, height:32, borderRadius:'50%', cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, flexShrink:0 }}>✕</button>
               </div>
+              {d.image && (
+                <div onClick={() => setImgZoom(d.image)} style={{ borderRadius:16, overflow:'hidden', marginTop:10, boxShadow:T.shadow, cursor:'pointer' }}>
+                  <img src={d.image} style={{ width:'100%', objectFit:'cover', maxHeight:200, display:'block' }} />
+                </div>
+              )}
               {(d.byId || d.by) ? (() => { const bp = profOf(d.byId) || (d.by ? { name: d.by } : null); return (
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:6 }}>
                   <Avatar pr={bp} size={20} />
@@ -39765,6 +39808,12 @@ function BarScreen({ go, deepLink }) {
           </div>
         ), document.body);
       })()}
+      {imgZoom && ReactDOM.createPortal((
+        <div onClick={() => setImgZoom(null)} style={{ position:'fixed', top:'-200px', left:0, right:0, bottom:'-200px', zIndex:90, background:'rgba(0,0,0,0.88)', display:'flex', alignItems:'center', justifyContent:'center', padding:'calc(env(safe-area-inset-top) + 220px) 16px calc(env(safe-area-inset-bottom) + 220px)', boxSizing:'border-box', animation:'fadeIn .2s' }}>
+          <img src={imgZoom} onClick={e => e.stopPropagation()} style={{ maxWidth:'100%', maxHeight:'100%', borderRadius:14, objectFit:'contain', boxShadow:'0 20px 60px rgba(0,0,0,0.6)', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.2)' }} />
+          <button onClick={() => setImgZoom(null)} aria-label="Bezárás" style={{ position:'fixed', top:'calc(env(safe-area-inset-top) + 236px)', right:16, width:40, height:40, borderRadius:'50%', border:'none', background:'rgba(255,255,255,0.18)', color:'#fff', fontSize:20, lineHeight:1, cursor:'pointer', display:'grid', placeItems:'center' }}>✕</button>
+        </div>
+      ), document.body)}
       {cartOpen && ReactDOM.createPortal((
         <div onClick={() => setCartOpen(false)} style={{ position:'fixed', top:'-200px', left:0, right:0, bottom:'-200px', background:'rgba(14,14,24,0.72)', zIndex:80, display:'flex', alignItems:'center', justifyContent:'center', padding:'calc(env(safe-area-inset-top) + 220px) 20px calc(env(safe-area-inset-bottom) + 220px)', boxSizing:'border-box', animation:'fadeIn .2s' }}>
           <div onClick={e => e.stopPropagation()} style={{ background:T.bg, borderRadius:24, padding:'18px', width:'100%', maxWidth:420, maxHeight:'86vh', display:'flex', flexDirection:'column', boxSizing:'border-box', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.2)' }}>
