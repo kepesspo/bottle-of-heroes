@@ -34834,7 +34834,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.025';
+const APP_VERSION = 'v10.026';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -39470,6 +39470,8 @@ function BarScreen({ go, deepLink }) {
   const [sheetId, setSheetId] = React.useState(null);
   const [adag, setAdag] = React.useState(1);
   const [imgZoom, setImgZoom] = React.useState(null);
+  const [pickHint, setPickHint] = React.useState(false);
+  const ratingsCardRef = React.useRef(null);
   const [form, setForm] = React.useState(null);
   const [confirmDel, setConfirmDel] = React.useState(false);
   const [ownFilter, setOwnFilter] = React.useState('all');
@@ -39533,7 +39535,13 @@ function BarScreen({ go, deepLink }) {
   const avgOf = id => { const v = Object.values(ratings[id] || {}); return v.length ? { avg: v.reduce((a,b) => a+b, 0) / v.length, n: v.length } : { avg: 0, n: 0 }; };
   const isFav = id => !!(rater && favorites[id] && favorites[id][rater]);
   const toggleFav = id => {
-    if (!rater) { setPickingRater(true); return; }
+    if (!rater) {
+      setPickingRater(true);
+      if (ratingsCardRef.current) ratingsCardRef.current.scrollIntoView({ behavior:'smooth', block:'center' });
+      setPickHint(true);
+      setTimeout(() => setPickHint(false), 1200);
+      return;
+    }
     const cur = !!(favorites[id] && favorites[id][rater]);
     setFavorites(prev => ({ ...prev, [id]: { ...(prev[id] || {}), [rater]: !cur } }));
     if (db) db.collection('config').doc('drinkFavorites').set({ [id]: { [rater]: !cur } }, { merge: true }).catch(() => {});
@@ -39820,7 +39828,7 @@ function BarScreen({ go, deepLink }) {
               {(d.ing && d.ing.length) ? (
                 <button onClick={() => addDrinkToCart(d, adag / Math.max(1, d.serv || 1))} style={{ width:'100%', marginTop:10, padding:'12px 0', borderRadius:12, border:'none', background: addedId === d.id ? T.mint : T.surfaceMuted, color: addedId === d.id ? '#fff' : T.ink, fontFamily:T.font, fontWeight:800, fontSize:13.5, cursor:'pointer' }}>{addedId === d.id ? '✓ Hozzávalók a kosárban' : '🛒 Hozzávalók a kosárba'}</button>
               ) : null}
-              <div style={{ background:T.surface, borderRadius:14, padding:'12px 13px', boxShadow:T.shadow, marginTop:10 }}>
+              <div ref={ratingsCardRef} style={{ background:T.surface, borderRadius:14, padding:'12px 13px', boxShadow:T.shadow, marginTop:10, outline: pickHint ? `2.5px solid ${T.coral}` : '2.5px solid transparent', outlineOffset:2, transition:'outline-color .25s' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
                   <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em' }}>Értékelések</span>
                   <div style={{ flex:1 }} />
