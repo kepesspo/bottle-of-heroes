@@ -75,6 +75,3 @@ Az advance funkciók nem commitálnak azonnal — `setPendingCommit({newPlayers,
 4. Assert-ekkel ellenőrizni a string replacement-et
 5. `align-items:stretch` a footer rowon → egyforma magasság
 6. Pill variánsok stabil `flex:1, minWidth:0, overflow:hidden` wrapperben
-
-## Következő tervezett feature
-- **Ország-Város-Fiú-Lány játék** megvalósítása (egy telefon mód: betű kisorsol, játékosok szavaznak az eredményekre)
