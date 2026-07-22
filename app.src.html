@@ -34834,7 +34834,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.023';
+const APP_VERSION = 'v10.025';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -39475,7 +39475,8 @@ function BarScreen({ go, deepLink }) {
   const [ownFilter, setOwnFilter] = React.useState('all');
   const [cart, setCart] = React.useState([]);
   const [cartOpen, setCartOpen] = React.useState(false);
-  const [customText, setCustomText] = React.useState('');
+  const [customQ, setCustomQ] = React.useState('');
+  const [customN, setCustomN] = React.useState('');
   const [confirmClear, setConfirmClear] = React.useState(false);
   const [addedId, setAddedId] = React.useState(null);
   const db = (typeof firebase !== 'undefined') ? firebase.firestore() : null;
@@ -39550,23 +39551,73 @@ function BarScreen({ go, deepLink }) {
   const deleteDrink = (id) => { if (db) db.collection('barDrinks').doc(id).delete().catch(() => {}); setConfirmDel(false); setSheetId(null); };
 
   // ── Bevásárlókosár (megosztott) ──
-  const writeCart = items => { setCart(items); if (db) db.collection('config').doc('shoppingCart').set({ items }, { merge: true }).catch(() => {}); };
+  // cartRef: szinkron "forrás igazság" a cart tömbről — a React state (cart) csak a
+  // renderelés után frissül, ezért ha két kosár-módosítás közvetlenül egymás után fut
+  // (pl. két "🛒 +" gyors egymás utáni koppintása), a második még a RÉGI cart-ot látná
+  // a closure-ön keresztül, és felülírná az elsőt. A writeCart szinkron frissíti a ref-et is.
+  const cartRef = React.useRef([]);
+  cartRef.current = cart;
+  const writeCart = items => { cartRef.current = items; setCart(items); if (db) db.collection('config').doc('shoppingCart').set({ items }, { merge: true }).catch(() => {}); };
   const genCid = () => 'c_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-  const addLines = (lines, from) => {
-    const items = cart.map(i => ({ ...i }));
-    (lines || []).forEach(line => {
-      const t = (line || '').trim(); if (!t) return;
-      const ex = items.find(i => !i.checked && (i.text || '').trim().toLowerCase() === t.toLowerCase());
-      if (ex) ex.qty = (ex.qty || 1) + 1;
-      else items.push({ id: genCid(), text: t, qty: 1, from: from || '', checked: false });
+  const cartEditTimer = React.useRef(null);
+  const updateCartItem = (id, patch) => {
+    const items = cartRef.current.map(i => i.id === id ? { ...i, ...patch } : i);
+    cartRef.current = items;
+    setCart(items);
+    if (cartEditTimer.current) clearTimeout(cartEditTimer.current);
+    cartEditTimer.current = setTimeout(() => { if (db) db.collection('config').doc('shoppingCart').set({ items: cartRef.current }, { merge: true }).catch(() => {}); }, 350);
+  };
+  const mergeQ = (a, b) => {
+    const ea = (a || '').trim(), eb = (b || '').trim();
+    if (!ea) return eb;
+    if (!eb) return ea;
+    if (ea.toLowerCase() === eb.toLowerCase()) return ea;
+    if (ea.split(' + ').some(p => p.trim().toLowerCase() === eb.toLowerCase())) return ea;
+    return ea + ' + ' + eb;
+  };
+  const mergeFrom = (a, b) => {
+    const parts = (a || '').split(', ').map(s => s.trim()).filter(Boolean);
+    const nb = (b || '').trim();
+    if (nb && !parts.includes(nb)) parts.push(nb);
+    return parts.join(', ');
+  };
+  // Hozzávalók kosárba tevése — MENNYISÉG + HOZZÁVALÓ külön mezőben, a hozzávaló NEVE
+  // szerint egyesítve (nem a teljes szöveg szerint), így 2 shot azonos alapanyaga összevonódik.
+  const addIngRows = (rows, from) => {
+    const items = cartRef.current.map(i => ({ ...i }));
+    (rows || []).forEach(row => {
+      const q = (row.q || '').trim();
+      const n = (row.n || '').trim();
+      if (!q && !n) return;
+      const key = (n || q).toLowerCase();
+      const ex = items.find(i => !i.checked && ((i.n || i.text || '').trim().toLowerCase() === key));
+      if (ex) {
+        if ((ex.q || '').trim().toLowerCase() === q.toLowerCase()) ex.qty = (ex.qty || 1) + 1;
+        else ex.q = mergeQ(ex.q, q);
+        ex.from = mergeFrom(ex.from, from);
+        if (!ex.n) ex.n = n;
+      } else {
+        items.push({ id: genCid(), q, n: n || q, qty: 1, from: from || '', checked: false });
+      }
     });
     writeCart(items);
   };
-  const addDrinkToCart = (d, factor) => { addLines((d.ing || []).map(it => ingToLine(it, factor || 1)), d.name); setAddedId(d.id); try { if (typeof window.bohHaptic === 'function') window.bohHaptic('success'); } catch(e) {} setTimeout(() => setAddedId(a => a === d.id ? null : a), 1400); };
-  const addCustom = () => { const t = customText.trim(); if (!t) return; addLines([t], ''); setCustomText(''); };
-  const toggleCartItem = id => writeCart(cart.map(i => i.id === id ? { ...i, checked: !i.checked } : i));
-  const removeCartItem = id => writeCart(cart.filter(i => i.id !== id));
-  const clearChecked = () => writeCart(cart.filter(i => !i.checked));
+  const addDrinkToCart = (d, factor) => {
+    const rows = (d.ing || []).map(it => { const p = ingParse(it); return { q: ingScaleQ(p.q, factor || 1), n: p.n }; });
+    addIngRows(rows, d.name);
+    setAddedId(d.id);
+    try { if (typeof window.bohHaptic === 'function') window.bohHaptic('success'); } catch(e) {}
+    setTimeout(() => setAddedId(a => a === d.id ? null : a), 1400);
+  };
+  const addCustom = () => {
+    const q = customQ.trim(), n = customN.trim();
+    if (!q && !n) return;
+    addIngRows([{ q, n }], '');
+    setCustomQ(''); setCustomN('');
+  };
+  const toggleCartItem = id => writeCart(cartRef.current.map(i => i.id === id ? { ...i, checked: !i.checked } : i));
+  const removeCartItem = id => writeCart(cartRef.current.filter(i => i.id !== id));
+  const clearChecked = () => writeCart(cartRef.current.filter(i => !i.checked));
   const clearAllCart = () => { writeCart([]); setConfirmClear(false); };
   const cartCount = cart.filter(i => !i.checked).length;
   const cartBtn = (
@@ -39839,8 +39890,9 @@ function BarScreen({ go, deepLink }) {
               <button onClick={() => setCartOpen(false)} style={{ border:'none', background:T.surfaceMuted, color:T.inkSoft, width:32, height:32, borderRadius:'50%', cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, flexShrink:0 }}>✕</button>
             </div>
             <div style={{ display:'flex', gap:7, marginBottom:12 }}>
-              <input value={customText} onChange={e => setCustomText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addCustom(); }} placeholder="Egyedi tétel — pl. jég, pohár, chips" style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'11px 12px', borderRadius:11, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
-              <button onClick={addCustom} disabled={!customText.trim()} style={{ padding:'11px 16px', borderRadius:11, border:'none', background: customText.trim() ? T.mint : T.mintSoft, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer', flexShrink:0 }}>+</button>
+              <input value={customQ} onChange={e => setCustomQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addCustom(); }} placeholder="menny." style={{ width:64, flexShrink:0, boxSizing:'border-box', padding:'11px 8px', borderRadius:11, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none', textAlign:'center' }} />
+              <input value={customN} onChange={e => setCustomN(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addCustom(); }} placeholder="Egyedi tétel — pl. jég, pohár, chips" style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'11px 12px', borderRadius:11, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+              <button onClick={addCustom} disabled={!customQ.trim() && !customN.trim()} style={{ padding:'11px 16px', borderRadius:11, border:'none', background: (customQ.trim() || customN.trim()) ? T.mint : T.mintSoft, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer', flexShrink:0 }}>+</button>
             </div>
             <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', display:'flex', flexDirection:'column', gap:6 }}>
               {cart.length === 0 ? (
@@ -39850,8 +39902,12 @@ function BarScreen({ go, deepLink }) {
                   <div key={it.id} style={{ display:'flex', alignItems:'center', gap:10, background:T.surface, borderRadius:12, padding:'10px 12px', boxShadow:T.shadow, opacity: it.checked ? 0.55 : 1 }}>
                     <button onClick={() => toggleCartItem(it.id)} style={{ width:26, height:26, borderRadius:8, border: it.checked ? `2px solid ${T.mint}` : `1.5px solid ${T.border}`, background: it.checked ? T.mint : 'transparent', color:'#fff', cursor:'pointer', flexShrink:0, display:'grid', placeItems:'center', fontSize:14, fontWeight:900 }}>{it.checked ? '✓' : ''}</button>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13.5, color:T.ink, textDecoration: it.checked ? 'line-through' : 'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{it.text}{(it.qty || 1) > 1 ? ` ×${it.qty}` : ''}</div>
-                      {it.from ? <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkMute, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{it.from}</div> : null}
+                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <input value={it.q || ''} onChange={e => updateCartItem(it.id, { q:e.target.value })} placeholder="menny." style={{ width:50, flexShrink:0, border:'none', background:'transparent', fontFamily:T.font, fontWeight:900, fontSize:12.5, color:T.mintDeep || T.mint, padding:0, outline:'none', textDecoration: it.checked ? 'line-through' : 'none' }} />
+                        <input value={it.n || it.text || ''} onChange={e => updateCartItem(it.id, { n:e.target.value })} placeholder="hozzávaló" style={{ flex:1, minWidth:0, border:'none', background:'transparent', fontFamily:T.font, fontWeight:800, fontSize:13.5, color:T.ink, padding:0, outline:'none', textDecoration: it.checked ? 'line-through' : 'none' }} />
+                        {(it.qty || 1) > 1 && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkMute, flexShrink:0 }}>×{it.qty}</span>}
+                      </div>
+                      {it.from ? <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkMute, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginTop:2 }}>{it.from}</div> : null}
                     </div>
                     <button onClick={() => removeCartItem(it.id)} style={{ border:'none', background:T.coralSoft, color:T.coral, borderRadius:8, padding:'6px 8px', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center' }}><BohIcon name="trash" size={12} /></button>
                   </div>
