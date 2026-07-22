@@ -78,6 +78,11 @@ src = src.slice(0, rSeg.openEnd) + '\n' + reactProd + '\n' + src.slice(rSeg.clos
 const rdSeg = findScript('react-dom.development.js');
 src = src.slice(0, rdSeg.openEnd) + '\n' + reactDomProd + '\n' + src.slice(rdSeg.close);
 
+// 4b) Manifest-link cache-busting — a webapp manifest URL-jébe a build verziót
+//     illesztjük, hogy iOS/Safari sose szolgálhasson ki egy régi, gyorsítótárazott
+//     manifest.json-t egy "Kezdőképernyőhöz adás" újratelepítésnél sem.
+src = src.split('__BUILD_VERSION__').join(version);
+
 // 5) Figyelmeztető fejléc
 src = src.replace(/^(<!DOCTYPE html>\s*\n?)/i,
   '$1<!-- ════ GENERÁLT FÁJL — NE SZERKESZD KÉZZEL! ════\n' +
