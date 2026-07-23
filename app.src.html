@@ -33946,6 +33946,7 @@ window.triggerHaptic = function() {
     if (profile.birthday) data.birthday = profile.birthday;
     if (profile.img) data.img = profile.img;
     if (profile.email !== undefined) data.email = profile.email || firebase.firestore.FieldValue.delete();
+    if (profile.drinkLimit !== undefined) data.drinkLimit = profile.drinkLimit || firebase.firestore.FieldValue.delete();
     return ref.set(data, { merge: true }).then(function() { return ref.id; });
   };
   window.getStats = function(profileId) {
@@ -34842,7 +34843,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.032';
+const APP_VERSION = 'v10.034';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -37049,6 +37050,7 @@ function AdminProfiles() {
   const [phone, setPhone] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [birthday, setBirthday] = React.useState('');
+  const [drinkLimit, setDrinkLimit] = React.useState('');
   const [color, setColor] = React.useState('#E8631A');
   const [saving, setSaving] = React.useState(false);
   const [deleting, setDeleting] = React.useState(null);
@@ -37066,6 +37068,7 @@ function AdminProfiles() {
   const [epPhone, setEpPhone] = React.useState('');
   const [epEmail, setEpEmail] = React.useState('');
   const [epBirthday, setEpBirthday] = React.useState('');
+  const [epDrinkLimit, setEpDrinkLimit] = React.useState('');
   const [epColor, setEpColor] = React.useState('#E8631A');
   const [epAvatarId, setEpAvatarId] = React.useState(null);
   const [savingProfile, setSavingProfile] = React.useState(false);
@@ -37137,9 +37140,10 @@ function AdminProfiles() {
     if (phone.trim()) prof.phone = phone.trim();
     if (email.trim()) prof.email = email.trim();
     if (birthday) prof.birthday = birthday;
+    if (drinkLimit && Number(drinkLimit) > 0) prof.drinkLimit = Number(drinkLimit);
     if (avatarId) { const av = CHAR_AVATARS.find(a => a.id === avatarId); if (av) { prof.img = av.img; prof.avatarId = av.id; } }
     window.saveProfile(prof).then(() => {
-      setSaving(false); setShowForm(false); setName(''); setNickname(''); setPhone(''); setEmail(''); setBirthday(''); setColor('#E8631A'); setAvatarId(null); load();
+      setSaving(false); setShowForm(false); setName(''); setNickname(''); setPhone(''); setEmail(''); setBirthday(''); setDrinkLimit(''); setColor('#E8631A'); setAvatarId(null); load();
     }).catch(() => setSaving(false));
   }
 
@@ -37158,6 +37162,7 @@ function AdminProfiles() {
     setEpPhone(p.phone || '');
     setEpEmail(p.email || '');
     setEpBirthday(p.birthday || '');
+    setEpDrinkLimit(p.drinkLimit ? String(p.drinkLimit) : '');
     setEpColor(p.color || '#E8631A');
     setEpAvatarId(p.avatarId || null);
     // also prep stats
@@ -37177,6 +37182,7 @@ function AdminProfiles() {
     if (epPhone.trim()) prof.phone = epPhone.trim();
     prof.email = epEmail.trim();
     if (epBirthday) prof.birthday = epBirthday;
+    prof.drinkLimit = (epDrinkLimit && Number(epDrinkLimit) > 0) ? Number(epDrinkLimit) : null;
     if (epAvatarId) {
       const av = CHAR_AVATARS.find(a => a.id === epAvatarId);
       if (av) { prof.img = av.img; prof.avatarId = av.id; }
@@ -37242,6 +37248,8 @@ function AdminProfiles() {
           <TextInput value={email} onChange={e => setEmail(e.target.value)} placeholder="pl. peter@email.hu" type="email" style={{ marginBottom:12 }} />
           <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Születésnap <span style={{ fontWeight:400, textTransform:'none', fontSize:10 }}>(opcionális)</span></div>
           <input value={birthday} onChange={e => setBirthday(e.target.value)} type="date" style={{ width:'100%', boxSizing:'border-box', padding:'10px 14px', height:44, borderRadius:T.r?.sm||12, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none', marginBottom:12, WebkitAppearance:'none', appearance:'none', lineHeight:'normal' }} />
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Saját korty-limit <span style={{ fontWeight:400, textTransform:'none', fontSize:10 }}>(opcionális — felelős ivás emlékeztető)</span></div>
+          <TextInput value={drinkLimit} onChange={e => setDrinkLimit(e.target.value.replace(/[^0-9]/g,''))} placeholder="pl. 10" type="number" inputMode="numeric" style={{ marginBottom:12 }} />
           <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>Szín</div>
           <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:14 }}>
             {AVATAR_COLORS.map(c => (
@@ -37335,6 +37343,8 @@ function AdminProfiles() {
                   <TextInput value={epEmail} onChange={e => setEpEmail(e.target.value)} type="email" placeholder="pl. peter@email.hu" style={{ marginBottom:10, fontSize:14, padding:'10px 12px' }} />
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, marginBottom:4 }}>Születésnap</div>
                   <input value={epBirthday} onChange={e => setEpBirthday(e.target.value)} type="date" style={{ width:'100%', boxSizing:'border-box', padding:'10px 12px', height:44, borderRadius:T.r?.sm||12, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none', marginBottom:10, WebkitAppearance:'none', appearance:'none', lineHeight:'normal' }} />
+                  <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, marginBottom:4 }}>Saját korty-limit <span style={{ fontWeight:400, fontSize:10, color:T.inkMute }}>(felelős ivás emlékeztető)</span></div>
+                  <TextInput value={epDrinkLimit} onChange={e => setEpDrinkLimit(e.target.value.replace(/[^0-9]/g,''))} placeholder="pl. 10" type="number" inputMode="numeric" style={{ marginBottom:10, fontSize:14, padding:'10px 12px' }} />
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, fontWeight:700, marginBottom:6 }}>Szín</div>
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:12 }}>
                     {AVATAR_COLORS.map(c => (
@@ -56850,6 +56860,28 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const [nextPreview, setNextPreview] = useState(false);
   const nextLpTimer = React.useRef(null);
   const nextLpFired = React.useRef(false);
+  const [drinkLimitWarn, setDrinkLimitWarn] = useState(null); // {name, limit}
+  const drinkLimitsRef = React.useRef({}); // profileId -> limit
+  const drinkWarnedRef = React.useRef(new Set());
+  React.useEffect(() => {
+    if (typeof window.getProfiles !== 'function') return;
+    window.getProfiles().then(ps => {
+      const map = {};
+      (ps || []).forEach(p => { if (p.drinkLimit) map[p.id] = p.drinkLimit; });
+      drinkLimitsRef.current = map;
+    }).catch(() => {});
+  }, []);
+  React.useEffect(() => {
+    players.forEach(p => {
+      if (!p.profileId) return;
+      const limit = drinkLimitsRef.current[p.profileId];
+      if (!limit || p.drinks < limit) return;
+      if (drinkWarnedRef.current.has(p.profileId)) return;
+      drinkWarnedRef.current.add(p.profileId);
+      setDrinkLimitWarn({ name: p.name, limit });
+      setTimeout(() => setDrinkLimitWarn(w => (w && w.name === p.name) ? null : w), 4200);
+    });
+  }, [players]);
   const gameStartRoundRef = React.useRef(1);
   const gameStartDrinksRef = React.useRef({});
   const hydrationCountdownRef = React.useRef(null);
@@ -57952,6 +57984,12 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       {wcToast && (
         <div style={{ position:'fixed', bottom:96, left:'50%', transform:'translateX(-50%)', zIndex:260, pointerEvents:'none', background:'rgba(26,42,74,0.92)', borderRadius:14, padding:'11px 20px', fontFamily:T.font, fontWeight:800, fontSize:14, color:'#fff', whiteSpace:'nowrap', animation:'toastIn .18s ease-out', display:'flex', alignItems:'center', gap:6 }}>
           {wcToast.name} iszik 1-et! <BohIcon name="beer" size={16} />
+        </div>
+      )}
+      {drinkLimitWarn && (
+        <div onClick={() => setDrinkLimitWarn(null)} style={{ position:'fixed', bottom:96, left:16, right:16, zIndex:261, pointerEvents:'auto', cursor:'pointer', background:'rgba(20,80,120,0.94)', borderRadius:16, padding:'12px 16px', fontFamily:T.font, fontWeight:700, fontSize:13, color:'#fff', animation:'toastIn .18s ease-out', display:'flex', alignItems:'center', gap:10, boxShadow:'0 8px 24px rgba(0,0,0,0.25)' }}>
+          <span style={{ fontSize:20, lineHeight:1, flexShrink:0 }}>💧</span>
+          <span>{drinkLimitWarn.name} elérte a saját {drinkLimitWarn.limit} kortyos limitjét — talán jöhetne egy pohár víz is.</span>
         </div>
       )}
       {nextPreview && (() => {
