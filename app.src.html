@@ -160,6 +160,7 @@
 
     /* ── Animations ── */
     @keyframes fadeIn    { from{opacity:0} to{opacity:1} }
+    @keyframes shimmer   { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
     @keyframes podiumRise   { from{transform:scaleY(0);opacity:0} to{transform:scaleY(1);opacity:1} }
     @keyframes resultBounceIn { 0%{transform:scale(0.4) translateY(-30px);opacity:0} 55%{transform:scale(1.08);opacity:1} 75%{transform:scale(0.96)} 100%{transform:scale(1)} }
     @keyframes resultCalmIn { 0%{transform:scale(0.92);opacity:0} 100%{transform:scale(1);opacity:1} }
@@ -34844,7 +34845,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.044';
+const APP_VERSION = 'v10.045';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36334,6 +36335,33 @@ function PullToRefresh({ onRefresh, children, style, contentStyle }) {
       >
         {children}
       </div>
+    </div>
+  );
+}
+
+function SkeletonBlock({ w, h, r=8, style }) {
+  return <div style={{ width:w, height:h, borderRadius:r, flexShrink:0, background:`linear-gradient(90deg, ${T.surfaceMuted} 25%, ${T.border} 50%, ${T.surfaceMuted} 75%)`, backgroundSize:'200% 100%', animation:'shimmer 1.4s ease-in-out infinite', ...style }} />;
+}
+
+// Kártyás lista betöltő-váz — a DrinkCard/esemény-kártya alakját követi, hogy ne
+// "ugorjon" a tartalom, amikor a valódi adat megérkezik.
+function SkeletonListCard({ withImage=true }) {
+  return (
+    <div style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow, display:'flex', alignItems:'center', gap:12 }}>
+      {withImage && <SkeletonBlock w={48} h={48} r={12} />}
+      <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:7 }}>
+        <SkeletonBlock w="62%" h={15} />
+        <SkeletonBlock w="40%" h={11} />
+      </div>
+      <SkeletonBlock w={44} h={26} r={9} />
+    </div>
+  );
+}
+
+function SkeletonList({ count=4, withImage=true }) {
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+      {Array.from({ length: count }).map((_, i) => <SkeletonListCard key={i} withImage={withImage} />)}
     </div>
   );
 }
@@ -40106,7 +40134,7 @@ function BarScreen({ go, deepLink }) {
             ); })}
           </div>
           {own === null ? (
-            <div style={{ textAlign:'center', padding:30, fontFamily:T.font, color:T.sub }}>Betöltés…</div>
+            <SkeletonList count={4} />
           ) : ownSorted.length === 0 ? (
             <div style={{ background:T.surface, borderRadius:20, padding:'30px 20px', boxShadow:T.shadow, textAlign:'center' }}>
               <div style={{ fontSize:44, marginBottom:10, lineHeight:1 }}>🍹</div>
@@ -40655,13 +40683,15 @@ function EventLogScreen({ go, goEdit, deepLink }) {
             </div>
           </div>
         )}
-        {shown.length === 0 && (
+        {loading && shown.length === 0 ? (
+          <SkeletonList count={4} />
+        ) : shown.length === 0 && (
           <div style={{ textAlign:'center', padding:'64px 24px', color:T.sub, fontFamily:T.font, fontSize:15, lineHeight:1.6 }}>
             <div style={{ fontSize:48, marginBottom:14 }}>📋</div>
             Még nincsenek közelgő események.
           </div>
         )}
-        {shown.map((ev) => {
+        {!(loading && shown.length === 0) && shown.map((ev) => {
           const rsvpEntries = Object.entries(ev.rsvp || {});
           const yesNames = rsvpEntries.filter(([,s])=>s==='yes').map(([n])=>n);
           const maybeCount = rsvpEntries.filter(([,s])=>s==='maybe').length;
