@@ -29,7 +29,7 @@
   <script>(function(){var q=location.search;var ev=q.indexOf('screen=events')!==-1||q.indexOf('screen=calendar')!==-1;var box=q.indexOf('screen=dnrbox')!==-1;var bar=q.indexOf('screen=bar')!==-1;document.write('<link rel="manifest" href="'+(ev?'manifest-events.json':box?'manifest-dnrbox.json':bar?'manifest-bar.json':'manifest.json')+'?v=__BUILD_VERSION__"/>');})();</script>
   <!-- iOS full-screen / status bar -->
   <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <script>(function(){var q=location.search;var bar=q.indexOf('screen=bar')!==-1;document.write('<meta name="apple-mobile-web-app-status-bar-style" content="'+(bar?'default':'black-translucent')+'"/>');})();</script>
   <script>(function(){var q=location.search;var ev=q.indexOf('screen=events')!==-1||q.indexOf('screen=calendar')!==-1;var box=q.indexOf('screen=dnrbox')!==-1;var bar=q.indexOf('screen=bar')!==-1;document.write('<meta name="apple-mobile-web-app-title" content="'+(ev?'DNR Events':box?'DNR BOX':bar?'DNR Pub':'DNR Games')+'"/>');})();</script>
   <!-- Theme color (amber) -->
   <meta name="theme-color" content="#F4C57E"/>
@@ -34843,7 +34843,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.036';
+const APP_VERSION = 'v10.035';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -39862,85 +39862,28 @@ function BarScreen({ go, deepLink }) {
       {ReactDOM.createPortal(<div style={{ position:'fixed', top:0, left:0, right:0, height:'env(safe-area-inset-top)', background:T.surface, zIndex:56, pointerEvents:'none' }} />, document.body)}
       {form ? (
         <DrinkForm init={form} profiles={profiles} onSave={saveDrink} onCancel={() => setForm(null)} />
-      ) : (<React.Fragment>
-      <AppBar title={view === 'recipes' ? 'Receptek' : (deepLink ? 'DNR Pub' : 'Pub')} onBack={deepLink && view !== 'recipes' ? null : () => { if (view === 'recipes') setView('own'); else go('home'); }} right={cartBtn} left={<span style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, color:T.inkMute, letterSpacing:'0.02em', whiteSpace:'nowrap' }}>{APP_VERSION}</span>} />
-      {view === 'own' && (
-        <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'14px 16px max(40px, calc(env(safe-area-inset-bottom) + 24px))', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
-          <div style={{ display:'flex', gap:10, marginBottom:16 }}>
-            <button onClick={() => setForm({})} style={{ flex:1, padding:'13px 0', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14.5, cursor:'pointer', boxShadow:`0 4px 14px ${T.mint}44` }}>+ Új keverés</button>
-            <button onClick={() => setView('recipes')} style={{ padding:'13px 16px', borderRadius:14, border:'none', background:T.surface, color:T.ink, fontFamily:T.font, fontWeight:800, fontSize:13.5, cursor:'pointer', boxShadow:T.shadow, display:'flex', alignItems:'center', gap:6 }}><span style={{ fontSize:15, lineHeight:1 }}>📖</span> Receptek</button>
+      ) : imgZoom ? (
+        <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:'#0e0e18', overflow:'hidden' }}>
+          <AppBar title="Fotó" onBack={() => setImgZoom(null)} bg="#0e0e18" />
+          <div style={{ flex:1, minHeight:0, display:'flex', alignItems:'center', justifyContent:'center', padding:16, overflow:'hidden' }}>
+            <img src={imgZoom} style={{ maxWidth:'100%', maxHeight:'100%', borderRadius:14, objectFit:'contain', boxShadow:'0 20px 60px rgba(0,0,0,0.6)' }} />
           </div>
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, marginBottom:2 }}>Mi kevertük 🍸</div>
-          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginBottom:10 }}>A DNR-eken készült keverések — koppints egy italra a részletekhez és az értékeléshez.</div>
-          <div style={{ display:'flex', gap:7, marginBottom:12 }}>
-            {[['all','Mind'],['cocktail','🍹 Koktél'],['shot','🥃 Shot'],['fav','❤️ Kedvenc']].map(([k,l]) => { const on = ownFilter === k; return (
-              <button key={k} onClick={() => setOwnFilter(k)} style={{ padding:'7px 14px', borderRadius:999, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:12.5, background: on ? T.mint : T.surface, color: on ? '#fff' : T.ink, boxShadow: on ? `0 3px 0 ${T.mintDeep||T.mint}66, 0 6px 14px ${T.mint}33` : T.shadow }}>{l}</button>
-            ); })}
-          </div>
-          {own === null ? (
-            <div style={{ textAlign:'center', padding:30, fontFamily:T.font, color:T.sub }}>Betöltés…</div>
-          ) : ownSorted.length === 0 ? (
-            <div style={{ background:T.surface, borderRadius:20, padding:'30px 20px', boxShadow:T.shadow, textAlign:'center' }}>
-              <div style={{ fontSize:44, marginBottom:10, lineHeight:1 }}>🍹</div>
-              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink, marginBottom:6 }}>Még nincs saját keverés</div>
-              <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, lineHeight:1.5, marginBottom:16 }}>Vedd fel, amit a bulin kikevertetek — mindenki értékelheti, és kiderül, melyik a legendás.</div>
-              <button onClick={() => setForm({})} style={{ padding:'12px 22px', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer' }}>+ Első keverés felvétele</button>
-            </div>
-          ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {ownShown.map(d => <DrinkCard key={d.id} d={d} medal={medalFor[d.id]} />)}
-              {ownShown.length === 0 && <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, textAlign:'center', padding:'18px 0' }}>{ownFilter === 'fav' ? 'Még nincs kedvenced — nyisd meg egy ital részleteit, és jelöld be a szívvel.' : 'Ebben a kategóriában még nincs keverés.'}</div>}
-            </div>
-          )}
-          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:20, lineHeight:1.5 }}>Idd felelősséggel! 🍸</div>
         </div>
-      )}
-      {view === 'recipes' && (
-        <React.Fragment>
-          <div style={{ padding:'10px 16px 0', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
-            <div style={{ display:'flex', background:T.surface, borderRadius:16, padding:5, gap:4, boxShadow:T.shadow }}>
-              {[['cocktail','Koktél 🍹'],['shot','Shot 🥃']].map(([k,l]) => (
-                <button key={k} onClick={() => setTab(k)} style={{ flex:1, padding:'11px 0', border:'none', borderRadius:12, cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, background: tab===k ? T.mint : 'transparent', color: tab===k ? '#fff' : T.inkSoft, transition:'all .15s' }}>{l}</button>
-              ))}
-            </div>
-          </div>
-          <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'14px 16px max(40px, calc(env(safe-area-inset-bottom) + 24px))', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
-            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, marginBottom:2 }}>Mi van itthon?</div>
-            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginBottom:10 }}>Koppints, amid van — kiemeljük, mit tudsz kikeverni.</div>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:7, marginBottom:16 }}>
-              {CHIPS.map(([k,l,e]) => { const on = avail.has(k); return (
-                <button key={k} onClick={() => toggle(k)} style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 11px', borderRadius:999, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:12.5, background: on ? T.mint : T.surface, color: on ? '#fff' : T.ink, boxShadow: on ? `0 3px 0 ${T.mintDeep||T.mint}66, 0 6px 14px ${T.mint}33` : T.shadow }}>
-                  <span style={{ fontSize:13, lineHeight:1 }}>{e}</span>{l}
-                </button>
-              ); })}
-              {avail.size > 0 && <button onClick={() => setAvail(new Set())} style={{ padding:'7px 11px', borderRadius:999, border:`1.5px solid ${T.inkMute}44`, background:'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:12.5, color:T.inkSoft }}>Törlés</button>}
-            </div>
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {recipeList.map(d => <DrinkCard key={d.id} d={d} mk={avail.size > 0 && canMake(d)} dim={avail.size > 0 && !canMake(d)} />)}
-            </div>
-            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:20, lineHeight:1.5 }}>Idd felelősséggel! A mennyiségek csak irányadóak. 🍸</div>
-          </div>
-        </React.Fragment>
-      )}
-      {sheetDrink && (() => {
+      ) : sheetDrink ? (() => {
         const d = sheetDrink;
         const { avg, n } = avgOf(d.id);
         const entries = Object.entries(ratings[d.id] || {}).sort((a,b) => b[1]-a[1]);
         const my = rater ? (ratings[d.id] || {})[rater] || 0 : 0;
         const rp = rater ? profOf(rater) : null;
-        return ReactDOM.createPortal((
-          <div onClick={() => setSheetId(null)} style={{ position:'fixed', top:'-200px', left:0, right:0, bottom:'-200px', background:'rgba(14,14,24,0.72)', backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)', zIndex:80, display:'flex', alignItems:'center', justifyContent:'center', padding:'calc(env(safe-area-inset-top) + 220px) 20px calc(env(safe-area-inset-bottom) + 220px)', boxSizing:'border-box', animation:'fadeIn .2s' }}>
-            <div onClick={e => e.stopPropagation()} style={{ background:T.bg, borderRadius:24, padding:'20px 18px', width:'100%', maxWidth:420, maxHeight:'86vh', overflowY:'auto', WebkitOverflowScrolling:'touch', boxSizing:'border-box', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.2)' }}>
-              <div style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom:4 }}>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:19, color:T.ink, lineHeight:1.15 }}>{d.name}</div>
-                  <div style={{ marginTop:5, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                    <StrDots s={d.str || 2} />
-                    {d.custom && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, color:T.inkSoft, background:T.surfaceMuted, borderRadius:999, padding:'2px 8px' }}>{d.type === 'shot' ? '🥃 Shot' : '🍹 Koktél'}</span>}
-                  </div>
-                </div>
-                <button onClick={() => toggleFav(d.id)} style={{ border:'none', background: isFav(d.id) ? T.coralSoft : T.surfaceMuted, color:T.coral, width:32, height:32, borderRadius:'50%', cursor:'pointer', fontSize:15, flexShrink:0, display:'grid', placeItems:'center' }}>{isFav(d.id) ? '❤️' : '🤍'}</button>
-                <button onClick={() => setSheetId(null)} style={{ border:'none', background:T.surfaceMuted, color:T.inkSoft, width:32, height:32, borderRadius:'50%', cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, flexShrink:0 }}>✕</button>
+        return (
+          <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
+            <AppBar title={d.name} onBack={() => setSheetId(null)} right={
+              <button onClick={() => toggleFav(d.id)} style={{ border:'none', background: isFav(d.id) ? T.coralSoft : T.surfaceMuted, color:T.coral, width:36, height:36, borderRadius:'50%', cursor:'pointer', fontSize:16, flexShrink:0, display:'grid', placeItems:'center' }}>{isFav(d.id) ? '❤️' : '🤍'}</button>
+            } />
+            <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'14px 16px max(40px, calc(env(safe-area-inset-bottom) + 24px))', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:4 }}>
+                <StrDots s={d.str || 2} />
+                {d.custom && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, color:T.inkSoft, background:T.surfaceMuted, borderRadius:999, padding:'2px 8px' }}>{d.type === 'shot' ? '🥃 Shot' : '🍹 Koktél'}</span>}
               </div>
               {d.image && (
                 <div onClick={() => setImgZoom(d.image)} style={{ borderRadius:16, overflow:'hidden', marginTop:10, boxShadow:T.shadow, cursor:'pointer' }}>
@@ -40031,31 +39974,18 @@ function BarScreen({ go, deepLink }) {
               )}
             </div>
           </div>
-        ), document.body);
-      })()}
-      {imgZoom && ReactDOM.createPortal((
-        <div onClick={() => setImgZoom(null)} style={{ position:'fixed', top:'-200px', left:0, right:0, bottom:'-200px', zIndex:90, background:'rgba(0,0,0,0.88)', backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)', display:'flex', alignItems:'center', justifyContent:'center', padding:'calc(env(safe-area-inset-top) + 220px) 16px calc(env(safe-area-inset-bottom) + 220px)', boxSizing:'border-box', animation:'fadeIn .2s' }}>
-          <img src={imgZoom} onClick={e => e.stopPropagation()} style={{ maxWidth:'100%', maxHeight:'100%', borderRadius:14, objectFit:'contain', boxShadow:'0 20px 60px rgba(0,0,0,0.6)', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.2)' }} />
-          <button onClick={() => setImgZoom(null)} aria-label="Bezárás" style={{ position:'fixed', top:'calc(env(safe-area-inset-top) + 236px)', right:16, width:40, height:40, borderRadius:'50%', border:'none', background:'rgba(255,255,255,0.18)', color:'#fff', fontSize:20, lineHeight:1, cursor:'pointer', display:'grid', placeItems:'center' }}>✕</button>
-        </div>
-      ), document.body)}
-      {cartOpen && ReactDOM.createPortal((
-        <div onClick={() => setCartOpen(false)} style={{ position:'fixed', top:'-200px', left:0, right:0, bottom:'-200px', background:'rgba(14,14,24,0.72)', backdropFilter:'blur(10px)', WebkitBackdropFilter:'blur(10px)', zIndex:80, display:'flex', alignItems:'center', justifyContent:'center', padding:'calc(env(safe-area-inset-top) + 220px) 20px calc(env(safe-area-inset-bottom) + 220px)', boxSizing:'border-box', animation:'fadeIn .2s' }}>
-          <div onClick={e => e.stopPropagation()} style={{ background:T.bg, borderRadius:24, padding:'18px', width:'100%', maxWidth:420, maxHeight:'86vh', display:'flex', flexDirection:'column', boxSizing:'border-box', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.2)' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
-              <span style={{ fontSize:24, lineHeight:1 }}>🛒</span>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink }}>Bevásárlókosár</div>
-                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft }}>{cart.length ? `${cartCount} megvenni · ${cart.length - cartCount} kész` : 'Üres — tegyél bele italokat vagy egyedi tételt'}</div>
-              </div>
-              <button onClick={() => setCartOpen(false)} style={{ border:'none', background:T.surfaceMuted, color:T.inkSoft, width:32, height:32, borderRadius:'50%', cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, flexShrink:0 }}>✕</button>
-            </div>
-            <div style={{ display:'flex', gap:7, marginBottom:12 }}>
+        );
+      })() : cartOpen ? (
+        <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
+          <AppBar title="Bevásárlókosár" onBack={() => setCartOpen(false)} />
+          <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'14px 16px max(40px, calc(env(safe-area-inset-bottom) + 24px))', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.inkSoft, marginBottom:12 }}>{cart.length ? `${cartCount} megvenni · ${cart.length - cartCount} kész` : 'Üres — tegyél bele italokat vagy egyedi tételt'}</div>
+            <div style={{ display:'flex', gap:7, marginBottom:14 }}>
               <input value={customQ} onChange={e => setCustomQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addCustom(); }} placeholder="menny." style={{ width:64, flexShrink:0, boxSizing:'border-box', padding:'11px 8px', borderRadius:11, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none', textAlign:'center' }} />
               <input value={customN} onChange={e => setCustomN(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addCustom(); }} placeholder="Egyedi tétel — pl. jég, pohár, chips" style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'11px 12px', borderRadius:11, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
               <button onClick={addCustom} disabled={!customQ.trim() && !customN.trim()} style={{ padding:'11px 16px', borderRadius:11, border:'none', background: (customQ.trim() || customN.trim()) ? T.mint : T.mintSoft, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer', flexShrink:0 }}>+</button>
             </div>
-            <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', display:'flex', flexDirection:'column', gap:6 }}>
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
               {cart.length === 0 ? (
                 <div style={{ textAlign:'center', padding:'26px 10px', fontFamily:T.font, fontSize:12.5, color:T.inkMute, lineHeight:1.5 }}>Még üres a kosár.<br/>Az italoknál a <b>🛒 +</b> gombbal tudsz hozzávalókat betenni, vagy írj be fentre egyedi tételt.</div>
               ) : (
@@ -40076,14 +40006,73 @@ function BarScreen({ go, deepLink }) {
               )}
             </div>
             {cart.length > 0 && (
-              <div style={{ display:'flex', gap:8, marginTop:12 }}>
+              <div style={{ display:'flex', gap:8, marginTop:14 }}>
                 {cart.some(i => i.checked) && <button onClick={clearChecked} style={{ flex:1, padding:'11px 0', borderRadius:12, border:'none', background:T.surfaceMuted, color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer' }}>Kész tételek törlése</button>}
                 <button onClick={() => { if (confirmClear) clearAllCart(); else setConfirmClear(true); }} style={{ flex:1, padding:'11px 0', borderRadius:12, border:'none', background: confirmClear ? T.coral : T.coralSoft, color: confirmClear ? '#fff' : T.coral, fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer' }}>{confirmClear ? 'Biztos? Mindent töröl!' : 'Kosár ürítése'}</button>
               </div>
             )}
           </div>
         </div>
-      ), document.body)}
+      ) : (<React.Fragment>
+      <AppBar title={view === 'recipes' ? 'Receptek' : (deepLink ? 'DNR Pub' : 'Pub')} onBack={deepLink && view !== 'recipes' ? null : () => { if (view === 'recipes') setView('own'); else go('home'); }} right={cartBtn} left={<span style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, color:T.inkMute, letterSpacing:'0.02em', whiteSpace:'nowrap' }}>{APP_VERSION}</span>} />
+      {view === 'own' && (
+        <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'14px 16px max(40px, calc(env(safe-area-inset-bottom) + 24px))', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
+          <div style={{ display:'flex', gap:10, marginBottom:16 }}>
+            <button onClick={() => setForm({})} style={{ flex:1, padding:'13px 0', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14.5, cursor:'pointer', boxShadow:`0 4px 14px ${T.mint}44` }}>+ Új keverés</button>
+            <button onClick={() => setView('recipes')} style={{ padding:'13px 16px', borderRadius:14, border:'none', background:T.surface, color:T.ink, fontFamily:T.font, fontWeight:800, fontSize:13.5, cursor:'pointer', boxShadow:T.shadow, display:'flex', alignItems:'center', gap:6 }}><span style={{ fontSize:15, lineHeight:1 }}>📖</span> Receptek</button>
+          </div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, marginBottom:2 }}>Mi kevertük 🍸</div>
+          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginBottom:10 }}>A DNR-eken készült keverések — koppints egy italra a részletekhez és az értékeléshez.</div>
+          <div style={{ display:'flex', gap:7, marginBottom:12 }}>
+            {[['all','Mind'],['cocktail','🍹 Koktél'],['shot','🥃 Shot'],['fav','❤️ Kedvenc']].map(([k,l]) => { const on = ownFilter === k; return (
+              <button key={k} onClick={() => setOwnFilter(k)} style={{ padding:'7px 14px', borderRadius:999, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:12.5, background: on ? T.mint : T.surface, color: on ? '#fff' : T.ink, boxShadow: on ? `0 3px 0 ${T.mintDeep||T.mint}66, 0 6px 14px ${T.mint}33` : T.shadow }}>{l}</button>
+            ); })}
+          </div>
+          {own === null ? (
+            <div style={{ textAlign:'center', padding:30, fontFamily:T.font, color:T.sub }}>Betöltés…</div>
+          ) : ownSorted.length === 0 ? (
+            <div style={{ background:T.surface, borderRadius:20, padding:'30px 20px', boxShadow:T.shadow, textAlign:'center' }}>
+              <div style={{ fontSize:44, marginBottom:10, lineHeight:1 }}>🍹</div>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink, marginBottom:6 }}>Még nincs saját keverés</div>
+              <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, lineHeight:1.5, marginBottom:16 }}>Vedd fel, amit a bulin kikevertetek — mindenki értékelheti, és kiderül, melyik a legendás.</div>
+              <button onClick={() => setForm({})} style={{ padding:'12px 22px', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer' }}>+ Első keverés felvétele</button>
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {ownShown.map(d => <DrinkCard key={d.id} d={d} medal={medalFor[d.id]} />)}
+              {ownShown.length === 0 && <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, textAlign:'center', padding:'18px 0' }}>{ownFilter === 'fav' ? 'Még nincs kedvenced — nyisd meg egy ital részleteit, és jelöld be a szívvel.' : 'Ebben a kategóriában még nincs keverés.'}</div>}
+            </div>
+          )}
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:20, lineHeight:1.5 }}>Idd felelősséggel! 🍸</div>
+        </div>
+      )}
+      {view === 'recipes' && (
+        <React.Fragment>
+          <div style={{ padding:'10px 16px 0', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
+            <div style={{ display:'flex', background:T.surface, borderRadius:16, padding:5, gap:4, boxShadow:T.shadow }}>
+              {[['cocktail','Koktél 🍹'],['shot','Shot 🥃']].map(([k,l]) => (
+                <button key={k} onClick={() => setTab(k)} style={{ flex:1, padding:'11px 0', border:'none', borderRadius:12, cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, background: tab===k ? T.mint : 'transparent', color: tab===k ? '#fff' : T.inkSoft, transition:'all .15s' }}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'14px 16px max(40px, calc(env(safe-area-inset-bottom) + 24px))', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, marginBottom:2 }}>Mi van itthon?</div>
+            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginBottom:10 }}>Koppints, amid van — kiemeljük, mit tudsz kikeverni.</div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:7, marginBottom:16 }}>
+              {CHIPS.map(([k,l,e]) => { const on = avail.has(k); return (
+                <button key={k} onClick={() => toggle(k)} style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 11px', borderRadius:999, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:12.5, background: on ? T.mint : T.surface, color: on ? '#fff' : T.ink, boxShadow: on ? `0 3px 0 ${T.mintDeep||T.mint}66, 0 6px 14px ${T.mint}33` : T.shadow }}>
+                  <span style={{ fontSize:13, lineHeight:1 }}>{e}</span>{l}
+                </button>
+              ); })}
+              {avail.size > 0 && <button onClick={() => setAvail(new Set())} style={{ padding:'7px 11px', borderRadius:999, border:`1.5px solid ${T.inkMute}44`, background:'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:12.5, color:T.inkSoft }}>Törlés</button>}
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {recipeList.map(d => <DrinkCard key={d.id} d={d} mk={avail.size > 0 && canMake(d)} dim={avail.size > 0 && !canMake(d)} />)}
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:20, lineHeight:1.5 }}>Idd felelősséggel! A mennyiségek csak irányadóak. 🍸</div>
+          </div>
+        </React.Fragment>
+      )}
       </React.Fragment>)}
     </div>
   );
