@@ -202,6 +202,7 @@
     @keyframes podiumAvatar { from{transform:translateY(24px) scale(0.5);opacity:0} to{transform:translateY(0) scale(1);opacity:1} }
     @keyframes slideInLeft  { from{transform:translateX(-100%)} to{transform:translateX(0)} }
     @keyframes spin      { to { transform: rotate(360deg); } }
+    @keyframes ptrSpin   { to { transform: rotate(360deg); } }
     @keyframes popIn     { from{transform:scale(.7);opacity:0} to{transform:scale(1);opacity:1} }
     @keyframes bjDeal    { from { opacity:0; transform: translateY(-14px) rotate(-6deg) scale(.9); } to { opacity:1; transform:none; } }
     @keyframes cardFlip  { 0%{transform:rotateY(90deg) scale(.85);opacity:0} 60%{transform:rotateY(-8deg) scale(1.05)} 100%{transform:rotateY(0) scale(1);opacity:1} }
@@ -34843,7 +34844,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.043';
+const APP_VERSION = 'v10.044';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36274,6 +36275,66 @@ function SheetOverlay({ onClose, children, footer, title }) {
       <div style={{ position:'fixed', bottom:0, left:0, right:0, height:'env(safe-area-inset-bottom)', background:T.surface, zIndex:60 }} />
     </div>,
     document.body
+  );
+}
+
+// Natív mintájú "húzd le a frissítéshez" — csak akkor aktiválódik, ha a
+// belső scroll-konténer tetején vagyunk (scrollTop===0), így nem ütközik
+// a normál görgetéssel.
+function PullToRefresh({ onRefresh, children, style, contentStyle }) {
+  const containerRef = React.useRef(null);
+  const [pullY, setPullY] = React.useState(0);
+  const [dragging, setDragging] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const startYRef = React.useRef(null);
+  const THRESHOLD = 64;
+
+  function onTouchStart(e) {
+    if (refreshing) return;
+    const el = containerRef.current;
+    if (!el || el.scrollTop > 0) { startYRef.current = null; return; }
+    startYRef.current = e.touches[0].clientY;
+    setDragging(true);
+  }
+  function onTouchMove(e) {
+    if (startYRef.current === null) return;
+    const dy = e.touches[0].clientY - startYRef.current;
+    setPullY(dy > 0 ? Math.min(dy * 0.5, 110) : 0);
+  }
+  function onTouchEnd() {
+    if (startYRef.current === null) return;
+    startYRef.current = null;
+    setDragging(false);
+    if (pullY > THRESHOLD) {
+      setRefreshing(true);
+      setPullY(THRESHOLD * 0.72);
+      Promise.resolve(onRefresh && onRefresh())
+        .then(() => new Promise(r => setTimeout(r, 260)))
+        .finally(() => { setRefreshing(false); setPullY(0); });
+    } else {
+      setPullY(0);
+    }
+  }
+
+  const indicatorH = refreshing ? THRESHOLD * 0.72 : pullY;
+  return (
+    <div style={{ flex:1, minHeight:0, position:'relative', overflow:'hidden', display:'flex', flexDirection:'column', ...style }}>
+      <div style={{ position:'absolute', top:0, left:0, right:0, display:'flex', justifyContent:'center', alignItems:'flex-end', height: indicatorH, overflow:'hidden', transition: dragging ? 'none' : 'height .25s cubic-bezier(.2,.9,.3,1)', pointerEvents:'none', zIndex:1 }}>
+        <div style={{ paddingBottom:10 }}>
+          <div style={{ width:22, height:22, borderRadius:'50%', border:`2.5px solid ${T.mint}3a`, borderTopColor:T.mint, animation: refreshing ? 'ptrSpin .7s linear infinite' : 'none', transform: refreshing ? 'none' : `rotate(${Math.min(pullY / THRESHOLD, 1) * 220}deg)`, transition: dragging ? 'none' : 'transform .2s ease' }} />
+        </div>
+      </div>
+      <div
+        ref={containerRef}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
+        style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', transform: `translateY(${indicatorH}px)`, transition: dragging ? 'none' : 'transform .25s cubic-bezier(.2,.9,.3,1)', ...contentStyle }}
+      >
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -39655,6 +39716,15 @@ function BarScreen({ go, deepLink }) {
     return () => { try { unsub1(); } catch(e) {} try { unsub2(); } catch(e) {} try { unsub3(); } catch(e) {} try { unsub4(); } catch(e) {} };
   }, []);
 
+  function refreshOwn() {
+    if (!db) return Promise.resolve();
+    return Promise.all([
+      db.collection('barDrinks').get({ source: 'server' }).then(qs => setOwn((qs.docs || []).map(dd => ({ ...dd.data(), id: dd.id, custom: true })))),
+      db.collection('config').doc('drinkRatings').get({ source: 'server' }).then(d => setRatings((d && d.exists && d.data()) || {})),
+      db.collection('config').doc('drinkFavorites').get({ source: 'server' }).then(d => setFavorites((d && d.exists && d.data()) || {})),
+    ]).catch(() => {});
+  }
+
   const CHIPS = [
     ['vodka','Vodka','🍶'],['rum','Rum','🥃'],['gin','Gin','🍸'],['tequila','Tequila','🌵'],
     ['whisky','Whisky','🥃'],['jager','Jäger','🦌'],['aperol','Aperol','🍹'],['pezsgo','Pezsgő','🍾'],
@@ -40023,7 +40093,7 @@ function BarScreen({ go, deepLink }) {
       ) : (<React.Fragment>
       <AppBar title={view === 'recipes' ? 'Receptek' : (deepLink ? 'DNR Pub' : 'Pub')} onBack={deepLink && view !== 'recipes' ? null : () => { if (view === 'recipes') setView('own'); else go('home'); }} right={cartBtn} left={<span style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, color:T.inkMute, letterSpacing:'0.02em', whiteSpace:'nowrap' }}>{APP_VERSION}</span>} />
       {view === 'own' && (
-        <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'14px 16px max(40px, calc(env(safe-area-inset-bottom) + 24px))', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
+        <PullToRefresh onRefresh={refreshOwn} contentStyle={{ padding:'14px 16px max(40px, calc(env(safe-area-inset-bottom) + 24px))', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
           <div style={{ display:'flex', gap:10, marginBottom:16 }}>
             <button onClick={() => setForm({})} style={{ flex:1, padding:'13px 0', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14.5, cursor:'pointer', boxShadow:`0 4px 14px ${T.mint}44` }}>+ Új keverés</button>
             <button onClick={() => setView('recipes')} style={{ padding:'13px 16px', borderRadius:14, border:'none', background:T.surface, color:T.ink, fontFamily:T.font, fontWeight:800, fontSize:13.5, cursor:'pointer', boxShadow:T.shadow, display:'flex', alignItems:'center', gap:6 }}><span style={{ fontSize:15, lineHeight:1 }}>📖</span> Receptek</button>
@@ -40051,7 +40121,7 @@ function BarScreen({ go, deepLink }) {
             </div>
           )}
           <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:20, lineHeight:1.5 }}>Idd felelősséggel! 🍸</div>
-        </div>
+        </PullToRefresh>
       )}
       {view === 'recipes' && (
         <React.Fragment>
@@ -40062,7 +40132,7 @@ function BarScreen({ go, deepLink }) {
               ))}
             </div>
           </div>
-          <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'14px 16px max(40px, calc(env(safe-area-inset-bottom) + 24px))', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
+          <PullToRefresh onRefresh={refreshOwn} contentStyle={{ padding:'14px 16px max(40px, calc(env(safe-area-inset-bottom) + 24px))', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, marginBottom:2 }}>Mi van itthon?</div>
             <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginBottom:10 }}>Koppints, amid van — kiemeljük, mit tudsz kikeverni.</div>
             <div style={{ display:'flex', flexWrap:'wrap', gap:7, marginBottom:16 }}>
@@ -40077,7 +40147,7 @@ function BarScreen({ go, deepLink }) {
               {recipeList.map(d => <DrinkCard key={d.id} d={d} mk={avail.size > 0 && canMake(d)} dim={avail.size > 0 && !canMake(d)} />)}
             </div>
             <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:20, lineHeight:1.5 }}>Idd felelősséggel! A mennyiségek csak irányadóak. 🍸</div>
-          </div>
+          </PullToRefresh>
         </React.Fragment>
       )}
       </React.Fragment>)}
@@ -40176,6 +40246,17 @@ function EventLogScreen({ go, goEdit, deepLink }) {
     }, () => setLoading(false));
     return () => unsub();
   }, []);
+
+  function refreshEvents() {
+    const col = evDb();
+    if (!col) return Promise.resolve();
+    return col.orderBy('createdAt', 'desc').get({ source: 'server' }).then(snap => {
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      docs.sort((a,b) => { if(!a.date) return 1; if(!b.date) return -1; return new Date(a.date)-new Date(b.date); });
+      setEvents(docs);
+      evSave(docs);
+    }).catch(() => {});
+  }
 
   React.useEffect(() => {
     if (typeof window.getProfiles === 'function') window.getProfiles().then(p => setProfiles(p || []));
@@ -40551,7 +40632,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
           const diff = Math.round((next - new Date(new Date().toDateString())) / 86400000);
           return { ...p, _bdDiff: diff, _bdMD: bd };
         }).filter(p => p._bdDiff <= 30).sort((a,b) => a._bdDiff - b._bdDiff) : [];
-        return <div style={{ flex:1, overflowY:'auto', padding:'16px 16px 32px' }}>
+        return <PullToRefresh onRefresh={refreshEvents} contentStyle={{ padding:'16px 16px 32px' }}>
         {upcomingBdays.length > 0 && (
           <div style={{ marginBottom:16 }}>
             <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.sub, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>🎂 Közelgő születésnapok</div>
@@ -40659,7 +40740,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
             </div>
           );
         })}
-      </div>; })()}
+      </PullToRefresh>; })()}
     </div>
   );
 }
