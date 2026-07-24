@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.087';
+const APP_VERSION = 'v10.088';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36464,6 +36464,23 @@ function recentBadgeKeys(statObj) {
   const badges = statObj && statObj.lastBadges;
   return (badges && badges.length) ? RECENT_BADGE_PRIORITY.filter(b => badges.includes(b)) : [];
 }
+
+// Mérföldkő-kitüntetések — az élettartam-statokból származtatva (nem tárolt).
+const ACHIEVEMENTS = [
+  { id:'d100',  icon:'beer',    label:'100 korty',        test: s => (s.totalDrinks||0) >= 100 },
+  { id:'d500',  icon:'beer',    label:'500 korty',        test: s => (s.totalDrinks||0) >= 500 },
+  { id:'d1000', icon:'fire',    label:'1000 korty',       test: s => (s.totalDrinks||0) >= 1000 },
+  { id:'p100',  icon:'star',    label:'100 pont',         test: s => (s.totalPoints||0) >= 100 },
+  { id:'p500',  icon:'star',    label:'500 pont',         test: s => (s.totalPoints||0) >= 500 },
+  { id:'s10',   icon:'flag',    label:'10 parti',         test: s => (s.totalSessions||0) >= 10 },
+  { id:'s50',   icon:'medal1',  label:'Veterán · 50 parti', test: s => (s.totalSessions||0) >= 50 },
+  { id:'bp1',   icon:'trophy',  label:'Beer Pong bajnok', test: s => (s.bp_tournaments||0) >= 1 },
+  { id:'bp5',   icon:'crown',   label:'5× BP bajnok',     test: s => (s.bp_tournaments||0) >= 5 },
+  { id:'st5',   icon:'fire',    label:'5-ös streak',      test: s => (s.bestStreak||0) >= 5 },
+  { id:'st10',  icon:'bolt',    label:'10-es streak',     test: s => (s.bestStreak||0) >= 10 },
+  { id:'bz5',   icon:'check',   label:'5 busz',           test: s => (s.busz_completions||0) >= 5 },
+  { id:'react', icon:'bolt',    label:'Villámkéz · <300ms', test: s => s.bestReactionTime != null && s.bestReactionTime < 300 },
+];
 
 // Közös "Gyors statisztika" popup — profil-avatar, buli-jelvények, PlayerProfileStats.
 function QuickStatsModal({ profile, badges, onClose }) {
@@ -42126,6 +42143,8 @@ function PlayerProfileStats({ profileId }) {
     { icon:'bolt', label:'Leggyorsabb', value: `${stats.bestReactionTime} ms` },
   ]});
 
+  const earned = ACHIEVEMENTS.filter(a => a.test(stats));
+
   // Fejlődési grafikon — kumulatív pont az egyes partik után (statEvents naplóból)
   let chart = null;
   if (events && events.length >= 2) {
@@ -42151,6 +42170,18 @@ function PlayerProfileStats({ profileId }) {
           </div>
         ))}
       </div>
+      {earned.length > 0 && (
+        <div>
+          <div style={{ fontFamily:T.font, fontSize:10.5, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5, marginLeft:3 }}>Kitüntetések · {earned.length}</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+            {earned.map(a => (
+              <span key={a.id} style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'6px 11px 6px 8px', borderRadius:999, background:T.bgSoft, fontFamily:T.font, fontWeight:800, fontSize:11.5, color:T.ink }}>
+                <BohIcon name={a.icon} size={14} />{a.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {chart && (
         <div>
           <div style={{ fontFamily:T.font, fontSize:10.5, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5, marginLeft:3 }}>Pontok alakulása</div>
