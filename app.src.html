@@ -33989,6 +33989,18 @@ window.triggerHaptic = function() {
     if (Object.keys(data).length === 0) return Promise.resolve();
     return ref.set(data, { merge: true }).catch(function(e) { console.warn('incrementStats', e); });
   };
+  window.logStatEvent = function(profileId, deltas) {
+    if (!profileId || !deltas) return Promise.resolve();
+    var clean = {};
+    Object.keys(deltas).forEach(function(k) { if (typeof deltas[k] === 'number' && deltas[k]) clean[k] = deltas[k]; });
+    if (Object.keys(clean).length === 0) return Promise.resolve();
+    return db.collection('statEvents').add(Object.assign({ profileId: profileId, ts: Date.now() }, clean)).catch(function(e) { console.warn('logStatEvent', e); });
+  };
+  window.getAllStatEvents = function() {
+    return db.collection('statEvents').get().then(function(snap) {
+      return snap.docs.map(function(d) { return d.data(); });
+    }).catch(function() { return []; });
+  };
   window.saveTournament = function(data) {
     return db.collection('bp_tournaments').add(data).catch(function(e) { console.warn('saveTournament', e); });
   };
@@ -34851,7 +34863,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.061';
+const APP_VERSION = 'v10.062';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -37745,21 +37757,54 @@ function AdminEvents({ go }) {
 }
 
 // ── Admin: Statisztika tab ────────────────────────────────────────────────────
+const STATS_PERIODS = [
+  { key:'all', label:'Mind' },
+  { key:'today', label:'Ma' },
+  { key:'week', label:'7 nap' },
+  { key:'month', label:'30 nap' },
+  { key:'year', label:'Idén' },
+];
+function statsPeriodSince(period) {
+  const now = new Date();
+  if (period === 'today') return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  if (period === 'week') return now.getTime() - 7*24*60*60*1000;
+  if (period === 'month') return now.getTime() - 30*24*60*60*1000;
+  if (period === 'year') return new Date(now.getFullYear(), 0, 1).getTime();
+  return null;
+}
 function AdminStats() {
   const [profiles, setProfiles] = React.useState([]);
   const [stats, setStats] = React.useState({});
+  const [statEvents, setStatEvents] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [period, setPeriod] = React.useState('all');
 
   React.useEffect(() => {
     Promise.all([
       window.getProfiles ? window.getProfiles() : Promise.resolve([]),
       window.getAllStats ? window.getAllStats() : Promise.resolve({}),
-    ]).then(([ps, st]) => { setProfiles(ps || []); setStats(st || {}); setLoading(false); }).catch(() => setLoading(false));
+      window.getAllStatEvents ? window.getAllStatEvents() : Promise.resolve([]),
+    ]).then(([ps, st, ev]) => { setProfiles(ps || []); setStats(st || {}); setStatEvents(ev || []); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
   if (loading) return <div style={{ textAlign:'center', padding:32, color:T.sub, fontFamily:T.font }}>Betöltés…</div>;
 
-  const rows = profiles.map(p => ({ p, s: stats[p.id] || {} }));
+  const sinceTs = statsPeriodSince(period);
+  let periodStats = stats;
+  if (sinceTs != null) {
+    const agg = {};
+    statEvents.filter(ev => (ev.ts || 0) >= sinceTs).forEach(ev => {
+      const dst = agg[ev.profileId] || (agg[ev.profileId] = {});
+      Object.keys(ev).forEach(k => {
+        if (k === 'profileId' || k === 'ts') return;
+        if (typeof ev[k] === 'number') dst[k] = (dst[k] || 0) + ev[k];
+      });
+    });
+    periodStats = agg;
+  }
+
+  const rows = profiles.map(p => ({ p, s: periodStats[p.id] || {} }));
+  const activeProfileCount = sinceTs == null ? profiles.length : rows.filter(r => Object.keys(r.s).length > 0).length;
   const sum = key => rows.reduce((a, r) => a + (r.s[key] || 0), 0);
   const Board = ({ title, emoji, valFn, fmt }) => {
     const top = [...rows].filter(r => (valFn(r.s) || 0) > 0).sort((a, b) => valFn(b.s) - valFn(a.s)).slice(0, 5);
@@ -37781,9 +37826,21 @@ function AdminStats() {
 
   return (
     <div style={{ padding:'16px' }}>
+      <div style={{ display:'flex', gap:8, marginBottom:8, overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
+        {STATS_PERIODS.map(pr => (
+          <button key={pr.key} onClick={() => setPeriod(pr.key)} style={{
+            padding:'8px 15px', borderRadius:999, border:'none', flexShrink:0, cursor:'pointer', whiteSpace:'nowrap',
+            background: period === pr.key ? T.ink : T.surface, color: period === pr.key ? '#fff' : T.sub,
+            fontFamily:T.font, fontWeight:800, fontSize:12, boxShadow:T.shadow,
+          }}>{pr.label}</button>
+        ))}
+      </div>
+      {sinceTs != null && (
+        <div style={{ fontFamily:T.font, fontSize:11, color:T.sub, marginBottom:10 }}>Csak az ez után lejátszott partik számítanak bele.</div>
+      )}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, marginBottom:14 }}>
         {[
-          { emoji:'👤', label:'Profil', val: profiles.length },
+          { emoji:'👤', label:'Profil', val: activeProfileCount },
           { emoji:'⭐', label:'Össz pont', val: sum('totalPoints') },
           { emoji:'🍺', label:'Össz korty', val: sum('totalDrinks') },
         ].map((it, i) => (
@@ -46087,6 +46144,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           bp_match_wins:   firebase.firestore.FieldValue.increment(isW ? 1 : 0),
           bp_match_losses: firebase.firestore.FieldValue.increment(isW ? 0 : 1),
         });
+        if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_match_wins: isW ? 1 : 0, bp_match_losses: isW ? 0 : 1 });
       });
     }
 
@@ -46218,6 +46276,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         [m.p1, m.p2].forEach(p => {
           if (!p?.profileId) return;
           window.updateStats(p.profileId, { bp_match_draws: firebase.firestore.FieldValue.increment(1) });
+          if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_match_draws: 1 });
         });
       } else if (winner && loser) {
         [winner, loser].forEach(p => {
@@ -46227,6 +46286,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
             bp_match_wins:   firebase.firestore.FieldValue.increment(isW ? 1 : 0),
             bp_match_losses: firebase.firestore.FieldValue.increment(isW ? 0 : 1),
           });
+          if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_match_wins: isW ? 1 : 0, bp_match_losses: isW ? 0 : 1 });
         });
       }
     }
@@ -46390,9 +46450,9 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     // Save per-match stats for group stage
     if (typeof window.updateStats === 'function') {
       if (isDraw) {
-        [m.p1, m.p2].forEach(p => { if (p?.profileId) window.updateStats(p.profileId, { bp_match_draws: firebase.firestore.FieldValue.increment(1) }); });
+        [m.p1, m.p2].forEach(p => { if (p?.profileId) { window.updateStats(p.profileId, { bp_match_draws: firebase.firestore.FieldValue.increment(1) }); if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_match_draws: 1 }); } });
       } else if (winner && loser) {
-        [winner, loser].forEach(p => { if (p?.profileId) window.updateStats(p.profileId, { bp_match_wins: firebase.firestore.FieldValue.increment(p.id===winner.id?1:0), bp_match_losses: firebase.firestore.FieldValue.increment(p.id===winner.id?0:1) }); });
+        [winner, loser].forEach(p => { if (p?.profileId) { const isW = p.id===winner.id; window.updateStats(p.profileId, { bp_match_wins: firebase.firestore.FieldValue.increment(isW?1:0), bp_match_losses: firebase.firestore.FieldValue.increment(isW?0:1) }); if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_match_wins: isW?1:0, bp_match_losses: isW?0:1 }); } });
       }
     }
 
@@ -51271,6 +51331,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
             busz_completions: firebase.firestore.FieldValue.increment(1),
             busz_total_drinks: firebase.firestore.FieldValue.increment(drinks),
           });
+          if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { busz_played: 1, busz_completions: 1, busz_total_drinks: drinks });
         });
       }
       if (typeof window.saveTournament === 'function' && profilePlayers.length >= 4 && buszState?.busRiderDrinks) {
@@ -58586,6 +58647,7 @@ function EndScreen({ players, go, resetGame, lastRound, scoreHistory }) {
       const inc = { totalDrinks: p.drinks || 0, totalPoints: p.points || 0, totalSessions: 1, totalRounds: lastRound || 1 };
       if (isWinner) inc.totalWins = 1;
       window.incrementStats(p.profileId, inc);
+      if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, inc);
       if (typeof window.updateStreak === 'function') window.updateStreak(p.profileId, isWinner);
     });
 
