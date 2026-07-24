@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.085';
+const APP_VERSION = 'v10.086';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -42059,11 +42059,15 @@ function PlayerCard({ p, onEdit, onRemove, index, badge, recentBadge, playful, o
 
 function PlayerProfileStats({ profileId }) {
   const [stats, setStats] = React.useState(null);
+  const [profiles, setProfiles] = React.useState([]);
   React.useEffect(() => {
     if (!profileId || typeof window.getStats !== 'function') return;
     setStats(null);
     window.getStats(profileId).then(s => setStats(s || {}));
   }, [profileId]);
+  React.useEffect(() => {
+    if (typeof window.getProfiles === 'function') window.getProfiles().then(ps => setProfiles(ps || [])).catch(() => {});
+  }, []);
 
   if (!stats) return (
     <div style={{ textAlign:'center', padding:'10px 0', color:T.inkMute, fontFamily:T.font, fontSize:12 }}>Statisztika betöltése…</div>
@@ -42096,6 +42100,16 @@ function PlayerProfileStats({ profileId }) {
     const bp = [];
     if (stats.bp_tournaments > 0) bp.push({ icon:'trophy', label:'Bajnoki cím', value: `${stats.bp_tournaments}×` });
     if (bpPlayed > 0) bp.push({ icon:'cheers', label:'Mérleg (Gy/D/V)', value: `${stats.bp_match_wins||0}/${stats.bp_match_draws||0}/${stats.bp_match_losses||0}` });
+    // Head-to-head: ki ellen a legjobb / legrosszabb a mérleg
+    const nameOf = oid => (profiles.find(p => p.id === oid) || {}).name || 'Ismeretlen';
+    const h2h = stats.bp_h2h || {};
+    const h2hArr = Object.keys(h2h).map(oid => { const r = h2h[oid] || {}; const w = r.w||0, l = r.l||0, d = r.d||0; return { oid, w, l, d, played: w+l+d, diff: w-l }; }).filter(x => x.played > 0);
+    if (h2hArr.length) {
+      const sorted = [...h2hArr].sort((a,b) => (b.diff - a.diff) || (b.w - a.w) || (a.l - b.l));
+      const best = sorted[0], worst = sorted[sorted.length - 1];
+      if (best.w > 0) bp.push({ icon:'target', label:'Legjobb ellenfél', value: `${nameOf(best.oid)} ${best.w}-${best.l}` });
+      if (worst !== best && worst.l > 0) bp.push({ icon:'skull', label:'Mumus', value: `${nameOf(worst.oid)} ${worst.w}-${worst.l}` });
+    }
     sections.push({ title:'Beer Pong', rows: bp });
   }
   if (stats.busz_completions > 0) {
@@ -46318,6 +46332,21 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     initTournament(teamPlayersRef.current);
   }, [teamsReady]);
 
+  // Head-to-head rögzítés: melyik profil kivel szemben nyert/vesztett/döntetlenezett.
+  // Firestore nested map: bp_h2h.{ellenfélProfileId}.{w|l|d}
+  const recordH2H = (a, b, isDraw) => {
+    if (!a?.profileId || !b?.profileId || a.profileId === b.profileId) return;
+    if (typeof window.updateStats !== 'function') return;
+    const inc = firebase.firestore.FieldValue.increment(1);
+    if (isDraw) {
+      window.updateStats(a.profileId, { ['bp_h2h.' + b.profileId + '.d']: inc });
+      window.updateStats(b.profileId, { ['bp_h2h.' + a.profileId + '.d']: inc });
+    } else {
+      window.updateStats(a.profileId, { ['bp_h2h.' + b.profileId + '.w']: inc });
+      window.updateStats(b.profileId, { ['bp_h2h.' + a.profileId + '.l']: inc });
+    }
+  };
+
   // ── SE confirm ────────────────────────────────────────────────────────────
   const handleSEConfirm = (rounds, curRound, curMatch, setCB) => {
     if (!rounds[curRound]?.[curMatch]) return;
@@ -46372,6 +46401,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         });
         if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_match_wins: isW ? 1 : 0, bp_match_losses: isW ? 0 : 1 });
       });
+      recordH2H(winner, loser, false);
     }
 
     setCB(prevRounds => {
@@ -46527,6 +46557,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_match_wins: isW ? 1 : 0, bp_match_losses: isW ? 0 : 1 });
         });
       }
+      if (isDraw) recordH2H(m.p1, m.p2, true); else if (winner && loser) recordH2H(winner, loser, false);
     }
 
     setMatchesCB(prev => {
@@ -46668,6 +46699,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       } else if (winner && loser) {
         [winner, loser].forEach(p => { if (p?.profileId) { const isW = p.id===winner.id; window.updateStats(p.profileId, { bp_match_wins: firebase.firestore.FieldValue.increment(isW?1:0), bp_match_losses: firebase.firestore.FieldValue.increment(isW?0:1) }); if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_match_wins: isW?1:0, bp_match_losses: isW?0:1 }); } });
       }
+      if (isDraw) recordH2H(m.p1, m.p2, true); else if (winner && loser) recordH2H(winner, loser, false);
     }
 
     setTsGroups(prev => {
