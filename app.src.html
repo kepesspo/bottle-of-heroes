@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.084';
+const APP_VERSION = 'v10.085';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -42072,30 +42072,63 @@ function PlayerProfileStats({ profileId }) {
   const sess = stats.totalSessions || 0;
   const winRate = sess > 0 ? Math.round((stats.totalWins || 0) / sess * 100) : null;
   const bpPlayed = (stats.bp_match_wins||0) + (stats.bp_match_losses||0) + (stats.bp_match_draws||0);
-  const items = [
-    { icon:'beer', label:'Összes korty', value: stats.totalDrinks ?? '—' },
-    { icon:'star', label:'Összesített pont', value: stats.totalPoints ?? '—' },
-    { icon:'flag', label:'Partik', value: sess || '—' },
-    { icon:'trophy', label:'Win rate', value: winRate != null ? `${winRate}%` : '—' },
+
+  // Kiemelt fő számok (tile-ok) felül
+  const heroes = [
+    { icon:'beer', label:'Korty', value: stats.totalDrinks || 0 },
+    { icon:'star', label:'Pont', value: stats.totalPoints || 0 },
+    { icon:'flag', label:'Parti', value: sess },
   ];
-  if (sess > 0) {
-    items.push({ icon:'beer', label:'Átlag korty / parti', value: ((stats.totalDrinks||0) / sess).toFixed(1) });
-    items.push({ icon:'star', label:'Átlag pont / parti', value: ((stats.totalPoints||0) / sess).toFixed(1) });
+  // A többi stat témák szerint csoportosítva
+  const perf = [
+    { icon:'trophy', label:'Win rate', value: winRate != null ? `${winRate}%` : '—' },
+    { icon:'medal1', label:'Legjobb streak', value: stats.bestStreak ? `${stats.bestStreak}×` : '—' },
+  ];
+  if (stats.currentStreak > 0) perf.push({ icon:'fire', label:'Jelenlegi széria', value: `${stats.currentStreak}×` });
+  perf.push({ icon:'redo', label:'Körök', value: stats.totalRounds ?? '—' });
+
+  const sections = [{ title:'Teljesítmény', rows: perf }];
+  if (sess > 0) sections.push({ title:'Átlagok', rows: [
+    { icon:'beer', label:'Korty / parti', value: ((stats.totalDrinks||0) / sess).toFixed(1) },
+    { icon:'star', label:'Pont / parti', value: ((stats.totalPoints||0) / sess).toFixed(1) },
+  ]});
+  if (stats.bp_tournaments > 0 || bpPlayed > 0) {
+    const bp = [];
+    if (stats.bp_tournaments > 0) bp.push({ icon:'trophy', label:'Bajnoki cím', value: `${stats.bp_tournaments}×` });
+    if (bpPlayed > 0) bp.push({ icon:'cheers', label:'Mérleg (Gy/D/V)', value: `${stats.bp_match_wins||0}/${stats.bp_match_draws||0}/${stats.bp_match_losses||0}` });
+    sections.push({ title:'Beer Pong', rows: bp });
   }
-  items.push({ icon:'medal1', label:'Legjobb streak', value: stats.bestStreak ? `${stats.bestStreak}×` : '—' });
-  if (stats.currentStreak > 0) items.push({ icon:'fire', label:'Jelenlegi széria', value: `${stats.currentStreak}×` });
-  items.push({ icon:'redo', label:'Körök', value: stats.totalRounds ?? '—' });
-  if (stats.bp_tournaments > 0) items.push({ icon:'trophy', label:'Beer Pong bajnok', value: `${stats.bp_tournaments}×` });
-  if (bpPlayed > 0) items.push({ icon:'cheers', label:'BP mérleg (Gy/D/V)', value: `${stats.bp_match_wins||0}/${stats.bp_match_draws||0}/${stats.bp_match_losses||0}` });
-  if (stats.busz_completions > 0) items.push({ icon:'check', label:'Busz teljesítve', value: `${stats.busz_completions}×` });
-  if (stats.busz_total_drinks > 0) items.push({ icon:'beer', label:'Busz korty', value: stats.busz_total_drinks });
-  if (stats.bestReactionTime != null) items.push({ icon:'bolt', label:'Leggyorsabb reakció', value: `${stats.bestReactionTime} ms` });
+  if (stats.busz_completions > 0) {
+    const bz = [{ icon:'check', label:'Teljesítve', value: `${stats.busz_completions}×` }];
+    if (stats.busz_total_drinks > 0) bz.push({ icon:'beer', label:'Elivott korty', value: stats.busz_total_drinks });
+    sections.push({ title:'Busz', rows: bz });
+  }
+  if (stats.bestReactionTime != null) sections.push({ title:'Reakció', rows: [
+    { icon:'bolt', label:'Leggyorsabb', value: `${stats.bestReactionTime} ms` },
+  ]});
+
   return (
-    <div style={{ background:T.bgSoft, borderRadius:14, padding:'10px 18px', display:'flex', flexDirection:'column', gap:0, width:'100%', boxSizing:'border-box', maxHeight:'52vh', overflowY:'auto' }}>
-      {items.map((it, i) => (
-        <div key={it.label} style={{ display:'flex', alignItems:'center', padding:'7px 0', borderBottom: i < items.length-1 ? `1px solid ${T.inkMute}18` : 'none' }}>
-          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, fontWeight:600, display:'flex', alignItems:'center', gap:5, flex:1, minWidth:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}><BohIcon name={it.icon} size={13} />{it.label}</div>
-          <div style={{ fontFamily:T.font, fontSize:13, fontWeight:900, color:T.ink, flexShrink:0, marginLeft:14 }}>{it.value}</div>
+    <div style={{ width:'100%', boxSizing:'border-box', maxHeight:'54vh', overflowY:'auto', display:'flex', flexDirection:'column', gap:12 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
+        {heroes.map(h => (
+          <div key={h.label} style={{ background:T.bgSoft, borderRadius:14, padding:'11px 4px 9px', display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+            <BohIcon name={h.icon} size={16} />
+            <div style={{ fontFamily:T.font, fontSize:19, fontWeight:900, color:T.ink, lineHeight:1 }}>{h.value}</div>
+            <div style={{ fontFamily:T.font, fontSize:10, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.05em' }}>{h.label}</div>
+          </div>
+        ))}
+      </div>
+      {sections.map(sec => (
+        <div key={sec.title}>
+          <div style={{ fontFamily:T.font, fontSize:10.5, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5, marginLeft:3 }}>{sec.title}</div>
+          <div style={{ background:T.bgSoft, borderRadius:14, padding:'2px 16px' }}>
+            {sec.rows.map((it, i) => (
+              <div key={it.label} style={{ display:'flex', alignItems:'center', padding:'8px 0', borderBottom: i < sec.rows.length-1 ? `1px solid ${T.inkMute}18` : 'none' }}>
+                <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, fontWeight:600, display:'flex', alignItems:'center', gap:6, flex:1, minWidth:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}><BohIcon name={it.icon} size={13} />{it.label}</div>
+                <div style={{ fontFamily:T.font, fontSize:13, fontWeight:900, color:T.ink, flexShrink:0, marginLeft:14 }}>{it.value}</div>
+              </div>
+            ))}
+          </div>
         </div>
       ))}
     </div>
