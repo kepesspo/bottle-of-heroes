@@ -34851,7 +34851,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.049';
+const APP_VERSION = 'v10.050';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -41497,6 +41497,15 @@ function PlayersScreen({ players, setPlayers, go }) {
     const ri = ranked.indexOf(p.profileId);
     return ri >= 0 && ri < 3 && (allTimeStats[p.profileId]?.totalPoints||0) > 0 ? <BohIcon name={'medal'+(ri+1)} size={19} /> : null;
   };
+  const RECENT_BADGE_ICONS = { champion:'🏆', comeback:'📈', mostDrinks:'🍺' };
+  const RECENT_BADGE_PRIORITY = ['champion','comeback','mostDrinks'];
+  const getRecentBadge = (p) => {
+    if (!p.profileId) return null;
+    const badges = allTimeStats[p.profileId]?.lastBadges;
+    if (!badges || !badges.length) return null;
+    const top = RECENT_BADGE_PRIORITY.find(b => badges.includes(b));
+    return top ? RECENT_BADGE_ICONS[top] : null;
+  };
 
 
 
@@ -41602,7 +41611,7 @@ function PlayersScreen({ players, setPlayers, go }) {
         ) : (
         <div className="grid-players">
           {players.map((p, i) =>
-            <PlayerCard key={p.id} p={p} index={i} onEdit={() => setEditing(p.id)} onRemove={() => removePlayer(p.id)} badge={getBadge(p)} onLongPress={p.profileId ? () => setQuickStatsFor(p) : undefined} />
+            <PlayerCard key={p.id} p={p} index={i} onEdit={() => setEditing(p.id)} onRemove={() => removePlayer(p.id)} badge={getBadge(p)} recentBadge={getRecentBadge(p)} onLongPress={p.profileId ? () => setQuickStatsFor(p) : undefined} />
           )}
           <button onClick={addPlayer} style={{
             aspectRatio:'1/1.18', minHeight:120,
@@ -41693,7 +41702,7 @@ function PlayersScreen({ players, setPlayers, go }) {
   );
 }
 
-function PlayerCard({ p, onEdit, onRemove, index, badge, playful, onLongPress }) {
+function PlayerCard({ p, onEdit, onRemove, index, badge, recentBadge, playful, onLongPress }) {
   const tilt = [-0.8, 0.8, -0.6, 0.9, -0.9, 0.7][(index||0)%6];
   const lpTimer = React.useRef(null);
   const lpFired = React.useRef(false);
@@ -41715,6 +41724,7 @@ function PlayerCard({ p, onEdit, onRemove, index, badge, playful, onLongPress })
       animation:'fadeInUp 0.32s ease both', animationDelay:`${(index||0)*0.06}s`,
     }}>
       {badge && <div style={{ position:'absolute', bottom:5, right:5, fontSize:16, lineHeight:1 }}>{badge}</div>}
+      {recentBadge && <div title="Legutóbbi buli eredménye" style={{ position:'absolute', bottom:5, left:5, fontSize:16, lineHeight:1 }}>{recentBadge}</div>}
       <button onClick={e => { e.stopPropagation(); onRemove(); }} style={{
         position:'absolute', top:-7, right:-7, width:28, height:28,
         borderRadius:'50%', background:'transparent', border:'none',
@@ -58452,6 +58462,39 @@ function EndScreen({ players, go, resetGame, lastRound, scoreHistory }) {
       window.incrementStats(p.profileId, inc);
       if (typeof window.updateStreak === 'function') window.updateStreak(p.profileId, isWinner);
     });
+
+    // ── Buli-jelvények — a legutóbbi este eredményei, tartósan mentve a
+    // profilhoz, hogy máshol (pl. Játékosok lista) matricaként megjelenjenek ──
+    if (typeof window.updateStats === 'function') {
+      const badgesByProfile = {};
+      const award = (playerId, badgeId) => {
+        const pl = players.find(x => x.id === playerId);
+        if (!pl || !pl.profileId) return;
+        (badgesByProfile[pl.profileId] = badgesByProfile[pl.profileId] || []).push(badgeId);
+      };
+      if (winner) award(winner.id, 'champion');
+      const topDrinker = [...players].sort((a,b) => (b.drinks-a.drinks)||(a.points-b.points))[0];
+      if (topDrinker && topDrinker.drinks > 0) award(topDrinker.id, 'mostDrinks');
+      if (scoreHistory && scoreHistory.length > 2 && players.length >= 3) {
+        const finalRanks = {}; sorted.forEach((p,i) => { finalRanks[p.id] = i; });
+        let best = null;
+        players.forEach(p => {
+          const ranksOverTime = scoreHistory.map(snap => {
+            const ordered = [...snap].sort((a,b) => b.pts - a.pts);
+            return ordered.findIndex(x => x.id === p.id);
+          }).filter(r => r >= 0);
+          if (!ranksOverTime.length) return;
+          const worstRank = Math.max(...ranksOverTime);
+          const finalRank = finalRanks[p.id] ?? worstRank;
+          const improvement = worstRank - finalRank;
+          if (improvement >= 2 && (!best || improvement > best.improvement)) best = { id: p.id, improvement };
+        });
+        if (best) award(best.id, 'comeback');
+      }
+      Object.entries(badgesByProfile).forEach(([profileId, badges]) => {
+        window.updateStats(profileId, { lastBadges: badges, lastBadgeAt: new Date().toISOString() });
+      });
+    }
   }, []);
   const pfBorderR = 'none';
   const pfShadowR = T.shadow;
