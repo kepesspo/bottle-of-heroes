@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.072';
+const APP_VERSION = 'v10.073';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36860,7 +36860,7 @@ function StatsScreen({ go, onOpenObserver }) {
               <div style={{ textAlign:'center', padding:40, fontFamily:T.font, color:T.inkSoft }}>
                 <div style={{ fontSize:40, marginBottom:12 }}>📜</div>
                 <div style={{ fontWeight:800, fontSize:15, color:T.ink }}>Még nincs előzmény</div>
-                <div style={{ fontSize:12, marginTop:6 }}>A befejezett bajnokságok (min. 4 profilos játékos) itt fognak megjelenni</div>
+                <div style={{ fontSize:12, marginTop:6 }}>A befejezett bajnokságok (min. 2 profilos játékos) itt fognak megjelenni</div>
               </div>
             )}
             {!tourLoading && tournaments.map(t => {
@@ -46324,16 +46324,13 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     });
   };
 
-  const finishSE = (champ, dm) => {
-    if (doneRef.current) return;
-    doneRef.current = true;
-    setChampion(champ);
-    const finalDm = {};
-    Object.entries(dm).forEach(([id, cnt]) => { finalDm[id] = cnt; });
-    if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { observerAllowed: true });
-    onAdvance && onAdvance(finalDm);
-    const profileCount = players.filter(p => p.profileId).length;
-    if (typeof window.updateStats === 'function' && profileCount >= 4) {
+  // Közös bajnokság-lezáró: statisztika (bp_wins/losses/played/tournaments),
+  // győztes-jelvény (champion badge) + időszak-esemény, és az előzmény-mentés.
+  // Min. 2 profilos játékos kell (egy valódi bajnoksághoz elég 2 fő).
+  const recordBpTournament = (champ, type, extra) => {
+    const profilePlayers = players.filter(p => p.profileId);
+    if (profilePlayers.length < 2) return;
+    if (typeof window.updateStats === 'function') {
       players.forEach(p => {
         if (!p.profileId) return;
         const isWinner = champ && champ.id === p.id;
@@ -46343,19 +46340,34 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           bp_played: firebase.firestore.FieldValue.increment(1),
           bp_tournaments: firebase.firestore.FieldValue.increment(isWinner ? 1 : 0),
         });
+        if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_wins: isWinner ? 1 : 0, bp_losses: isWinner ? 0 : 1, bp_played: 1, bp_tournaments: isWinner ? 1 : 0 });
       });
+      if (champ && champ.profileId) {
+        window.updateStats(champ.profileId, { lastBadges: ['champion'], lastBadgeAt: new Date().toISOString() });
+      }
     }
-    if (typeof window.saveTournament === 'function' && profileCount >= 4) {
-      window.saveTournament({
+    if (typeof window.saveTournament === 'function') {
+      window.saveTournament(Object.assign({
         ts: Date.now(),
         game: 'beerpong',
-        type: 'se',
+        type,
         roomCode: roomCode || null,
         tournamentName: gameMeta?.beerpongConfig?.tournamentName || null,
         champion: champ ? { id: champ.id, name: champ.name, color: champ.color } : null,
         players: players.map(p => ({ id: p.id, name: p.name, color: p.color, profileId: p.profileId || null })),
-      });
+      }, extra || {}));
     }
+  };
+
+  const finishSE = (champ, dm) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    setChampion(champ);
+    const finalDm = {};
+    Object.entries(dm).forEach(([id, cnt]) => { finalDm[id] = cnt; });
+    if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { observerAllowed: true });
+    onAdvance && onAdvance(finalDm);
+    recordBpTournament(champ, 'se');
   };
 
   // ── RR confirm ────────────────────────────────────────────────────────────
@@ -46510,32 +46522,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     Object.entries(dm).forEach(([id, cnt]) => { finalDm[id] = cnt; });
     if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { observerAllowed: true });
     onAdvance && onAdvance(finalDm);
-    const profileCount = players.filter(p => p.profileId).length;
-    if (typeof window.updateStats === 'function' && profileCount >= 4) {
-      players.forEach(p => {
-        if (!p.profileId) return;
-        const isWinner = champ && champ.id === p.id;
-        window.updateStats(p.profileId, {
-          bp_wins: firebase.firestore.FieldValue.increment(isWinner ? 1 : 0),
-          bp_losses: firebase.firestore.FieldValue.increment(isWinner ? 0 : 1),
-          bp_played: firebase.firestore.FieldValue.increment(1),
-          bp_tournaments: firebase.firestore.FieldValue.increment(isWinner ? 1 : 0),
-        });
-      });
-    }
-    if (typeof window.saveTournament === 'function' && profileCount >= 4) {
-      const podium = standings.slice(0, 3).map((s, i) => ({ rank: i+1, id: s.player.id, name: s.player.name, color: s.player.color, pts: s.pts }));
-      window.saveTournament({
-        ts: Date.now(),
-        game: 'beerpong',
-        type: 'rr',
-        roomCode: roomCode || null,
-        tournamentName: gameMeta?.beerpongConfig?.tournamentName || null,
-        champion: champ ? { id: champ.id, name: champ.name, color: champ.color } : null,
-        podium,
-        players: players.map(p => ({ id: p.id, name: p.name, color: p.color, profileId: p.profileId || null })),
-      });
-    }
+    const podium = standings.slice(0, 3).map((s, i) => ({ rank: i+1, id: s.player.id, name: s.player.name, color: s.player.color, pts: s.pts }));
+    recordBpTournament(champ, 'rr', { podium });
   };
 
   // ── Two-stage group confirm ───────────────────────────────────────────────
