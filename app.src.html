@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.086';
+const APP_VERSION = 'v10.087';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -42060,6 +42060,7 @@ function PlayerCard({ p, onEdit, onRemove, index, badge, recentBadge, playful, o
 function PlayerProfileStats({ profileId }) {
   const [stats, setStats] = React.useState(null);
   const [profiles, setProfiles] = React.useState([]);
+  const [events, setEvents] = React.useState([]);
   React.useEffect(() => {
     if (!profileId || typeof window.getStats !== 'function') return;
     setStats(null);
@@ -42068,6 +42069,10 @@ function PlayerProfileStats({ profileId }) {
   React.useEffect(() => {
     if (typeof window.getProfiles === 'function') window.getProfiles().then(ps => setProfiles(ps || [])).catch(() => {});
   }, []);
+  React.useEffect(() => {
+    if (!profileId || typeof window.getAllStatEvents !== 'function') { setEvents([]); return; }
+    window.getAllStatEvents().then(evs => setEvents((evs || []).filter(e => e.profileId === profileId && (e.totalPoints || 0) > 0).sort((a, b) => (a.ts || 0) - (b.ts || 0)))).catch(() => setEvents([]));
+  }, [profileId]);
 
   if (!stats) return (
     <div style={{ textAlign:'center', padding:'10px 0', color:T.inkMute, fontFamily:T.font, fontSize:12 }}>Statisztika betöltése…</div>
@@ -42121,6 +42126,20 @@ function PlayerProfileStats({ profileId }) {
     { icon:'bolt', label:'Leggyorsabb', value: `${stats.bestReactionTime} ms` },
   ]});
 
+  // Fejlődési grafikon — kumulatív pont az egyes partik után (statEvents naplóból)
+  let chart = null;
+  if (events && events.length >= 2) {
+    let cum = 0;
+    const cumPts = events.map(e => { cum += (e.totalPoints || 0); return cum; });
+    const W = 300, H = 62, pad = 5;
+    const maxV = Math.max(...cumPts, 1);
+    const coords = cumPts.map((v, i) => [pad + (cumPts.length === 1 ? 0 : (i / (cumPts.length - 1)) * (W - 2*pad)), H - pad - (v / maxV) * (H - 2*pad)]);
+    const linePath = coords.map((c, i) => (i === 0 ? 'M' : 'L') + c[0].toFixed(1) + ' ' + c[1].toFixed(1)).join(' ');
+    const areaPath = linePath + ` L${coords[coords.length-1][0].toFixed(1)} ${H} L${coords[0][0].toFixed(1)} ${H} Z`;
+    const last = coords[coords.length - 1];
+    chart = { linePath, areaPath, last, W, H, total: cum, n: cumPts.length };
+  }
+
   return (
     <div style={{ width:'100%', boxSizing:'border-box', maxHeight:'54vh', overflowY:'auto', display:'flex', flexDirection:'column', gap:12 }}>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
@@ -42132,6 +42151,19 @@ function PlayerProfileStats({ profileId }) {
           </div>
         ))}
       </div>
+      {chart && (
+        <div>
+          <div style={{ fontFamily:T.font, fontSize:10.5, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5, marginLeft:3 }}>Pontok alakulása</div>
+          <div style={{ background:T.bgSoft, borderRadius:14, padding:'12px 12px 8px' }}>
+            <svg viewBox={`0 0 ${chart.W} ${chart.H}`} width="100%" height="66" preserveAspectRatio="none" style={{ display:'block', overflow:'visible' }}>
+              <path d={chart.areaPath} fill={T.mint + '22'} />
+              <path d={chart.linePath} fill="none" stroke={T.mint} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+              <circle cx={chart.last[0]} cy={chart.last[1]} r="3.5" fill={T.mintDeep || T.mint} stroke="#fff" strokeWidth="1.5" />
+            </svg>
+            <div style={{ fontFamily:T.font, fontSize:10.5, fontWeight:700, color:T.inkMute, marginTop:4, textAlign:'center' }}>{chart.n} parti · összesen {chart.total} pont</div>
+          </div>
+        </div>
+      )}
       {sections.map(sec => (
         <div key={sec.title}>
           <div style={{ fontFamily:T.font, fontSize:10.5, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5, marginLeft:3 }}>{sec.title}</div>
