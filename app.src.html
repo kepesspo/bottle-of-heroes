@@ -34851,7 +34851,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.059';
+const APP_VERSION = 'v10.060';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -42211,6 +42211,21 @@ function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
           </div>
         )}
 
+        {/* Körmérkőzés kör-szám — hányszor játsszon mindenki mindenkivel (1-5) */}
+        {(tournament === 'rr' || tournament.startsWith('grp_rr_')) && (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'none' }}>
+            <div>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>Hány kör</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>Hányszor játsszon mindenki mindenkivel a körmérkőzésben</div>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <button onClick={() => setConfig(c => ({...c, rrLegs: Math.max(1,(c.rrLegs??1)-1)}))} style={{ width:33, height:33, borderRadius:10, background:T.inkMute+'55', border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:'#D85F5C' }}>-</button>
+              <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:18, color:T.ink, minWidth:30, textAlign:'center' }}>{config.rrLegs??1}</span>
+              <button onClick={() => setConfig(c => ({...c, rrLegs: Math.min(5,(c.rrLegs??1)+1)}))} style={{ width:33, height:33, borderRadius:10, background:T.inkMute+'55', border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:T.mintDeep }}>+</button>
+            </div>
+          </div>
+        )}
+
       </div>
     </SheetOverlay>
   );
@@ -45708,8 +45723,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     }
     return [round0, round1];
   };
-  const buildRRMatches = (parts) => {
-    if (parts.length < 2) return [];
+  const buildRRMatchesOneLeg = (parts) => {
     const ms = [];
     const players = parts.length % 2 === 0 ? [...parts] : [...parts, null];
     const numRounds = players.length - 1;
@@ -45725,6 +45739,19 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       rotating.unshift(rotating.pop());
     }
     return ms;
+  };
+  const buildRRMatches = (parts) => {
+    if (parts.length < 2) return [];
+    const legs = Math.max(1, Math.min(5, bpCfg.rrLegs || 1));
+    let all = [];
+    for (let leg = 0; leg < legs; leg++) {
+      const legMatches = buildRRMatchesOneLeg(parts);
+      // páratlan (visszavágó) körben megcseréljük a hazai/vendég sorrendet, hogy ne
+      // pont ugyanaz a p1/p2 elrendezés ismétlődjön minden körben
+      if (leg % 2 === 1) legMatches.forEach(m => { const tmp = m.p1; m.p1 = m.p2; m.p2 = tmp; });
+      all = all.concat(legMatches);
+    }
+    return all;
   };
   const getRRStandings = (parts, matches) => {
     const st = {};
