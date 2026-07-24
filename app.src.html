@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.081';
+const APP_VERSION = 'v10.082';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36456,6 +36456,36 @@ function SwipeNavHint({ idx, total, onPrev, onNext, label = 'Húzz a köviért' 
   );
 }
 
+// Buli-jelvények — közös konstansok (Játékosok lista + Statisztika oldal + gyors statisztika popup)
+const RECENT_BADGE_ICON_NAMES = { champion:'trophy', comeback:'comeback', mostDrinks:'beer' };
+const RECENT_BADGE_LABELS = { champion:'Bajnok', comeback:'Feltörekvő', mostDrinks:'Legszomjasabb' };
+const RECENT_BADGE_PRIORITY = ['champion','comeback','mostDrinks'];
+function recentBadgeKeys(statObj) {
+  const badges = statObj && statObj.lastBadges;
+  return (badges && badges.length) ? RECENT_BADGE_PRIORITY.filter(b => badges.includes(b)) : [];
+}
+
+// Közös "Gyors statisztika" popup — profil-avatar, buli-jelvények, PlayerProfileStats.
+function QuickStatsModal({ profile, badges, onClose }) {
+  if (!profile) return null;
+  const bl = badges || [];
+  return (
+    <ActionModal wide onClose={onClose} icon={<PlayerAvatar player={profile} size={56} />} kicker="Gyors statisztika" onPrimary={onClose} primaryLabel="Bezár">
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink, marginBottom: bl.length ? 8 : 10 }}>{profile.name}</div>
+      {bl.length > 0 && (
+        <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:6, marginBottom:12 }}>
+          {bl.map(b => (
+            <span key={b} style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 11px 5px 8px', borderRadius:999, background:T.mintSoft, fontFamily:T.font, fontWeight:800, fontSize:12, color:T.mintDeep }}>
+              <BohIcon name={RECENT_BADGE_ICON_NAMES[b]} size={15} />{RECENT_BADGE_LABELS[b]}
+            </span>
+          ))}
+        </div>
+      )}
+      <PlayerProfileStats profileId={profile.profileId || profile.id} />
+    </ActionModal>
+  );
+}
+
 function Tag({ tone, subtle, children }) {
   return (
     <span style={{
@@ -36606,6 +36636,7 @@ function StatsScreen({ go, onOpenObserver }) {
   const [period, setPeriod] = React.useState('all');
   const [customFrom, setCustomFrom] = React.useState('');
   const [customTo, setCustomTo] = React.useState('');
+  const [quickStatsFor, setQuickStatsFor] = React.useState(null);
 
   React.useEffect(() => {
     Promise.all([
@@ -36769,7 +36800,7 @@ function StatsScreen({ go, onOpenObserver }) {
                 const wr = s.totalSessions > 0 ? Math.round((s.totalWins||0) / s.totalSessions * 100) : null;
                 const wrColor = wr !== null ? (wr >= 50 ? T.mint : T.coral) : T.inkSoft;
                 return (
-                  <div key={p.id} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:pfShadow, border:pfBorder }}>
+                  <div key={p.id} onClick={() => setQuickStatsFor(p)} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:pfShadow, border:pfBorder, cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                       <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color: i===0?'#F59E0B':i===1?'#9CA3AF':i===2?'#CD7F32':T.inkMute, minWidth:18, textAlign:'center', flexShrink:0 }}>{i+1}</div>
                       <div style={{ position:'relative', flexShrink:0 }}>
@@ -37031,6 +37062,9 @@ function StatsScreen({ go, onOpenObserver }) {
         )}
       </div>
       </div>
+      {quickStatsFor && (
+        <QuickStatsModal profile={quickStatsFor} badges={recentBadgeKeys(stats[quickStatsFor.id])} onClose={() => setQuickStatsFor(null)} />
+      )}
     </div>
   );
 }
@@ -41774,22 +41808,12 @@ function PlayersScreen({ players, setPlayers, go }) {
     const ri = ranked.indexOf(p.profileId);
     return ri >= 0 && ri < 3 && (allTimeStats[p.profileId]?.totalPoints||0) > 0 ? <BohIcon name={'medal'+(ri+1)} size={19} /> : null;
   };
-  const RECENT_BADGE_ICON_NAMES = { champion:'trophy', comeback:'comeback', mostDrinks:'beer' };
-  const RECENT_BADGE_LABELS = { champion:'Bajnok', comeback:'Feltörekvő', mostDrinks:'Legszomjasabb' };
-  const RECENT_BADGE_PRIORITY = ['champion','comeback','mostDrinks'];
   const getRecentBadge = (p) => {
     if (!p.profileId) return null;
-    const badges = allTimeStats[p.profileId]?.lastBadges;
-    if (!badges || !badges.length) return null;
-    const top = RECENT_BADGE_PRIORITY.find(b => badges.includes(b));
-    return top ? <BohIcon name={RECENT_BADGE_ICON_NAMES[top]} size={17} /> : null;
+    const keys = recentBadgeKeys(allTimeStats[p.profileId]);
+    return keys.length ? <BohIcon name={RECENT_BADGE_ICON_NAMES[keys[0]]} size={17} /> : null;
   };
-  const getRecentBadges = (p) => {
-    if (!p.profileId) return [];
-    const badges = allTimeStats[p.profileId]?.lastBadges;
-    if (!badges || !badges.length) return [];
-    return RECENT_BADGE_PRIORITY.filter(b => badges.includes(b));
-  };
+  const getRecentBadges = (p) => p.profileId ? recentBadgeKeys(allTimeStats[p.profileId]) : [];
 
 
 
@@ -41977,23 +42001,7 @@ function PlayersScreen({ players, setPlayers, go }) {
         document.body
       )}
       {quickStatsFor && (
-        <ActionModal wide onClose={() => setQuickStatsFor(null)} icon={<PlayerAvatar player={quickStatsFor} size={56} />} kicker="Gyors statisztika" onPrimary={() => setQuickStatsFor(null)} primaryLabel="Bezár">
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink, marginBottom: getRecentBadges(quickStatsFor).length ? 8 : 10 }}>{quickStatsFor.name}</div>
-          {(() => {
-            const badges = getRecentBadges(quickStatsFor);
-            if (!badges.length) return null;
-            return (
-              <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:6, marginBottom:12 }}>
-                {badges.map(b => (
-                  <span key={b} style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 11px 5px 8px', borderRadius:999, background:T.mintSoft, fontFamily:T.font, fontWeight:800, fontSize:12, color:T.mintDeep }}>
-                    <BohIcon name={RECENT_BADGE_ICON_NAMES[b]} size={15} />{RECENT_BADGE_LABELS[b]}
-                  </span>
-                ))}
-              </div>
-            );
-          })()}
-          <PlayerProfileStats profileId={quickStatsFor.profileId} />
-        </ActionModal>
+        <QuickStatsModal profile={quickStatsFor} badges={getRecentBadges(quickStatsFor)} onClose={() => setQuickStatsFor(null)} />
       )}
     </div>
   );
