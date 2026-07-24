@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.071';
+const APP_VERSION = 'v10.072';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36640,11 +36640,14 @@ function StatsScreen({ go, onOpenObserver }) {
     pGameStats = agg;
   }
 
-  const bpRows = [...profiles].sort((a, b) => {
+  const bpRows = [...profiles].filter(p => {
+    const s = pStats[p.id] || {};
+    return ((s.bp_match_wins||0) + (s.bp_match_losses||0) + (s.bp_match_draws||0)) > 0;
+  }).sort((a, b) => {
     const wr = id => { const s = pStats[id]||{}; const mw=s.bp_match_wins||0,ml=s.bp_match_losses||0,md=s.bp_match_draws||0; const p=mw+ml+md; return p>0?mw/p:-1; };
     return wr(b.id) - wr(a.id);
   });
-  const buszRows = [...profiles].sort((a, b) => {
+  const buszRows = [...profiles].filter(p => (pStats[p.id]?.busz_played || 0) > 0).sort((a, b) => {
     const ap = pStats[a.id]?.busz_played || 0, bp2 = pStats[b.id]?.busz_played || 0;
     return bp2 - ap;
   });
@@ -36723,7 +36726,10 @@ function StatsScreen({ go, onOpenObserver }) {
         {loading && <div style={{ textAlign:'center', padding:40, fontFamily:T.font, color:T.inkSoft }}>{LANG==='en'?'Loading…':'Betöltés…'}</div>}
 
         {!loading && tab === 'profil' && (() => {
-          const profilRows = [...profiles].sort((a, b) => {
+          const profilRows = [...profiles].filter(p => {
+            const s = pStats[p.id] || {};
+            return (s.totalSessions||0) > 0 || (s.totalPoints||0) > 0 || (s.totalDrinks||0) > 0 || (s.totalRounds||0) > 0;
+          }).sort((a, b) => {
             const sa = pStats[a.id] || {}, sb = pStats[b.id] || {};
             return (sb.totalPoints||0) - (sa.totalPoints||0);
           });
@@ -36732,8 +36738,8 @@ function StatsScreen({ go, onOpenObserver }) {
               {profilRows.length === 0 && (
                 <div style={{ textAlign:'center', padding:40, fontFamily:T.font, color:T.inkSoft }}>
                   <div style={{ marginBottom:8, display:'flex', justifyContent:'center' }}><BottleHero pose="wait" size={64} /></div>
-                  <div style={{ fontWeight:800, fontSize:15, color:T.ink }}>Még nincs profil stat</div>
-                  <div style={{ fontSize:12, marginTop:6 }}>Játssz névjeggyel és a statisztikák itt jelennek meg</div>
+                  <div style={{ fontWeight:800, fontSize:15, color:T.ink }}>{period === 'all' ? 'Még nincs profil stat' : 'Nincs adat ebben az időszakban'}</div>
+                  <div style={{ fontSize:12, marginTop:6 }}>{period === 'all' ? 'Játssz névjeggyel és a statisztikák itt jelennek meg' : 'Válassz másik időszakot, vagy játssz egy partit'}</div>
                 </div>
               )}
               {profilRows.map((p, i) => {
@@ -36785,6 +36791,13 @@ function StatsScreen({ go, onOpenObserver }) {
 
         {!loading && tab === 'bp' && (
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {bpRows.length === 0 && (
+              <div style={{ textAlign:'center', padding:40, fontFamily:T.font, color:T.inkSoft }}>
+                <div style={{ fontSize:40, marginBottom:12 }}>🏓</div>
+                <div style={{ fontWeight:800, fontSize:15, color:T.ink }}>Nincs Beer Pong adat</div>
+                <div style={{ fontSize:12, marginTop:6 }}>{period === 'all' ? 'Játssz egy bajnokságot névjeggyel' : 'Ebben az időszakban nincs Beer Pong meccs'}</div>
+              </div>
+            )}
             {bpRows.map((p, i) => {
               const s = pStats[p.id] || {};
               const wr = winRate(p.id);
@@ -36896,6 +36909,13 @@ function StatsScreen({ go, onOpenObserver }) {
 
         {!loading && tab === 'busz' && (
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {buszRows.length === 0 && (
+              <div style={{ textAlign:'center', padding:40, fontFamily:T.font, color:T.inkSoft }}>
+                <div style={{ fontSize:40, marginBottom:12 }}>🚌</div>
+                <div style={{ fontWeight:800, fontSize:15, color:T.ink }}>Nincs Busz adat</div>
+                <div style={{ fontSize:12, marginTop:6 }}>{period === 'all' ? 'Játssz egy Busz kört névjeggyel' : 'Ebben az időszakban nincs Busz játék'}</div>
+              </div>
+            )}
             {buszRows.map((p, i) => {
               const s = pStats[p.id] || {};
               return (
