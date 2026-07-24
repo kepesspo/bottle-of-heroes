@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.089';
+const APP_VERSION = 'v10.090';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36503,6 +36503,64 @@ function QuickStatsModal({ profile, badges, onClose }) {
   );
 }
 
+// Két profil statisztikájának szembeállítása (ki jobb miben).
+function ProfileCompareSheet({ profiles, onClose }) {
+  const [aId, setAId] = React.useState(profiles[0]?.id || '');
+  const [bId, setBId] = React.useState(profiles[1]?.id || profiles[0]?.id || '');
+  const [aS, setAS] = React.useState(null);
+  const [bS, setBS] = React.useState(null);
+  React.useEffect(() => { if (aId && typeof window.getStats === 'function') { setAS(null); window.getStats(aId).then(s => setAS(s || {})); } }, [aId]);
+  React.useEffect(() => { if (bId && typeof window.getStats === 'function') { setBS(null); window.getStats(bId).then(s => setBS(s || {})); } }, [bId]);
+  const aP = profiles.find(p => p.id === aId), bP = profiles.find(p => p.id === bId);
+  const wr = s => (s && s.totalSessions > 0) ? Math.round((s.totalWins||0)/s.totalSessions*100) : 0;
+  const rows = (aS && bS) ? [
+    { label:'Összes korty', a: aS.totalDrinks||0, b: bS.totalDrinks||0 },
+    { label:'Összpont', a: aS.totalPoints||0, b: bS.totalPoints||0 },
+    { label:'Partik', a: aS.totalSessions||0, b: bS.totalSessions||0 },
+    { label:'Win rate', a: wr(aS), b: wr(bS), suffix:'%' },
+    { label:'Legjobb streak', a: aS.bestStreak||0, b: bS.bestStreak||0, suffix:'×' },
+    { label:'Körök', a: aS.totalRounds||0, b: bS.totalRounds||0 },
+    { label:'BP bajnok', a: aS.bp_tournaments||0, b: bS.bp_tournaments||0, suffix:'×' },
+    { label:'Busz teljesítve', a: aS.busz_completions||0, b: bS.busz_completions||0, suffix:'×' },
+  ] : [];
+  const selStyle = { flex:1, minWidth:0, boxSizing:'border-box', padding:'10px 12px', borderRadius:12, border:`1.5px solid ${T.border}`, background:T.surface, fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, outline:'none' };
+  return (
+    <SheetOverlay onClose={onClose} title="Összehasonlítás">
+      <div style={{ padding:'0 20px 28px' }}>
+        <div style={{ display:'flex', gap:10, marginBottom:14 }}>
+          <select value={aId} onChange={e => setAId(e.target.value)} style={selStyle}>{profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+          <select value={bId} onChange={e => setBId(e.target.value)} style={selStyle}>{profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+        </div>
+        <div style={{ display:'flex', alignItems:'flex-start', gap:8, marginBottom:14 }}>
+          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:5 }}>
+            {aP && <PlayerAvatar player={aP} size={48} />}
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:T.ink, textAlign:'center', lineHeight:1.2 }}>{aP?.name}</div>
+          </div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.inkMute, paddingTop:16 }}>VS</div>
+          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:5 }}>
+            {bP && <PlayerAvatar player={bP} size={48} />}
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:T.ink, textAlign:'center', lineHeight:1.2 }}>{bP?.name}</div>
+          </div>
+        </div>
+        {(!aS || !bS) ? <div style={{ textAlign:'center', padding:20, color:T.inkMute, fontFamily:T.font, fontSize:12 }}>Betöltés…</div> : (
+          <div style={{ background:T.bgSoft, borderRadius:14, padding:'4px 14px' }}>
+            {rows.map((r, i) => {
+              const aWin = r.a > r.b, bWin = r.b > r.a;
+              return (
+                <div key={r.label} style={{ display:'flex', alignItems:'center', padding:'9px 0', borderBottom: i < rows.length-1 ? `1px solid ${T.inkMute}18` : 'none' }}>
+                  <div style={{ flex:1, textAlign:'right', fontFamily:T.font, fontWeight: aWin ? 900 : 700, fontSize:14, color: aWin ? T.mintDeep : T.inkSoft }}>{r.a}{r.suffix||''}</div>
+                  <div style={{ width:108, flexShrink:0, textAlign:'center', fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.03em' }}>{r.label}</div>
+                  <div style={{ flex:1, textAlign:'left', fontFamily:T.font, fontWeight: bWin ? 900 : 700, fontSize:14, color: bWin ? T.mintDeep : T.inkSoft }}>{r.b}{r.suffix||''}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </SheetOverlay>
+  );
+}
+
 function Tag({ tone, subtle, children }) {
   return (
     <span style={{
@@ -36654,6 +36712,7 @@ function StatsScreen({ go, onOpenObserver }) {
   const [customFrom, setCustomFrom] = React.useState('');
   const [customTo, setCustomTo] = React.useState('');
   const [quickStatsFor, setQuickStatsFor] = React.useState(null);
+  const [showCompare, setShowCompare] = React.useState(false);
 
   React.useEffect(() => {
     Promise.all([
@@ -36806,6 +36865,12 @@ function StatsScreen({ go, onOpenObserver }) {
           const totalPtsAll = profilRows.reduce((sum, pp) => sum + (pStats[pp.id]?.totalPoints || 0), 0);
           return (
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {profilRows.length >= 2 && (
+                <button onClick={() => setShowCompare(true)} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'11px', borderRadius:14, border:'none', background:T.surface, boxShadow:pfShadow, color:T.ink, fontFamily:T.font, fontWeight:800, fontSize:13.5, cursor:'pointer', marginBottom:2 }}>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={T.mint} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5M8 21H3v-5M21 3l-7 7M3 21l7-7"/></svg>
+                  Két játékos összehasonlítása
+                </button>
+              )}
               {profilRows.length === 0 && (
                 <div style={{ textAlign:'center', padding:40, fontFamily:T.font, color:T.inkSoft }}>
                   <div style={{ marginBottom:8, display:'flex', justifyContent:'center' }}><BottleHero pose="wait" size={64} /></div>
@@ -37084,6 +37149,9 @@ function StatsScreen({ go, onOpenObserver }) {
       </div>
       {quickStatsFor && (
         <QuickStatsModal profile={quickStatsFor} badges={recentBadgeKeys(stats[quickStatsFor.id])} onClose={() => setQuickStatsFor(null)} />
+      )}
+      {showCompare && (
+        <ProfileCompareSheet profiles={profiles.filter(p => { const s = stats[p.id] || {}; return (s.totalSessions||0) > 0 || (s.totalPoints||0) > 0 || (s.totalDrinks||0) > 0; })} onClose={() => setShowCompare(false)} />
       )}
     </div>
   );
