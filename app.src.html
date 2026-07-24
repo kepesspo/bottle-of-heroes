@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.083';
+const APP_VERSION = 'v10.084';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -42069,17 +42069,29 @@ function PlayerProfileStats({ profileId }) {
     <div style={{ textAlign:'center', padding:'10px 0', color:T.inkMute, fontFamily:T.font, fontSize:12 }}>Statisztika betöltése…</div>
   );
 
-  const winRate = stats.totalSessions > 0 ? Math.round((stats.totalWins || 0) / stats.totalSessions * 100) : null;
+  const sess = stats.totalSessions || 0;
+  const winRate = sess > 0 ? Math.round((stats.totalWins || 0) / sess * 100) : null;
+  const bpPlayed = (stats.bp_match_wins||0) + (stats.bp_match_losses||0) + (stats.bp_match_draws||0);
   const items = [
     { icon:'beer', label:'Összes korty', value: stats.totalDrinks ?? '—' },
     { icon:'star', label:'Összesített pont', value: stats.totalPoints ?? '—' },
+    { icon:'flag', label:'Partik', value: sess || '—' },
     { icon:'trophy', label:'Win rate', value: winRate != null ? `${winRate}%` : '—' },
-    { icon:'medal1', label:'Legjobb streak', value: stats.bestStreak ? `${stats.bestStreak}×` : '—' },
-
-    { icon:'redo', label:'Körök', value: stats.totalRounds ?? '—' },
   ];
+  if (sess > 0) {
+    items.push({ icon:'beer', label:'Átlag korty / parti', value: ((stats.totalDrinks||0) / sess).toFixed(1) });
+    items.push({ icon:'star', label:'Átlag pont / parti', value: ((stats.totalPoints||0) / sess).toFixed(1) });
+  }
+  items.push({ icon:'medal1', label:'Legjobb streak', value: stats.bestStreak ? `${stats.bestStreak}×` : '—' });
+  if (stats.currentStreak > 0) items.push({ icon:'fire', label:'Jelenlegi széria', value: `${stats.currentStreak}×` });
+  items.push({ icon:'redo', label:'Körök', value: stats.totalRounds ?? '—' });
+  if (stats.bp_tournaments > 0) items.push({ icon:'trophy', label:'Beer Pong bajnok', value: `${stats.bp_tournaments}×` });
+  if (bpPlayed > 0) items.push({ icon:'cheers', label:'BP mérleg (Gy/D/V)', value: `${stats.bp_match_wins||0}/${stats.bp_match_draws||0}/${stats.bp_match_losses||0}` });
+  if (stats.busz_completions > 0) items.push({ icon:'check', label:'Busz teljesítve', value: `${stats.busz_completions}×` });
+  if (stats.busz_total_drinks > 0) items.push({ icon:'beer', label:'Busz korty', value: stats.busz_total_drinks });
+  if (stats.bestReactionTime != null) items.push({ icon:'bolt', label:'Leggyorsabb reakció', value: `${stats.bestReactionTime} ms` });
   return (
-    <div style={{ background:T.bgSoft, borderRadius:14, padding:'10px 18px', display:'flex', flexDirection:'column', gap:0 }}>
+    <div style={{ background:T.bgSoft, borderRadius:14, padding:'10px 18px', display:'flex', flexDirection:'column', gap:0, width:'100%', boxSizing:'border-box', maxHeight:'52vh', overflowY:'auto' }}>
       {items.map((it, i) => (
         <div key={it.label} style={{ display:'flex', alignItems:'center', padding:'7px 0', borderBottom: i < items.length-1 ? `1px solid ${T.inkMute}18` : 'none' }}>
           <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, fontWeight:600, display:'flex', alignItems:'center', gap:5, flex:1, minWidth:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}><BohIcon name={it.icon} size={13} />{it.label}</div>
