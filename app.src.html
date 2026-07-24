@@ -34851,7 +34851,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.052';
+const APP_VERSION = 'v10.053';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -37108,8 +37108,13 @@ function EventHistoryView({ events, setDetail, evT: histEvT }) {
 
 // ── AdminScreen ────────────────────────────────────────────────────────────────
 function AdminScreen({ go, setTheme, currentTheme }) {
-  const [tab, setTab] = React.useState('profiles');
-  const TABS = [['profiles','Profilok'],['feladatok','Feladatok'],['events','Események'],['games','Játékok'],['wildcards','Wildcard'],['punishments','Büntetés'],['bingo','Bingó'],['stats','Statisztika'],['zene','Zene'],['rooms','Szobák'],['message','Hirdetmény'],['settings','Beállítások']];
+  const [tab, setTab] = React.useState(null);
+  const TABS = [
+    ['profiles','Profilok','👤'],['feladatok','Feladatok','✅'],['events','Események','📅'],
+    ['games','Játékok','🎮'],['wildcards','Wildcard','🎴'],['punishments','Büntetés','🎲'],
+    ['bingo','Bingó','🔢'],['stats','Statisztika','📊'],['zene','Zene','🎵'],
+    ['rooms','Szobák','🚪'],['message','Hirdetmény','📢'],['settings','Beállítások','⚙️'],
+  ];
   const [pinOk, setPinOk] = React.useState(null);
   const [reqPin, setReqPin] = React.useState('');
   const [pinInput, setPinInput] = React.useState('');
@@ -37146,19 +37151,27 @@ function AdminScreen({ go, setTheme, currentTheme }) {
     </div>
   );
 
-  return (
-    <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
-      <AppBar title="Admin" onBack={() => go('home')} />
-      {/* Tab switcher — scrollable */}
-      <div style={{ padding:'10px 16px 0' }}>
-        <div style={{ display:'flex', background:T.surface, borderRadius:18, padding:4, boxShadow:T.shadow, overflowX:'auto', WebkitOverflowScrolling:'touch', scrollbarWidth:'none' }}>
-          {TABS.map(([k,label]) => (
-            <button key={k} onClick={() => setTab(k)} style={{ flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', padding:'10px 16px', borderRadius:14, border:'none', fontFamily:T.font, fontWeight:900, fontSize:13, cursor:'pointer', background: tab===k ? T.mint : 'transparent', color: tab===k ? '#fff' : T.inkSoft, transition:'all .2s', WebkitTapHighlightColor:'transparent', whiteSpace:'nowrap' }}>
-              {label}
-            </button>
-          ))}
+  if (tab === null) {
+    return (
+      <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
+        <AppBar title="Admin" onBack={() => go('home')} />
+        <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'16px 16px max(24px, calc(env(safe-area-inset-bottom) + 16px))' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10 }}>
+            {TABS.map(([k,label,emoji]) => (
+              <button key={k} onClick={() => setTab(k)} style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:7, aspectRatio:'1/0.92', border:'none', borderRadius:16, background:T.surface, boxShadow:T.shadow, cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
+                <span style={{ fontSize:26, lineHeight:1 }}>{emoji}</span>
+                <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.ink, textAlign:'center', lineHeight:1.2 }}>{label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+    );
+  }
+  const activeTabLabel = (TABS.find(([k]) => k === tab) || [,'Admin'])[1];
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
+      <AppBar title={activeTabLabel} onBack={() => setTab(null)} />
       <div style={{ flex:1, overflowY:'auto' }}>
         {tab === 'profiles' && <AdminProfiles />}
         {tab === 'feladatok' && <AdminTasks />}
