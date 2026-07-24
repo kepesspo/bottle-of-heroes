@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.067';
+const APP_VERSION = 'v10.068';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -45776,7 +45776,7 @@ function QRModal({ url, onClose }) {
   return <RoomQR roomCode={roomCode} onClose={onClose} />;
 }
 
-function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCode, initialBpState, onSetHideFooter }) {
+function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCode, initialBpState, onSetHideFooter, onSetBpEnded }) {
   const bpCfg = gameMeta?.beerpongConfig || {};
   const [showQR, setShowQR] = React.useState(false);
   const joinUrl = roomCode ? (window.location.origin + window.location.pathname + '?room=' + roomCode) : '';
@@ -45907,6 +45907,10 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const [cups2, setCups2] = React.useState(0);
   const [drinkMap, setDrinkMap] = React.useState({});
   const [champion, setChampion] = React.useState(null);
+  // Jelezzük a PlayScreennek, ha a bajnokság véget ért (van bajnok) — így a footer
+  // "Kövi"/"Vége" gombja aktívvá válhat.
+  React.useEffect(() => { if (typeof onSetBpEnded === 'function') onSetBpEnded(!!champion); }, [champion]);
+  React.useEffect(() => () => { if (typeof onSetBpEnded === 'function') onSetBpEnded(false); }, []);
   const [visszavagoOffer, setVissszavagoOffer] = React.useState(null);
   const visszavagoUsedRef = React.useRef(new Set());
   const [polipOverlay, setPolipOverlay] = React.useState(null); // { match, onPick } — döntetlen visszavágó tiebreaker
@@ -55602,7 +55606,7 @@ function SzolancGame({ gameIdx, players, onAdvance, onResult, onSetHideFooter })
   return null;
 }
 
-function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, roomCode, gameMeta, challenger, opponent, onSetHideFooter, onSetBuszSwitch, onCommit }) {
+function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, roomCode, gameMeta, challenger, opponent, onSetHideFooter, onSetBuszSwitch, onSetBpEnded, onCommit }) {
   if (gameId === 'szolánc') return <SzolancGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} />;
   if (gameId === 'idopárbaj') return <IdoparbajGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'csakegyszó') return <CsakEgySzoGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
@@ -55625,7 +55629,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'cardbattle') return <CardBattleGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} />;
   if (gameId === 'quiz') return <QuizGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} gameMeta={gameMeta} />;
   if (gameId === 'utveszto') return <UtvesztoGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} />;
-  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} initialBpState={null} onSetHideFooter={onSetHideFooter} />;
+  if (gameId === 'beerpong') return <BeerPongGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} initialBpState={null} onSetHideFooter={onSetHideFooter} onSetBpEnded={onSetBpEnded} />;
   if (gameId === 'blackjack') return <BlackjackGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onLiveDrinkUpdate={onLiveDrinkUpdate} onSetBuszSwitch={onSetBuszSwitch} />;
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onSetBuszSwitch={onSetBuszSwitch} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
@@ -57426,8 +57430,9 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const [csapatLosers, setCsapatLosers] = useState(new Set());
   const [gameResult, setGameResult] = useState(null); // { correct, playerName }
   const [resultMinimized, setResultMinimized] = useState(false);
+  const [bpEnded, setBpEnded] = useState(false); // Beer Pong bajnokság véget ért (van bajnok)
   const transRef = React.useRef(false);
-  useEffect(() => { setCsapatLosers(new Set()); setPendingCommit(null); setGameResult(null); setResultMinimized(false); }, [gameIdx]);
+  useEffect(() => { setCsapatLosers(new Set()); setPendingCommit(null); setGameResult(null); setResultMinimized(false); setBpEnded(false); }, [gameIdx]);
   useEffect(() => {
     if (!gameResult) return;
     setResultMinimized(false);
@@ -57926,7 +57931,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         )}
 
         <div style={{ display:'flex', flexDirection:'column', flex: (currentGameId==='beerpong' || currentGameId==='busz') ? '1 1 0' : 'unset', minHeight: currentGameId==='beerpong' ? 0 : 'unset' }}>
-          <GameContent key={currentGameId + gameIdx + '_' + gameRestartKey} gameId={currentGameId} gameIdx={gameIdx} players={activePlayers} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={pairedOpponent} onSetHideFooter={setHideFooter} onSetBuszSwitch={(obj) => setBuszSwitchFn(obj || null)} onCommit={commitPending} />
+          <GameContent key={currentGameId + gameIdx + '_' + gameRestartKey} gameId={currentGameId} gameIdx={gameIdx} players={activePlayers} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={pairedOpponent} onSetHideFooter={setHideFooter} onSetBuszSwitch={(obj) => setBuszSwitchFn(obj || null)} onSetBpEnded={setBpEnded} onCommit={commitPending} />
         </div>
       </div>
         </div>
@@ -58341,13 +58346,18 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         {(() => {
           const nextGameId = games[(gameIdx + 1) % games.length];
           const nextGame = GAMES.find(g => g.id === nextGameId) || GAMES[0];
-          const active = !!pendingCommit && !transitioning && currentGameId !== 'beerpong';
+          // Beer Pong bajnokság véget ért → a gomb aktív. Ha nincs több játék (csak
+          // Beer Pong volt), "Vége" gomb a végeredményhez; egyébként a szokásos "Kövi".
+          const bpEndActive = currentGameId === 'beerpong' && bpEnded && !transitioning;
+          const active = (!!pendingCommit && !transitioning && currentGameId !== 'beerpong') || bpEndActive;
+          const isEndBtn = bpEndActive && games.length <= 1;
+          const doEnd = () => { setPendingCommit(null); saveCurrentGameStats(); if (setLastGameRound) setLastGameRound(round); try { localStorage.removeItem('boh_session'); } catch(e) {} go('end'); };
           return (
             <button
-              onClick={() => { if (nextLpFired.current) { nextLpFired.current = false; return; } commitPending(); }}
-              onMouseDown={() => { nextLpTimer.current = setTimeout(() => { nextLpFired.current = true; setNextPreview(true); try { if (typeof window.bohHaptic === 'function') window.bohHaptic('success'); } catch(e) {} setTimeout(() => setNextPreview(false), 1600); }, 400); }}
+              onClick={() => { if (nextLpFired.current) { nextLpFired.current = false; return; } if (isEndBtn) doEnd(); else commitPending(); }}
+              onMouseDown={() => { if (isEndBtn) return; nextLpTimer.current = setTimeout(() => { nextLpFired.current = true; setNextPreview(true); try { if (typeof window.bohHaptic === 'function') window.bohHaptic('success'); } catch(e) {} setTimeout(() => setNextPreview(false), 1600); }, 400); }}
               onMouseUp={() => clearTimeout(nextLpTimer.current)} onMouseLeave={() => clearTimeout(nextLpTimer.current)}
-              onTouchStart={() => { nextLpTimer.current = setTimeout(() => { nextLpFired.current = true; setNextPreview(true); try { if (typeof window.bohHaptic === 'function') window.bohHaptic('success'); } catch(e) {} setTimeout(() => setNextPreview(false), 1600); }, 400); }}
+              onTouchStart={() => { if (isEndBtn) return; nextLpTimer.current = setTimeout(() => { nextLpFired.current = true; setNextPreview(true); try { if (typeof window.bohHaptic === 'function') window.bohHaptic('success'); } catch(e) {} setTimeout(() => setNextPreview(false), 1600); }, 400); }}
               onTouchEnd={() => clearTimeout(nextLpTimer.current)} onTouchCancel={() => clearTimeout(nextLpTimer.current)}
               disabled={!active} style={{
               flex:1, borderRadius:15,
@@ -58366,9 +58376,9 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               WebkitTapHighlightColor:'transparent',
             }}>
               <div style={{ width:32, height:32, borderRadius:10, background: active ? 'rgba(255,255,255,0.22)' : `${nextGame.color}22`, display:'grid', placeItems:'center', padding:5, overflow:'hidden', flexShrink:0, opacity: active ? 1 : 0.45 }}>
-                <GameImg g={nextGame} size="full" />
+                {isEndBtn ? <BohIcon name="trophy" size={20} /> : <GameImg g={nextGame} size="full" />}
               </div>
-              <span style={{ color: active ? '#fff' : T.inkMute, fontSize:11, fontFamily:T.font, fontWeight:700, letterSpacing:'0.06em', lineHeight:1 }}>{t('next')}</span>
+              <span style={{ color: active ? '#fff' : T.inkMute, fontSize:11, fontFamily:T.font, fontWeight:700, letterSpacing:'0.06em', lineHeight:1 }}>{isEndBtn ? 'Vége' : t('next')}</span>
             </button>
           );
         })()}
