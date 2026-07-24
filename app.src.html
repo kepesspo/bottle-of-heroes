@@ -34851,7 +34851,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.050';
+const APP_VERSION = 'v10.051';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -37107,7 +37107,7 @@ function EventHistoryView({ events, setDetail, evT: histEvT }) {
 }
 
 // ── AdminScreen ────────────────────────────────────────────────────────────────
-function AdminScreen({ go }) {
+function AdminScreen({ go, setTheme, currentTheme }) {
   const [tab, setTab] = React.useState('profiles');
   const TABS = [['profiles','Profilok'],['feladatok','Feladatok'],['events','Események'],['games','Játékok'],['wildcards','Wildcard'],['punishments','Büntetés'],['bingo','Bingó'],['stats','Statisztika'],['zene','Zene'],['rooms','Szobák'],['message','Hirdetmény'],['settings','Beállítások']];
   const [pinOk, setPinOk] = React.useState(null);
@@ -37171,7 +37171,7 @@ function AdminScreen({ go }) {
         {tab === 'zene'     && <AdminZene />}
         {tab === 'rooms'    && <AdminRooms />}
         {tab === 'message'  && <AdminMessage />}
-        {tab === 'settings' && <AdminSettings />}
+        {tab === 'settings' && <AdminSettings setTheme={setTheme} currentTheme={currentTheme} />}
       </div>
     </div>
   );
@@ -38147,12 +38147,14 @@ function ThemeSelector({ title, urlHint, getFn, setFn, onFn, cacheKey, defaultKe
   );
 }
 
-function AdminSettings() {
+function AdminSettings({ setTheme, currentTheme }) {
   return (
     <div style={{ padding:16 }}>
       <ThemeSelector title="Események oldal témája" urlHint="?screen=events" getFn={window.getEventsTheme} setFn={window.setEventsTheme} onFn={window.onEventsTheme} cacheKey="boh_events_theme" defaultKey="ice" />
       <ThemeSelector title="Pub oldal témája" urlHint="?screen=bar" getFn={window.getBarTheme} setFn={window.setBarTheme} onFn={window.onBarTheme} cacheKey="boh_bar_theme" defaultKey="warm" />
       <ThemeSelector title="Box oldal témája" urlHint="?screen=dnrbox" getFn={window.getBoxTheme} setFn={window.setBoxTheme} onFn={window.onBoxTheme} cacheKey="boh_dnrbox_theme" defaultKey="warm" />
+
+      {setTheme && <ThemeCyclerCard setTheme={setTheme} currentTheme={currentTheme} />}
 
       <AdminPinCard />
 
@@ -38161,6 +38163,46 @@ function AdminSettings() {
         <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginBottom:12 }}>Minden megnyitott app azonnal újratölt — deploy után hasznos, ha valakinél régi verzió ragadt be.</div>
         <ForceReloadButton />
       </div>
+    </div>
+  );
+}
+
+const ADMIN_THEME_LABELS = { warm:'Homokpart', peach:'Naplemente', lemon:'Limonádé', ice:'Jéghegy', jade:'Dzsungel', dark:'Kozmosz', slate:'Mélytenger' };
+function ThemeCyclerCard({ setTheme, currentTheme }) {
+  const keys = Object.keys(ADMIN_THEME_LABELS);
+  const [cycling, setCycling] = React.useState(false);
+  const [idx, setIdx] = React.useState(0);
+  const savedRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!cycling) return;
+    setTheme(keys[idx]);
+  }, [cycling, idx]);
+
+  React.useEffect(() => {
+    if (!cycling) return;
+    const iv = setInterval(() => setIdx(i => (i + 1) % keys.length), 1500);
+    return () => clearInterval(iv);
+  }, [cycling]);
+
+  function toggle() {
+    if (cycling) {
+      setCycling(false);
+      if (savedRef.current) setTheme(savedRef.current);
+    } else {
+      savedRef.current = currentTheme;
+      setIdx(0);
+      setCycling(true);
+    }
+  }
+
+  return (
+    <div style={{ background:T.surface, borderRadius:16, padding:16, boxShadow:T.shadow, marginTop:14 }}>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:4 }}>Téma-pörgető előnézet</div>
+      <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginBottom:12 }}>Sorban végigmutatja mind a {keys.length} témát élőben, 1.5 mp-enként — nem kell egyenként beállítani teszteléshez. Leállításkor visszaáll az eredeti témára.</div>
+      <button onClick={toggle} style={{ width:'100%', padding:'12px', borderRadius:12, border:'none', background: cycling ? '#ef4444' : T.accent, fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>
+        {cycling ? `⏸ Leállítás — most: ${ADMIN_THEME_LABELS[keys[idx]] || keys[idx]}` : `▶ Pörgetés indítása (${keys.length} téma)`}
+      </button>
     </div>
   );
 }
@@ -63770,7 +63812,7 @@ function BottleApp() {
         {screen==='bingo'    && <BingoScreen    go={go} />}
         {screen==='log'      && <EventLogScreen go={go} goEdit={goEdit} deepLink={_deepLink} />}
         {screen==='jukebox'  && <JukeboxScreen go={go} deepLink={_jukebox} />}
-        {screen==='admin'    && <AdminScreen go={go} />}
+        {screen==='admin'    && <AdminScreen go={go} setTheme={handleSetTheme} currentTheme={appTheme} />}
         {screen==='create'   && <EventCreateScreen go={go} editId={editEventId} deepLink={_deepLink} />}
         {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
         {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
