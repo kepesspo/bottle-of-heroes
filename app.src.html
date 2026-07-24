@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.078';
+const APP_VERSION = 'v10.079';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -40064,7 +40064,10 @@ function BarScreen({ go, deepLink }) {
       step:'Jéggel jól behűtve összekevered, felesekbe töltöd — 25 adag, buli-mennyiség.' },
   ];
 
-  const ownList = [...DNR_MIXES, ...(own || [])];
+  // A szerkesztett (Firestore-ba mentett) DNR keverés felülírja a beépítettet — id
+  // szerint dedupolunk, hogy ne jelenjen meg kétszer.
+  const ownIds = new Set((own || []).map(d => d.id));
+  const ownList = [...DNR_MIXES.filter(m => !ownIds.has(m.id)), ...(own || [])];
   const toggle = k => setAvail(s => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const canMake = d => d.need && d.need.length > 0 && d.need.every(k => avail.has(k));
   const setRaterPersist = id => { setRater(id); setPickingRater(false); try { localStorage.setItem('boh_bar_rater', id || ''); } catch(e) {} };
@@ -40094,7 +40097,8 @@ function BarScreen({ go, deepLink }) {
     if (!db) return;
     const editing = form && form.id;
     const id = editing || ('own_' + Date.now().toString(36));
-    db.collection('barDrinks').doc(id).set({ ...data, created: (editing && form.created) || Date.now() }, { merge: true }).catch(() => {});
+    const isDnr = /^dnr_/.test(id); // beépített DNR keverés szerkesztése → megtartja a dnr jelölést
+    db.collection('barDrinks').doc(id).set({ ...data, ...(isDnr ? { dnr: true } : {}), created: (editing && form.created) || Date.now() }, { merge: true }).catch(() => {});
     setForm(null); setView('own'); setSheetId(id);
   };
   const deleteDrink = (id) => { if (db) db.collection('barDrinks').doc(id).delete().catch(() => {}); setConfirmDel(false); setSheetId(null); };
@@ -40390,10 +40394,10 @@ function BarScreen({ go, deepLink }) {
                   </div>
                 )}
               </div>
-              {d.custom && !d.dnr && (
+              {d.custom && (
                 <div style={{ display:'flex', gap:10, marginTop:12 }}>
                   <button onClick={() => setForm(d)} style={{ flex:1, padding:'11px 0', borderRadius:12, border:'none', background:T.surfaceMuted, color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer' }}>Szerkesztés</button>
-                  <button onClick={() => { if (confirmDel) deleteDrink(d.id); else setConfirmDel(true); }} style={{ flex:1, padding:'11px 0', borderRadius:12, border:'none', background: confirmDel ? T.coral : T.coralSoft, color: confirmDel ? '#fff' : T.coral, fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer' }}>{confirmDel ? 'Biztos? Végleg törli!' : 'Törlés'}</button>
+                  <button onClick={() => { if (confirmDel) deleteDrink(d.id); else setConfirmDel(true); }} style={{ flex:1, padding:'11px 0', borderRadius:12, border:'none', background: confirmDel ? T.coral : T.coralSoft, color: confirmDel ? '#fff' : T.coral, fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer' }}>{confirmDel ? (d.dnr ? 'Biztos? Visszaáll az eredeti!' : 'Biztos? Végleg törli!') : (d.dnr ? 'Visszaállítás' : 'Törlés')}</button>
                 </div>
               )}
             </div>
