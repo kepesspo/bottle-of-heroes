@@ -34851,7 +34851,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.056';
+const APP_VERSION = 'v10.057';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -37108,8 +37108,25 @@ function EventHistoryView({ events, setDetail, evT: histEvT }) {
 
 // ── AdminScreen ────────────────────────────────────────────────────────────────
 function AdminScreen({ go, setTheme, currentTheme }) {
+  const CATEGORIES = [
+    { key:'content', label:'Tartalom', tabs:[
+      ['profiles','Profilok'],['events','Események'],['feladatok','Feladatok'],
+    ]},
+    { key:'game', label:'Játék', tabs:[
+      ['games','Játékok'],['wildcards','Wildcard'],['punishments','Büntetés'],['bingo','Bingó'],
+    ]},
+    { key:'system', label:'Rendszer', tabs:[
+      ['stats','Statisztika'],['zene','Zene'],['rooms','Szobák'],['message','Hirdetmény'],['settings','Beállítások'],
+    ]},
+  ];
+  const [category, setCategory] = React.useState('content');
   const [tab, setTab] = React.useState('profiles');
-  const TABS = [['profiles','Profilok'],['feladatok','Feladatok'],['events','Események'],['games','Játékok'],['wildcards','Wildcard'],['punishments','Büntetés'],['bingo','Bingó'],['stats','Statisztika'],['zene','Zene'],['rooms','Szobák'],['message','Hirdetmény'],['settings','Beállítások']];
+  const activeCategory = CATEGORIES.find(c => c.key === category) || CATEGORIES[0];
+  function selectCategory(key) {
+    setCategory(key);
+    const cat = CATEGORIES.find(c => c.key === key);
+    setTab(cat.tabs[0][0]);
+  }
   const [pinOk, setPinOk] = React.useState(null);
   const [reqPin, setReqPin] = React.useState('');
   const [pinInput, setPinInput] = React.useState('');
@@ -37149,11 +37166,21 @@ function AdminScreen({ go, setTheme, currentTheme }) {
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
       <AppBar title="Admin" onBack={() => go('home')} />
-      {/* Tab switcher — tördelt (nem gördülő), így minden fül egyszerre látszik */}
+      {/* Fix kategória-sáv — mindig 3 elem, nem görgethető */}
       <div style={{ padding:'10px 16px 0' }}>
-        <div style={{ display:'flex', flexWrap:'wrap', background:T.surface, borderRadius:18, padding:5, gap:5, boxShadow:T.shadow }}>
-          {TABS.map(([k,label]) => (
-            <button key={k} onClick={() => setTab(k)} style={{ flex:'1 1 auto', display:'flex', alignItems:'center', justifyContent:'center', padding:'9px 12px', borderRadius:12, border:'none', fontFamily:T.font, fontWeight:900, fontSize:12.5, cursor:'pointer', background: tab===k ? T.mint : 'transparent', color: tab===k ? '#fff' : T.inkSoft, transition:'all .2s', WebkitTapHighlightColor:'transparent', whiteSpace:'nowrap' }}>
+        <div style={{ display:'flex', background:T.surface, borderRadius:16, padding:4, gap:4, boxShadow:T.shadow }}>
+          {CATEGORIES.map(c => (
+            <button key={c.key} onClick={() => selectCategory(c.key)} style={{ flex:1, padding:'10px 0', borderRadius:12, border:'none', fontFamily:T.font, fontWeight:900, fontSize:13.5, cursor:'pointer', background: category===c.key ? T.mint : 'transparent', color: category===c.key ? '#fff' : T.inkSoft, transition:'all .2s', WebkitTapHighlightColor:'transparent' }}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* Dinamikus al-sáv — a kiválasztott kategória elemei, szükség esetén görgethető */}
+      <div style={{ padding:'8px 16px 0' }}>
+        <div style={{ display:'flex', gap:6, overflowX:'auto', WebkitOverflowScrolling:'touch', scrollbarWidth:'none', paddingBottom:2 }}>
+          {activeCategory.tabs.map(([k,label]) => (
+            <button key={k} onClick={() => setTab(k)} style={{ flexShrink:0, padding:'8px 14px', borderRadius:999, border:'none', fontFamily:T.font, fontWeight:800, fontSize:12.5, cursor:'pointer', background: tab===k ? T.ink : T.surface, color: tab===k ? '#fff' : T.inkSoft, boxShadow: tab===k ? 'none' : T.shadow, transition:'all .2s', WebkitTapHighlightColor:'transparent', whiteSpace:'nowrap' }}>
               {label}
             </button>
           ))}
