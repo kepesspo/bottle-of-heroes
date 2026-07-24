@@ -34851,7 +34851,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.051';
+const APP_VERSION = 'v10.052';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -40085,8 +40085,22 @@ function BarScreen({ go, deepLink }) {
         const entries = Object.entries(ratings[d.id] || {}).sort((a,b) => b[1]-a[1]);
         const my = rater ? (ratings[d.id] || {})[rater] || 0 : 0;
         const rp = rater ? profOf(rater) : null;
+        const swipeList = view === 'recipes' ? recipeList : ownShown;
+        const swipeIdx = swipeList.findIndex(x => x.id === d.id);
+        const swipeStartRef2 = { current: null };
+        const onSheetTouchStart = e => { swipeStartRef2.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; };
+        const onSheetTouchEnd = e => {
+          const start = swipeStartRef2.current; swipeStartRef2.current = null;
+          if (!start || swipeIdx === -1) return;
+          const dx = e.changedTouches[0].clientX - start.x;
+          const dy = e.changedTouches[0].clientY - start.y;
+          if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+          const nextIdx = dx < 0 ? swipeIdx + 1 : swipeIdx - 1;
+          if (nextIdx < 0 || nextIdx >= swipeList.length) return;
+          openSheet(swipeList[nextIdx]);
+        };
         return (
-          <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
+          <div onTouchStart={onSheetTouchStart} onTouchEnd={onSheetTouchEnd} style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
             <AppBar title={d.name} onBack={() => setSheetId(null)} right={
               <button onClick={() => toggleFav(d.id)} style={{ border:'none', background: isFav(d.id) ? T.coralSoft : T.surfaceMuted, color:T.coral, width:36, height:36, borderRadius:'50%', cursor:'pointer', fontSize:16, flexShrink:0, display:'grid', placeItems:'center' }}>{isFav(d.id) ? '❤️' : '🤍'}</button>
             } />
@@ -40492,8 +40506,24 @@ function EventLogScreen({ go, goEdit, deepLink }) {
   if (ev) {
     const rsvp = ev.rsvp || {};
     const rsvpEntries = Object.entries(rsvp);
+    const swipeNow = new Date(); swipeNow.setHours(0,0,0,0);
+    const swipeIsPast = e2 => { const d2 = e2.dateTo ? new Date(e2.dateTo) : (e2.date ? new Date(e2.date) : null); return d2 ? d2 < swipeNow : false; };
+    const swipeList = events.filter(e2 => !swipeIsPast(e2));
+    const swipeIdx = swipeList.findIndex(x => x.id === ev.id);
+    const swipeStartRef3 = { current: null };
+    const onEvTouchStart = e => { swipeStartRef3.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; };
+    const onEvTouchEnd = e => {
+      const start = swipeStartRef3.current; swipeStartRef3.current = null;
+      if (!start || swipeIdx === -1) return;
+      const dx = e.changedTouches[0].clientX - start.x;
+      const dy = e.changedTouches[0].clientY - start.y;
+      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+      const nextIdx = dx < 0 ? swipeIdx + 1 : swipeIdx - 1;
+      if (nextIdx < 0 || nextIdx >= swipeList.length) return;
+      setDetail(swipeList[nextIdx].id);
+    };
     return (
-      <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden', position:'relative' }}>
+      <div onTouchStart={onEvTouchStart} onTouchEnd={onEvTouchEnd} style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden', position:'relative' }}>
         <div style={{ display:'flex', alignItems:'center', padding:'16px 16px 12px', gap:10 }}>
           <button onClick={() => setDetail(null)} style={{ width:40, height:40, borderRadius:12, border:'none', background:T.surface, display:'grid', placeItems:'center', cursor:'pointer', boxShadow:T.shadow, flexShrink:0 }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
