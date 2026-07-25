@@ -34908,7 +34908,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.109';
+const APP_VERSION = 'v10.110';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -46331,11 +46331,17 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const MATCH_MINUTES = bpCfg.matchMinutes ?? 5;
   const MODE = bpCfg.mode || 'egyeni';
   const TOURNAMENT_NAME = bpCfg.tournamentName || '';
-  // A bajnok ennyi pontot kap a buli-pontversenyben (a többi játék 1 pontot ad)
-  const BP_WIN_POINTS = 5;
   const doneRef = React.useRef(false);
   const [showTableau, setShowTableau] = React.useState(false);
   const teamPlayersRef = React.useRef(null);
+
+  // A bajnok annyi pontot kap a buli-pontversenyben, ahányan játsszuk a
+  // bajnokságot osztva kettővel, felfelé kerekítve (a többi játék 1 pontot ad).
+  // Csapat módban is a résztvevő emberek száma számít, nem a csapatoké.
+  const bpHeadcount = (MODE === 'csapat' && teamPlayersRef.current)
+    ? teamPlayersRef.current.reduce((s, tm) => s + ((tm.members || []).length || 1), 0)
+    : (players || []).length;
+  const BP_WIN_POINTS = Math.max(1, Math.ceil(bpHeadcount / 2));
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const buildSERound = (parts) => {
