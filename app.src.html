@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.093';
+const APP_VERSION = 'v10.094';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -63702,6 +63702,7 @@ function JukeboxScreen({ go, deepLink }) {
   const db = React.useMemo(() => hasFb ? firebase.firestore() : null, [hasFb]);
   const docRef = React.useMemo(() => db ? db.collection('jukebox').doc('main') : null, [db]);
   const queueRef = React.useMemo(() => docRef ? docRef.collection('queue') : null, [docRef]);
+  const playsRef = React.useMemo(() => docRef ? docRef.collection('plays') : null, [docRef]);
 
   const [name] = React.useState(() => {
     try {
@@ -63723,6 +63724,11 @@ function JukeboxScreen({ go, deepLink }) {
   const [beat, setBeat] = React.useState(0);
   const [hostId, setHostId] = React.useState(null);
   const [hostName, setHostName] = React.useState('');
+  const [plays, setPlays] = React.useState([]);
+  // Széles képernyőn (gép) két hasábos elrendezés
+  const [winW, setWinW] = React.useState(() => typeof window !== 'undefined' ? window.innerWidth : 390);
+  React.useEffect(() => { const h = () => setWinW(window.innerWidth); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
+  const twoCol = winW >= 900;
   const [claimErr, setClaimErr] = React.useState('');
   const [takeoverOpen, setTakeoverOpen] = React.useState(false);
   const [addInput, setAddInput] = React.useState('');
@@ -63777,8 +63783,9 @@ function JukeboxScreen({ go, deepLink }) {
       setHostId(d.hostId || null); setHostName(d.hostName || '');
     });
     const u2 = queueRef.orderBy('addedAt','asc').onSnapshot(s => setQueue(s.docs.map(d => ({ id:d.id, ...d.data() }))));
-    return () => { u1&&u1(); u2&&u2(); };
-  }, [docRef, queueRef]);
+    const u3 = playsRef ? playsRef.onSnapshot(s => setPlays(s.docs.map(d => ({ id:d.id, ...d.data() })))) : null;
+    return () => { u1&&u1(); u2&&u2(); u3&&u3(); };
+  }, [docRef, queueRef, playsRef]);
 
   React.useEffect(() => {
     if (!db) return;
@@ -63919,6 +63926,15 @@ function JukeboxScreen({ go, deepLink }) {
         const item = docs[0];
         await docRef.set({ nowPlaying: { videoId:item.videoId, title:item.title, author:item.author||'', thumb:item.thumb||'', addedByName:item.addedByName||'', startedAt: Date.now() } }, { merge:true });
         await item.ref.delete();
+        // lejátszás-számláló a "legtöbbet játszott" listához
+        if (playsRef && item.videoId) {
+          try {
+            await playsRef.doc(item.videoId).set({
+              videoId:item.videoId, title:item.title, author:item.author||'', thumb:item.thumb||jukeThumb(item.videoId),
+              count: firebase.firestore.FieldValue.increment(1), lastAt: Date.now(),
+            }, { merge:true });
+          } catch(e){}
+        }
       }
     } catch(e) { console.error('startNext', e); }
     advancingRef.current = false;
@@ -63936,6 +63952,7 @@ function JukeboxScreen({ go, deepLink }) {
     queueRef.doc(q.id).update({ ['votes.'+voteKey]: voted ? FV.delete() : true, voteCount: FV.increment(voted ? -1 : 1) }).catch(()=>{});
   }
   const sortedQueue = [...queue].sort((a,b) => (b.voteCount||0)-(a.voteCount||0) || (a.addedAt||0)-(b.addedAt||0));
+  const topPlayed = [...plays].filter(x => (x.count||0) > 0).sort((a,b) => (b.count||0)-(a.count||0) || (b.lastAt||0)-(a.lastAt||0)).slice(0, 5);
   async function addFromResult(r) {
     await addTrack(r);
     setAddedFlash(prev => ({ ...prev, [r.videoId]: true }));
@@ -63979,8 +63996,12 @@ function JukeboxScreen({ go, deepLink }) {
       } />
 
       <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
+        <div style={twoCol
+          ? { display:'flex', alignItems:'flex-start', gap:20, padding:'14px 20px 28px', maxWidth:1180, margin:'0 auto' }
+          : { display:'block' }}>
+        <div style={twoCol ? { flex:'1 1 0', minWidth:0 } : undefined}>
         {isHost && (
-          <div style={{ padding:'12px 16px 0', maxWidth:640, margin:'0 auto' }}>
+          <div style={twoCol ? { marginBottom:14 } : { padding:'12px 16px 0', maxWidth:640, margin:'0 auto' }}>
             <div style={{ borderRadius:18, overflow:'hidden', boxShadow:T.shadow, background:'#000' }}>
               <div style={{ position:'relative', width:'100%', paddingTop:'56.25%' }}>
                 <div id="dnrbox-yt" style={{ position:'absolute', inset:0 }} />
@@ -64010,7 +64031,7 @@ function JukeboxScreen({ go, deepLink }) {
           </div>
         )}
 
-        <div style={{ padding:'16px', maxWidth:640, margin:'0 auto', display:'flex', flexDirection:'column', gap:14 }}>
+        <div style={twoCol ? { display:'flex', flexDirection:'column', gap:14 } : { padding:'16px', maxWidth:640, margin:'0 auto', display:'flex', flexDirection:'column', gap:14 }}>
           {otherHostLive && (
             <div style={{ background:T.mintSoft, borderRadius:14, padding:'10px 14px', fontFamily:T.font, fontSize:13, fontWeight:T.weightBody, color:T.ink, display:'flex', alignItems:'center', gap:9 }}>
               <span style={{ width:9, height:9, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
@@ -64093,6 +64114,34 @@ function JukeboxScreen({ go, deepLink }) {
             </div>
           </div>
 
+          {topPlayed.length > 0 && (
+            <div style={{ background:T.surface, borderRadius:18, padding:14, boxShadow:T.shadow }}>
+              <div style={{ ...secLabel, marginBottom:10 }}>🔥 Legtöbbet játszott</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
+                {topPlayed.map((tp, i) => {
+                  const inQueue = queue.some(q => q.videoId === tp.videoId);
+                  const justAdded = !!addedFlash[tp.videoId];
+                  return (
+                    <div key={tp.videoId} style={{ display:'flex', alignItems:'center', gap:10, background:T.surfaceMuted, borderRadius:12, padding:'7px 8px' }}>
+                      <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12.5, color:T.inkMute, width:16, textAlign:'center', flexShrink:0 }}>{i+1}</div>
+                      <img src={tp.thumb || jukeThumb(tp.videoId)} style={{ width:52, height:39, objectFit:'cover', borderRadius:8, flexShrink:0 }} />
+                      <div style={{ minWidth:0, flex:1 }}>
+                        <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink, lineHeight:1.25, ...clamp2 }}>{tp.title}</div>
+                        <div style={{ fontFamily:T.font, fontSize:11, fontWeight:T.weightBody, color:T.inkSoft, marginTop:1 }}>{tp.count}× ment le{tp.author ? ` · ${tp.author}` : ''}</div>
+                      </div>
+                      <button onClick={()=>addFromResult(tp)} disabled={inQueue} aria-label="Hozzáadás a sorhoz" style={{ width:30, height:30, borderRadius:'50%', border:'none', background: justAdded || inQueue ? T.mintSoft : T.mint, color: justAdded || inQueue ? T.mintDeep : '#fff', display:'grid', placeItems:'center', fontSize:16, fontWeight:900, cursor: inQueue ? 'default' : 'pointer', flexShrink:0 }}>
+                        {justAdded || inQueue ? '✓' : '+'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+        </div>
+
+        <div style={twoCol ? { flex:'1 1 0', minWidth:0 } : { padding:'0 16px 16px', maxWidth:640, margin:'0 auto' }}>
           <div>
             <div style={{ ...secLabel, marginBottom:10, paddingLeft:2 }}>Következik ({queue.length})</div>
             {queue.length === 0 ? (
@@ -64121,6 +64170,7 @@ function JukeboxScreen({ go, deepLink }) {
               </div>
             )}
           </div>
+        </div>
         </div>
       </div>
 
