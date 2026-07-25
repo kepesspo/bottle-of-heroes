@@ -34936,7 +34936,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.119';
+const APP_VERSION = 'v10.120';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -64189,7 +64189,18 @@ function JukeboxScreen({ go, deepLink }) {
   // Széles képernyőn (gép) két hasábos elrendezés
   const [winW, setWinW] = React.useState(() => typeof window !== 'undefined' ? window.innerWidth : 390);
   React.useEffect(() => { const h = () => setWinW(window.innerWidth); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
-  const twoCol = winW >= 900;
+  // TV mód: a Boxot gyakran tévére tükrözik, ahol a telefonra szabott
+  // betűméretek 2-3 méterről olvashatatlanok. A `zoom` az egész felületet
+  // felnagyítja (az elrendezés is vele skálázódik, nem csak a kinézet).
+  const [tvMode, setTvMode] = React.useState(() => {
+    try { const v = localStorage.getItem('dnrbox_tv'); if (v != null) return v === '1'; } catch(e) {}
+    return typeof window !== 'undefined' && window.innerWidth >= 1600;
+  });
+  const toggleTv = () => setTvMode(v => { const nv = !v; try { localStorage.setItem('dnrbox_tv', nv ? '1' : '0'); } catch(e) {} return nv; });
+  const tvZoom = tvMode ? Math.min(2, Math.max(1.15, winW / 1200)) : 1;
+  // a hasáb-váltás a NAGYÍTÁS UTÁNI tényleges szélességtől függjön
+  const effW = winW / tvZoom;
+  const twoCol = effW >= 900;
   const [hostCode, setHostCode] = React.useState('');
   const [claimErr, setClaimErr] = React.useState('');
   const [takeoverOpen, setTakeoverOpen] = React.useState(false);
@@ -64494,9 +64505,19 @@ function JukeboxScreen({ go, deepLink }) {
 
   const np = nowPlaying;
   return (
-    <div style={{ position:'fixed', top:'calc(-1 * env(safe-area-inset-top))', left:0, right:0, bottom:0, paddingTop:'env(safe-area-inset-top)', boxSizing:'border-box', background:T.bg, fontFamily:T.font, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+    <div style={{ position:'fixed', top:'calc(-1 * env(safe-area-inset-top))', left:0, right:0, bottom:0, paddingTop:'env(safe-area-inset-top)', boxSizing:'border-box', background:T.bg, fontFamily:T.font, display:'flex', flexDirection:'column', overflow:'hidden', zoom: tvZoom }}>
       <AppBar title="DNR BOX" onBack={deepLink ? null : ()=>go('home')} right={
-        isHost ? null : otherHostLive ? (
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+        {/* TV mód csak nagy képernyőn — telefonon nincs értelme */}
+        {winW >= 1000 && (
+          <button onClick={toggleTv} title={tvMode ? 'Vissza normál méretre' : 'Nagyobb betűk tévéhez'}
+            style={{ display:'flex', alignItems:'center', gap:5, height:36, padding:'0 12px', borderRadius:12, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0,
+              border: tvMode ? 'none' : `1.5px solid ${T.inkMute}44`, background: tvMode ? T.mint : 'transparent',
+              color: tvMode ? '#fff' : T.inkSoft, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12 }}>
+            📺 {tvMode ? 'TV mód' : 'TV'}
+          </button>
+        )}
+        {isHost ? null : otherHostLive ? (
           <button onClick={()=>setTakeoverOpen(true)} style={{ display:'flex', alignItems:'center', gap:5, height:36, padding:'0 12px', borderRadius:12, border:`1.5px solid ${T.inkMute}44`, background:'transparent', color:T.inkSoft, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, cursor:'pointer', whiteSpace:'nowrap', maxWidth:150, overflow:'hidden', textOverflow:'ellipsis' }}>
             📺 {hostName || 'Lejátszó aktív'}
           </button>
@@ -64504,7 +64525,8 @@ function JukeboxScreen({ go, deepLink }) {
           <button onClick={()=>claimHost(false)} style={{ display:'flex', alignItems:'center', gap:5, height:36, padding:'0 12px', borderRadius:12, border:'none', background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' }}>
             📺 Légy a lejátszó
           </button>
-        )
+        )}
+        </div>
       } />
 
       <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
