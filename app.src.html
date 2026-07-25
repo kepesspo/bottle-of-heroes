@@ -34936,7 +34936,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.121';
+const APP_VERSION = 'v10.122';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -43015,16 +43015,13 @@ function KisebbConfigSheet({ config, setConfig, onClose }) {
             </div>
           } />
 
-        <Row label={t('livesLabel')} sub={t('livesSub')}
+        <Row label="Életek — nyílt lapok" sub="Mindenki kap ennyi nyílt lapot. Ez az élete: tipp helyett kijátszhatja, és rontáskor is egy lapot ad fel — mindig ő választja, melyiket."
           right={<Toggle on={livesOn} onToggle={() => setConfig(c => ({...c, lives:!livesOn}))} />} />
 
         {livesOn && (
-          <Row label="Élet kártyák száma" sub="Ennyi hibát enged meg"
+          <Row label="Lapok száma" sub="Ennyi lapot kap mindenki a játék elején"
             right={<Stepper value={lifeCount} min={1} max={5} onChange={v => setConfig(c => ({...c, lifeCount:v}))} />} />
         )}
-
-        <Row label="Mentőöv lapok" sub="Mindenki kap 3 nyílt lapot — tipp helyett kijátszható, ha nem mersz a vak lapra fogadni"
-          right={<Toggle on={config.mentoov===true} onToggle={() => setConfig(c => ({...c, mentoov: !c.mentoov}))} />} />
 
       </div>
     </SheetOverlay>
@@ -52850,6 +52847,7 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
   const pendRef = React.useRef(false);
   const handleGuessRef = React.useRef(null);
   const [guessRes, setGuessRes] = React.useState(null);
+  const [discardFor, setDiscardFor] = React.useState(null); // {pid, failedPot} — melyik lapot adja fel
   const [gameOver, setGameOver] = React.useState(false);
   const advancedRef = React.useRef(false);
 
@@ -52871,11 +52869,11 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
     players.forEach(p=>{ st.playerLives[p.id]=liveCount; st.failCount[p.id]=0; st.maxFailPot[p.id]=0; });
     // Mentőöv: mindenki kap 3 nyílt lapot a pakli tetejéről. Mindenki látja
     // mindenkiét — a lényeg, hogy a sajátodat ISMERED, a következő vak lapot nem.
-    if (cfg.mentoov) {
-      players.forEach(p => { st.hands[p.id] = d.splice(0, 3); });
+    if (cfg.lives) {
+      players.forEach(p => { st.hands[p.id] = d.splice(0, liveCount); });
       st.deck = d;
     }
-    gsRef.current=st; setGs({...st}); setGuessRes(null); setGameOver(false); pendRef.current=false; advancedRef.current=false;
+    gsRef.current=st; setGs({...st}); setGuessRes(null); setDiscardFor(null); setGameOver(false); pendRef.current=false; advancedRef.current=false;
   },[gameIdx]);
 
   // Sync current turn to Firestore for observer screens
@@ -52885,6 +52883,27 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
     const pid = st.activePids[st.turnPos % Math.max(st.activePids.length, 1)];
     syncRoom(roomCode, { kisebbTurn: { pid, pot: st.pot, deckPos: st.deckPos, gameIdx } });
   }, [gs?.turnPos, gs?.deckPos, gs?.pot, gameIdx, roomCode]);
+
+  // Egy rontás könyvelése. discardIdx: melyik lapot adja fel a játékos
+  // (−1 = nincs lapja). A lap ÉS az élet ugyanaz — együtt fogynak.
+  const applyMiss = (base, pid, failedPot, discardIdx) => {
+    const cfg2 = (gameMeta?.kisebbConfig) || {};
+    const noElim = cfg2.noElim === true;
+    const hand = (base.hands || {})[pid] || [];
+    const newHands = discardIdx >= 0
+      ? { ...base.hands, [pid]: hand.filter((_, i) => i !== discardIdx) }
+      : base.hands;
+    const newFail = { ...base.failCount, [pid]: (base.failCount[pid] || 0) + 1 };
+    const newMaxPot = { ...base.maxFailPot, [pid]: Math.max(base.maxFailPot[pid] || 0, failedPot) };
+    const newLives = { ...base.playerLives, [pid]: (base.playerLives[pid] || 1) - 1 };
+    let nst = { ...base, hands:newHands, failCount:newFail, maxFailPot:newMaxPot, playerLives:newLives, pot:1 };
+    if (!noElim && (newLives[pid] || 0) <= 0) {
+      const newActive = base.activePids.filter(x => x !== pid);
+      nst = { ...nst, activePids:newActive, turnPos: base.turnPos % Math.max(newActive.length, 1) };
+      if (newActive.length <= 1) nst.__over = true;
+    }
+    return nst;
+  };
 
   const finishGame = (st) => {
     if (advancedRef.current) return;
@@ -52925,7 +52944,7 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
   if (!gs) return null;
   const { deck, deckPos, activePids, turnPos, failCount, maxFailPot, playerLives } = gs;
   const hands = gs.hands || {};
-  const mentoovOn = (gameMeta?.kisebbConfig?.mentoov) === true;
+  const livesOn = (gameMeta?.kisebbConfig?.lives) === true;
   const pot = gs.pot || 1;
   const currentCard = deck[deckPos];
   const nextCard = deck[deckPos+1];
@@ -52959,15 +52978,16 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
         const failP = players.find(x => x.id === pid);
         if (failP && onResult) onResult({ correct:false, playerName: failP.name, drinks: failedPot,
           subtitle: `${failP.name} mellélőtt — ${failedPot} korty a téten` });
-        const newFail = { ...st.failCount, [pid]:(st.failCount[pid]||0)+1 };
-        const newMaxPot = { ...st.maxFailPot, [pid]: Math.max(st.maxFailPot[pid]||0, failedPot) };
-        const newLives = { ...st.playerLives, [pid]:(st.playerLives[pid]||1)-1 };
-        nst = { ...nst, failCount:newFail, maxFailPot:newMaxPot, playerLives:newLives, pot:1 };
-        if (!noElim && (newLives[pid]||0)<=0) {
-          const newActive = st.activePids.filter(p=>p!==pid);
-          nst = { ...nst, activePids:newActive, turnPos:st.turnPos%Math.max(newActive.length,1) };
-          if (newActive.length<=1) { gsRef.current=nst; setGs({...nst}); setGuessRes(null); pendRef.current=false; setGameOver(true); finishGame(nst); return; }
+        // Ha van miből választani, a játékos dönti el, melyik lapját adja fel
+        const hand = (st.hands || {})[pid] || [];
+        if (livesOn && hand.length > 1) {
+          const waitSt = { ...nst, pot:1 };
+          gsRef.current = waitSt; setGs({ ...waitSt }); setGuessRes(null); pendRef.current = false;
+          setDiscardFor({ pid, failedPot });
+          return;
         }
+        nst = applyMiss(nst, pid, failedPot, hand.length ? 0 : -1);
+        if (nst.__over) { const f = { ...nst }; delete f.__over; gsRef.current=f; setGs({...f}); setGuessRes(null); pendRef.current=false; setGameOver(true); finishGame(f); return; }
       } else {
         nst = { ...nst, turnPos:(st.turnPos+1)%st.activePids.length };
       }
@@ -53000,7 +53020,9 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
       const newDeck = [...st.deck];
       newDeck.splice(st.deckPos + 1, 0, card);
       const newHands = { ...st.hands, [pid]: (st.hands[pid] || []).filter((_, i) => i !== idx) };
-      let nst = { ...st, deck:newDeck, deckPos: st.deckPos + 1, hands:newHands };
+      // a kijátszott lap egyben egy élet is
+      const newLives = { ...st.playerLives, [pid]: Math.max(0, (st.playerLives[pid] || 1) - 1) };
+      let nst = { ...st, deck:newDeck, deckPos: st.deckPos + 1, hands:newHands, playerLives:newLives };
       if (same) {
         const sm = cfg2.stackMode ?? 'plus1';
         nst = { ...nst, pot: sm === 'times2' ? (st.pot || 1) * 2 : (st.pot || 1) + 1 };
@@ -53011,6 +53033,20 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
       if (atEnd && !gameOver) { gsRef.current = nst; setGs({ ...nst }); setGuessRes(null); pendRef.current = false; setGameOver(true); finishGame(nst); return; }
       gsRef.current = nst; setGs({ ...nst }); setGuessRes(null); pendRef.current = false;
     }, 900);
+  };
+
+  // Rontás után: a játékos választja ki, melyik lapját adja fel
+  const confirmDiscard = (idx) => {
+    const d = discardFor;
+    if (!d) return;
+    const st = gsRef.current;
+    const nst = applyMiss(st, d.pid, d.failedPot, idx);
+    setDiscardFor(null);
+    const over = !!nst.__over;
+    const fin = { ...nst }; delete fin.__over;
+    const atEnd = fin.deckPos >= fin.deck.length - 1;
+    gsRef.current = fin; setGs({ ...fin });
+    if (over || atEnd) { setGameOver(true); finishGame(fin); }
   };
 
   handleGuessRef.current = handleGuess;
@@ -53142,29 +53178,36 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
         </div>
       )}
 
-      {/* Mentőöv lapok — mindenkié látszik, de csak a soron lévő játszhat ki */}
-      {mentoovOn && (
+      {/* Életek = nyílt lapok. Mindenkié látszik; a soron lévő kijátszhat egyet
+          tipp helyett, rontás után pedig ő választja, melyiket adja fel. */}
+      {livesOn && (
         <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8 }}>
-          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', color:T.inkMute, textAlign:'center' }}>
-            Mentőöv lapok
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', color: discardFor ? T.coral : T.inkMute, textAlign:'center' }}>
+            {discardFor
+              ? `${(players.find(x => x.id === discardFor.pid) || {}).name || '?'} — melyik lapot adod fel?`
+              : 'Életek — a lapjaid'}
           </div>
           {activePids.map(pid => {
             const pl = players.find(x => x.id === pid);
-            const myTurn = pid === currentPid && !guessRes && !gameOver;
             const hand = hands[pid] || [];
+            const discarding = !!discardFor && discardFor.pid === pid;
+            const canPlay = !discardFor && pid === currentPid && !guessRes && !gameOver;
+            const active = discarding || canPlay;
             return (
-              <div key={pid} style={{ display:'flex', alignItems:'center', gap:8, background: myTurn ? T.surface : 'transparent', borderRadius:12, padding: myTurn ? '7px 9px' : '3px 9px', boxShadow: myTurn ? T.shadow : 'none', opacity: myTurn ? 1 : 0.55 }}>
+              <div key={pid} style={{ display:'flex', alignItems:'center', gap:8, background: active ? T.surface : 'transparent', borderRadius:12, padding: active ? '7px 9px' : '3px 9px', boxShadow: active ? T.shadow : 'none', opacity: active ? 1 : 0.55, border: discarding ? `1.5px solid ${T.coral}` : '1.5px solid transparent' }}>
                 <span style={{ width:8, height:8, borderRadius:'50%', background: pl?.color || T.inkMute, flexShrink:0 }} />
                 <span style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:12, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pl?.name || '?'}</span>
                 <div style={{ display:'flex', gap:5, flexShrink:0 }}>
                   {hand.length === 0 && <span style={{ fontFamily:T.font, fontSize:11, color:T.inkMute }}>elfogyott</span>}
                   {hand.map((c, i) => {
                     const red = SUIT_RED.has(c.suit);
+                    const accent = discarding ? T.coral : T.mint;
                     return (
-                      <button key={i} disabled={!myTurn} onClick={() => playHandCard(i)}
-                        style={{ width:34, height:46, borderRadius:7, background:T.surface, border:`1.5px solid ${myTurn ? T.mint : T.inkMute+'33'}`,
+                      <button key={i} disabled={!active}
+                        onClick={() => discarding ? confirmDiscard(i) : playHandCard(i)}
+                        style={{ width:34, height:46, borderRadius:7, background:T.surface, border:`1.5px solid ${active ? accent : T.inkMute+'33'}`,
                           display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', lineHeight:1.05,
-                          cursor: myTurn ? 'pointer' : 'default', padding:0, boxShadow: myTurn ? `0 2px 8px ${T.mint}33` : 'none' }}>
+                          cursor: active ? 'pointer' : 'default', padding:0, boxShadow: active ? `0 2px 8px ${accent}33` : 'none' }}>
                         <span style={{ fontFamily:'Georgia,serif', fontWeight:700, fontSize:14, color: red ? T.coral : T.ink }}>{c.value}</span>
                         <span style={{ fontFamily:'Georgia,serif', fontSize:12, color: red ? T.coral : T.ink }}>{c.suit}</span>
                       </button>
@@ -53174,6 +53217,11 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
               </div>
             );
           })}
+          {!discardFor && (
+            <div style={{ fontFamily:T.font, fontSize:10.5, color:T.inkMute, textAlign:'center', lineHeight:1.4 }}>
+              Tipp helyett rárakhatod az egyik lapodat — azt látod, a vak lapot nem.
+            </div>
+          )}
         </div>
       )}
 
