@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.095';
+const APP_VERSION = 'v10.096';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -63843,6 +63843,13 @@ function JukeboxScreen({ go, deepLink }) {
     const iv = setInterval(tick, 10000);
     return () => clearInterval(iv);
   }, [isHost, docRef]);
+
+  // Ha lejátszó vagyok, de nincs átvételi kód (pl. a szerep még a kód bevezetése
+  // előtt lett igényelve), pótoljuk — különben nem lehetne átvenni a lejátszást.
+  React.useEffect(() => {
+    if (!isHost || !docRef || hostCode) return;
+    docRef.set({ hostCode: String(1000 + Math.floor(Math.random() * 9000)) }, { merge:true }).catch(()=>{});
+  }, [isHost, hostCode, docRef]);
 
   // kilépéskor engedjük el a szerepet, hogy ne ragadjon be a box
   React.useEffect(() => () => { if (isHostRef.current) releaseHost(); }, []);
