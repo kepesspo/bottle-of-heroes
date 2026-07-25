@@ -34047,6 +34047,19 @@ window.triggerHaptic = function() {
       return snap.docs.map(function(d) { return d.data(); });
     }).catch(function() { return []; });
   };
+  // Buli-sablonok: mentett jatek-lista + beallitasok, hogy egy koppintassal
+  // vissza lehessen allitani egy bevalt estet.
+  window.getPartyTemplates = function() {
+    return db.collection('party_templates').orderBy('ts', 'desc').limit(30).get().then(function(snap) {
+      return snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    }).catch(function() { return []; });
+  };
+  window.savePartyTemplate = function(data) {
+    return db.collection('party_templates').add(Object.assign({ ts: Date.now() }, data)).catch(function(e) { console.warn('savePartyTemplate', e); });
+  };
+  window.deletePartyTemplate = function(id) {
+    return db.collection('party_templates').doc(id).delete().catch(function(e) { console.warn('deletePartyTemplate', e); });
+  };
   window.saveTournament = function(data) {
     return db.collection('bp_tournaments').add(data).catch(function(e) { console.warn('saveTournament', e); });
   };
@@ -34923,7 +34936,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.115';
+const APP_VERSION = 'v10.116';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -43196,6 +43209,16 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   const [filterSheet, setFilterSheet] = useState(false);
   const [lockToast, setLockToast] = React.useState(null);
   const lockToastRef = React.useRef(null);
+  // Buli-sablonok
+  const [templates, setTemplates] = useState([]);
+  const [tplSaveOpen, setTplSaveOpen] = useState(false);
+  const [tplName, setTplName] = useState('');
+  const [tplDeleting, setTplDeleting] = useState(null);
+  const loadTemplates = React.useCallback(() => {
+    if (typeof window.getPartyTemplates !== 'function') return;
+    window.getPartyTemplates().then(ts => setTemplates(ts || [])).catch(() => {});
+  }, []);
+  React.useEffect(() => { loadTemplates(); }, [loadTemplates]);
   const [activeFilters, setActiveFilters] = useState([]); // [] = show all
   const buszConfig = gameMeta?.buszConfig || {};
   const setBuszConfig = cfg => setGameMeta(m => ({...m, buszConfig: typeof cfg === 'function' ? cfg(m?.buszConfig||{}) : cfg}));
@@ -43360,6 +43383,48 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
         <div style={{ height:'100%', overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
         <div className="screen-wide screen-pad" style={{ paddingTop:14, paddingBottom:100 }}>
 
+        {/* ── Buli-sablonok ── */}
+        {(templates.length > 0 || anySelected) && (
+          <div style={{ marginBottom:18 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:10 }}>
+              <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.12em' }}>Sablonok</span>
+              {anySelected && (
+                <button onClick={() => { setTplName(''); setTplSaveOpen(true); }}
+                  style={{ display:'inline-flex', alignItems:'center', gap:5, border:'none', borderRadius:999, background:T.mintSoft, color:T.mintDeep || T.mint, fontFamily:T.font, fontWeight:900, fontSize:11.5, padding:'6px 11px', cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
+                  + Mentés sablonként
+                </button>
+              )}
+            </div>
+            {templates.length === 0 ? (
+              <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, lineHeight:1.4 }}>
+                Mentsd el a mostani válogatást, és legközelebb egy koppintás lesz.
+              </div>
+            ) : (
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                {templates.map(tpl => {
+                  const names = (tpl.games || []).map(id => (GAMES.find(g => g.id === id) || {}).name).filter(Boolean);
+                  const active = (tpl.games || []).length === selectedGames.length && (tpl.games || []).every(id => selectedGames.includes(id));
+                  return (
+                    <div key={tpl.id} title={names.join(', ')}
+                      style={{ display:'inline-flex', alignItems:'center', gap:8, background: active ? T.mint : T.surface, borderRadius:14, padding:'9px 10px 9px 12px', boxShadow:T.shadow, maxWidth:'100%', minWidth:0 }}>
+                      <button onClick={() => {
+                          setSelectedGames(tpl.games || []);
+                          if (tpl.gameMeta) setGameMeta(m => Object.assign({}, m, tpl.gameMeta));
+                        }}
+                        style={{ display:'flex', flexDirection:'column', alignItems:'flex-start', gap:2, background:'none', border:'none', padding:0, cursor:'pointer', minWidth:0, textAlign:'left' }}>
+                        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color: active ? '#fff' : T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:180 }}>{tpl.name}</span>
+                        <span style={{ fontFamily:T.font, fontSize:11, color: active ? 'rgba(255,255,255,0.85)' : T.inkMute }}>{names.length} játék</span>
+                      </button>
+                      <button onClick={() => setTplDeleting(tpl)} title="Törlés"
+                        style={{ flexShrink:0, width:24, height:24, borderRadius:8, border:'none', background: active ? 'rgba(255,255,255,0.22)' : T.surfaceMuted, color: active ? '#fff' : T.inkMute, fontFamily:T.font, fontWeight:900, fontSize:13, cursor:'pointer', lineHeight:1 }}>✕</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ── Kedvencek szekció ── */}
         {!hasFilter && (() => {
           const FAVS = ['beerpong','busz'];
@@ -43461,6 +43526,49 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
         </div>
         <div style={{ position:'absolute', bottom:0, left:0, right:0, height:80, background:`linear-gradient(to bottom, transparent, ${T.bg})`, pointerEvents:'none' }} />
       </div>
+
+      {/* Sablon mentése */}
+      {tplSaveOpen && (
+        <div onClick={() => setTplSaveOpen(false)} style={{ position:'fixed', inset:0, zIndex:9998, background:'rgba(20,30,50,0.45)', display:'grid', placeItems:'center', padding:20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:340, background:T.surface, borderRadius:22, padding:'20px 18px', boxShadow:'0 12px 48px rgba(0,0,0,0.22)', display:'flex', flexDirection:'column', gap:12 }}>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink }}>Sablon mentése</div>
+            <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, lineHeight:1.45 }}>
+              {selectedGames.length} kiválasztott játék és a mostani beállítások mentődnek.
+            </div>
+            <TextInput value={tplName} onChange={e => setTplName(e.target.value)} placeholder="pl. Péntek esti csomag" />
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={() => setTplSaveOpen(false)} style={{ flex:1, padding:'13px 0', borderRadius:14, border:`1.5px solid ${T.inkMute}40`, background:T.surfaceMuted, color:T.ink, fontFamily:T.font, fontWeight:800, fontSize:14.5, cursor:'pointer' }}>Mégse</button>
+              <button disabled={!tplName.trim()} onClick={() => {
+                  const clean = (() => { try { return JSON.parse(JSON.stringify(gameMeta || {})); } catch (e) { return {}; } })();
+                  const doSave = typeof window.savePartyTemplate === 'function'
+                    ? window.savePartyTemplate({ name: tplName.trim(), games: [...selectedGames], gameMeta: clean })
+                    : Promise.resolve();
+                  Promise.resolve(doSave).then(() => { setTplSaveOpen(false); setTplName(''); loadTemplates(); });
+                }}
+                style={{ flex:1, padding:'13px 0', borderRadius:14, border:'none', background: tplName.trim() ? T.mint : T.inkMute+'33', color: tplName.trim() ? '#fff' : T.inkMute, fontFamily:T.font, fontWeight:900, fontSize:14.5, cursor: tplName.trim() ? 'pointer' : 'not-allowed' }}>Mentés</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sablon törlése */}
+      {tplDeleting && (
+        <div onClick={() => setTplDeleting(null)} style={{ position:'fixed', inset:0, zIndex:9998, background:'rgba(20,30,50,0.45)', display:'grid', placeItems:'center', padding:20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:320, background:T.surface, borderRadius:22, padding:'20px 18px', boxShadow:'0 12px 48px rgba(0,0,0,0.22)', display:'flex', flexDirection:'column', gap:12, textAlign:'center' }}>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink }}>Töröljük a(z) „{tplDeleting.name}" sablont?</div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={() => setTplDeleting(null)} style={{ flex:1, padding:'13px 0', borderRadius:14, border:`1.5px solid ${T.inkMute}40`, background:T.surfaceMuted, color:T.ink, fontFamily:T.font, fontWeight:800, fontSize:14.5, cursor:'pointer' }}>Mégse</button>
+              <button onClick={() => {
+                  const id = tplDeleting.id;
+                  setTplDeleting(null);
+                  const doDel = typeof window.deletePartyTemplate === 'function' ? window.deletePartyTemplate(id) : Promise.resolve();
+                  Promise.resolve(doDel).then(() => loadTemplates());
+                }}
+                style={{ flex:1, padding:'13px 0', borderRadius:14, border:'none', background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14.5, cursor:'pointer' }}>Törlés</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {lockToast && (
         <div style={{ position:'fixed', bottom:90, left:'50%', transform:'translateX(-50%)', zIndex:200, pointerEvents:'none',
