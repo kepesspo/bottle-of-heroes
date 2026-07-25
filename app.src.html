@@ -293,6 +293,8 @@
 
     /* Statisztika-listák: széles képernyőn több hasáb, hogy a kártyák ne nyúljanak szét */
     .grid-statlist { display:grid; grid-template-columns:1fr; gap:8px; align-content:start; }
+    /* grid-elem alapból min-width:auto — enélkül a széles tartalom kilóg a hasábból */
+    .grid-statlist > * { min-width:0; }
     @media (min-width:900px)  { .grid-statlist { grid-template-columns:repeat(2,1fr); gap:10px; } }
     @media (min-width:1300px) { .grid-statlist { grid-template-columns:repeat(3,1fr); } }
 
@@ -34883,7 +34885,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.103';
+const APP_VERSION = 'v10.104';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36508,12 +36510,33 @@ const ACHIEVEMENT_FAMILIES = [
     tiers:[10,15,20], names:['Nagyivó · 10+','Szomjas lélek · 15+','Feneketlen · 20+'] },
   { id:'avgp',   title:'Átlag pont / parti', icon:'star', unit:'', minSess:5, val: s => (s.totalSessions||0) >= 5 ? (s.totalPoints||0)/s.totalSessions : 0,
     tiers:[5,10,15], names:['Pontszerző · 5+','Pontgyűjtő · 10+','Pontgép · 15+'] },
+  { id:'versat', title:'Sokoldalúság', icon:'crown', unit:'játék',
+    val: s => Object.keys(s._gameWins || {}).filter(k => (s._gameWins[k]||0) > 0).length,
+    tiers:[10], names:['Mindenes · 10 külön játék'] },
+  // per-játék: minden játékhoz egy "első győzelem" jelvény
+  { id:'gamewin', title:'Játék-győzelmek', icon:'trophy', unit:'győzelem', perGame:true },
 ];
+// A profil stat-objektumához hozzáfűzi, hogy melyik játékban hányszor nyert
+// (a game_stats/{gameId}.winners térképből) — ebből jönnek a per-játék jelvények.
+function withGameWins(stats, gameStats, profileId) {
+  const gw = {};
+  Object.keys(gameStats || {}).forEach(gid => {
+    const c = ((gameStats[gid] || {}).winners || {})[profileId] || 0;
+    if (c > 0) gw[gid] = c;
+  });
+  return Object.assign({}, stats || {}, { _gameWins: gw });
+}
 // lapos lista a régi felhasználási helyekhez (megszerzett jelvény-chipek)
-const ACHIEVEMENTS = ACHIEVEMENT_FAMILIES.flatMap(f => f.tiers.map((goal, i) => ({
-  id: f.id + '_' + goal, icon: f.icon, label: f.names[i], family: f.id, goal, unit: f.unit,
-  reverse: !!f.reverse, minSess: f.minSess, val: f.val,
-})));
+const ACHIEVEMENTS = ACHIEVEMENT_FAMILIES.flatMap(f => f.perGame
+  ? (typeof GAMES !== 'undefined' ? GAMES : []).map(g => ({
+      id: f.id + '_' + g.id, icon: f.icon, label: g.name, family: f.id, goal: 1, unit: f.unit,
+      val: s => (s._gameWins || {})[g.id] || 0,
+    }))
+  : f.tiers.map((goal, i) => ({
+      id: f.id + '_' + goal, icon: f.icon, label: f.names[i], family: f.id, goal, unit: f.unit,
+      reverse: !!f.reverse, minSess: f.minSess, val: f.val,
+    })));
+try { window.ACHIEVEMENTS = ACHIEVEMENTS; } catch(e){}
 function achievementState(a, s) {
   const st = s || {};
   const raw = a.val ? a.val(st) : 0;
@@ -36557,16 +36580,37 @@ function AchievementsSheet({ stats, profileName, onClose }) {
         <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
           {ACHIEVEMENT_FAMILIES.map(f => {
             const items = ACHIEVEMENTS.filter(a => a.family === f.id).map(a => ({ a, st: achievementState(a, s) }));
+            if (!items.length) return null;
             const fDone = items.filter(x => x.st.done).length;
             // az első még nem teljesített szint a "következő cél"
             const nextIdx = items.findIndex(x => !x.st.done);
+            const header = (
+              <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:7, marginLeft:2 }}>
+                <BohIcon name={f.icon} size={15} />
+                <span style={{ fontFamily:T.font, fontSize:11, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.07em' }}>{f.title}</span>
+                <span style={{ fontFamily:T.font, fontSize:11, fontWeight:800, color: fDone === items.length ? T.mintDeep : T.inkMute }}>{fDone}/{items.length}</span>
+              </div>
+            );
+            // per-játék család: sok elem, ezért sűrű chip-rácsban
+            if (f.perGame) {
+              const sortedG = [...items].sort((x, y) => (y.st.done - x.st.done) || x.a.label.localeCompare(y.a.label, 'hu'));
+              return (
+                <div key={f.id}>
+                  {header}
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                    {sortedG.map(({ a, st }) => (
+                      <span key={a.id} style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'6px 10px 6px 8px', borderRadius:999, background: st.done ? T.mintSoft : T.bgSoft, opacity: st.done ? 1 : 0.55, fontFamily:T.font, fontWeight:800, fontSize:11.5, color: st.done ? T.mintDeep : T.inkMute }}>
+                        <span style={{ filter: st.done ? 'none' : 'grayscale(1)', display:'inline-flex' }}><BohIcon name={a.icon} size={12} /></span>
+                        {a.label}{st.done && st.cur > 1 ? ` ${st.cur}×` : ''}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
             return (
               <div key={f.id}>
-                <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:7, marginLeft:2 }}>
-                  <BohIcon name={f.icon} size={15} />
-                  <span style={{ fontFamily:T.font, fontSize:11, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.07em' }}>{f.title}</span>
-                  <span style={{ fontFamily:T.font, fontSize:11, fontWeight:800, color: fDone === items.length ? T.mintDeep : T.inkMute }}>{fDone}/{items.length}</span>
-                </div>
+                {header}
                 <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                   {items.map(({ a, st }, i) => {
                     const isNext = i === nextIdx;
@@ -37006,51 +37050,36 @@ function StatsScreen({ go, onOpenObserver }) {
               {profilRows.map((p, i) => {
                 const s = pStats[p.id] || {};
                 // A jelvények mindig az élettartam-statokból jönnek (nem időszakosak)
-                const lifeS = stats[p.id] || {};
+                const lifeS = withGameWins(stats[p.id], gameStats, p.id);
                 const achDone = ACHIEVEMENTS.filter(a => achievementState(a, lifeS).done).length;
                 const achPct = Math.round(achDone / Math.max(1, ACHIEVEMENTS.length) * 100);
                 return (
-                  <div key={p.id} onClick={() => setQuickStatsFor(p)} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:pfShadow, border:pfBorder, cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color: i===0?'#F59E0B':i===1?'#9CA3AF':i===2?'#CD7F32':T.inkMute, minWidth:18, textAlign:'center', flexShrink:0 }}>{i+1}</div>
+                  <div key={p.id} onClick={() => setQuickStatsFor(p)} style={{ background:T.surface, borderRadius:15, padding:'10px 12px', boxShadow:pfShadow, border:pfBorder, cursor:'pointer', WebkitTapHighlightColor:'transparent', minWidth:0, overflow:'hidden' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:9, minWidth:0 }}>
+                      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color: i===0?'#F59E0B':i===1?'#9CA3AF':i===2?'#CD7F32':T.inkMute, minWidth:14, textAlign:'center', flexShrink:0 }}>{i+1}</div>
                       <div style={{ position:'relative', flexShrink:0 }}>
-                        <PlayerAvatar player={p} size={40} />
-                        {i < 3 && <div style={{ position:'absolute', bottom:-3, right:-4, lineHeight:1 }}><BohIcon name={'medal'+(i+1)} size={14} /></div>}
+                        <PlayerAvatar player={p} size={36} />
+                        {i < 3 && <div style={{ position:'absolute', bottom:-3, right:-4, lineHeight:1 }}><BohIcon name={'medal'+(i+1)} size={13} /></div>}
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
-                        <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>{s.totalSessions||0} játék · {s.totalRounds||0} kör</div>
-                      </div>
-                      <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:4, background:T.mintSoft, borderRadius:999, padding:'5px 10px 5px 8px' }} title="Megszerzett jelvények">
-                          <BohIcon name="medal1" size={14} />
-                          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:T.mintDeep }}>{achDone}</span>
+                        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
+                        <div style={{ display:'flex', alignItems:'center', gap:9, marginTop:2, flexWrap:'wrap' }}>
+                          <span style={{ display:'inline-flex', alignItems:'center', gap:3, fontFamily:T.font, fontSize:11, color:T.inkSoft }}><BohIcon name="beer" size={11} />{s.totalDrinks||0}</span>
+                          <span style={{ display:'inline-flex', alignItems:'center', gap:3, fontFamily:T.font, fontSize:11, color:T.inkSoft }}><BohIcon name="flag" size={11} />{s.totalSessions||0}</span>
+                          <span style={{ display:'inline-flex', alignItems:'center', gap:3, fontFamily:T.font, fontSize:11, color:T.inkSoft }}><BohIcon name="redo" size={11} />{s.totalRounds||0}</span>
+                          {s.bestStreak ? <span style={{ display:'inline-flex', alignItems:'center', gap:3, fontFamily:T.font, fontSize:11, color:T.inkSoft }}><BohIcon name="fire" size={11} />{s.bestStreak}×</span> : null}
                         </div>
-                        <div style={{ textAlign:'right' }}>
-                          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.yellow||'#F59E0B', lineHeight:1 }}>{s.totalPoints||0}</div>
-                          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>{t('pointStat').toUpperCase()}</div>
+                      </div>
+                      <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:3, flexShrink:0 }}>
+                        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.yellow||'#F59E0B', lineHeight:1 }}>{s.totalPoints||0}</div>
+                        <div style={{ display:'inline-flex', alignItems:'center', gap:3, background:T.mintSoft, borderRadius:999, padding:'2px 7px 2px 5px' }} title="Megszerzett jelvények">
+                          <BohIcon name="medal1" size={11} />
+                          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:T.mintDeep }}>{achDone}</span>
                         </div>
                       </div>
                     </div>
-                    <div style={{ display:'flex', alignItems:'center', gap:12, marginTop:10, marginLeft:68, flexWrap:'wrap' }}>
-                      {[
-                        { icon:'beer', val: s.totalDrinks||0, label:'korty' },
-                        { icon:'star', val: s.totalPoints||0, label:'pont' },
-                        { icon:'medal1', val: s.bestStreak ? s.bestStreak+'×' : '—', label:'best streak' },
-
-                      ].map((it, ci) => (
-                        <div key={ci} style={{ display:'flex', alignItems:'center', gap:4 }}>
-                          <BohIcon name={it.icon} size={13} />
-                          <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.ink }}>{it.val}</span>
-                          <span style={{ fontFamily:T.font, fontSize:11, color:T.inkMute }}>{it.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ marginTop:8, marginLeft:68 }}>
-                      <div style={{ height:4, borderRadius:4, background:T.surfaceMuted, overflow:'hidden' }}>
-                        <div style={{ width:achPct+'%', height:'100%', background:T.mint, transition:'width .3s' }} />
-                      </div>
-                      <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkMute, marginTop:3 }}>{achDone} / {ACHIEVEMENTS.length} jelvény</div>
+                    <div style={{ height:4, borderRadius:4, background:T.surfaceMuted, overflow:'hidden', marginTop:8 }}>
+                      <div style={{ width:achPct+'%', height:'100%', background:T.mint, transition:'width .3s' }} />
                     </div>
                   </div>
                 );
@@ -42279,6 +42308,7 @@ function PlayerProfileStats({ profileId }) {
   const [stats, setStats] = React.useState(null);
   const [profiles, setProfiles] = React.useState([]);
   const [events, setEvents] = React.useState([]);
+  const [gameStats, setGameStats] = React.useState({});
   const [showAch, setShowAch] = React.useState(false);
   React.useEffect(() => {
     if (!profileId || typeof window.getStats !== 'function') return;
@@ -42287,6 +42317,7 @@ function PlayerProfileStats({ profileId }) {
   }, [profileId]);
   React.useEffect(() => {
     if (typeof window.getProfiles === 'function') window.getProfiles().then(ps => setProfiles(ps || [])).catch(() => {});
+    if (typeof window.getAllGameStats === 'function') window.getAllGameStats().then(gs => setGameStats(gs || {})).catch(() => {});
   }, []);
   React.useEffect(() => {
     if (!profileId || typeof window.getAllStatEvents !== 'function') { setEvents([]); return; }
@@ -42345,7 +42376,8 @@ function PlayerProfileStats({ profileId }) {
     { icon:'bolt', label:'Leggyorsabb', value: `${stats.bestReactionTime} ms` },
   ]});
 
-  const earned = ACHIEVEMENTS.filter(a => achievementState(a, stats).done);
+  const achStats = withGameWins(stats, gameStats, profileId);
+  const earned = ACHIEVEMENTS.filter(a => achievementState(a, achStats).done);
 
   // Fejlődési grafikon — kumulatív pont az egyes partik után (statEvents naplóból)
   let chart = null;
@@ -42372,24 +42404,21 @@ function PlayerProfileStats({ profileId }) {
           </div>
         ))}
       </div>
-      <div>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:5, marginLeft:3 }}>
-          <div style={{ fontFamily:T.font, fontSize:10.5, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.08em' }}>Kitüntetések · {earned.length}/{ACHIEVEMENTS.length}</div>
-          <button onClick={()=>setShowAch(true)} style={{ border:'none', background:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:11, color:T.mintDeep, padding:'2px 4px' }}>Összes →</button>
+      {/* Kitüntetések: nem listázzuk ki (sok van) — egy gomb nyitja a vitrint */}
+      <button onClick={()=>setShowAch(true)} style={{ display:'flex', alignItems:'center', gap:11, width:'100%', boxSizing:'border-box', background:T.bgSoft, border:'none', borderRadius:14, padding:'11px 14px', cursor:'pointer', textAlign:'left', WebkitTapHighlightColor:'transparent' }}>
+        <div style={{ width:34, height:34, borderRadius:11, background:T.mintSoft, display:'grid', placeItems:'center', flexShrink:0 }}>
+          <BohIcon name="medal1" size={17} />
         </div>
-        {earned.length > 0 ? (
-          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-            {earned.map(a => (
-              <span key={a.id} style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'6px 11px 6px 8px', borderRadius:999, background:T.bgSoft, fontFamily:T.font, fontWeight:800, fontSize:11.5, color:T.ink }}>
-                <BohIcon name={a.icon} size={14} />{a.label}
-              </span>
-            ))}
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13.5, color:T.ink }}>Kitüntetések</div>
+          <div style={{ height:5, borderRadius:5, background:`${T.inkMute}22`, overflow:'hidden', marginTop:5 }}>
+            <div style={{ width: Math.round(earned.length / Math.max(1, ACHIEVEMENTS.length) * 100)+'%', height:'100%', background:T.mint, transition:'width .3s' }} />
           </div>
-        ) : (
-          <div style={{ background:T.bgSoft, borderRadius:14, padding:'11px 14px', fontFamily:T.font, fontSize:12, color:T.inkMute }}>Még nincs kitüntetés — nézd meg, mi a legközelebbi cél!</div>
-        )}
-      </div>
-      {showAch && <AchievementsSheet stats={stats} onClose={()=>setShowAch(false)} />}
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, marginTop:3 }}>{earned.length} / {ACHIEVEMENTS.length} megszerezve</div>
+        </div>
+        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.mintDeep, flexShrink:0 }}>→</span>
+      </button>
+      {showAch && <AchievementsSheet stats={achStats} onClose={()=>setShowAch(false)} />}
       {chart && (
         <div>
           <div style={{ fontFamily:T.font, fontSize:10.5, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5, marginLeft:3 }}>Pontok alakulása</div>
