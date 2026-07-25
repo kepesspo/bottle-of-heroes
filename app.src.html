@@ -34908,7 +34908,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.106';
+const APP_VERSION = 'v10.107';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -56623,7 +56623,8 @@ function IdoparbajGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
       const winner = p1wins ? challenger : opponent;
       setTimeout(() => {
         onResult && onResult({ winners:[winner].filter(Boolean), losers:[loser].filter(Boolean), drinks:1, winNote:'+1 pont' });
-        onAdvance && onAdvance({ [loser?.id]: 1 });
+        // a győztes pontja is menjen át, ne csak a vesztes kortya
+        onAdvance && onAdvance(loser ? { [loser.id]: 1 } : {}, winner ? { [winner.id]: 1 } : {});
       }, 400);
     }
   };
@@ -56928,9 +56929,10 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
       const winnerIsP1 = r1.steps <= r2_.steps;
       const loserKorty = winnerIsP1 ? (r2_.korty + 2) : (r1.korty + 2);
       const loserId = winnerIsP1 ? p2?.id : p1?.id;
-      if (onAdvance && loserId) onAdvance({[loserId]: loserKorty});
       const winnerP = winnerIsP1 ? p1 : p2;
       const loserP = winnerIsP1 ? p2 : p1;
+      // a győztes pontja is menjen át, ne csak a vesztes kortya
+      if (onAdvance) onAdvance(loserId ? {[loserId]: loserKorty} : {}, winnerP ? {[winnerP.id]: 1} : {});
       if (onResult) onResult({ winners:[winnerP].filter(Boolean), losers:[loserP].filter(Boolean), drinks: loserKorty, winNote:'Gyorsabb volt!' });
       setPhase('done');
     }, 1200);
