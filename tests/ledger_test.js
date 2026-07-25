@@ -29,6 +29,52 @@ const ADVANCE_PATTERNS = [
   'Következő', 'Dobás', 'Pörget', 'Húz', 'Felfed', 'Válasz',
 ];
 
+// ── Saját driverek ────────────────────────────────────────────────────────
+// Amit a generikus kattintgatás nem tud végigjátszani (rácsra rajzolás,
+// többfázisú átadás), annak külön forgatókönyv kell.
+const DRIVERS = {
+  // Útvesztő: csapdalerakás (5 típus, 5 külön mező) → átadás → ugyanez a másik
+  // félnek → útvonalrajzolás mindkét oldalon → feltárás-animáció → eredmény
+  async utveszto(p) {
+    const btn = (re) => p.evaluate((re) => {
+      const b = Array.from(document.querySelectorAll('#__g button')).find(x => new RegExp(re).test(x.innerText) && !x.disabled);
+      if (b) { b.click(); return b.innerText.trim().slice(0, 24); } return null;
+    }, re);
+    const cell = (i) => p.evaluate((i) => {
+      const g = Array.from(document.querySelectorAll('#__g div')).find(d => getComputedStyle(d).display === 'grid' && d.children.length === 25);
+      if (g && g.children[i]) g.children[i].click();
+    }, i);
+    const txt = () => p.evaluate(() => document.getElementById('__g').innerText);
+    const fired = () => p.evaluate(() => window.__adv.length > 0);
+
+    const placeTraps = async () => {
+      let idx = 7;
+      for (const t of ['Sörcsokor', 'Fal', 'Álom', 'Örvény', 'Teleport']) {
+        await btn(t); await p.waitForTimeout(160);
+        for (let k = 0; k < 8; k++) {
+          await cell(idx); idx++;
+          await p.waitForTimeout(150);
+          if (new RegExp(t + ' ✓').test(await txt())) break;
+        }
+      }
+    };
+    // START=0, END=24 (5×5): felső sor végig, majd a jobb szélső oszlop le
+    const drawPath = async () => { for (const i of [0,1,2,3,4,9,14,19,24]) { await cell(i); await p.waitForTimeout(130); } };
+
+    await btn('Kezdés'); await p.waitForTimeout(700);
+    await placeTraps();  await btn('Kész'); await p.waitForTimeout(800);
+    await placeTraps();  await btn('Kész'); await p.waitForTimeout(800);
+    await drawPath();    await btn('Kész'); await p.waitForTimeout(800);
+    await drawPath();    await btn('FELTÁRÁS'); await p.waitForTimeout(1500);
+    // futás-animáció: a köztes „→ X futása!" gombokat is meg kell nyomni
+    for (let i = 0; i < 40; i++) {
+      if (await fired()) break;
+      await btn('futása|Tovább|Kész|Következő|Rendben|FELTÁRÁS|→');
+      await p.waitForTimeout(900);
+    }
+  },
+};
+
 async function playOne(browser, gameId) {
   const p = await browser.newPage({ viewport: { width: 390, height: 900 } });
   const errs = []; p.on('pageerror', e => { if (!/ServiceWorker/.test(e.message)) errs.push(e.message); });
@@ -60,8 +106,17 @@ async function playOne(browser, gameId) {
   }, { gameId, players: PLAYERS });
   await p.waitForTimeout(900);
 
+  // Ha van saját driver ehhez a játékhoz, azt futtatjuk a generikus helyett
+  if (DRIVERS[gameId]) {
+    await DRIVERS[gameId](p);
+    await p.waitForTimeout(800);
+    const o = await p.evaluate(() => ({ adv: window.__adv, res: window.__res, text: document.getElementById('__g').innerText.slice(0,120) }));
+    await p.close();
+    return { ...o, clicks: -1, errs };
+  }
+
   // Generikus driver. Ha a képernyő szövege nem változik két kattintás után,
-  // ráváltunk a rács-cellákra (Útvesztő csapdalerakás, Memória, Collect…).
+  // ráváltunk a rács-cellákra (Memória, Collect…).
   let clicks = 0, stuck = 0, lastText = '';
   for (let step = 0; step < 44; step++) {
     if (await p.evaluate(() => window.__adv.length > 0)) break;
@@ -106,7 +161,8 @@ async function playOne(browser, gameId) {
 // A banner (onResult) és a könyvelés (onAdvance) egyezésének ellenőrzése
 function check(gameId, r) {
   const problems = [];
-  if (!r.adv.length) return { status:'NEM_JATSZHATO', problems, note:`${r.clicks} kattintás után sem hívott onAdvance-t` };
+  if (!r.adv.length) return { status:'NEM_JATSZHATO', problems,
+    note: r.clicks < 0 ? 'a saját driver sem jutott el az onAdvance-ig' : `${r.clicks} kattintás után sem hívott onAdvance-t` };
   const pm = {}, dm = {};
   r.adv.forEach(a => {
     Object.entries(a.pm).forEach(([k,v]) => pm[k] = (pm[k]||0) + v);

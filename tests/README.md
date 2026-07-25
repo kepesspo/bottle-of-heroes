@@ -31,12 +31,15 @@ Kilépési kód `1`, ha bármelyik játéknál eltér a banner és a könyvelés
 - `✓ OK` — a banner és a könyvelés egyezik
 - `✗ HIBA` — eltérés vagy konzolhiba (ez a lényeg)
 - `– NEM_JATSZHATO` — a generikus driver nem tudta végigjátszani, **nem** azt
-  jelenti, hogy jó. Ezekhez saját driver kell:
+  jelenti, hogy jó. Ezekhez saját driver kell (`DRIVERS` a fájl elején):
   - *timing/ügyességi*: `ticktak`, `reakcio`, `szamsor`, `ritmus`, `tapper`,
-    `memoria`, `utveszto`, `cardbattle` (drag&drop)
+    `memoria`, `cardbattle` (drag&drop)
   - *több fázisú / lobbys*: `busz`, `blackjack`, `powerhour`, `loverseny`
   - *csak online szobában*: `ovfj`
   - `beerpong` — külön, teljes lefedettséggel: lásd a Beer Pong teszteket
+
+Saját driverrel már lefedett: **`utveszto`** (csapdalerakás → átadás →
+útvonalrajzolás → feltárás-animáció).
 
 ### Hogyan működik
 
