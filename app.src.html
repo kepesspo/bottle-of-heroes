@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.091';
+const APP_VERSION = 'v10.092';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -63710,10 +63710,21 @@ function JukeboxScreen({ go, deepLink }) {
       return n;
     } catch(e) { return 'Vendég'; }
   });
+  // Állandó eszköz-azonosító — ez alapján dől el, ki a lejátszó (host) eszköz
+  const [deviceId] = React.useState(() => {
+    try {
+      let d = localStorage.getItem('dnrbox_device');
+      if (!d) { d = 'dev_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36); localStorage.setItem('dnrbox_device', d); }
+      return d;
+    } catch(e) { return 'dev_tmp'; }
+  });
   const [queue, setQueue] = React.useState([]);
   const [nowPlaying, setNowPlaying] = React.useState(null);
   const [beat, setBeat] = React.useState(0);
-  const [isPlayer, setIsPlayer] = React.useState(false);
+  const [hostId, setHostId] = React.useState(null);
+  const [hostName, setHostName] = React.useState('');
+  const [claimErr, setClaimErr] = React.useState('');
+  const [takeoverOpen, setTakeoverOpen] = React.useState(false);
   const [addInput, setAddInput] = React.useState('');
   const [adding, setAdding] = React.useState(false);
   const [addErr, setAddErr] = React.useState('');
@@ -63740,14 +63751,31 @@ function JukeboxScreen({ go, deepLink }) {
   const playerRef = React.useRef(null);
   const ytReadyRef = React.useRef(false);
   const advancingRef = React.useRef(false);
-  const otherPlayerActive = !!beat && (Date.now() - beat < 25000) && !isPlayer;
   const apiKey = cfg.ytApiKey || '';
   const clamp2 = { display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' };
   const decodeHtml = (s) => { try { const t = document.createElement('textarea'); t.innerHTML = s || ''; return t.value; } catch(e){ return s || ''; } };
 
+  // ── Host-zár ──────────────────────────────────────────────────────────────
+  // Egyszerre csak EGY eszköz lehet a lejátszó (host). A hostId + heartbeat a
+  // közös dokumentumban él, így egy második eszköz nem tud véletlenül lejátszóvá
+  // válni és széttolni az állapotot. Ha a host eltűnik (lezárt telefon), a lease
+  // lejár és bárki átveheti.
+  const HOST_TTL = 30000;
+  const [nowTick, setNowTick] = React.useState(Date.now());
+  React.useEffect(() => { const iv = setInterval(() => setNowTick(Date.now()), 5000); return () => clearInterval(iv); }, []);
+  const hostLive = !!beat && (nowTick - beat < HOST_TTL);
+  const isHost = hostLive && hostId === deviceId;
+  const otherHostLive = hostLive && hostId !== deviceId;
+  const isHostRef = React.useRef(false);
+  React.useEffect(() => { isHostRef.current = isHost; }, [isHost]);
+
   React.useEffect(() => {
     if (!docRef || !queueRef) return;
-    const u1 = docRef.onSnapshot(s => { const d = s.data()||{}; setNowPlaying(d.nowPlaying || null); setBeat(d.playerHeartbeat || 0); });
+    const u1 = docRef.onSnapshot(s => {
+      const d = s.data()||{};
+      setNowPlaying(d.nowPlaying || null); setBeat(d.playerHeartbeat || 0);
+      setHostId(d.hostId || null); setHostName(d.hostName || '');
+    });
     const u2 = queueRef.orderBy('addedAt','asc').onSnapshot(s => setQueue(s.docs.map(d => ({ id:d.id, ...d.data() }))));
     return () => { u1&&u1(); u2&&u2(); };
   }, [docRef, queueRef]);
@@ -63758,27 +63786,61 @@ function JukeboxScreen({ go, deepLink }) {
     return () => u && u();
   }, [db]);
 
+  // Lejátszó szerep igénylése — tranzakcióban, hogy két eszköz ne szerezhesse meg
+  async function claimHost(force) {
+    if (!docRef) return;
+    setClaimErr('');
+    const take = () => docRef.set({ hostId: deviceId, hostName: name, playerHeartbeat: Date.now() }, { merge:true });
+    try {
+      if (db && typeof db.runTransaction === 'function') {
+        await db.runTransaction(async tx => {
+          const s = await tx.get(docRef);
+          const d = (s && s.data && s.data()) || {};
+          const live = d.playerHeartbeat && (Date.now() - d.playerHeartbeat < HOST_TTL);
+          if (!force && live && d.hostId && d.hostId !== deviceId) throw new Error('taken');
+          tx.set(docRef, { hostId: deviceId, hostName: name, playerHeartbeat: Date.now() }, { merge:true });
+        });
+      } else {
+        const s = await docRef.get();
+        const d = (s && s.data && s.data()) || {};
+        const live = d.playerHeartbeat && (Date.now() - d.playerHeartbeat < HOST_TTL);
+        if (!force && live && d.hostId && d.hostId !== deviceId) throw new Error('taken');
+        await take();
+      }
+      setTakeoverOpen(false);
+    } catch(e) {
+      setClaimErr(e && e.message === 'taken' ? 'Már van aktív lejátszó eszköz.' : 'Nem sikerült a lejátszó indítása.');
+    }
+  }
+  function releaseHost() {
+    if (!docRef) return;
+    docRef.set({ hostId: null, playerHeartbeat: 0 }, { merge:true }).catch(()=>{});
+  }
+
   React.useEffect(() => {
-    if (!isPlayer || !docRef) return;
+    if (!isHost || !docRef) return;
     const tick = () => docRef.set({ playerHeartbeat: Date.now() }, { merge:true }).catch(()=>{});
     tick();
     const iv = setInterval(tick, 10000);
     return () => clearInterval(iv);
-  }, [isPlayer, docRef]);
+  }, [isHost, docRef]);
+
+  // kilépéskor engedjük el a szerepet, hogy ne ragadjon be a box
+  React.useEffect(() => () => { if (isHostRef.current) releaseHost(); }, []);
 
   // keep the player device awake while it's the jukebox
   React.useEffect(() => {
-    if (!isPlayer || !('wakeLock' in navigator)) return;
+    if (!isHost || !('wakeLock' in navigator)) return;
     let lock = null;
     const acquire = async () => { try { lock = await navigator.wakeLock.request('screen'); } catch(e){} };
     acquire();
     const onVis = () => { if (document.visibilityState === 'visible') acquire(); };
     document.addEventListener('visibilitychange', onVis);
     return () => { document.removeEventListener('visibilitychange', onVis); try { lock && lock.release(); } catch(e){} };
-  }, [isPlayer]);
+  }, [isHost]);
 
   React.useEffect(() => {
-    if (!isPlayer) return;
+    if (!isHost) return;
     let cancelled = false;
     setYtLoadFailed(false);
     ytReadyRef.current = false;
@@ -63811,10 +63873,10 @@ function JukeboxScreen({ go, deepLink }) {
     // gombok addig "nem csinálnak semmit" a felületen, mert nincs mit vezérelniük
     const failTimer = setTimeout(() => { if (!cancelled && !ytReadyRef.current) setYtLoadFailed(true); }, 12000);
     return () => { cancelled = true; clearTimeout(failTimer); };
-  }, [isPlayer]);
+  }, [isHost]);
 
   React.useEffect(() => {
-    if (!isPlayer || !ytReady || !playerRef.current) return;
+    if (!isHost || !ytReady || !playerRef.current) return;
     if (nowPlaying && nowPlaying.videoId) {
       let cur = null; try { cur = playerRef.current.getVideoData(); } catch(e){}
       if (!cur || cur.video_id !== nowPlaying.videoId) {
@@ -63824,7 +63886,7 @@ function JukeboxScreen({ go, deepLink }) {
     } else if (!nowPlaying && queue.length > 0) {
       startNext();
     }
-  }, [isPlayer, ytReady, nowPlaying && nowPlaying.videoId, queue.length]);
+  }, [isHost, ytReady, nowPlaying && nowPlaying.videoId, queue.length]);
 
   // debounced YouTube search
   React.useEffect(() => {
@@ -63844,6 +63906,8 @@ function JukeboxScreen({ go, deepLink }) {
   }, [searchQ, apiKey, mode]);
 
   async function startNext() {
+    // csak a lejátszó (host) eszköz léptethet — így nem csúszhat szét az állapot
+    if (!isHostRef.current) return;
     if (advancingRef.current || !queueRef || !docRef) return;
     advancingRef.current = true;
     try {
@@ -63862,7 +63926,7 @@ function JukeboxScreen({ go, deepLink }) {
 
   async function addTrack(t) {
     if (!queueRef) return;
-    try { await queueRef.add({ videoId:t.videoId, title:t.title, author:t.author||'', thumb:t.thumb||jukeThumb(t.videoId), addedByName:name, addedAt: Date.now(), voteCount:0, votes:{} }); } catch(e){}
+    try { await queueRef.add({ videoId:t.videoId, title:t.title, author:t.author||'', thumb:t.thumb||jukeThumb(t.videoId), addedByName:name, addedById:deviceId, addedAt: Date.now(), voteCount:0, votes:{} }); } catch(e){}
   }
   const voteKey = (name||'').replace(/[^a-zA-Z0-9]/g,'_') || 'x';
   function toggleVote(q) {
@@ -63886,6 +63950,8 @@ function JukeboxScreen({ go, deepLink }) {
     await addTrack({ videoId:id, title:meta.title, author:meta.author, thumb:jukeThumb(id) });
     setAddInput(''); setAdding(false);
   }
+  // a lejátszó bármit kivehet a sorból, a vendég csak a saját számát
+  const canRemove = (q) => isHost || (q.addedById ? q.addedById === deviceId : q.addedByName === name);
   function removeItem(qid) { if (queueRef) queueRef.doc(qid).delete().catch(()=>{}); }
   function togglePlay() { const p = playerRef.current; if (!p) return; try { paused ? p.playVideo() : p.pauseVideo(); } catch(e){} }
   function skip() { startNext(); }
@@ -63901,13 +63967,23 @@ function JukeboxScreen({ go, deepLink }) {
   return (
     <div style={{ position:'fixed', top:'calc(-1 * env(safe-area-inset-top))', left:0, right:0, bottom:0, paddingTop:'env(safe-area-inset-top)', boxSizing:'border-box', background:T.bg, fontFamily:T.font, display:'flex', flexDirection:'column', overflow:'hidden' }}>
       <AppBar title="DNR BOX" onBack={deepLink ? null : ()=>go('home')} right={
-        <button onClick={()=>setIsPlayer(v=>!v)} style={{ display:'flex', alignItems:'center', gap:5, height:36, padding:'0 12px', borderRadius:12, border: isPlayer?'none':`1.5px solid ${T.inkMute}44`, background:isPlayer?T.mint:'transparent', color:isPlayer?'#fff':T.inkSoft, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' }}>
-          {isPlayer ? '🔊 Lejátszó' : '📺 Lejátszó'}
-        </button>
+        isHost ? (
+          <button onClick={releaseHost} style={{ display:'flex', alignItems:'center', gap:5, height:36, padding:'0 12px', borderRadius:12, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' }}>
+            🔊 Lejátszó
+          </button>
+        ) : otherHostLive ? (
+          <button onClick={()=>setTakeoverOpen(true)} style={{ display:'flex', alignItems:'center', gap:5, height:36, padding:'0 12px', borderRadius:12, border:`1.5px solid ${T.inkMute}44`, background:'transparent', color:T.inkSoft, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, cursor:'pointer', whiteSpace:'nowrap', maxWidth:150, overflow:'hidden', textOverflow:'ellipsis' }}>
+            📺 {hostName || 'Lejátszó aktív'}
+          </button>
+        ) : (
+          <button onClick={()=>claimHost(false)} style={{ display:'flex', alignItems:'center', gap:5, height:36, padding:'0 12px', borderRadius:12, border:'none', background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' }}>
+            📺 Légy a lejátszó
+          </button>
+        )
       } />
 
       <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
-        {isPlayer && (
+        {isHost && (
           <div style={{ padding:'12px 16px 0', maxWidth:640, margin:'0 auto' }}>
             <div style={{ borderRadius:18, overflow:'hidden', boxShadow:T.shadow, background:'#000' }}>
               <div style={{ position:'relative', width:'100%', paddingTop:'56.25%' }}>
@@ -63939,14 +64015,24 @@ function JukeboxScreen({ go, deepLink }) {
         )}
 
         <div style={{ padding:'16px', maxWidth:640, margin:'0 auto', display:'flex', flexDirection:'column', gap:14 }}>
-          {otherPlayerActive && (
+          {otherHostLive && (
             <div style={{ background:T.mintSoft, borderRadius:14, padding:'10px 14px', fontFamily:T.font, fontSize:13, fontWeight:T.weightBody, color:T.ink, display:'flex', alignItems:'center', gap:9 }}>
               <span style={{ width:9, height:9, borderRadius:'50%', background:T.mint, flexShrink:0 }} />
-              Egy lejátszó eszköz már aktív — csak dobd be a zenéket.
+              <span>Lejátszó: <b>{hostName || 'másik eszköz'}</b> — te csak dobd be a zenéket.</span>
             </div>
           )}
+          {!isHost && !otherHostLive && (
+            <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:18, flexShrink:0 }}>📺</span>
+              <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontSize:12.5, fontWeight:T.weightBody, color:T.inkSoft, lineHeight:1.35 }}>Nincs aktív lejátszó. Ha ez az eszköz megy a hangfalba, indítsd el!</div>
+              <button onClick={()=>claimHost(false)} style={{ flexShrink:0, padding:'9px 14px', borderRadius:12, border:'none', background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12.5, cursor:'pointer' }}>Indítás</button>
+            </div>
+          )}
+          {claimErr && (
+            <div style={{ background:T.coralSoft, borderRadius:12, padding:'9px 13px', fontFamily:T.font, fontSize:12.5, fontWeight:T.weightBody, color:T.coral }}>{claimErr}</div>
+          )}
 
-          {!isPlayer && (
+          {!isHost && (
             np ? (
               <div style={{ display:'flex', gap:13, alignItems:'center', background:T.surface, borderRadius:20, padding:14, boxShadow:T.shadow }}>
                 <img src={np.thumb || jukeThumb(np.videoId)} style={{ width:88, height:66, objectFit:'cover', borderRadius:12, flexShrink:0 }} />
@@ -64032,7 +64118,7 @@ function JukeboxScreen({ go, deepLink }) {
                       <span style={{ fontSize:13 }}>▲</span>
                       <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:12, marginTop:1 }}>{vc}</span>
                     </button>
-                    <button onClick={()=>removeItem(q.id)} aria-label="Törlés" style={{ width:28, height:28, borderRadius:9, border:'none', background:'transparent', color:T.inkMute, fontSize:14, cursor:'pointer', flexShrink:0 }}>✕</button>
+                    {canRemove(q) && <button onClick={()=>removeItem(q.id)} aria-label="Törlés" style={{ width:28, height:28, borderRadius:9, border:'none', background:'transparent', color:T.inkMute, fontSize:14, cursor:'pointer', flexShrink:0 }}>✕</button>}
                   </div>
                   );
                 })}
@@ -64041,6 +64127,21 @@ function JukeboxScreen({ go, deepLink }) {
           </div>
         </div>
       </div>
+
+      {takeoverOpen && (
+        <div onClick={()=>setTakeoverOpen(false)} style={{ position:'fixed', inset:0, zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.5)', backdropFilter:'blur(3px)', WebkitBackdropFilter:'blur(3px)', padding:24 }}>
+          <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:340, background:T.surface, borderRadius:22, padding:'22px 20px', boxShadow:'0 24px 60px rgba(0,0,0,0.4)' }}>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textAlign:'center', marginBottom:6 }}>📺 Lejátszó átvétele</div>
+            <div style={{ fontFamily:T.font, fontSize:13, fontWeight:T.weightBody, color:T.inkSoft, textAlign:'center', lineHeight:1.45, marginBottom:16 }}>
+              Most <b>{hostName || 'egy másik eszköz'}</b> a lejátszó. Csak akkor vedd át, ha az az eszköz már nem megy a hangfalba — különben két helyen szólna a zene.
+            </div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={()=>setTakeoverOpen(false)} style={{ flex:1, padding:'12px', borderRadius:12, border:`1.5px solid ${T.inkMute}33`, background:'transparent', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.inkSoft, cursor:'pointer' }}>Mégsem</button>
+              <div style={{ flex:1 }}><PrimaryButton onClick={()=>claimHost(true)} tone="coral" big={false} size="md">Átveszem</PrimaryButton></div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {setOpen && (
         <div onClick={()=>setSetOpen(false)} style={{ position:'fixed', inset:0, zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.5)', backdropFilter:'blur(3px)', WebkitBackdropFilter:'blur(3px)', padding:24 }}>
