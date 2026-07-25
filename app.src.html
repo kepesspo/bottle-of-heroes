@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.097';
+const APP_VERSION = 'v10.098';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -63773,7 +63773,11 @@ function JukeboxScreen({ go, deepLink }) {
   const [nowTick, setNowTick] = React.useState(Date.now());
   React.useEffect(() => { const iv = setInterval(() => setNowTick(Date.now()), 5000); return () => clearInterval(iv); }, []);
   const hostLive = !!beat && (nowTick - beat < HOST_TTL);
-  const isHost = hostLive && hostId === deviceId;
+  // Ha a közös dokumentum szerint ez az eszköz a lejátszó, akkor az is — a saját
+  // heartbeatünk elavulása (háttérbe került app, lezárt képernyő) nem foszthat meg
+  // a szereptől, különben a videó konténer ki-be ugrálna és elveszne a lejátszó.
+  // A TTL csak ahhoz kell, hogy MÁSOK eldönthessék: él-e még a host.
+  const isHost = !!hostId && hostId === deviceId;
   const otherHostLive = hostLive && hostId !== deviceId;
   const isHostRef = React.useRef(false);
   React.useEffect(() => { isHostRef.current = isHost; }, [isHost]);
@@ -63865,8 +63869,24 @@ function JukeboxScreen({ go, deepLink }) {
     return () => { document.removeEventListener('visibilitychange', onVis); try { lock && lock.release(); } catch(e){} };
   }, [isHost]);
 
+  // él-e még a lejátszó, vagyis a hozzá tartozó iframe a dokumentumban van-e
+  const playerAlive = () => {
+    const p2 = playerRef.current;
+    if (!p2) return false;
+    try { const fr = p2.getIframe && p2.getIframe(); return !!fr && document.contains(fr); } catch(e) { return false; }
+  };
+  const dropPlayer = () => {
+    try { playerRef.current && playerRef.current.destroy && playerRef.current.destroy(); } catch(e){}
+    playerRef.current = null; ytReadyRef.current = false; setYtReady(false);
+  };
+
   React.useEffect(() => {
-    if (!isHost) return;
+    if (!isHost) {
+      // a videó konténer kikerült a DOM-ból — dobjuk el a lejátszót is, különben
+      // legközelebb egy megsemmisült példányt vezérelnénk (nem indulna a zene)
+      if (playerRef.current) dropPlayer();
+      return;
+    }
     let cancelled = false;
     setYtLoadFailed(false);
     ytReadyRef.current = false;
@@ -63880,7 +63900,11 @@ function JukeboxScreen({ go, deepLink }) {
       }
     }
     ensureApi(() => {
-      if (cancelled || playerRef.current) { if (playerRef.current) { ytReadyRef.current = true; setYtReady(true); setYtLoadFailed(false); } return; }
+      if (cancelled) return;
+      // csak akkor használjuk újra a meglévő lejátszót, ha az iframe-je még él
+      if (playerAlive()) { ytReadyRef.current = true; setYtReady(true); setYtLoadFailed(false); return; }
+      if (playerRef.current) dropPlayer();
+      if (!document.getElementById('dnrbox-yt')) return;
       playerRef.current = new window.YT.Player('dnrbox-yt', {
         height:'100%', width:'100%',
         playerVars:{ autoplay:1, playsinline:1, rel:0, modestbranding:1 },
