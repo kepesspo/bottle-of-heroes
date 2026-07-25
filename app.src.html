@@ -33965,20 +33965,43 @@ window.triggerHaptic = function() {
     if (profile.drinkLimit !== undefined) data.drinkLimit = profile.drinkLimit || firebase.firestore.FieldValue.delete();
     return ref.set(data, { merge: true }).then(function() { return ref.id; });
   };
+  // FONTOS: set(..., {merge:true}) NEM értelmezi a pontot mezőúttként (csak az update() teszi),
+  // ezért a { 'bp_h2h.p_x.w': ... } alakú kulcsból szó szerinti, pontot tartalmazó mezőnév lenne.
+  // Ez a segéd beágyazott objektummá alakítja — a merge így rendesen mélységi összefésülést csinál.
+  function expandDotKeys(src) {
+    if (!src || typeof src !== 'object') return src;
+    var dotted = Object.keys(src).filter(function(k) { return k.indexOf('.') !== -1; });
+    if (!dotted.length) return src;
+    var out = Object.assign({}, src);
+    dotted.forEach(function(k) { delete out[k]; });
+    dotted.forEach(function(k) {
+      var segs = k.split('.'), cur = out;
+      for (var i = 0; i < segs.length - 1; i++) {
+        var s = segs[i];
+        cur[s] = (cur[s] && typeof cur[s] === 'object' && !Array.isArray(cur[s])) ? Object.assign({}, cur[s]) : {};
+        cur = cur[s];
+      }
+      var last = segs[segs.length - 1], v = src[k];
+      // olvasásnál a régi (lapos) és az új (ágyazott) érték összeadódik
+      cur[last] = (typeof cur[last] === 'number' && typeof v === 'number') ? cur[last] + v : v;
+    });
+    return out;
+  }
+  window.__expandDotKeys = expandDotKeys;
   window.getStats = function(profileId) {
     return db.collection('stats').doc(profileId).get().then(function(d) {
-      return d.exists ? d.data() : {};
+      return d.exists ? expandDotKeys(d.data()) : {};
     }).catch(function() { return {}; });
   };
   window.getAllStats = function() {
     return db.collection('stats').get().then(function(snap) {
       var result = {};
-      snap.docs.forEach(function(d) { result[d.id] = d.data(); });
+      snap.docs.forEach(function(d) { result[d.id] = expandDotKeys(d.data()); });
       return result;
     }).catch(function() { return {}; });
   };
   window.updateStats = function(profileId, updates) {
-    return db.collection('stats').doc(profileId).set(updates, { merge: true }).catch(function(e) { console.warn('updateStats', e); });
+    return db.collection('stats').doc(profileId).set(expandDotKeys(updates), { merge: true }).catch(function(e) { console.warn('updateStats', e); });
   };
   window.incrementStats = function(profileId, increments, bestValues) {
     var data = {};
@@ -34037,7 +34060,7 @@ window.triggerHaptic = function() {
   window.recordGameWin = function(gameId, profileId) {
     var update = {};
     update['winners.' + profileId] = firebase.firestore.FieldValue.increment(1);
-    return db.collection('game_stats').doc(gameId).set(update, { merge: true }).catch(function(e) { console.warn('recordGameWin', e); });
+    return db.collection('game_stats').doc(gameId).set(expandDotKeys(update), { merge: true }).catch(function(e) { console.warn('recordGameWin', e); });
   };
   window.updateStreak = function(profileId, won) {
     return db.collection('stats').doc(profileId).get().then(function(d) {
@@ -34050,7 +34073,7 @@ window.triggerHaptic = function() {
   window.getAllGameStats = function() {
     return db.collection('game_stats').get().then(function(snap) {
       var result = {};
-      snap.docs.forEach(function(d) { result[d.id] = d.data(); });
+      snap.docs.forEach(function(d) { result[d.id] = expandDotKeys(d.data()); });
       return result;
     }).catch(function() { return {}; });
   };
@@ -34885,7 +34908,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.104';
+const APP_VERSION = 'v10.105';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36957,6 +36980,24 @@ function StatsScreen({ go, onOpenObserver }) {
     return played > 0 ? Math.round(mw / played * 100) : null;
   };
 
+  // Head-to-head: ki ellen megy jól / rosszul. Nincs hozzá dátumozott napló,
+  // ezért mindig az összesített (élettartam) mérleget mutatjuk.
+  const h2hOf = (id) => {
+    const h2h = (stats[id] || {}).bp_h2h || {};
+    const arr = Object.keys(h2h).map(oid => {
+      const r = h2h[oid] || {}; const w = r.w||0, l = r.l||0, d = r.d||0;
+      return { oid, w, l, d, played: w+l+d, diff: w-l };
+    }).filter(x => x.played > 0).sort((a,b) => (b.diff - a.diff) || (b.w - a.w) || (a.l - b.l));
+    if (!arr.length) return null;
+    const best = arr[0], worst = arr[arr.length - 1];
+    const nameOf = oid => (profiles.find(p => p.id === oid) || {}).name || 'Ismeretlen';
+    return {
+      best:  best.w > 0 ? { name: nameOf(best.oid), w: best.w, l: best.l } : null,
+      worst: (worst !== best ? worst.l > 0 : (best.l > 0 && best.w === 0))
+        ? { name: nameOf(worst.oid), w: worst.w, l: worst.l } : null,
+    };
+  };
+
   const pfBorder = 'none';
   const pfShadow = T.shadow;
   return (
@@ -37146,6 +37187,24 @@ function StatsScreen({ go, onOpenObserver }) {
                       </div>
                     </div>
                   )}
+                  {/* Ki ellen megy jól / rosszul */}
+                  {(() => {
+                    const h = h2hOf(p.id);
+                    if (!h || (!h.best && !h.worst)) return null;
+                    const chip = (icon, label, o, bg, fg) => (
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:5, background:bg, borderRadius:999, padding:'4px 9px', maxWidth:'100%', minWidth:0 }}>
+                        <BohIcon name={icon} size={11} />
+                        <span style={{ fontFamily:T.font, fontSize:10, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.05em', flexShrink:0 }}>{label}</span>
+                        <span style={{ fontFamily:T.font, fontSize:11.5, fontWeight:900, color:fg, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.name} {o.w}-{o.l}</span>
+                      </span>
+                    );
+                    return (
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8, marginLeft:68 }}>
+                        {h.best  && chip('target', 'Jól megy',    h.best,  T.mintSoft,  T.mintDeep)}
+                        {h.worst && chip('skull',  'Mumus',       h.worst, `${T.coral}22`, T.coral)}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
@@ -42363,7 +42422,9 @@ function PlayerProfileStats({ profileId }) {
       const sorted = [...h2hArr].sort((a,b) => (b.diff - a.diff) || (b.w - a.w) || (a.l - b.l));
       const best = sorted[0], worst = sorted[sorted.length - 1];
       if (best.w > 0) bp.push({ icon:'target', label:'Legjobb ellenfél', value: `${nameOf(best.oid)} ${best.w}-${best.l}` });
-      if (worst !== best && worst.l > 0) bp.push({ icon:'skull', label:'Mumus', value: `${nameOf(worst.oid)} ${worst.w}-${worst.l}` });
+      // Egyetlen ellenfélnél is legyen kiírás: ha ellene csak vereség van, ő a mumus
+      const showWorst = worst !== best ? worst.l > 0 : (best.l > 0 && best.w === 0);
+      if (showWorst) bp.push({ icon:'skull', label:'Mumus', value: `${nameOf(worst.oid)} ${worst.w}-${worst.l}` });
     }
     sections.push({ title:'Beer Pong', rows: bp });
   }
