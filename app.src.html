@@ -34908,7 +34908,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.108';
+const APP_VERSION = 'v10.109';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -47364,7 +47364,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
                   })}
                 </div>
                 <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, marginTop:9, textAlign:'center' }}>
-                  Ez már be van számítva a buli pontjaiba és kortyaiba.
+                  Beszámít a buli pontjaiba és kortyaiba.
                 </div>
               </div>
             );
@@ -58260,6 +58260,20 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     commitRound(newPlayers, fb, newTurn, newGameIdx, newRound);
   };
 
+  // Buli lezárása közben: a pendingCommit a Kövi gombra várna, de innen nincs
+  // következő kör — ezért az utolsó játék pontjait/kortyait be kell írni a
+  // játékosokba, különben lenullázva jelennének meg a végeredményen.
+  // (Ez érintette a Beer Pongot: a bajnokság végén a "Vége" gomb eldobta.)
+  const flushPendingBeforeEnd = () => {
+    const pc = pendingCommit;
+    if (pc && pc.newPlayers) {
+      setPlayers(pc.newPlayers);
+      if (setScoreHistory) setScoreHistory(prev => [...prev, pc.newPlayers.map(p => ({ id: p.id, name: p.name, color: p.color, pts: p.points }))]);
+      if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { players: pc.newPlayers });
+    }
+    setPendingCommit(null);
+  };
+
   const punishWildcard = (pid) => {
     const upd = playersRef.current.map(p => p.id === pid ? { ...p, drinks: (p.drinks || 0) + 1 } : p);
     setPlayers(upd);
@@ -58964,7 +58978,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           const bpEndActive = currentGameId === 'beerpong' && bpEnded && !transitioning;
           const active = (!!pendingCommit && !transitioning && currentGameId !== 'beerpong') || bpEndActive;
           const isEndBtn = bpEndActive && games.length <= 1;
-          const doEnd = () => { setPendingCommit(null); saveCurrentGameStats(); if (setLastGameRound) setLastGameRound(round); try { localStorage.removeItem('boh_session'); } catch(e) {} go('end'); };
+          const doEnd = () => { flushPendingBeforeEnd(); saveCurrentGameStats(); if (setLastGameRound) setLastGameRound(round); try { localStorage.removeItem('boh_session'); } catch(e) {} go('end'); };
           return (
             <button
               onClick={() => { if (nextLpFired.current) { nextLpFired.current = false; return; } if (isEndBtn) doEnd(); else commitPending(); }}
@@ -59239,7 +59253,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                   </button>
                 </div>
 
-                <button onClick={() => { setPendingCommit(null); setShowMenu(false); saveCurrentGameStats(); if (setLastGameRound) setLastGameRound(round); try { localStorage.removeItem('boh_session'); } catch(e) {} go('end'); }}
+                <button onClick={() => { flushPendingBeforeEnd(); setShowMenu(false); saveCurrentGameStats(); if (setLastGameRound) setLastGameRound(round); try { localStorage.removeItem('boh_session'); } catch(e) {} go('end'); }}
                   style={{ width:'100%', height:52, border:'none', background:T.mint, color:'#fff',
                     fontFamily:T.font, fontWeight:900, fontSize:15, borderRadius:16, cursor:'pointer',
                     display:'flex', alignItems:'center', justifyContent:'center', gap:8,
