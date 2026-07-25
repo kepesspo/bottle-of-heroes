@@ -34883,7 +34883,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.101';
+const APP_VERSION = 'v10.102';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36479,27 +36479,60 @@ function recentBadgeKeys(statObj) {
 }
 
 // Mérföldkő-kitüntetések — az élettartam-statokból származtatva (nem tárolt).
-// val: az aktuális érték, goal: a cél — ezekből jön a haladásjelző a vitrinben.
-const ACHIEVEMENTS = [
-  { id:'d100',  icon:'beer',    label:'100 korty',        val: s => s.totalDrinks||0,     goal:100,  unit:'korty' },
-  { id:'d500',  icon:'beer',    label:'500 korty',        val: s => s.totalDrinks||0,     goal:500,  unit:'korty' },
-  { id:'d1000', icon:'fire',    label:'1000 korty',       val: s => s.totalDrinks||0,     goal:1000, unit:'korty' },
-  { id:'p100',  icon:'star',    label:'100 pont',         val: s => s.totalPoints||0,     goal:100,  unit:'pont' },
-  { id:'p500',  icon:'star',    label:'500 pont',         val: s => s.totalPoints||0,     goal:500,  unit:'pont' },
-  { id:'s10',   icon:'flag',    label:'10 parti',         val: s => s.totalSessions||0,   goal:10,   unit:'parti' },
-  { id:'s50',   icon:'medal1',  label:'Veterán · 50 parti', val: s => s.totalSessions||0, goal:50,   unit:'parti' },
-  { id:'bp1',   icon:'trophy',  label:'Beer Pong bajnok', val: s => s.bp_tournaments||0,  goal:1,    unit:'bajnoki cím' },
-  { id:'bp5',   icon:'crown',   label:'5× BP bajnok',     val: s => s.bp_tournaments||0,  goal:5,    unit:'bajnoki cím' },
-  { id:'st5',   icon:'fire',    label:'5-ös streak',      val: s => s.bestStreak||0,      goal:5,    unit:'széria' },
-  { id:'st10',  icon:'bolt',    label:'10-es streak',     val: s => s.bestStreak||0,      goal:10,   unit:'széria' },
-  { id:'bz5',   icon:'check',   label:'5 busz',           val: s => s.busz_completions||0, goal:5,   unit:'busz' },
-  { id:'react', icon:'bolt',    label:'Villámkéz · <300ms', goal:1, unit:'', hint:'Reagálj 300 ms alatt egy reakció-játékban',
-    val: s => (s.bestReactionTime != null && s.bestReactionTime < 300) ? 1 : 0 },
+// Családokba szervezve: minden családnak van egy mért értéke (val) és több szintje
+// (tiers). A vitrin családonként csoportosítva mutatja őket, haladásjelzővel.
+const ACHIEVEMENT_FAMILIES = [
+  { id:'drinks', title:'Korty',        icon:'beer',   unit:'korty', val: s => s.totalDrinks||0,
+    tiers:[100,200,300,400,500,1000], names:['Kezdő korty','Bemelegítve','Rutinos','Kemény mag','Ötszázas klub','Legenda'] },
+  { id:'points', title:'Pont',         icon:'star',   unit:'pont',  val: s => s.totalPoints||0,
+    tiers:[100,250,500,1000,2000], names:['Első százas','Gyűjtögető','Félezres','Ezres','Pontvadász'] },
+  { id:'sess',   title:'Partik',       icon:'flag',   unit:'parti', val: s => s.totalSessions||0,
+    tiers:[5,10,25,50,100], names:['Törzstag','Tízes','Visszajáró','Veterán','Százas klub'] },
+  { id:'rounds', title:'Körök',        icon:'redo',   unit:'kör',   val: s => s.totalRounds||0,
+    tiers:[100,500,1000,2500,5000], names:['Száz kör','Ötszáz kör','Ezer kör','Kitartó','Maratoni'] },
+  { id:'wins',   title:'Győzelmek',    icon:'trophy', unit:'győzelem', val: s => s.totalWins||0,
+    tiers:[1,5,10,25,50], names:['Első siker','Ötszörös','Tízszeres','Sorozatnyerő','Bajnokok bajnoka'] },
+  { id:'streak', title:'Széria',       icon:'fire',   unit:'széria', val: s => s.bestStreak||0,
+    tiers:[3,5,10,15], names:['Hármas széria','Ötös széria','Tízes széria','Megállíthatatlan'] },
+  { id:'bpcup',  title:'Beer Pong bajnoki cím', icon:'crown', unit:'cím', val: s => s.bp_tournaments||0,
+    tiers:[1,3,5,10], names:['Első kupa','Háromszoros','Ötszörös','Dinasztia'] },
+  { id:'bpwin',  title:'Beer Pong meccsgyőzelem', icon:'cheers', unit:'meccs', val: s => s.bp_match_wins||0,
+    tiers:[10,25,50,100], names:['Tíz meccs','Rutinos dobó','Mesterlövész','Asztal ura'] },
+  { id:'busz',   title:'Busz',         icon:'check',  unit:'busz',  val: s => s.busz_completions||0,
+    tiers:[1,5,10,25], names:['Első busz','Ötös busz','Buszsofőr','Buszkirály'] },
+  { id:'react',  title:'Reakció',      icon:'bolt',   unit:'', reverse:true, val: s => s.bestReactionTime,
+    tiers:[400,300,250,200], names:['Fürge · <400ms','Villámkéz · <300ms','Reflexbajnok · <250ms','Emberfeletti · <200ms'] },
+  { id:'wr',     title:'Win rate',     icon:'medal1', unit:'%', minSess:10, val: s => (s.totalSessions||0) >= 10 ? Math.round((s.totalWins||0)/s.totalSessions*100) : 0,
+    tiers:[50,70], names:['Nyerő típus · 50%','Dominancia · 70%'] },
+  { id:'avgd',   title:'Átlag korty / parti', icon:'beer', unit:'', minSess:5, val: s => (s.totalSessions||0) >= 5 ? (s.totalDrinks||0)/s.totalSessions : 0,
+    tiers:[10,15,20], names:['Nagyivó · 10+','Szomjas lélek · 15+','Feneketlen · 20+'] },
+  { id:'avgp',   title:'Átlag pont / parti', icon:'star', unit:'', minSess:5, val: s => (s.totalSessions||0) >= 5 ? (s.totalPoints||0)/s.totalSessions : 0,
+    tiers:[5,10,15], names:['Pontszerző · 5+','Pontgyűjtő · 10+','Pontgép · 15+'] },
 ];
+// lapos lista a régi felhasználási helyekhez (megszerzett jelvény-chipek)
+const ACHIEVEMENTS = ACHIEVEMENT_FAMILIES.flatMap(f => f.tiers.map((goal, i) => ({
+  id: f.id + '_' + goal, icon: f.icon, label: f.names[i], family: f.id, goal, unit: f.unit,
+  reverse: !!f.reverse, minSess: f.minSess, val: f.val,
+})));
 function achievementState(a, s) {
-  const cur = a.val ? a.val(s || {}) : 0;
+  const st = s || {};
+  const raw = a.val ? a.val(st) : 0;
   const goal = a.goal || 1;
-  return { cur, goal, done: cur >= goal, pct: Math.max(0, Math.min(100, Math.round(cur / goal * 100))) };
+  // reverse: a kisebb érték a jobb (reakcióidő) — ott nincs értelmes haladás-sáv
+  if (a.reverse) {
+    const has = raw != null && raw > 0;
+    const done = has && raw <= goal;
+    return { cur: has ? raw : 0, goal, done, pct: done ? 100 : 0, reverse:true,
+             note: has ? `Legjobb: ${raw} ms` : 'Játssz egy reakció-játékot' };
+  }
+  const cur = typeof raw === 'number' && isFinite(raw) ? raw : 0;
+  const done = cur >= goal;
+  // küszöb alatti mintaszám: a jelvény még nem nyitott meg
+  if (a.minSess && (st.totalSessions || 0) < a.minSess) {
+    return { cur: 0, goal, done:false, pct:0, note: `Legalább ${a.minSess} parti kell hozzá` };
+  }
+  const show = cur % 1 === 0 ? cur : Math.round(cur * 10) / 10;
+  return { cur: show, goal, done, pct: Math.max(0, Math.min(100, Math.round(cur / goal * 100))) };
 }
 
 // Jelvény-vitrin — minden kitüntetés egy helyen, a még nem teljesítettek
@@ -36521,32 +36554,53 @@ function AchievementsSheet({ stats, profileName, onClose }) {
             {Math.round(doneCount / Math.max(1, rows.length) * 100)}%
           </div>
         </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {sorted.map(({ a, st }) => (
-            <div key={a.id} style={{ display:'flex', alignItems:'center', gap:11, background: st.done ? T.mintSoft : T.bgSoft, borderRadius:14, padding:'11px 13px', opacity: st.done ? 1 : 0.72 }}>
-              <div style={{ width:38, height:38, borderRadius:12, background: st.done ? T.surface : `${T.inkMute}22`, display:'grid', placeItems:'center', flexShrink:0, filter: st.done ? 'none' : 'grayscale(1)' }}>
-                <BohIcon name={a.icon} size={19} />
-              </div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13.5, color: st.done ? T.mintDeep : T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{a.label}</span>
-                  {st.done && <span style={{ fontSize:12, color:T.mintDeep, flexShrink:0 }}>✓</span>}
+        <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          {ACHIEVEMENT_FAMILIES.map(f => {
+            const items = ACHIEVEMENTS.filter(a => a.family === f.id).map(a => ({ a, st: achievementState(a, s) }));
+            const fDone = items.filter(x => x.st.done).length;
+            // az első még nem teljesített szint a "következő cél"
+            const nextIdx = items.findIndex(x => !x.st.done);
+            return (
+              <div key={f.id}>
+                <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:7, marginLeft:2 }}>
+                  <BohIcon name={f.icon} size={15} />
+                  <span style={{ fontFamily:T.font, fontSize:11, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.07em' }}>{f.title}</span>
+                  <span style={{ fontFamily:T.font, fontSize:11, fontWeight:800, color: fDone === items.length ? T.mintDeep : T.inkMute }}>{fDone}/{items.length}</span>
                 </div>
-                {st.done ? (
-                  <div style={{ fontFamily:T.font, fontSize:11, color:T.mintDeep, marginTop:2 }}>Megszerezve</div>
-                ) : (
-                  <React.Fragment>
-                    <div style={{ height:5, borderRadius:5, background:`${T.inkMute}22`, overflow:'hidden', marginTop:6 }}>
-                      <div style={{ width:st.pct+'%', height:'100%', background:T.mint, transition:'width .3s' }} />
-                    </div>
-                    <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, marginTop:3 }}>
-                      {a.hint && st.cur === 0 ? a.hint : `${st.cur} / ${st.goal}${a.unit ? ' ' + a.unit : ''}`}
-                    </div>
-                  </React.Fragment>
-                )}
+                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                  {items.map(({ a, st }, i) => {
+                    const isNext = i === nextIdx;
+                    const far = !st.done && !isNext;
+                    return (
+                      <div key={a.id} style={{ display:'flex', alignItems:'center', gap:11, background: st.done ? T.mintSoft : T.bgSoft, borderRadius:13, padding: far ? '8px 12px' : '10px 13px', opacity: far ? 0.5 : 1 }}>
+                        <div style={{ width: far ? 28 : 34, height: far ? 28 : 34, borderRadius:10, background: st.done ? T.surface : `${T.inkMute}22`, display:'grid', placeItems:'center', flexShrink:0, filter: st.done ? 'none' : 'grayscale(1)' }}>
+                          <BohIcon name={a.icon} size={far ? 15 : 17} />
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                            <span style={{ fontFamily:T.font, fontWeight: far ? 700 : 900, fontSize: far ? 12.5 : 13.5, color: st.done ? T.mintDeep : T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{a.label}</span>
+                            {st.done && <span style={{ fontSize:12, color:T.mintDeep, flexShrink:0 }}>✓</span>}
+                          </div>
+                          {st.done ? null : isNext ? (
+                            <React.Fragment>
+                              {!st.reverse && (
+                                <div style={{ height:5, borderRadius:5, background:`${T.inkMute}22`, overflow:'hidden', marginTop:6 }}>
+                                  <div style={{ width:st.pct+'%', height:'100%', background:T.mint, transition:'width .3s' }} />
+                                </div>
+                              )}
+                              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, marginTop:3 }}>
+                                {st.note || `${st.cur} / ${st.goal}${a.unit ? ' ' + a.unit : ''}`}
+                              </div>
+                            </React.Fragment>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </SheetOverlay>
