@@ -34020,6 +34020,21 @@ window.triggerHaptic = function() {
     if (Object.keys(data).length === 0) return Promise.resolve();
     return ref.set(data, { merge: true }).catch(function(e) { console.warn('incrementStats', e); });
   };
+  // Kliens-oldali osszeomlas naplozasa (hibahatarbol hivva). Csendes: ha nem
+  // megy at, az nem szabad hogy tovabbi hibat okozzon.
+  window.logClientError = function(data) {
+    try {
+      return db.collection('client_errors').add({
+        ts: Date.now(),
+        version: (typeof APP_VERSION !== 'undefined' ? APP_VERSION : null),
+        where: String(data && data.where || 'ismeretlen').slice(0, 80),
+        message: String(data && data.message || '').slice(0, 400),
+        stack: String(data && data.stack || '').slice(0, 1500),
+        componentStack: String(data && data.componentStack || '').slice(0, 1500),
+        ua: (navigator.userAgent || '').slice(0, 200),
+      }).catch(function(){});
+    } catch (e) { return Promise.resolve(); }
+  };
   window.logStatEvent = function(profileId, deltas) {
     if (!profileId || !deltas) return Promise.resolve();
     var clean = {};
@@ -34908,7 +34923,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.114';
+const APP_VERSION = 'v10.115';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -56223,6 +56238,37 @@ function SzolancGame({ gameIdx, players, onAdvance, onResult, onSetHideFooter })
   return null;
 }
 
+// ── Hibahatár a játékok köré ───────────────────────────────────────────────
+// React egyetlen render-hibára az egész fát leszedi — enélkül egy elgépelt
+// null-ellenőrzés (pl. a Zene `song.artist`-ja) fehér képernyőt hagy a buli
+// közepén. Itt elkapjuk: a játék helyére egy magyarázó doboz kerül, ahonnan
+// újra lehet indítani vagy tovább lehet lépni, és a hiba naplózódik.
+class GameErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err, info) {
+    try { console.error('[BOH] játék-hiba:', this.props.gameId, err, info); } catch (e) {}
+    try {
+      if (typeof window.logClientError === 'function') window.logClientError({
+        where: 'game:' + (this.props.gameId || '?'),
+        message: (err && err.message) || String(err),
+        stack: (err && err.stack) || '',
+        componentStack: (info && info.componentStack) || '',
+      });
+    } catch (e) {}
+  }
+  componentDidUpdate(prev) {
+    // új játék / újraindítás → tiszta lappal indulunk
+    if (this.state.err && (prev.gameId !== this.props.gameId || prev.resetKey !== this.props.resetKey)) {
+      this.setState({ err: null });
+    }
+  }
+  render() {
+    if (this.state.err) return this.props.renderFallback(this.state.err);
+    return this.props.children;
+  }
+}
+
 function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, roomCode, gameMeta, challenger, opponent, onSetHideFooter, onSetBuszSwitch, onSetBpEnded, onCommit }) {
   if (gameId === 'szolánc') return <SzolancGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} />;
   if (gameId === 'idopárbaj') return <IdoparbajGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
@@ -58266,6 +58312,14 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     commitRound(newPlayers, fb, newTurn, newGameIdx, newRound);
   };
 
+  // Elakadt (render-hibára futott) játék átugrása: nincs pont és korty, csak
+  // lépünk a következőre — a buli addigi állása marad.
+  const skipBrokenGame = () => {
+    setPendingCommit(null);
+    setGameRestartKey(k => k + 1);
+    commitRound(playersRef.current, null, (turn + 1) % Math.max(activePlayers.length, 1), gameIdx + 1, round + 1);
+  };
+
   // Buli lezárása közben: a pendingCommit a Kövi gombra várna, de innen nincs
   // következő kör — ezért az utolsó játék pontjait/kortyait be kell írni a
   // játékosokba, különben lenullázva jelennének meg a végeredményen.
@@ -58564,7 +58618,24 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         )}
 
         <div style={{ display:'flex', flexDirection:'column', flex: (currentGameId==='beerpong' || currentGameId==='busz') ? '1 1 0' : 'unset', minHeight: currentGameId==='beerpong' ? 0 : 'unset' }}>
-          <GameContent key={currentGameId + gameIdx + '_' + gameRestartKey} gameId={currentGameId} gameIdx={gameIdx} players={activePlayers} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={pairedOpponent} onSetHideFooter={setHideFooter} onSetBuszSwitch={(obj) => setBuszSwitchFn(obj || null)} onSetBpEnded={setBpEnded} onCommit={commitPending} />
+          <GameErrorBoundary gameId={currentGameId} resetKey={gameRestartKey} renderFallback={(err) => (
+            <div style={{ background:T.surface, borderRadius:20, padding:'24px 18px', boxShadow:T.shadow, display:'flex', flexDirection:'column', alignItems:'center', gap:12, textAlign:'center' }}>
+              <div style={{ fontSize:34, lineHeight:1 }}>😵‍💫</div>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink }}>Ez a játék elakadt</div>
+              <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, lineHeight:1.45, maxWidth:290 }}>
+                A buli állása megmaradt — se pont, se korty nem veszett el. Próbáld újra, vagy ugorj a következő játékra.
+              </div>
+              <div style={{ display:'flex', gap:10, width:'100%', maxWidth:300 }}>
+                <button onClick={() => setGameRestartKey(k => k + 1)} style={{ flex:1, padding:'13px 0', borderRadius:14, border:`1.5px solid ${T.inkMute}40`, background:T.surfaceMuted, color:T.ink, fontFamily:T.font, fontWeight:800, fontSize:14.5, cursor:'pointer' }}>Újra</button>
+                <button onClick={skipBrokenGame} style={{ flex:1, padding:'13px 0', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14.5, cursor:'pointer', boxShadow:`0 3px 12px ${T.mint}55` }}>Kövi játék →</button>
+              </div>
+              <div style={{ fontFamily:'monospace', fontSize:10.5, color:T.inkMute, wordBreak:'break-word', maxWidth:300, lineHeight:1.35 }}>
+                {String((err && err.message) || err).slice(0, 140)}
+              </div>
+            </div>
+          )}>
+            <GameContent key={currentGameId + gameIdx + '_' + gameRestartKey} gameId={currentGameId} gameIdx={gameIdx} players={activePlayers} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={pairedOpponent} onSetHideFooter={setHideFooter} onSetBuszSwitch={(obj) => setBuszSwitchFn(obj || null)} onSetBpEnded={setBpEnded} onCommit={commitPending} />
+          </GameErrorBoundary>
         </div>
       </div>
         </div>
