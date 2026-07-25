@@ -34936,7 +34936,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.120';
+const APP_VERSION = 'v10.121';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -43022,6 +43022,9 @@ function KisebbConfigSheet({ config, setConfig, onClose }) {
           <Row label="Élet kártyák száma" sub="Ennyi hibát enged meg"
             right={<Stepper value={lifeCount} min={1} max={5} onChange={v => setConfig(c => ({...c, lifeCount:v}))} />} />
         )}
+
+        <Row label="Mentőöv lapok" sub="Mindenki kap 3 nyílt lapot — tipp helyett kijátszható, ha nem mersz a vak lapra fogadni"
+          right={<Toggle on={config.mentoov===true} onToggle={() => setConfig(c => ({...c, mentoov: !c.mentoov}))} />} />
 
       </div>
     </SheetOverlay>
@@ -52864,8 +52867,14 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
     const d = shuffleDeck(generateDeck(numDecks));
     // failCount: number of wrong guesses per player
     // maxFailPot: highest pot at time of failure per player
-    const st = { deck:d, deckPos:0, activePids:players.map(p=>p.id), turnPos:0, failCount:{}, maxFailPot:{}, playerLives:{}, pot:1 };
+    const st = { deck:d, deckPos:0, activePids:players.map(p=>p.id), turnPos:0, failCount:{}, maxFailPot:{}, playerLives:{}, pot:1, hands:{} };
     players.forEach(p=>{ st.playerLives[p.id]=liveCount; st.failCount[p.id]=0; st.maxFailPot[p.id]=0; });
+    // Mentőöv: mindenki kap 3 nyílt lapot a pakli tetejéről. Mindenki látja
+    // mindenkiét — a lényeg, hogy a sajátodat ISMERED, a következő vak lapot nem.
+    if (cfg.mentoov) {
+      players.forEach(p => { st.hands[p.id] = d.splice(0, 3); });
+      st.deck = d;
+    }
     gsRef.current=st; setGs({...st}); setGuessRes(null); setGameOver(false); pendRef.current=false; advancedRef.current=false;
   },[gameIdx]);
 
@@ -52892,8 +52901,8 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
       dm[p.id] = maxPot > 1 ? maxPot : 1;
     });
     const otherPlayers = players.filter(p=>p.id!==winner.id);
-    const loserNames = otherPlayers.map(p=>`${p.name} ${dm[p.id]}🍺`).join(', ');
-    onResult && onResult({ winners:[winner], losers: otherPlayers, winNote:'+1 pont', loseNote: loserNames });
+    // A banner csak rontáskor jön elő — a végeredményt a játék saját
+    // képernyője mutatja, banner nélkül (különben duplán jelenne meg).
     onAdvance && onAdvance(dm, pm);
   };
 
@@ -52915,6 +52924,8 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
 
   if (!gs) return null;
   const { deck, deckPos, activePids, turnPos, failCount, maxFailPot, playerLives } = gs;
+  const hands = gs.hands || {};
+  const mentoovOn = (gameMeta?.kisebbConfig?.mentoov) === true;
   const pot = gs.pot || 1;
   const currentCard = deck[deckPos];
   const nextCard = deck[deckPos+1];
@@ -52945,6 +52956,9 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
         nst = { ...nst, pot: sm==='times2' ? (st.pot||1)*2 : (st.pot||1)+1 };
       } else if (!ok) {
         const failedPot = st.pot || 1;
+        const failP = players.find(x => x.id === pid);
+        if (failP && onResult) onResult({ correct:false, playerName: failP.name, drinks: failedPot,
+          subtitle: `${failP.name} mellélőtt — ${failedPot} korty a téten` });
         const newFail = { ...st.failCount, [pid]:(st.failCount[pid]||0)+1 };
         const newMaxPot = { ...st.maxFailPot, [pid]: Math.max(st.maxFailPot[pid]||0, failedPot) };
         const newLives = { ...st.playerLives, [pid]:(st.playerLives[pid]||1)-1 };
@@ -52965,6 +52979,40 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
       gsRef.current=nst; setGs({...nst}); setGuessRes(null); pendRef.current=false;
     }, 900);
   };
+  // Mentőöv: a saját nyílt lapod közül raksz rá egyet a pakli tetejére. Mivel
+  // látod, tudsz biztosat választani — csak az egyezés (döntetlen) nem visz
+  // tovább, az a tétet növeli, mint a vak lapnál.
+  const playHandCard = (idx) => {
+    if (pendRef.current || gameOver || guessRes) return;
+    const myHand = (gsRef.current?.hands || {})[currentPid] || [];
+    const card = myHand[idx];
+    if (!card) return;
+    const cfg2 = (gameMeta?.kisebbConfig) || {};
+    const cv = cardVal(currentCard.value), pv = cardVal(card.value);
+    const same = cv === pv;
+    pendRef.current = true;
+    setGuessRes({ correct: same ? null : true, same, pid: currentPid, card, pot, fromHand: true });
+
+    setTimeout(() => {
+      const st = gsRef.current;
+      const pid = st.activePids[st.turnPos % Math.max(st.activePids.length, 1)];
+      // a kijátszott lap kerül a pakli tetejére, az lesz az új aktuális lap
+      const newDeck = [...st.deck];
+      newDeck.splice(st.deckPos + 1, 0, card);
+      const newHands = { ...st.hands, [pid]: (st.hands[pid] || []).filter((_, i) => i !== idx) };
+      let nst = { ...st, deck:newDeck, deckPos: st.deckPos + 1, hands:newHands };
+      if (same) {
+        const sm = cfg2.stackMode ?? 'plus1';
+        nst = { ...nst, pot: sm === 'times2' ? (st.pot || 1) * 2 : (st.pot || 1) + 1 };
+      } else {
+        nst = { ...nst, turnPos: (st.turnPos + 1) % st.activePids.length };
+      }
+      const atEnd = nst.deckPos >= nst.deck.length - 1;
+      if (atEnd && !gameOver) { gsRef.current = nst; setGs({ ...nst }); setGuessRes(null); pendRef.current = false; setGameOver(true); finishGame(nst); return; }
+      gsRef.current = nst; setGs({ ...nst }); setGuessRes(null); pendRef.current = false;
+    }, 900);
+  };
+
   handleGuessRef.current = handleGuess;
 
   if(gameOver) {
@@ -53091,6 +53139,41 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
           <button onClick={()=>handleGuess('N')} style={{ flex:1, minHeight:58, border:'none', background:'#B8E8D4', color:'#2E8B60', fontFamily:T.font, fontWeight:700, fontSize:17, borderRadius:16, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
             <span style={{ fontSize:14 }}>↑</span><span>Nagyobb</span>
           </button>
+        </div>
+      )}
+
+      {/* Mentőöv lapok — mindenkié látszik, de csak a soron lévő játszhat ki */}
+      {mentoovOn && (
+        <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8 }}>
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', color:T.inkMute, textAlign:'center' }}>
+            Mentőöv lapok
+          </div>
+          {activePids.map(pid => {
+            const pl = players.find(x => x.id === pid);
+            const myTurn = pid === currentPid && !guessRes && !gameOver;
+            const hand = hands[pid] || [];
+            return (
+              <div key={pid} style={{ display:'flex', alignItems:'center', gap:8, background: myTurn ? T.surface : 'transparent', borderRadius:12, padding: myTurn ? '7px 9px' : '3px 9px', boxShadow: myTurn ? T.shadow : 'none', opacity: myTurn ? 1 : 0.55 }}>
+                <span style={{ width:8, height:8, borderRadius:'50%', background: pl?.color || T.inkMute, flexShrink:0 }} />
+                <span style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:12, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pl?.name || '?'}</span>
+                <div style={{ display:'flex', gap:5, flexShrink:0 }}>
+                  {hand.length === 0 && <span style={{ fontFamily:T.font, fontSize:11, color:T.inkMute }}>elfogyott</span>}
+                  {hand.map((c, i) => {
+                    const red = SUIT_RED.has(c.suit);
+                    return (
+                      <button key={i} disabled={!myTurn} onClick={() => playHandCard(i)}
+                        style={{ width:34, height:46, borderRadius:7, background:T.surface, border:`1.5px solid ${myTurn ? T.mint : T.inkMute+'33'}`,
+                          display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', lineHeight:1.05,
+                          cursor: myTurn ? 'pointer' : 'default', padding:0, boxShadow: myTurn ? `0 2px 8px ${T.mint}33` : 'none' }}>
+                        <span style={{ fontFamily:'Georgia,serif', fontWeight:700, fontSize:14, color: red ? T.coral : T.ink }}>{c.value}</span>
+                        <span style={{ fontFamily:'Georgia,serif', fontSize:12, color: red ? T.coral : T.ink }}>{c.suit}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
