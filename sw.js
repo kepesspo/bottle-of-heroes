@@ -1,5 +1,5 @@
 // GENERÁLT FÁJL — forrás: build.js (node build.js)
-const CACHE = 'boh-v10.122';
+const CACHE = 'boh-v10.123';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', 'index.html']).catch(() => {})));
