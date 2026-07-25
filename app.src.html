@@ -34908,7 +34908,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.107';
+const APP_VERSION = 'v10.108';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -42363,7 +42363,9 @@ function PlayerCard({ p, onEdit, onRemove, index, badge, recentBadge, playful, o
   );
 }
 
-function PlayerProfileStats({ profileId }) {
+// compact: csak a három fő szám (korty / pont / parti) — a játékos-hozzáadás
+// képernyőn ennél több adat csak elnyomná a névválasztást és az avatart.
+function PlayerProfileStats({ profileId, compact }) {
   const [stats, setStats] = React.useState(null);
   const [profiles, setProfiles] = React.useState([]);
   const [events, setEvents] = React.useState([]);
@@ -42375,13 +42377,14 @@ function PlayerProfileStats({ profileId }) {
     window.getStats(profileId).then(s => setStats(s || {}));
   }, [profileId]);
   React.useEffect(() => {
+    if (compact) return; // compact módban ezek egyike sem kell — ne is töltsük be
     if (typeof window.getProfiles === 'function') window.getProfiles().then(ps => setProfiles(ps || [])).catch(() => {});
     if (typeof window.getAllGameStats === 'function') window.getAllGameStats().then(gs => setGameStats(gs || {})).catch(() => {});
-  }, []);
+  }, [compact]);
   React.useEffect(() => {
-    if (!profileId || typeof window.getAllStatEvents !== 'function') { setEvents([]); return; }
+    if (compact || !profileId || typeof window.getAllStatEvents !== 'function') { setEvents([]); return; }
     window.getAllStatEvents().then(evs => setEvents((evs || []).filter(e => e.profileId === profileId && (e.totalPoints || 0) > 0).sort((a, b) => (a.ts || 0) - (b.ts || 0)))).catch(() => setEvents([]));
-  }, [profileId]);
+  }, [profileId, compact]);
 
   if (!stats) return (
     <div style={{ textAlign:'center', padding:'10px 0', color:T.inkMute, fontFamily:T.font, fontSize:12 }}>Statisztika betöltése…</div>
@@ -42397,6 +42400,19 @@ function PlayerProfileStats({ profileId }) {
     { icon:'star', label:'Pont', value: stats.totalPoints || 0 },
     { icon:'flag', label:'Parti', value: sess },
   ];
+  const heroGrid = (
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
+      {heroes.map(h => (
+        <div key={h.label} style={{ background:T.bgSoft, borderRadius:14, padding:'11px 4px 9px', display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+          <BohIcon name={h.icon} size={16} />
+          <div style={{ fontFamily:T.font, fontSize:19, fontWeight:900, color:T.ink, lineHeight:1 }}>{h.value}</div>
+          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.05em' }}>{h.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+  if (compact) return <div style={{ width:'100%', boxSizing:'border-box' }}>{heroGrid}</div>;
+
   // A többi stat témák szerint csoportosítva
   const perf = [
     { icon:'trophy', label:'Win rate', value: winRate != null ? `${winRate}%` : '—' },
@@ -42456,15 +42472,7 @@ function PlayerProfileStats({ profileId }) {
 
   return (
     <div style={{ width:'100%', boxSizing:'border-box', maxHeight:'54vh', overflowY:'auto', display:'flex', flexDirection:'column', gap:12 }}>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
-        {heroes.map(h => (
-          <div key={h.label} style={{ background:T.bgSoft, borderRadius:14, padding:'11px 4px 9px', display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
-            <BohIcon name={h.icon} size={16} />
-            <div style={{ fontFamily:T.font, fontSize:19, fontWeight:900, color:T.ink, lineHeight:1 }}>{h.value}</div>
-            <div style={{ fontFamily:T.font, fontSize:10, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.05em' }}>{h.label}</div>
-          </div>
-        ))}
-      </div>
+      {heroGrid}
       {/* Kitüntetések: nem listázzuk ki (sok van) — egy gomb nyitja a vitrint */}
       <button onClick={()=>setShowAch(true)} style={{ display:'flex', alignItems:'center', gap:11, width:'100%', boxSizing:'border-box', background:T.bgSoft, border:'none', borderRadius:14, padding:'11px 14px', cursor:'pointer', textAlign:'left', WebkitTapHighlightColor:'transparent' }}>
         <div style={{ width:34, height:34, borderRadius:11, background:T.mintSoft, display:'grid', placeItems:'center', flexShrink:0 }}>
@@ -42589,7 +42597,7 @@ function PlayerEditSheet({ player, onClose, onChange, usedColors, usedProfileIds
           </div>
 
           {/* Profil statisztika */}
-          {player.profileId && <PlayerProfileStats profileId={player.profileId} />}
+          {player.profileId && <PlayerProfileStats profileId={player.profileId} compact />}
 
           {/* Karakter választó */}
           <div>
