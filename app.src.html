@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.098';
+const APP_VERSION = 'v10.099';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36225,7 +36225,7 @@ function DrinkChip({ sips=1, label, style:sx }) {
   );
 }
 
-function SheetOverlay({ onClose, children, footer, title }) {
+function SheetOverlay({ onClose, children, footer, title, zIndex }) {
   const [dragY, setDragY] = React.useState(0);
   const [closing, setClosing] = React.useState(false);
   const startYRef = React.useRef(null);
@@ -36257,7 +36257,7 @@ function SheetOverlay({ onClose, children, footer, title }) {
       background:'rgba(14,14,24,0.55)',
       backdropFilter:'blur(6px)',
       WebkitBackdropFilter:'blur(6px)',
-      zIndex:60, display:'flex', alignItems:'flex-end',
+      zIndex: zIndex || 60, display:'flex', alignItems:'flex-end',
       animation:'fadeIn .2s',
       opacity, transition: dragY === 0 ? 'opacity .22s' : 'none',
     }}>
@@ -36473,21 +36473,79 @@ function recentBadgeKeys(statObj) {
 }
 
 // Mérföldkő-kitüntetések — az élettartam-statokból származtatva (nem tárolt).
+// val: az aktuális érték, goal: a cél — ezekből jön a haladásjelző a vitrinben.
 const ACHIEVEMENTS = [
-  { id:'d100',  icon:'beer',    label:'100 korty',        test: s => (s.totalDrinks||0) >= 100 },
-  { id:'d500',  icon:'beer',    label:'500 korty',        test: s => (s.totalDrinks||0) >= 500 },
-  { id:'d1000', icon:'fire',    label:'1000 korty',       test: s => (s.totalDrinks||0) >= 1000 },
-  { id:'p100',  icon:'star',    label:'100 pont',         test: s => (s.totalPoints||0) >= 100 },
-  { id:'p500',  icon:'star',    label:'500 pont',         test: s => (s.totalPoints||0) >= 500 },
-  { id:'s10',   icon:'flag',    label:'10 parti',         test: s => (s.totalSessions||0) >= 10 },
-  { id:'s50',   icon:'medal1',  label:'Veterán · 50 parti', test: s => (s.totalSessions||0) >= 50 },
-  { id:'bp1',   icon:'trophy',  label:'Beer Pong bajnok', test: s => (s.bp_tournaments||0) >= 1 },
-  { id:'bp5',   icon:'crown',   label:'5× BP bajnok',     test: s => (s.bp_tournaments||0) >= 5 },
-  { id:'st5',   icon:'fire',    label:'5-ös streak',      test: s => (s.bestStreak||0) >= 5 },
-  { id:'st10',  icon:'bolt',    label:'10-es streak',     test: s => (s.bestStreak||0) >= 10 },
-  { id:'bz5',   icon:'check',   label:'5 busz',           test: s => (s.busz_completions||0) >= 5 },
-  { id:'react', icon:'bolt',    label:'Villámkéz · <300ms', test: s => s.bestReactionTime != null && s.bestReactionTime < 300 },
+  { id:'d100',  icon:'beer',    label:'100 korty',        val: s => s.totalDrinks||0,     goal:100,  unit:'korty' },
+  { id:'d500',  icon:'beer',    label:'500 korty',        val: s => s.totalDrinks||0,     goal:500,  unit:'korty' },
+  { id:'d1000', icon:'fire',    label:'1000 korty',       val: s => s.totalDrinks||0,     goal:1000, unit:'korty' },
+  { id:'p100',  icon:'star',    label:'100 pont',         val: s => s.totalPoints||0,     goal:100,  unit:'pont' },
+  { id:'p500',  icon:'star',    label:'500 pont',         val: s => s.totalPoints||0,     goal:500,  unit:'pont' },
+  { id:'s10',   icon:'flag',    label:'10 parti',         val: s => s.totalSessions||0,   goal:10,   unit:'parti' },
+  { id:'s50',   icon:'medal1',  label:'Veterán · 50 parti', val: s => s.totalSessions||0, goal:50,   unit:'parti' },
+  { id:'bp1',   icon:'trophy',  label:'Beer Pong bajnok', val: s => s.bp_tournaments||0,  goal:1,    unit:'bajnoki cím' },
+  { id:'bp5',   icon:'crown',   label:'5× BP bajnok',     val: s => s.bp_tournaments||0,  goal:5,    unit:'bajnoki cím' },
+  { id:'st5',   icon:'fire',    label:'5-ös streak',      val: s => s.bestStreak||0,      goal:5,    unit:'széria' },
+  { id:'st10',  icon:'bolt',    label:'10-es streak',     val: s => s.bestStreak||0,      goal:10,   unit:'széria' },
+  { id:'bz5',   icon:'check',   label:'5 busz',           val: s => s.busz_completions||0, goal:5,   unit:'busz' },
+  { id:'react', icon:'bolt',    label:'Villámkéz · <300ms', goal:1, unit:'', hint:'Reagálj 300 ms alatt egy reakció-játékban',
+    val: s => (s.bestReactionTime != null && s.bestReactionTime < 300) ? 1 : 0 },
 ];
+function achievementState(a, s) {
+  const cur = a.val ? a.val(s || {}) : 0;
+  const goal = a.goal || 1;
+  return { cur, goal, done: cur >= goal, pct: Math.max(0, Math.min(100, Math.round(cur / goal * 100))) };
+}
+
+// Jelvény-vitrin — minden kitüntetés egy helyen, a még nem teljesítettek
+// szürkén, haladásjelzővel.
+function AchievementsSheet({ stats, profileName, onClose }) {
+  const s = stats || {};
+  const rows = ACHIEVEMENTS.map(a => ({ a, st: achievementState(a, s) }));
+  const doneCount = rows.filter(r => r.st.done).length;
+  const sorted = [...rows].sort((x, y) => (y.st.done - x.st.done) || (y.st.pct - x.st.pct));
+  return (
+    <SheetOverlay onClose={onClose} title="Kitüntetések" zIndex={9999}>
+      <div style={{ padding:'0 20px 28px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
+          <div style={{ flex:1, minWidth:0 }}>
+            {profileName && <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>{profileName}</div>}
+            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>{doneCount} / {rows.length} megszerezve</div>
+          </div>
+          <div style={{ width:52, height:52, borderRadius:'50%', background:T.bgSoft, display:'grid', placeItems:'center', flexShrink:0, fontFamily:T.font, fontWeight:900, fontSize:15, color:T.mintDeep }}>
+            {Math.round(doneCount / Math.max(1, rows.length) * 100)}%
+          </div>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {sorted.map(({ a, st }) => (
+            <div key={a.id} style={{ display:'flex', alignItems:'center', gap:11, background: st.done ? T.mintSoft : T.bgSoft, borderRadius:14, padding:'11px 13px', opacity: st.done ? 1 : 0.72 }}>
+              <div style={{ width:38, height:38, borderRadius:12, background: st.done ? T.surface : `${T.inkMute}22`, display:'grid', placeItems:'center', flexShrink:0, filter: st.done ? 'none' : 'grayscale(1)' }}>
+                <BohIcon name={a.icon} size={19} />
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13.5, color: st.done ? T.mintDeep : T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{a.label}</span>
+                  {st.done && <span style={{ fontSize:12, color:T.mintDeep, flexShrink:0 }}>✓</span>}
+                </div>
+                {st.done ? (
+                  <div style={{ fontFamily:T.font, fontSize:11, color:T.mintDeep, marginTop:2 }}>Megszerezve</div>
+                ) : (
+                  <React.Fragment>
+                    <div style={{ height:5, borderRadius:5, background:`${T.inkMute}22`, overflow:'hidden', marginTop:6 }}>
+                      <div style={{ width:st.pct+'%', height:'100%', background:T.mint, transition:'width .3s' }} />
+                    </div>
+                    <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, marginTop:3 }}>
+                      {a.hint && st.cur === 0 ? a.hint : `${st.cur} / ${st.goal}${a.unit ? ' ' + a.unit : ''}`}
+                    </div>
+                  </React.Fragment>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </SheetOverlay>
+  );
+}
 
 // Közös "Gyors statisztika" popup — profil-avatar, buli-jelvények, PlayerProfileStats.
 function QuickStatsModal({ profile, badges, onClose }) {
@@ -42153,6 +42211,7 @@ function PlayerProfileStats({ profileId }) {
   const [stats, setStats] = React.useState(null);
   const [profiles, setProfiles] = React.useState([]);
   const [events, setEvents] = React.useState([]);
+  const [showAch, setShowAch] = React.useState(false);
   React.useEffect(() => {
     if (!profileId || typeof window.getStats !== 'function') return;
     setStats(null);
@@ -42218,7 +42277,7 @@ function PlayerProfileStats({ profileId }) {
     { icon:'bolt', label:'Leggyorsabb', value: `${stats.bestReactionTime} ms` },
   ]});
 
-  const earned = ACHIEVEMENTS.filter(a => a.test(stats));
+  const earned = ACHIEVEMENTS.filter(a => achievementState(a, stats).done);
 
   // Fejlődési grafikon — kumulatív pont az egyes partik után (statEvents naplóból)
   let chart = null;
@@ -42245,9 +42304,12 @@ function PlayerProfileStats({ profileId }) {
           </div>
         ))}
       </div>
-      {earned.length > 0 && (
-        <div>
-          <div style={{ fontFamily:T.font, fontSize:10.5, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5, marginLeft:3 }}>Kitüntetések · {earned.length}</div>
+      <div>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:5, marginLeft:3 }}>
+          <div style={{ fontFamily:T.font, fontSize:10.5, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.08em' }}>Kitüntetések · {earned.length}/{ACHIEVEMENTS.length}</div>
+          <button onClick={()=>setShowAch(true)} style={{ border:'none', background:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:11, color:T.mintDeep, padding:'2px 4px' }}>Összes →</button>
+        </div>
+        {earned.length > 0 ? (
           <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
             {earned.map(a => (
               <span key={a.id} style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'6px 11px 6px 8px', borderRadius:999, background:T.bgSoft, fontFamily:T.font, fontWeight:800, fontSize:11.5, color:T.ink }}>
@@ -42255,8 +42317,11 @@ function PlayerProfileStats({ profileId }) {
               </span>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div style={{ background:T.bgSoft, borderRadius:14, padding:'11px 14px', fontFamily:T.font, fontSize:12, color:T.inkMute }}>Még nincs kitüntetés — nézd meg, mi a legközelebbi cél!</div>
+        )}
+      </div>
+      {showAch && <AchievementsSheet stats={stats} onClose={()=>setShowAch(false)} />}
       {chart && (
         <div>
           <div style={{ fontFamily:T.font, fontSize:10.5, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:5, marginLeft:3 }}>Pontok alakulása</div>
