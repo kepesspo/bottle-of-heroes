@@ -34877,7 +34877,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.096';
+const APP_VERSION = 'v10.097';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -63907,7 +63907,9 @@ function JukeboxScreen({ go, deepLink }) {
       let cur = null; try { cur = playerRef.current.getVideoData(); } catch(e){}
       if (!cur || cur.video_id !== nowPlaying.videoId) {
         try { playerRef.current.loadVideoById(nowPlaying.videoId); playerRef.current.playVideo(); } catch(e){}
-        setTimeout(() => { try { const st = playerRef.current && playerRef.current.getPlayerState(); if (st !== 1 && st !== 3) setNeedsGesture(true); } catch(x){} }, 1600);
+        // egy újrapróbálkozás, mielőtt a "koppints az indításhoz" fedvényt kitesszük
+        setTimeout(() => { try { const st = playerRef.current && playerRef.current.getPlayerState(); if (st !== 1 && st !== 3) playerRef.current.playVideo(); } catch(x){} }, 700);
+        setTimeout(() => { try { const st = playerRef.current && playerRef.current.getPlayerState(); if (st !== 1 && st !== 3) setNeedsGesture(true); } catch(x){} }, 2200);
       }
     } else if (!nowPlaying && queue.length > 0) {
       startNext();
@@ -63990,7 +63992,13 @@ function JukeboxScreen({ go, deepLink }) {
   const canRemove = (q) => isHost || (q.addedById ? q.addedById === deviceId : q.addedByName === name);
   function removeItem(qid) { if (queueRef) queueRef.doc(qid).delete().catch(()=>{}); }
   function togglePlay() { const p = playerRef.current; if (!p) return; try { paused ? p.playVideo() : p.pauseVideo(); } catch(e){} }
-  function skip() { startNext(); }
+  function skip() {
+    // A koppintás "gesztus-jogát" azonnal, még szinkron módon átadjuk a lejátszónak:
+    // a startNext() Firestore-körútja után a böngésző már nem engedne autoplay-t,
+    // és a videó betöltve, de megállítva maradna.
+    try { playerRef.current && playerRef.current.playVideo(); } catch(e){}
+    startNext();
+  }
   function openSettings() { setSetOpen(true); setSetStep('code'); setSetCode(''); setSetErr(false); setKeyInput(apiKey || ''); }
   function submitSetCode() { if (setCode.trim() === '2019') { setSetStep('key'); setSetErr(false); } else setSetErr(true); }
   function saveKey() { if (db) db.collection('config').doc('dnrbox').set({ ytApiKey: keyInput.trim() }, { merge:true }).catch(()=>{}); setSetOpen(false); }
@@ -64024,6 +64032,14 @@ function JukeboxScreen({ go, deepLink }) {
             <div style={{ borderRadius:18, overflow:'hidden', boxShadow:T.shadow, background:'#000' }}>
               <div style={{ position:'relative', width:'100%', paddingTop:'56.25%' }}>
                 <div id="dnrbox-yt" style={{ position:'absolute', inset:0 }} />
+                {!nowPlaying && queue.length === 0 && !ytLoadFailed && (
+                  <div style={{ position:'absolute', inset:0, display:'grid', placeItems:'center', background:'rgba(0,0,0,0.7)', zIndex:2, padding:16 }}>
+                    <div style={{ textAlign:'center', color:'#fff' }}>
+                      <div style={{ fontSize:34, lineHeight:1 }}>🎵</div>
+                      <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, marginTop:6 }}>Üres a sor — nincs mit lejátszani</div>
+                    </div>
+                  </div>
+                )}
                 {needsGesture && !ytLoadFailed && (
                   <div onClick={() => { try { playerRef.current.playVideo(); } catch(x){} setNeedsGesture(false); }} style={{ position:'absolute', inset:0, display:'grid', placeItems:'center', background:'rgba(0,0,0,0.55)', cursor:'pointer', zIndex:2 }}>
                     <div style={{ textAlign:'center', color:'#fff' }}>
