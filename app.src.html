@@ -34883,7 +34883,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.102';
+const APP_VERSION = 'v10.103';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -37005,7 +37005,10 @@ function StatsScreen({ go, onOpenObserver }) {
               )}
               {profilRows.map((p, i) => {
                 const s = pStats[p.id] || {};
-                const ptShare = totalPtsAll > 0 ? Math.round((s.totalPoints||0) / totalPtsAll * 100) : 0;
+                // A jelvények mindig az élettartam-statokból jönnek (nem időszakosak)
+                const lifeS = stats[p.id] || {};
+                const achDone = ACHIEVEMENTS.filter(a => achievementState(a, lifeS).done).length;
+                const achPct = Math.round(achDone / Math.max(1, ACHIEVEMENTS.length) * 100);
                 return (
                   <div key={p.id} onClick={() => setQuickStatsFor(p)} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:pfShadow, border:pfBorder, cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:10 }}>
@@ -37018,9 +37021,15 @@ function StatsScreen({ go, onOpenObserver }) {
                         <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
                         <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>{s.totalSessions||0} játék · {s.totalRounds||0} kör</div>
                       </div>
-                      <div style={{ textAlign:'right', flexShrink:0 }}>
-                        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.yellow||'#F59E0B', lineHeight:1 }}>{s.totalPoints||0}</div>
-                        <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>{t('pointStat').toUpperCase()}</div>
+                      <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:4, background:T.mintSoft, borderRadius:999, padding:'5px 10px 5px 8px' }} title="Megszerzett jelvények">
+                          <BohIcon name="medal1" size={14} />
+                          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:T.mintDeep }}>{achDone}</span>
+                        </div>
+                        <div style={{ textAlign:'right' }}>
+                          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.yellow||'#F59E0B', lineHeight:1 }}>{s.totalPoints||0}</div>
+                          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>{t('pointStat').toUpperCase()}</div>
+                        </div>
                       </div>
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:12, marginTop:10, marginLeft:68, flexWrap:'wrap' }}>
@@ -37037,14 +37046,12 @@ function StatsScreen({ go, onOpenObserver }) {
                         </div>
                       ))}
                     </div>
-                    {(s.totalPoints||0) > 0 && totalPtsAll > 0 && (
-                      <div style={{ marginTop:8, marginLeft:68 }}>
-                        <div style={{ height:4, borderRadius:4, background:T.surfaceMuted, overflow:'hidden' }}>
-                          <div style={{ width:ptShare+'%', height:'100%', background:T.mint, transition:'width .3s' }} />
-                        </div>
-                        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkMute, marginTop:3 }}>{ptShare}% az összpontból</div>
+                    <div style={{ marginTop:8, marginLeft:68 }}>
+                      <div style={{ height:4, borderRadius:4, background:T.surfaceMuted, overflow:'hidden' }}>
+                        <div style={{ width:achPct+'%', height:'100%', background:T.mint, transition:'width .3s' }} />
                       </div>
-                    )}
+                      <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.inkMute, marginTop:3 }}>{achDone} / {ACHIEVEMENTS.length} jelvény</div>
+                    </div>
                   </div>
                 );
               })}
