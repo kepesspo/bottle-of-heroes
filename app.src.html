@@ -34908,7 +34908,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.113';
+const APP_VERSION = 'v10.114';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -46712,19 +46712,45 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     initTournament(teamPlayersRef.current);
   }, [teamsReady]);
 
-  // Head-to-head rögzítés: melyik profil kivel szemben nyert/vesztett/döntetlenezett.
+  // Egy torna-résztvevő mögötti valódi profilok. Csapat módban a torna
+  // „játékosa" egy csapat — a statisztika viszont mindig profilokhoz tartozik.
+  const profilesOf = (entity) => {
+    if (!entity) return [];
+    if (entity.members && entity.members.length) return entity.members.filter(m => m && m.profileId);
+    return entity.profileId ? [entity] : [];
+  };
+
+  // Egy lejátszott meccs könyvelése: meccsmérleg (Gy/D/V) + head-to-head.
+  // Csapat módban minden tagra rögzítjük, a h2h-t pedig a két csapat tagjai
+  // közötti összes párosításra. Nyertesnél a=győztes, b=vesztes; döntetlennél
+  // a és b a két fél.
   // Firestore nested map: bp_h2h.{ellenfélProfileId}.{w|l|d}
-  const recordH2H = (a, b, isDraw) => {
-    if (!a?.profileId || !b?.profileId || a.profileId === b.profileId) return;
+  const recordMatch = (a, b, isDraw) => {
     if (typeof window.updateStats !== 'function') return;
-    const inc = firebase.firestore.FieldValue.increment(1);
-    if (isDraw) {
-      window.updateStats(a.profileId, { ['bp_h2h.' + b.profileId + '.d']: inc });
-      window.updateStats(b.profileId, { ['bp_h2h.' + a.profileId + '.d']: inc });
-    } else {
-      window.updateStats(a.profileId, { ['bp_h2h.' + b.profileId + '.w']: inc });
-      window.updateStats(b.profileId, { ['bp_h2h.' + a.profileId + '.l']: inc });
+    const A = profilesOf(a), B = profilesOf(b);
+    if (!A.length || !B.length) return;
+    const FV = firebase.firestore.FieldValue;
+    const bump = (p, delta) => {
+      const upd = {}; Object.keys(delta).forEach(k => { upd[k] = FV.increment(delta[k]); });
+      window.updateStats(p.profileId, upd);
+      if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, delta);
+    };
+    if (isDraw) A.concat(B).forEach(p => bump(p, { bp_match_draws: 1 }));
+    else {
+      A.forEach(p => bump(p, { bp_match_wins: 1, bp_match_losses: 0 }));
+      B.forEach(p => bump(p, { bp_match_wins: 0, bp_match_losses: 1 }));
     }
+    const inc = FV.increment(1);
+    A.forEach(pa => B.forEach(pb => {
+      if (pa.profileId === pb.profileId) return;
+      if (isDraw) {
+        window.updateStats(pa.profileId, { ['bp_h2h.' + pb.profileId + '.d']: inc });
+        window.updateStats(pb.profileId, { ['bp_h2h.' + pa.profileId + '.d']: inc });
+      } else {
+        window.updateStats(pa.profileId, { ['bp_h2h.' + pb.profileId + '.w']: inc });
+        window.updateStats(pb.profileId, { ['bp_h2h.' + pa.profileId + '.l']: inc });
+      }
+    }));
   };
 
   // ── SE confirm ────────────────────────────────────────────────────────────
@@ -46770,19 +46796,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     setDrinkMap(newDrink);
     setCups1(0); setCups2(0);
 
-    // Save per-match stats
-    if (typeof window.updateStats === 'function' && winner && loser) {
-      [winner, loser].forEach(p => {
-        if (!p.profileId) return;
-        const isW = p.id === winner.id;
-        window.updateStats(p.profileId, {
-          bp_match_wins:   firebase.firestore.FieldValue.increment(isW ? 1 : 0),
-          bp_match_losses: firebase.firestore.FieldValue.increment(isW ? 0 : 1),
-        });
-        if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_match_wins: isW ? 1 : 0, bp_match_losses: isW ? 0 : 1 });
-      });
-      recordH2H(winner, loser, false);
-    }
+    // Meccs-statisztika
+    if (winner && loser) recordMatch(winner, loser, false);
 
     setCB(prevRounds => {
       const nr = prevRounds.map(r => r.map(m => ({ ...m })));
@@ -46853,12 +46868,16 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   // győztes-jelvény (champion badge) + időszak-esemény, és az előzmény-mentés.
   // Statisztika min. 3 profilos játékostól; a győztes-jelvény min. 4 főtől jár.
   const recordBpTournament = (champ, type, extra) => {
-    const profilePlayers = players.filter(p => p.profileId);
-    if (profilePlayers.length < 3) return;
+    // Csapat módban a torna résztvevői csapatok, a statisztika viszont
+    // profilokhoz tartozik — a bajnok id-je ilyenkor 'team_N', ami sosem
+    // egyezne egy játékos id-jével, ezért profilokra bontva hasonlítunk.
+    const roster = (MODE === 'csapat' && teamPlayersRef.current) ? teamPlayersRef.current : players;
+    const entrants = roster.flatMap(profilesOf);
+    const champIds = new Set(profilesOf(champ).map(p => p.profileId));
+    if (entrants.length < 3) return;
     if (typeof window.updateStats === 'function') {
-      players.forEach(p => {
-        if (!p.profileId) return;
-        const isWinner = champ && champ.id === p.id;
+      entrants.forEach(p => {
+        const isWinner = champIds.has(p.profileId);
         window.updateStats(p.profileId, {
           bp_wins: firebase.firestore.FieldValue.increment(isWinner ? 1 : 0),
           bp_losses: firebase.firestore.FieldValue.increment(isWinner ? 0 : 1),
@@ -46867,8 +46886,10 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
         });
         if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_wins: isWinner ? 1 : 0, bp_losses: isWinner ? 0 : 1, bp_played: 1, bp_tournaments: isWinner ? 1 : 0 });
       });
-      if (champ && champ.profileId && profilePlayers.length >= 4) {
-        window.updateStats(champ.profileId, { lastBadges: ['champion'], lastBadgeAt: new Date().toISOString() });
+      // bajnok-jelvény min. 4 főtől — csapatnál a nyertes csapat minden tagjának
+      if (entrants.length >= 4) {
+        const badgeAt = new Date().toISOString();
+        champIds.forEach(pid => window.updateStats(pid, { lastBadges: ['champion'], lastBadgeAt: badgeAt }));
       }
     }
     if (typeof window.saveTournament === 'function') {
@@ -46935,27 +46956,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     setDrinkMap(newDrink);
     setCups1(0); setCups2(0); resetTimer();
 
-    // Save per-match stats
-    if (typeof window.updateStats === 'function') {
-      if (isDraw) {
-        [m.p1, m.p2].forEach(p => {
-          if (!p?.profileId) return;
-          window.updateStats(p.profileId, { bp_match_draws: firebase.firestore.FieldValue.increment(1) });
-          if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_match_draws: 1 });
-        });
-      } else if (winner && loser) {
-        [winner, loser].forEach(p => {
-          if (!p.profileId) return;
-          const isW = p.id === winner.id;
-          window.updateStats(p.profileId, {
-            bp_match_wins:   firebase.firestore.FieldValue.increment(isW ? 1 : 0),
-            bp_match_losses: firebase.firestore.FieldValue.increment(isW ? 0 : 1),
-          });
-          if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_match_wins: isW ? 1 : 0, bp_match_losses: isW ? 0 : 1 });
-        });
-      }
-      if (isDraw) recordH2H(m.p1, m.p2, true); else if (winner && loser) recordH2H(winner, loser, false);
-    }
+    // Meccs-statisztika
+    if (isDraw) recordMatch(m.p1, m.p2, true); else if (winner && loser) recordMatch(winner, loser, false);
 
     setMatchesCB(prev => {
       const nm = prev.map((mm, i) => {
@@ -47089,15 +47091,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     setDrinkMap(newDrink);
     setCups1(0); setCups2(0); resetTimer();
 
-    // Save per-match stats for group stage
-    if (typeof window.updateStats === 'function') {
-      if (isDraw) {
-        [m.p1, m.p2].forEach(p => { if (p?.profileId) { window.updateStats(p.profileId, { bp_match_draws: firebase.firestore.FieldValue.increment(1) }); if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_match_draws: 1 }); } });
-      } else if (winner && loser) {
-        [winner, loser].forEach(p => { if (p?.profileId) { const isW = p.id===winner.id; window.updateStats(p.profileId, { bp_match_wins: firebase.firestore.FieldValue.increment(isW?1:0), bp_match_losses: firebase.firestore.FieldValue.increment(isW?0:1) }); if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_match_wins: isW?1:0, bp_match_losses: isW?0:1 }); } });
-      }
-      if (isDraw) recordH2H(m.p1, m.p2, true); else if (winner && loser) recordH2H(winner, loser, false);
-    }
+    // Meccs-statisztika (csoportkör)
+    if (isDraw) recordMatch(m.p1, m.p2, true); else if (winner && loser) recordMatch(winner, loser, false);
 
     setTsGroups(prev => {
       const ng = prev.map((g, gi) => {
