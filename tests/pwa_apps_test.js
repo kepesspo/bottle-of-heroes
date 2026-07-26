@@ -162,20 +162,24 @@ const head = (p) => p.evaluate(() => ({
         const cs = getComputedStyle(b);
         const brand = Array.from(document.querySelectorAll('span')).find(x => /^DNR GAMES$/.test((x.innerText || '').trim()));
         const logo = document.querySelector('.home-brand svg, .home-brand img');
+        const ring = b.querySelector('svg circle[stroke-dasharray]');
         return {
           text: (b.innerText || '').replace(/\n/g, ' | '),
           top: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width),
-          bg: cs.backgroundImage.slice(0, 40), anim: cs.animationName,
+          ring: ring ? { dash: ring.getAttribute('stroke-dasharray'), color: ring.getAttribute('stroke') } : null,
+          anim: cs.animationName,
           brandTop: brand ? Math.round(brand.getBoundingClientRect().top) : null,
           logoTop: logo ? Math.round(logo.getBoundingClientRect().top) : null,
         };
       });
       ok('van szezon-badge', !!badge, JSON.stringify(badge));
       ok('a szezon nevet mutatja', badge && /S2 · NYÁR|S2 · Nyár/i.test(badge.text), badge && badge.text);
-      ok('kiirja a hatralevo napokat', badge && /még \d+ nap/i.test(badge.text), badge && badge.text);
+      ok('kiirja a hatralevo napokat', badge && /\d+ nap|Ma zárul/i.test(badge.text), badge && badge.text);
       ok('a DNR GAMES ALATT van', badge && badge.brandTop != null && badge.top > badge.brandTop, `badge=${badge && badge.top} brand=${badge && badge.brandTop}`);
       ok('a logo FOLOTT van', badge && badge.logoTop != null && badge.top < badge.logoTop, `badge=${badge && badge.top} logo=${badge && badge.logoTop}`);
-      ok('latvanyos: szines atmenet + animacio', badge && /gradient/.test(badge.bg) && /seasonGlow|seasonPop/.test(badge.anim), badge && badge.bg + ' / ' + badge.anim);
+      ok('van arany haladás-gyűrű (részben töltött)', badge && badge.ring && /^[\d.]+ [\d.]+$/.test(badge.ring.dash) && parseFloat(badge.ring.dash) > 0 && parseFloat(badge.ring.dash) < parseFloat(badge.ring.dash.split(' ')[1]), JSON.stringify(badge && badge.ring));
+      ok('bepattano animacio', badge && /seasonPop/.test(badge.anim), badge && badge.anim);
+      ok('egy sor magas (<=52px)', badge && badge.h <= 52, badge && badge.h + 'px');
       ok('nem log ki (<=358px)', badge && badge.w <= 358, badge && badge.w + 'px');
       await pp.screenshot({ path: __dirname + '/pwa_home_dock.png', fullPage: true });
 
