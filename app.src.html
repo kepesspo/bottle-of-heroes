@@ -34981,7 +34981,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.143';
+const APP_VERSION = 'v10.144';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -58865,33 +58865,61 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const [nextPreview, setNextPreview] = useState(false);
   const nextLpTimer = React.useRef(null);
   const nextLpFired = React.useRef(false);
-  const [drinkLimitWarn, setDrinkLimitWarn] = useState(null); // {name, limit}
+  // Korty-limit: a figyelmeztetes a KOR VEGEN jelenik meg (jatek kozben elsuhanna),
+  // utana pedig a jatekos neve mellett vegig ott marad egy 💧.
+  const [drinkLimitWarn, setDrinkLimitWarn] = useState(null); // {name, limit} — a kor vegi popup
+  const pendingLimitWarnRef = React.useRef(null);             // amit a kovetkezo korvaltasnal mutatunk
+  const [overLimitIds, setOverLimitIds] = useState(() => new Set()); // tartos 💧 jelzes
+  const [limitArmed, setLimitArmed] = useState(0);                   // korvaltas utan varakozik
   const drinkLimitsRef = React.useRef({}); // profileId -> limit
   const drinkWarnedRef = React.useRef(new Set());
+  // A limitek aszinkron erkeznek — a betoltes utan UJRA ki kell ertekelni, kulonben
+  // aki mar a limitjen allva lep be (session-visszatoltes), sosem kapna jelzest.
+  const [limitsVersion, setLimitsVersion] = useState(0);
   React.useEffect(() => {
     if (typeof window.getProfiles !== 'function') return;
     window.getProfiles().then(ps => {
       const map = {};
       (ps || []).forEach(p => { if (p.drinkLimit) map[p.id] = p.drinkLimit; });
       drinkLimitsRef.current = map;
+      setLimitsVersion(v => v + 1);
     }).catch(() => {});
   }, []);
   React.useEffect(() => {
+    let changed = false;
+    const next = new Set(overLimitIds);
     players.forEach(p => {
       if (!p.profileId) return;
       const limit = drinkLimitsRef.current[p.profileId];
       if (!limit || p.drinks < limit) return;
+      if (!next.has(p.id)) { next.add(p.id); changed = true; }
       if (drinkWarnedRef.current.has(p.profileId)) return;
       drinkWarnedRef.current.add(p.profileId);
-      setDrinkLimitWarn({ name: p.name, limit });
-      setTimeout(() => setDrinkLimitWarn(w => (w && w.name === p.name) ? null : w), 4200);
+      // nem mutatjuk azonnal — a kovetkezo korvaltasnal jon elo
+      pendingLimitWarnRef.current = { name: p.name, limit };
     });
-  }, [players]);
+    if (changed) setOverLimitIds(next);
+  }, [players, limitsVersion]);
+  // Igaz, ha ennek a jatekosnak mar megvan a sajat limitje
+  const isOverLimit = (p) => !!(p && overLimitIds.has(p.id));
   const gameStartRoundRef = React.useRef(1);
   const gameStartDrinksRef = React.useRef({});
   const hydrationCountdownRef = React.useRef(null);
   const [feedback, setFeedback] = useState(null);
   const [transitioning, setTransitioning] = useState(false);
+  // Az elesitett figyelmeztetes akkor jelenik meg, amikor a kepernyo tiszta:
+  // lement a kor-popup es befejezodott az atmenet.
+  React.useEffect(() => {
+    if (!limitArmed || roundPopup || transitioning || !pendingLimitWarnRef.current) return;
+    const w = pendingLimitWarnRef.current;
+    pendingLimitWarnRef.current = null;
+    setLimitArmed(0);
+    setDrinkLimitWarn(w);
+    try { if (typeof window.bohHaptic === 'function') window.bohHaptic('warning'); } catch(e) {}
+    const tm = setTimeout(() => setDrinkLimitWarn(cur => (cur === w ? null : cur)), 4600);
+    return () => clearTimeout(tm);
+  }, [limitArmed, roundPopup, transitioning]);
+
   const [showInfo, setShowInfo] = useState(false);
   const [showRoomQR, setShowRoomQR] = useState(false);
   const [showBpConfig, setShowBpConfig] = useState(false);
@@ -59148,6 +59176,9 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       setFeedback(null); setTurn(newTurn); setGameIdx(newGameIdx);
       setRound(newRound); setTransitioning(false); transRef.current = false;
       processPendingDrinks();
+      // Korty-limit figyelmeztetes — csak "elesitjuk"; a megjelenites megvarja,
+      // amig a kor-popup ("N. Kör" / wildcard) lement, kulonben egymasra csusznanak.
+      if (pendingLimitWarnRef.current) setLimitArmed(v => v + 1);
       const maxRounds = gameMeta?.maxRounds || null;
       if (maxRounds && newRound > maxRounds) {
         saveCurrentGameStats();
@@ -59925,8 +59956,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               <div style={{ position:'absolute', left:16, top:4, width:24, height:24, borderRadius:'50%', background:pairedOpponent.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:12, color:'#fff', opacity:0.85, border:`2px solid ${T.surface}`, zIndex:1, overflow:'hidden' }}>{pairedOpponent.img ? <img src={pairedOpponent.img} style={{width:24,height:24,objectFit:'cover'}} /> : pairedOpponent.name.charAt(0).toUpperCase()}</div>
             </div>
             <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentPlayer.name}</div>
-              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.coral, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pairedOpponent.name}</div>
+              <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentPlayer.name}{isOverLimit(currentPlayer) ? ' 💧' : ''}</div>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.coral, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pairedOpponent.name}{isOverLimit(pairedOpponent) ? ' 💧' : ''}</div>
             </div>
           </div>
         ) : (
@@ -59935,7 +59966,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
             <div style={{ width:32, height:32, borderRadius:'50%', background:currentPlayer.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:14, color:'#fff', boxShadow: scorePulse ? `0 0 0 4px ${currentPlayer.color}44` : `0 0 0 2px ${currentPlayer.color}30`, transition:'box-shadow .3s', flexShrink:0, overflow:'hidden', animation:'avatarNudge 3.4s 1.2s ease-in-out infinite' }}>{currentPlayer.img ? <img src={currentPlayer.img} style={{width:32,height:32,objectFit:'cover'}} /> : currentPlayer.name.charAt(0).toUpperCase()}</div>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:`${currentPlayer.color}cc`, letterSpacing:'0.06em', textTransform:'uppercase', lineHeight:1 }}>{t('nowPlaying')}</div>
-              <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentPlayer.name}</div>
+              <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentPlayer.name}{isOverLimit(currentPlayer) ? ' 💧' : ''}</div>
             </div>
           </div>
         )}
@@ -60031,11 +60062,20 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       {wcToast && (
         <Toast>{wcToast.name} iszik 1-et! <BohIcon name="beer" size={16} /></Toast>
       )}
-      {drinkLimitWarn && (
-        <Toast tone="info" wide icon="💧" onDismiss={() => setDrinkLimitWarn(null)}>
-          {drinkLimitWarn.name} elérte a saját {drinkLimitWarn.limit} kortyos limitjét — talán jöhetne egy pohár víz is.
-        </Toast>
-      )}
+      {drinkLimitWarn && ReactDOM.createPortal((
+        <div onClick={() => setDrinkLimitWarn(null)} style={{ position:'fixed', inset:0, zIndex:9991, display:'flex', alignItems:'center', justifyContent:'center', padding:24, background:'rgba(14,14,24,0.45)', animation:'fadeIn .15s' }}>
+          <div style={{ background:'rgba(20,30,50,0.94)', borderRadius:24, padding:'24px 28px', display:'flex', flexDirection:'column', alignItems:'center', gap:8, boxShadow:'0 16px 48px rgba(0,0,0,0.4)', animation:'popIn .25s cubic-bezier(.2,.9,.3,1.3)', maxWidth:320 }}>
+            <div style={{ fontSize:44, lineHeight:1 }}>💧</div>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, letterSpacing:'0.14em', textTransform:'uppercase', color:'rgba(255,255,255,0.6)' }}>Vízszünet</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:19, color:'#fff', textAlign:'center', lineHeight:1.25 }}>
+              {drinkLimitWarn.name} elérte a {drinkLimitWarn.limit} kortyos limitjét
+            </div>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.72)', textAlign:'center', lineHeight:1.45 }}>
+              Jöhetne egy pohár víz. Innentől a neve mellett ott marad a 💧.
+            </div>
+          </div>
+        </div>
+      ), document.body)}
       {nextPreview && (() => {
         const nextGameId = games[(gameIdx + 1) % games.length];
         const nextGame = GAMES.find(g => g.id === nextGameId) || GAMES[0];
@@ -60083,7 +60123,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               {/* ÁLLÁS — absolute, scrollable, same height as vezérlés */}
               <div style={{ visibility: menuTab==='állás' ? 'visible' : 'hidden', position:'absolute', top:0, left:14, right:14, bottom:0, overflowY:'auto' }}>
                 <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                  {mSorted.map((p,i) => <LeaderRow key={p.id||i} p={p} rank={i+1} maxScore={mMaxScore} showScores={true} />)}
+                  {mSorted.map((p,i) => <LeaderRow key={p.id||i} p={p} rank={i+1} maxScore={mMaxScore} showScores={true} overLimit={isOverLimit(p)} />)}
                   <div style={{ height:8 }} />
                 </div>
               </div>
@@ -60291,6 +60331,17 @@ function Confetti({ originY }) {
 // ─── END SCREEN ───────────────────────────────────────────────
 function EndScreen({ players, go, resetGame, lastRound, scoreHistory }) {
   const sorted = [...players].sort((a,b) => (b.points-a.points)||(a.drinks-b.drinks));
+  // Ki lepte at a sajat korty-limitjet — a vegeredmenyben is lassuk
+  const [limits, setLimits] = React.useState({});
+  React.useEffect(() => {
+    if (typeof window.getProfiles !== 'function') return;
+    window.getProfiles().then(ps => {
+      const m = {};
+      (ps || []).forEach(x => { if (x.drinkLimit) m[x.id] = x.drinkLimit; });
+      setLimits(m);
+    }).catch(() => {});
+  }, []);
+  const endOverLimit = (p) => !!(p && p.profileId && limits[p.profileId] && (p.drinks || 0) >= limits[p.profileId]);
   const [showShareSheet, setShowShareSheet] = React.useState(false);
   const shareCardRef = React.useRef(null);
   const [shareLoading, setShareLoading] = React.useState(false);
@@ -60565,7 +60616,7 @@ function EndScreen({ players, go, resetGame, lastRound, scoreHistory }) {
 
         {/* Full leaderboard */}
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {sorted.map((p,i) => <LeaderRow key={p.id} p={p} rank={i+1} maxScore={maxScore} />)}
+          {sorted.map((p,i) => <LeaderRow key={p.id} p={p} rank={i+1} maxScore={maxScore} overLimit={endOverLimit(p)} />)}
         </div>
 
         {/* Ital egység kalkulátor */}
@@ -60632,7 +60683,7 @@ function Stat({ value, label, tone }) {
   );
 }
 
-function LeaderRow({ p, rank, maxScore, showScores=true }) {
+function LeaderRow({ p, rank, maxScore, showScores=true, overLimit }) {
   const pct = showScores ? (p.points/maxScore)*100 : 0;
   const medalColor = rank===1 ? '#F4C95A' : rank===2 ? '#C0C0C0' : rank===3 ? '#CD7F32' : null;
   return (
@@ -60641,7 +60692,9 @@ function LeaderRow({ p, rank, maxScore, showScores=true }) {
       <div style={{ position:'absolute', left:medalColor?4:0, top:0, bottom:0, width:`${pct}%`, background:`${p.color}18`, transition:'width .5s' }}/>
       <div style={{ position:'relative', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color: medalColor || T.inkSoft, minWidth:22, marginLeft: medalColor ? 8 : 0, display:'flex', justifyContent:'center' }}>{rank<=3 ? <BohIcon name={'medal'+rank} size={18} /> : rank}</div>
       <div style={{ position:'relative', width:36, height:36, borderRadius:'50%', background:p.color, display:'grid', placeItems:'center', color:'#fff', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, overflow:'hidden' }}>{p.img ? <img src={p.img} style={{width:36,height:36,objectFit:'cover'}} /> : p.name.charAt(0).toUpperCase()||'?'}</div>
-      <div style={{ position:'relative', flex:1, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink }}>{p.name}</div>
+      <div style={{ position:'relative', flex:1, minWidth:0, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+        {p.name}{overLimit ? <span title="Elérte a saját korty-limitjét"> 💧</span> : null}
+      </div>
       {showScores && <div style={{ position:'relative', display:'flex', alignItems:'center', gap:4 }}><BohIcon name="star" size={14} /><div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, fontVariantNumeric:'tabular-nums', color:T.ink }}>{p.points}</div></div>}
       {showScores && <div style={{ position:'relative', display:'flex', alignItems:'center', gap:6, color:T.coral }}>
         <BohIcon name="beer" size={14} />
