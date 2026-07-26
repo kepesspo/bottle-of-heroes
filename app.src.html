@@ -34936,7 +34936,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.123';
+const APP_VERSION = 'v10.125';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -56550,7 +56550,8 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
   const [dropHover, setDropHover] = React.useState(null);
   const [animStep, setAnimStep] = React.useState(0);
   const animTimer = React.useRef(null);
-  React.useEffect(() => { setS(fresh()); setAnimStep(0); }, [gameIdx]);
+  const advancedRef = React.useRef(false);
+  React.useEffect(() => { setS(fresh()); setAnimStep(0); advancedRef.current = false; }, [gameIdx]);
 
   const isP1    = S.phase === 'p1_plan';
   const hand    = isP1 ? S.p1Hand : S.p2Hand;
@@ -56616,21 +56617,25 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
     if (S.phase !== 'reveal') return;
     if (animStep < _revealNR) return;
     const {p1W, p2W} = results;
+    if (advancedRef.current) return;
     const t = setTimeout(() => {
+      if (advancedRef.current) return;
+      advancedRef.current = true;
       const p1id = challenger?.id;
       const p2id = opponent?.id;
       const diff = Math.abs(p1W - p2W);
       if (p1W > p2W) {
         if (onAdvance) onAdvance({[p2id]: diff}, {[p1id]: 1});
-        if (onResult) onResult({ winners:[challenger], losers:[opponent], drinks: diff, winNote:'Nyerte a meccset · +1 pont' });
+        if (onResult) onResult({ winners:[challenger], losers:[opponent], drinks: diff, winNote:`Nyerte a meccset ${p1W}–${p2W} · +1 pont` });
       } else if (p2W > p1W) {
         if (onAdvance) onAdvance({[p1id]: diff}, {[p2id]: 1});
-        if (onResult) onResult({ winners:[opponent], losers:[challenger], drinks: diff, winNote:'Nyerte a meccset · +1 pont' });
+        if (onResult) onResult({ winners:[opponent], losers:[challenger], drinks: diff, winNote:`Nyerte a meccset ${p2W}–${p1W} · +1 pont` });
       } else {
         if (onAdvance) onAdvance({[p1id]: 1, [p2id]: 1}, {});
-        if (onResult) onResult({ losers:[challenger,opponent].filter(Boolean), drinks: 1, loseNote:'Döntetlen — mindenki iszik!' });
+        if (onResult) onResult({ losers:[challenger,opponent].filter(Boolean), drinks: 1, loseNote:`Döntetlen ${p1W}–${p2W} — mindenki iszik!` });
       }
-      setS(s=>({...s,phase:'done'}));
+      // Marad a felfedés-képernyő (körlista + „ki nyert" sor), a banner erre jön rá.
+      // Korábban egy üres "…" dobozra váltott, pont amikor a banner megjelent.
     }, 1600);
     return () => clearTimeout(t);
   }, [S.phase, animStep]);
@@ -56792,7 +56797,7 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
     const winName  = p1W>p2W ? p1Name : p2W>p1W ? p2Name : null;
     const loseName = p1W>p2W ? p2Name : p2W>p1W ? p1Name : null;
     const diff = Math.abs(p1W - p2W);
-    const resultBg = tie ? T.inkSoft : CB_GREEN;
+    const ties = rounds.filter(r => r.w === null).length;
 
     return (
       <div style={{background:CB_BG,borderRadius:20,padding:'12px',display:'flex',flexDirection:'column',gap:7,overflowY:'auto'}}>
@@ -56809,8 +56814,10 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
           const revealed = i < animStep;
           const win1=r.w==='p1', win2=r.w==='p2';
           const rowBg = !revealed ? 'rgba(255,255,255,.35)' : win1 ? p1Color+'22' : win2 ? p2Color+'22' : 'rgba(255,255,255,.65)';
-          const icon  = !revealed ? '❓' : win1 ? '🏆' : win2 ? '✗' : '🤝';
-          const iconColor = !revealed ? T.inkMute : win2 ? CB_RED : T.inkSoft;
+          // Mindkét fél körgyőzelme ugyanaz a jel, a nyertes színével — korábban
+          // az 1. játékos 🏆-t, a 2. piros ✗-et kapott, attól tűnt féloldalasnak
+          const icon  = !revealed ? '❓' : (win1 || win2) ? '🏆' : '🤝';
+          const iconColor = !revealed ? T.inkMute : win1 ? p1Color : win2 ? p2Color : T.inkSoft;
           return (
             <div key={i} style={{
               display:'flex',alignItems:'center',gap:8,padding:'7px 10px',
@@ -56834,21 +56841,15 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
           );
         })}
 
-        {/* Végeredmény — csak ha minden felfedve */}
+        {/* Alul csak annyi, hogy ki nyert és milyen körarányban — a kortyokat
+            és a pontot a nagy eredmény-banner mondja el, ne írjuk ki kétszer */}
         {allDone && (
-          <div style={{
-            background:resultBg,borderRadius:16,padding:'14px 16px',
-            display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,
-            animation:'popIn .45s cubic-bezier(.2,.9,.3,1.2)',
-          }}>
-            <div style={{fontFamily:T.font,fontWeight:900,fontSize:20,color:'#fff'}}>
-              {winName ? winName+' nyert!' : 'Döntetlen!'}
+          <div style={{ textAlign:'center', padding:'8px 4px 2px', animation:'popIn .45s cubic-bezier(.2,.9,.3,1.2)' }}>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color: tie ? T.inkSoft : (p1W>p2W ? p1Color : p2Color) }}>
+              {winName ? `${winName} nyert` : 'Döntetlen'}
             </div>
-            <div style={{
-              background:'rgba(255,255,255,.25)',borderRadius:999,
-              padding:'7px 16px',fontFamily:T.font,fontWeight:800,fontSize:14,color:'#fff',whiteSpace:'nowrap',
-            }}>
-              {loseName ? `🎴 ${loseName} iszik ${diff}` : '🍺 +1 mindenki'}
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft, marginTop:2 }}>
+              {p1W}–{p2W} kör{ties > 0 ? ` · ${ties} döntetlen` : ''}
             </div>
           </div>
         )}
