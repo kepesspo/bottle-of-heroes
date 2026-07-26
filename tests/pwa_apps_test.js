@@ -124,34 +124,71 @@ const head = (p) => p.evaluate(() => ({
     ok(`${q || '(alap)'} → ${title}`, hh.title === title, hh.title);
     ok(`${q || '(alap)'} → ${man}`, (hh.manifest || '').split('?')[0] === man, hh.manifest);
     if (!q) {
-      // v10.136: a dokk 3 csempe + "Több" — a Bingó/Liga a lapon van
-      const dock = (hh.text.match(/DNR · A többi app[\s\S]{0,140}/i) || [''])[0].replace(/\n/g, ' | ');
-      ok('a dokk egy sorban 4 csempe (Events, Box, Pub, Több)',
-         /Events/.test(dock) && /Box/.test(dock) && /Pub/.test(dock) && /Több/.test(dock), dock);
-      ok('a Bingó és a Liga NINCS kint a dokkban', !/\bBingó\b[\s\S]{0,20}Meccs & buli/.test(dock) && !/\bLiga\b/.test(dock), dock);
-      ok('a "Több" csempe az appok szamat mutatja', /Több \| 2 app/.test(dock), dock);
-      await pp.screenshot({ path: __dirname + '/pwa_home_dock.png', fullPage: true });
-      const dockRows = await pp.evaluate(() => {
-        const btns = Array.from(document.querySelectorAll('button')).filter(b => /^(Events|Box|Pub|Több)/.test((b.innerText || '').trim()));
-        return btns.map(b => Math.round(b.getBoundingClientRect().top));
+      // v10.137: a dokk egyetlen app-fiók (nem gomb) — minden app a lapon van
+      const dock = await pp.evaluate(() => {
+        const row = Array.from(document.querySelectorAll('div')).find(d => /DNR appok/.test((d.innerText || '')) && d.getAttribute('role') === 'button');
+        if (!row) return null;
+        const r = row.getBoundingClientRect();
+        const icons = Array.from(row.querySelectorAll('img')).map(i => i.getAttribute('src'));
+        return { text: row.innerText.replace(/\n/g, ' | '), h: Math.round(r.height), icons, tag: row.tagName };
       });
-      ok('mind a 4 csempe EGY sorban van', dockRows.length === 4 && new Set(dockRows).size === 1, JSON.stringify(dockRows));
-      // "Több" lap
-      await pp.evaluate(() => { const b = Array.from(document.querySelectorAll('button')).find(x => /^Több/.test((x.innerText || '').trim())); if (b) b.click(); });
+      ok('van egyetlen app-fiók sor', !!dock, JSON.stringify(dock));
+      ok('a fiók NEM <button> (nem gomb-kinézet)', dock && dock.tag === 'DIV', dock && dock.tag);
+      ok('mind az 5 app ikonja ott van egymáson', dock && dock.icons.length === 5, JSON.stringify(dock && dock.icons));
+      ok('egy sor magas (<=64px)', dock && dock.h <= 64, dock && dock.h + 'px');
+      ok('a digest sor élő infót mutat', dock && /Köv\. esemény|A Box most szól|Events · BOX/.test(dock.text), dock && dock.text);
+      const tiles = await pp.evaluate(() => Array.from(document.querySelectorAll('button')).filter(b => /^(Events|Box|Pub|Több|Bingó|Liga)$/.test((b.innerText || '').trim().split('\n')[0])).length);
+      ok('nincs tobb kulon app-csempe a fooldalon', tiles === 0, 'db=' + tiles);
+      // fiók megnyitasa -> mind az 5 app
+      await pp.evaluate(() => { const row = Array.from(document.querySelectorAll('div')).find(d => /DNR appok/.test(d.innerText || '') && d.getAttribute('role') === 'button'); if (row) row.click(); });
       await pp.waitForTimeout(700);
       const sheet = await pp.evaluate(() => document.body.innerText);
       ok('a lap "DNR appok" cimmel nyilik', /DNR appok/.test(sheet));
-      ok('a lapon ott a DNR Bingó', /DNR Bingó/.test(sheet));
-      ok('a lapon ott a DNR Liga', /DNR Liga/.test(sheet));
+      for (const n of ['DNR Events', 'DNR BOX', 'DNR Pub', 'DNR Bingó', 'DNR Liga']) ok('a lapon ott: ' + n, sheet.includes(n));
       ok('a Liga sora a futo szezont mutatja', /Ranglista · S2 · Nyár/.test(sheet), (sheet.match(/Ranglista[^\n]*/) || ['NINCS'])[0]);
       await pp.screenshot({ path: __dirname + '/pwa_more_sheet.png', fullPage: true });
-      // navigacio a lapról
       await pp.evaluate(() => { const b = Array.from(document.querySelectorAll('button')).find(x => /DNR Bingó/.test(x.innerText || '')); if (b) b.click(); });
       await pp.waitForTimeout(1200);
       const after = await pp.evaluate(() => document.body.innerText);
       ok('a lapról el lehet jutni a Bingóba', /Bingó|Ki vagy/i.test(after) && !/DNR appok/.test(after), after.split('\n').slice(0, 3).join(' | '));
+      // ujratoltes a fooldalra a szezon-badge teszthez
+      await pp.goto(BASE, { waitUntil: 'domcontentloaded' });
+      await pp.waitForTimeout(3200);
+      // ── Szezon-badge a DNR GAMES alatt ──
+      const badge = await pp.evaluate(() => {
+        const b = Array.from(document.querySelectorAll('button')).find(x => /S2 · Ny[áÁ]r/i.test(x.innerText || ''));
+        if (!b) return null;
+        const r = b.getBoundingClientRect();
+        const cs = getComputedStyle(b);
+        const brand = Array.from(document.querySelectorAll('span')).find(x => /^DNR GAMES$/.test((x.innerText || '').trim()));
+        const logo = document.querySelector('.home-brand svg, .home-brand img');
+        return {
+          text: (b.innerText || '').replace(/\n/g, ' | '),
+          top: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width),
+          bg: cs.backgroundImage.slice(0, 40), anim: cs.animationName,
+          brandTop: brand ? Math.round(brand.getBoundingClientRect().top) : null,
+          logoTop: logo ? Math.round(logo.getBoundingClientRect().top) : null,
+        };
+      });
+      ok('van szezon-badge', !!badge, JSON.stringify(badge));
+      ok('a szezon nevet mutatja', badge && /S2 · NYÁR|S2 · Nyár/i.test(badge.text), badge && badge.text);
+      ok('kiirja a hatralevo napokat', badge && /még \d+ nap/i.test(badge.text), badge && badge.text);
+      ok('a DNR GAMES ALATT van', badge && badge.brandTop != null && badge.top > badge.brandTop, `badge=${badge && badge.top} brand=${badge && badge.brandTop}`);
+      ok('a logo FOLOTT van', badge && badge.logoTop != null && badge.top < badge.logoTop, `badge=${badge && badge.top} logo=${badge && badge.logoTop}`);
+      ok('latvanyos: szines atmenet + animacio', badge && /gradient/.test(badge.bg) && /seasonGlow|seasonPop/.test(badge.anim), badge && badge.bg + ' / ' + badge.anim);
+      ok('nem log ki (<=358px)', badge && badge.w <= 358, badge && badge.w + 'px');
+      await pp.screenshot({ path: __dirname + '/pwa_home_dock.png', fullPage: true });
+
+      // koppintasra a Liga SZEZON nezete nyilik
+      await pp.evaluate(() => { const b = Array.from(document.querySelectorAll('button')).find(x => /S2 · Ny[áÁ]r/i.test(x.innerText || '')); if (b) b.click(); });
+      await pp.waitForTimeout(1400);
+      const seasonView = await pp.evaluate(() => {
+        const on = Array.from(document.querySelectorAll('button')).find(x => x.textContent.trim() === 'Szezon');
+        return { text: document.body.innerText, active: on ? getComputedStyle(on).color : null };
+      });
+      ok('a badge a Liga szezon-nezetet nyitja', /Aktív · még \d+ nap/.test(seasonView.text) && /S2 · Nyár/.test(seasonView.text), seasonView.text.split('\n').slice(0, 6).join(' | '));
+      await pp.screenshot({ path: __dirname + '/pwa_season_view.png', fullPage: true });
     }
-    if (!q) ok('az alap app nyito-kepernyoje valtozatlan', /BOTTLE OF HEROES/.test(pp.__splash.title.replace(/\s+/g, ' ')) || /Bottle/i.test(pp.__splash.title), JSON.stringify(pp.__splash.title.replace(/\s+/g, '')));
     ok(`${q || '(alap)'} nincs JS hiba`, pp.__errs.filter(e => !/ServiceWorker/.test(e)).length === 0, pp.__errs.join(' | '));
     await pp.close();
   }
