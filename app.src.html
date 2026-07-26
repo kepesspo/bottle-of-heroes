@@ -34981,7 +34981,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.142';
+const APP_VERSION = 'v10.143';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -39082,10 +39082,12 @@ function AdminHomeToggles() {
     return () => { try { un(); } catch(e) {} };
   }, []);
   const on = !cfg || cfg.dnrAppsEnabled !== false;
-  const set = (val) => {
-    setCfg(c => Object.assign({}, c || {}, { dnrAppsEnabled: val }));
-    try { firebase.firestore().collection('config').doc('homeConfig').set({ dnrAppsEnabled: val }, { merge: true }).catch(() => {}); } catch(e) {}
+  const closeMode = (cfg && cfg.seasonCloseMode) || 'always';
+  const write = (patch) => {
+    setCfg(c => Object.assign({}, c || {}, patch));
+    try { firebase.firestore().collection('config').doc('homeConfig').set(patch, { merge: true }).catch(() => {}); } catch(e) {}
   };
+  const set = (val) => write({ dnrAppsEnabled: val });
   return (
     <div style={{ background:T.surface, borderRadius:16, padding:16, boxShadow:T.shadow, marginTop:14 }}>
       <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:4 }}>Főoldal</div>
@@ -39104,6 +39106,33 @@ function AdminHomeToggles() {
           Kikapcsolva — a felirat egyetlen készüléken sem látszik.
         </div>
       )}
+
+      <div style={{ height:1, background:`${T.inkMute}22`, margin:'14px 0' }} />
+
+      <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>Szezonzáró ablak</div>
+      <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginTop:2, marginBottom:10 }}>
+        A lezárult szezon győztesét mutató összefoglaló. Legfeljebb 2 héttel a szezon vége után jelenik meg.
+      </div>
+      <div style={{ display:'flex', background:T.bgSoft, borderRadius:14, padding:4, gap:4 }}>
+        {[
+          { k:'always', l:'Minden indításnál' },
+          { k:'once',   l:'Egyszer' },
+          { k:'off',    l:'Soha' },
+        ].map(m => (
+          <button key={m.k} onClick={() => write({ seasonCloseMode: m.k })} style={{
+            flex:1, minWidth:0, minHeight:40, borderRadius:11, border:'none', cursor:'pointer',
+            fontFamily:T.font, fontWeight:800, fontSize:11.5, transition:'all .16s',
+            background: closeMode === m.k ? T.ink : 'transparent', color: closeMode === m.k ? '#fff' : T.inkSoft,
+          }}>{m.l}</button>
+        ))}
+      </div>
+      <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, marginTop:8, lineHeight:1.5 }}>
+        {closeMode === 'always'
+          ? 'Minden app-indításkor egyszer feljön — a főoldalra visszalépés nem hozza elő újra.'
+          : closeMode === 'once'
+            ? 'Készülékenként egyszer, utána nem jön elő többé.'
+            : 'Nem jelenik meg. A végeredmény a Ligában továbbra is megnézhető.'}
+      </div>
     </div>
   );
 }
@@ -42239,14 +42268,6 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
     return () => { try { un(); } catch(e) {} };
   }, []);
   const bingoOn = !bingoCfg || bingoCfg.enabled !== false;
-  // Fooldal-kapcsolok (Admin > Rendszer > Beallitasok)
-  const [homeCfg, setHomeCfg] = React.useState(null);
-  React.useEffect(() => {
-    if (typeof firebase === 'undefined') return;
-    const un = firebase.firestore().collection('config').doc('homeConfig').onSnapshot(d => setHomeCfg((d && d.exists && d.data()) || null), () => {});
-    return () => { try { un(); } catch(e) {} };
-  }, []);
-  const dnrAppsOn = !homeCfg || homeCfg.dnrAppsEnabled !== false;
   const bingoMode = (bingoCfg && bingoCfg.mode === 'tipp') ? 'tipp' : 'bingo';
   const bingoLabel = bingoMode === 'tipp'
     ? ((bingoCfg && bingoCfg.tippTitle) ? bingoCfg.tippTitle : 'Tippbajnokság')
@@ -42277,6 +42298,22 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
   const _boxDockSub = boxInfo
     ? (boxInfo.np ? (currentLang==='en' ? '🟢 Active' : '🟢 Aktív') : (currentLang==='en' ? '⚪ Not active' : '⚪ Nem aktív'))
     : (currentLang==='en' ? 'Shared jukebox' : 'Közös jukebox');
+  // Fooldal-kapcsolok (Admin > Rendszer > Beallitasok)
+  const [homeCfg, setHomeCfg] = React.useState(null);
+  // Amig a config meg nem erkezett, nem dontunk a szezonzarorol — kulonben
+  // 'off'/'once' beallitas mellett is felvillanna az alapertelmezes szerint.
+  const [homeCfgLoaded, setHomeCfgLoaded] = React.useState(false);
+  React.useEffect(() => {
+    if (typeof firebase === 'undefined') { setHomeCfgLoaded(true); return; }
+    const un = firebase.firestore().collection('config').doc('homeConfig').onSnapshot(
+      d => { setHomeCfg((d && d.exists && d.data()) || null); setHomeCfgLoaded(true); },
+      () => setHomeCfgLoaded(true));
+    return () => { try { un(); } catch(e) {} };
+  }, []);
+  const dnrAppsOn = !homeCfg || homeCfg.dnrAppsEnabled !== false;
+  // 'always' (alap) = minden app-inditasnal · 'once' = keszulekenkent egyszer · 'off'
+  const closeMode = (homeCfg && homeCfg.seasonCloseMode) || 'always';
+
   // Liga csempe: ha fut szezon, annak a neve latszik
   const [ligaSeason, setLigaSeason] = React.useState(null);
   // Szezonzaro: a legutobb lezarult szezon, ha meg nem lattuk ezen a keszuleken.
@@ -42284,16 +42321,23 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
   const [closing, setClosing] = React.useState(null); // { season, standings, nextSeason }
   const CLOSE_MAX_AGE = 14 * 24 * 60 * 60 * 1000; // 2 hetnel regebbi szezonzarot mar nem hozunk elo
   React.useEffect(() => {
-    if (typeof window.getSeasons !== 'function') return;
+    if (typeof window.getSeasons !== 'function' || !homeCfgLoaded) return;
     window.getSeasons().then(ss => {
       const list = ss || [], now = Date.now();
       setLigaSeason(list.find(x => (x.from || 0) <= now && now <= (x.to || 0)) || null);
       // getSeasons from szerint csokkeno sorrendben ad vissza
       const ended = list.filter(x => (x.to || 0) < now).sort((a, b) => (b.to || 0) - (a.to || 0))[0];
       if (!ended || (now - (ended.to || 0)) > CLOSE_MAX_AGE) return;
-      let seen = false;
-      try { seen = localStorage.getItem('boh_season_closed_' + ended.id) === '1'; } catch (e) {}
-      if (seen) return;
+      if (closeMode === 'off') return;
+      if (closeMode === 'once') {
+        let seen = false;
+        try { seen = localStorage.getItem('boh_season_closed_' + ended.id) === '1'; } catch (e) {}
+        if (seen) return;
+      } else {
+        // 'always' = app-INDITASONKENT egyszer. A fooldal minden hazateresnel
+        // ujra mountolodik, azt nem szamitjuk uj megnyitasnak.
+        if (window.__seasonClosingShown === ended.id) return;
+      }
       Promise.all([
         typeof window.getProfiles === 'function' ? window.getProfiles() : Promise.resolve([]),
         typeof window.getAllStatEvents === 'function' ? window.getAllStatEvents() : Promise.resolve([]),
@@ -42301,12 +42345,15 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
         const standings = seasonStandings(evs, ended, profs);
         const nextSeason = list.filter(x => (x.from || 0) > (ended.to || 0)).sort((a, b) => (a.from || 0) - (b.from || 0))[0]
           || list.find(x => (x.from || 0) <= now && now <= (x.to || 0)) || null;
+        try { window.__seasonClosingShown = ended.id; } catch (e) {}
         setClosing({ season: ended, standings, nextSeason });
       }).catch(() => {});
     }).catch(() => {});
-  }, []);
+  }, [homeCfgLoaded, closeMode]);
   const dismissClosing = () => {
-    if (closing) { try { localStorage.setItem('boh_season_closed_' + closing.season.id, '1'); } catch (e) {} }
+    if (closing && closeMode === 'once') {
+      try { localStorage.setItem('boh_season_closed_' + closing.season.id, '1'); } catch (e) {}
+    }
     setClosing(null);
   };
   const _ligaDockSub = ligaSeason ? ligaSeason.name : (currentLang==='en' ? 'Leaderboard' : 'Ranglista');

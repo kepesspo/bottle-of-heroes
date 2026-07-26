@@ -11,7 +11,7 @@ const S1 = { from: NOW - 70 * DAY, to: NOW - 40 * DAY };
 const S2 = { from: NOW - 25 * DAY, to: NOW - 3 * DAY };
 const S3 = { from: NOW - 1 * DAY,  to: NOW + 20 * DAY };
 
-const seed = (seasons) => `
+const seed = (seasons, cfg) => `
   try { localStorage.setItem('boh_onboarded','1'); } catch(e){}
   window.__fbStore['profiles'] = {
     p_a:{name:'Alfa',color:'#5BA0DB'}, p_b:{name:'Beta',color:'#E07A5F'},
@@ -38,18 +38,19 @@ const seed = (seasons) => `
     x1:{ profileId:'p_d', ts:${S2.to + DAY}, totalPoints:9999, totalSessions:9, totalDrinks:9999, totalRounds:9999 },
   };
   window.__fbStore['seasons'] = ${JSON.stringify(seasons)};
+  window.__fbStore['config'] = ${JSON.stringify(cfg || {})};
 `;
 
 const ALL = { s1:{ name:'S1 · Tavasz', from:S1.from, to:S1.to },
               s2:{ name:'S2 · Nyár',   from:S2.from, to:S2.to },
               s3:{ name:'S3 · Ősz',    from:S3.from, to:S3.to } };
 
-async function home(b, seasons, storage) {
+async function home(b, seasons, storage, cfg) {
   const p = await b.newPage({ viewport: { width: 390, height: 900 } });
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.route('**://**', r => r.request().url().startsWith('file://') ? r.continue() : r.abort());
   await p.addInitScript(stub);
-  await p.addInitScript(seed(seasons));
+  await p.addInitScript(seed(seasons, cfg));
   if (storage) await p.addInitScript(`try { ${storage} } catch(e){}`);
   await p.goto(BASE, { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(3400);
@@ -108,13 +109,39 @@ const sheetText = (p) => p.evaluate(() => {
   });
   await p.waitForTimeout(600);
   ok('bezarhato', (await sheetText(p)) === null);
-  const flag = await p.evaluate(() => localStorage.getItem('boh_season_closed_s2'));
-  ok('elmenti, hogy lattuk (localStorage)', flag === '1', 'boh_season_closed_s2=' + flag);
   await p.close();
 
-  console.log('\n===== NEM UGRIK FEL FELESLEGESEN =====');
+  console.log('\n===== MODOK =====');
+  // 'always' (alap): ujratoltes utan ismet feljon, akkor is, ha mar lattuk
   p = await home(b, ALL, "localStorage.setItem('boh_season_closed_s2','1');");
-  ok('mar latott szezonnal NEM ugrik fel', (await sheetText(p)) === null);
+  ok('alapbol MINDEN inditasnal feljon (a regi "latott" jelzes ellenere is)', (await sheetText(p)) !== null);
+  // fooldalra visszalepes NEM hozza elo ujra
+  await p.evaluate(() => { const btn = Array.from(document.querySelectorAll('button')).find(x => x.textContent.trim() === 'Bezár'); if (btn) btn.click(); });
+  await p.waitForTimeout(500);
+  await p.evaluate(() => { const c = Array.from(document.querySelectorAll('button')).find(b2 => b2.querySelector('svg line[x1="18"][y1="20"]')); if (c) c.click(); });
+  await p.waitForTimeout(1200);
+  await p.evaluate(() => { const b2 = Array.from(document.querySelectorAll('button')).find(x => x.querySelector('svg path[d^="M15 18l-6-6"]')); if (b2) b2.click(); });
+  await p.waitForTimeout(1400);
+  ok('a fooldalra visszalepes NEM hozza elo ujra', (await sheetText(p)) === null, 'ugyanaz az app-inditas');
+  await p.close();
+  // ujratoltes = uj app-inditas -> ismet feljon
+  p = await home(b, ALL);
+  ok('ujratoltes utan ismet feljon', (await sheetText(p)) !== null);
+  await p.close();
+
+  p = await home(b, ALL, "localStorage.setItem('boh_season_closed_s2','1');", { homeConfig:{ seasonCloseMode:'once' } });
+  ok('"once" modban a mar latott szezon NEM ugrik fel', (await sheetText(p)) === null);
+  await p.close();
+
+  p = await home(b, ALL, null, { homeConfig:{ seasonCloseMode:'once' } });
+  ok('"once" modban eloszor feljon', (await sheetText(p)) !== null);
+  await p.evaluate(() => { const btn = Array.from(document.querySelectorAll('button')).find(x => x.textContent.trim() === 'Bezár'); if (btn) btn.click(); });
+  await p.waitForTimeout(500);
+  ok('"once" modban a bezaras elmentodik', (await p.evaluate(() => localStorage.getItem('boh_season_closed_s2'))) === '1');
+  await p.close();
+
+  p = await home(b, ALL, null, { homeConfig:{ seasonCloseMode:'off' } });
+  ok('"off" modban SOHA nem ugrik fel', (await sheetText(p)) === null);
   await p.close();
 
   p = await home(b, { s1: ALL.s1 });   // csak a 40 napja lezarult
