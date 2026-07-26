@@ -34936,7 +34936,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.132';
+const APP_VERSION = 'v10.133';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -53179,46 +53179,43 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
         </div>
       )}
 
-      {/* Mentőöv = nyílt lapok. Mindenkié látszik; a soron lévő kijátszhat
-          egyet tipp helyett. Rontás NEM visz lapot — csak önként fogy. */}
-      {livesOn && (
-        <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8 }}>
-          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', color:T.inkMute, textAlign:'center' }}>
-            Mentőöv — a lapjaid
-          </div>
-          {activePids.map(pid => {
-            const pl = players.find(x => x.id === pid);
-            const hand = hands[pid] || [];
-            const active = pid === currentPid && !guessRes && !gameOver;
-            return (
-              <div key={pid} style={{ display:'flex', alignItems:'center', gap:8, background: active ? T.surface : 'transparent', borderRadius:12, padding: active ? '7px 9px' : '3px 9px', boxShadow: active ? T.shadow : 'none', opacity: active ? 1 : 0.55, border:'1.5px solid transparent' }}>
-                <span style={{ width:8, height:8, borderRadius:'50%', background: pl?.color || T.inkMute, flexShrink:0 }} />
-                <span style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:12, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pl?.name || '?'}</span>
-                <div style={{ display:'flex', gap:5, flexShrink:0 }}>
-                  {hand.length === 0 && <span style={{ fontFamily:T.font, fontSize:11, color:T.inkMute }}>elfogyott</span>}
-                  {hand.map((c, i) => {
-                    const red = SUIT_RED.has(c.suit);
-                    const accent = T.mint;
-                    return (
-                      <button key={i} disabled={!active}
-                        onClick={() => playHandCard(i)}
-                        style={{ width:34, height:46, borderRadius:7, background:T.surface, border:`1.5px solid ${active ? accent : T.inkMute+'33'}`,
-                          display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', lineHeight:1.05,
-                          cursor: active ? 'pointer' : 'default', padding:0, boxShadow: active ? `0 2px 8px ${accent}33` : 'none' }}>
-                        <span style={{ fontFamily:'Georgia,serif', fontWeight:700, fontSize:14, color: red ? T.coral : T.ink }}>{c.value}</span>
-                        <span style={{ fontFamily:'Georgia,serif', fontSize:12, color: red ? T.coral : T.ink }}>{c.suit}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+      {/* Mentőöv = nyílt lapok. CSAK a soron lévő játékosé látszik — ő tud
+          kijátszani egyet tipp helyett. Rontás NEM visz lapot, csak önként fogy. */}
+      {livesOn && (() => {
+        const myHand = hands[currentPid] || [];
+        const active = !guessRes && !gameOver;
+        return (
+          <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8 }}>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', color:T.inkMute, textAlign:'center' }}>
+              Mentőöv — {currentPlayer?.name || '?'} lapjai
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:8, background: active ? T.surface : 'transparent', borderRadius:12, padding: active ? '7px 9px' : '3px 9px', boxShadow: active ? T.shadow : 'none', opacity: active ? 1 : 0.55, border:'1.5px solid transparent' }}>
+              <span style={{ width:8, height:8, borderRadius:'50%', background: currentPlayer?.color || T.inkMute, flexShrink:0 }} />
+              <span style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:12, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentPlayer?.name || '?'}</span>
+              <div style={{ display:'flex', gap:5, flexShrink:0 }}>
+                {myHand.length === 0 && <span style={{ fontFamily:T.font, fontSize:11, color:T.inkMute }}>elfogyott</span>}
+                {myHand.map((c, i) => {
+                  const red = SUIT_RED.has(c.suit);
+                  const accent = T.mint;
+                  return (
+                    <button key={i} disabled={!active}
+                      onClick={() => playHandCard(i)}
+                      style={{ width:34, height:46, borderRadius:7, background:T.surface, border:`1.5px solid ${active ? accent : T.inkMute+'33'}`,
+                        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', lineHeight:1.05,
+                        cursor: active ? 'pointer' : 'default', padding:0, boxShadow: active ? `0 2px 8px ${accent}33` : 'none' }}>
+                      <span style={{ fontFamily:'Georgia,serif', fontWeight:700, fontSize:14, color: red ? T.coral : T.ink }}>{c.value}</span>
+                      <span style={{ fontFamily:'Georgia,serif', fontSize:12, color: red ? T.coral : T.ink }}>{c.suit}</span>
+                    </button>
+                  );
+                })}
               </div>
-            );
-          })}
-          <div style={{ fontFamily:T.font, fontSize:10.5, color:T.inkMute, textAlign:'center', lineHeight:1.4 }}>
-            Tipp helyett rárakhatod az egyik lapodat — azt látod, a vak lapot nem.
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:10.5, color:T.inkMute, textAlign:'center', lineHeight:1.4 }}>
+              Tipp helyett rárakhatod az egyik lapodat — azt látod, a vak lapot nem.
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );
