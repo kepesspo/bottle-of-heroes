@@ -34981,7 +34981,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.141';
+const APP_VERSION = 'v10.142';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -37011,6 +37011,34 @@ const STATS_PERIODS = [
   { key:'week', label:'7 nap' },
   { key:'custom', label:'Egyedi' },
 ];
+// ── Szezon-segedek — a statEvents idobelyegeibol, kozos a fooldal es a
+// statisztika kozott, hogy sose terjen el a ket helyen szamolt allas.
+function seasonStandings(statEvents, season, profiles) {
+  if (!season) return [];
+  const from = season.from || 0, to = season.to || 0;
+  const agg = {};
+  (statEvents || []).forEach(e => {
+    const ts = e.ts || 0;
+    if (ts < from || ts > to) return;
+    const d = agg[e.profileId] || (agg[e.profileId] = { pts:0, drinks:0, sessions:0, rounds:0 });
+    d.pts += e.totalPoints || 0;
+    d.drinks += e.totalDrinks || 0;
+    d.sessions += e.totalSessions || 0;
+    d.rounds += e.totalRounds || 0;
+  });
+  return Object.keys(agg)
+    .map(id => ({ id, p: (profiles || []).find(x => String(x.id) === String(id)) || { id, name:'?', color:'#98A2B3' }, ...agg[id] }))
+    .filter(x => x.pts > 0 || x.drinks > 0 || x.sessions > 0)
+    .sort((a, b) => (b.pts - a.pts) || (b.sessions - a.sessions));
+}
+// Hany LEZARULT szezont nyert az adott profil (a gyoztes = legtobb pont)
+function seasonWinsOf(profileId, seasons, statEvents, profiles) {
+  const now = Date.now();
+  return (seasons || []).filter(se => (se.to || 0) < now).filter(se => {
+    const st = seasonStandings(statEvents, se, profiles);
+    return st.length > 0 && st[0].pts > 0 && String(st[0].id) === String(profileId);
+  });
+}
 function getStatsPeriodRange(period, customFrom, customTo) {
   const now = new Date();
   if (period === 'today') return { since: new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(), until: null };
@@ -37025,7 +37053,7 @@ function getStatsPeriodRange(period, customFrom, customTo) {
   }
   return { since: null, until: null };
 }
-function StatsScreen({ go, onOpenObserver, deepLink, initialView }) {
+function StatsScreen({ go, onOpenObserver, deepLink, initialView, initialSeasonId }) {
   const [profiles, setProfiles] = React.useState([]);
   const [stats, setStats] = React.useState({});
   const [gameStats, setGameStats] = React.useState({});
@@ -37064,7 +37092,8 @@ function StatsScreen({ go, onOpenObserver, deepLink, initialView }) {
       setSeasons(seas || []);
       const now = Date.now();
       const live = (seas || []).find(s => (s.from || 0) <= now && now <= (s.to || 0));
-      setSeasonId((live || (seas || [])[0] || {}).id || null);
+      const wanted = initialSeasonId && (seas || []).find(s => s.id === initialSeasonId);
+      setSeasonId((wanted || live || (seas || [])[0] || {}).id || null);
       setLoading(false);
     });
   }, []);
@@ -37297,6 +37326,12 @@ function StatsScreen({ go, onOpenObserver, deepLink, initialView }) {
             return (sb.totalPoints||0) - (sa.totalPoints||0);
           });
           const totalPtsAll = profilRows.reduce((sum, pp) => sum + (pStats[pp.id]?.totalPoints || 0), 0);
+          // Szezon-győzelmek profilonként — egyszer, az egész listára
+          const seasonWins = {};
+          seasons.filter(se => (se.to || 0) < Date.now()).forEach(se => {
+            const st = seasonStandings(statEvents, se, profiles);
+            if (st.length && st[0].pts > 0) seasonWins[st[0].id] = (seasonWins[st[0].id] || 0) + 1;
+          });
           return (
             <div className="grid-statlist">
               {profilRows.length >= 2 && (
@@ -37320,6 +37355,8 @@ function StatsScreen({ go, onOpenObserver, deepLink, initialView }) {
                 const achPct = Math.round(achDone / Math.max(1, ACHIEVEMENTS.length) * 100);
                 // A szint mindig az örök statból jön — szezon-nézetben is
                 const lvl = levelFromXp(computeXp(lifeS).total);
+                // Megnyert (lezárult) szezonok — a névsorban is látszódjon, ne csak a popupban
+                const sWins = seasonWins[p.id] || 0;
                 return (
                   <div key={p.id} onClick={() => setQuickStatsFor(p)} style={{ background:T.surface, borderRadius:16, padding:'10px 12px', boxShadow:pfShadow, border:pfBorder, cursor:'pointer', WebkitTapHighlightColor:'transparent', minWidth:0, overflow:'hidden' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:9, minWidth:0 }}>
@@ -37332,6 +37369,12 @@ function StatsScreen({ go, onOpenObserver, deepLink, initialView }) {
                         {/* név + rögtön mellette a megszerzett kitüntetések */}
                         <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
                           <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:lvl.color, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', minWidth:0 }}>{p.name}</span>
+                          {sWins > 0 && (
+                            <span title={`${sWins} megnyert szezon`} style={{ display:'inline-flex', alignItems:'center', gap:2, background:`${T.yellow||'#F0C74E'}26`, border:`1.5px solid ${T.yellow||'#F0C74E'}66`, borderRadius:999, padding:'1px 6px 1px 4px', flexShrink:0 }}>
+                              <BohIcon name="trophy" size={10} />
+                              {sWins > 1 && <span style={{ fontFamily:T.font, fontWeight:900, fontSize:10, color:T.ink }}>{sWins}</span>}
+                            </span>
+                          )}
                           <LevelChip lvl={lvl} />
                           <span style={{ display:'inline-flex', alignItems:'center', gap:3, background:T.mintSoft, borderRadius:999, padding:'2px 7px 2px 5px', flexShrink:0 }} title="Megszerzett kitüntetések">
                             <BohIcon name="medal1" size={11} />
@@ -42059,6 +42102,93 @@ function EventCreateScreen({ go, deepLink }) {
   );
 }
 
+// ── Szezonzaro — egyszer ugrik fel, amikor egy szezon lejart ────────────────
+function SeasonClosingSheet({ season, standings, nextSeason, onClose, onOpenLeague }) {
+  const podium = standings.slice(0, 3);
+  const mvp = podium[0];
+  // Mellekcimek: csak akkor, ha nem ugyanaz nyerte, mint a fodijat
+  const extras = [];
+  const best = (key, label, icon, unit) => {
+    const top = [...standings].sort((a, b) => b[key] - a[key])[0];
+    if (top && top[key] > 0 && (!mvp || String(top.id) !== String(mvp.id))) extras.push({ p: top.p, label, icon, val: top[key] + ' ' + unit });
+  };
+  best('drinks', 'Legtöbb korty', 'beer', 'korty');
+  best('sessions', 'Legtöbb parti', 'flag', 'parti');
+  const fmt = ms => ms ? new Date(ms).toLocaleDateString('hu-HU', { year:'numeric', month:'long', day:'numeric' }) : '?';
+  const now = Date.now();
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.78)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:18, animation:'fadeIn .25s' }}>
+      <Confetti originY={0.3} />
+      <div onClick={e => e.stopPropagation()} style={{ position:'relative', background:T.surface, borderRadius:28, padding:'26px 20px 20px', width:'100%', maxWidth:400, maxHeight:'86vh', overflowY:'auto', display:'flex', flexDirection:'column', alignItems:'center', gap:12, boxShadow:'0 24px 64px rgba(0,0,0,0.35)', animation:'popIn .35s cubic-bezier(.2,.9,.3,1.3)' }}>
+        <div style={{ fontSize:46, lineHeight:1 }}>🏆</div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:11.5, color:T.coral, textTransform:'uppercase', letterSpacing:'0.16em' }}>Szezon vége</div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, textAlign:'center', lineHeight:1.2 }}>{season.name}</div>
+        <div style={{ fontFamily:T.font, fontSize:11.5, color:T.inkMute, marginTop:-6 }}>{fmt(season.from)} – {fmt(season.to)}</div>
+
+        {mvp ? (
+          <React.Fragment>
+            <div style={{ width:'100%', marginTop:6, background:`${T.yellow||'#F0C74E'}1F`, border:`2px solid ${T.yellow||'#F0C74E'}66`, borderRadius:20, padding:'14px 16px', display:'flex', alignItems:'center', gap:12 }}>
+              <PlayerAvatar player={mvp.p} size={48} />
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:10.5, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.14em' }}>Szezon MVP</div>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{mvp.p.name}</div>
+              </div>
+              <div style={{ textAlign:'right', flexShrink:0 }}>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:T.yellow||'#F0C74E', lineHeight:0.95 }}>{mvp.pts}</div>
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:9, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.12em' }}>pont</div>
+              </div>
+            </div>
+
+            {podium.length > 1 && (
+              <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:6 }}>
+                {podium.slice(1).map((x, i) => (
+                  <div key={x.id} style={{ display:'flex', alignItems:'center', gap:10, background:T.bgSoft, borderRadius:14, padding:'9px 12px' }}>
+                    <BohIcon name={'medal' + (i + 2)} size={16} />
+                    <PlayerAvatar player={x.p} size={28} />
+                    <span style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:13.5, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{x.p.name}</span>
+                    <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.inkSoft, flexShrink:0 }}>{x.pts}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {extras.length > 0 && (
+              <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:6 }}>
+                {extras.map(e => (
+                  <div key={e.label} style={{ display:'flex', alignItems:'center', gap:9, padding:'7px 12px', background:T.bgSoft, borderRadius:14 }}>
+                    <BohIcon name={e.icon} size={14} />
+                    <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11.5, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em' }}>{e.label}</span>
+                    <span style={{ flex:1 }} />
+                    <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12.5, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'45%' }}>{e.p.name}</span>
+                    <span style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft, flexShrink:0 }}>{e.val}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </React.Fragment>
+        ) : (
+          <div style={{ fontFamily:T.font, fontSize:13.5, color:T.inkSoft, textAlign:'center', padding:'12px 0' }}>
+            Ebben a szezonban nem gyűlt pont — nincs győztes.
+          </div>
+        )}
+
+        <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, textAlign:'center', lineHeight:1.5, marginTop:2 }}>
+          {nextSeason
+            ? ((nextSeason.from || 0) <= now
+                ? <React.Fragment>Már fut a következő: <b style={{ color:T.ink }}>{nextSeason.name}</b></React.Fragment>
+                : <React.Fragment><b style={{ color:T.ink }}>{nextSeason.name}</b> indul: {fmt(nextSeason.from)}</React.Fragment>)
+            : 'Az örök statisztika és a szintek tovább gyűlnek.'}
+        </div>
+
+        <div style={{ display:'flex', gap:10, width:'100%', marginTop:6 }}>
+          <button onClick={onClose} style={{ flex:1, padding:'13px 0', borderRadius:14, border:'none', background:T.surfaceMuted, color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:14, cursor:'pointer' }}>Bezár</button>
+          <button onClick={onOpenLeague} style={{ flex:1.4, padding:'13px 0', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer' }}>Végeredmény</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // A DNR csalad appjai — uj app felvetele ide egy sor, a fooldalhoz nem kell nyulni
 const DNR_APPS = [
   { screen:'log',     name:'DNR Events', icon:'assets/dnr_events_icon.png', sub: c => c.ev },
@@ -42149,13 +42279,36 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
     : (currentLang==='en' ? 'Shared jukebox' : 'Közös jukebox');
   // Liga csempe: ha fut szezon, annak a neve latszik
   const [ligaSeason, setLigaSeason] = React.useState(null);
+  // Szezonzaro: a legutobb lezarult szezon, ha meg nem lattuk ezen a keszuleken.
+  // A profil/esemeny-adatot CSAK akkor toltjuk be, ha tenyleg van mit mutatni.
+  const [closing, setClosing] = React.useState(null); // { season, standings, nextSeason }
+  const CLOSE_MAX_AGE = 14 * 24 * 60 * 60 * 1000; // 2 hetnel regebbi szezonzarot mar nem hozunk elo
   React.useEffect(() => {
     if (typeof window.getSeasons !== 'function') return;
     window.getSeasons().then(ss => {
-      const now = Date.now();
-      setLigaSeason((ss || []).find(x => (x.from || 0) <= now && now <= (x.to || 0)) || null);
+      const list = ss || [], now = Date.now();
+      setLigaSeason(list.find(x => (x.from || 0) <= now && now <= (x.to || 0)) || null);
+      // getSeasons from szerint csokkeno sorrendben ad vissza
+      const ended = list.filter(x => (x.to || 0) < now).sort((a, b) => (b.to || 0) - (a.to || 0))[0];
+      if (!ended || (now - (ended.to || 0)) > CLOSE_MAX_AGE) return;
+      let seen = false;
+      try { seen = localStorage.getItem('boh_season_closed_' + ended.id) === '1'; } catch (e) {}
+      if (seen) return;
+      Promise.all([
+        typeof window.getProfiles === 'function' ? window.getProfiles() : Promise.resolve([]),
+        typeof window.getAllStatEvents === 'function' ? window.getAllStatEvents() : Promise.resolve([]),
+      ]).then(([profs, evs]) => {
+        const standings = seasonStandings(evs, ended, profs);
+        const nextSeason = list.filter(x => (x.from || 0) > (ended.to || 0)).sort((a, b) => (a.from || 0) - (b.from || 0))[0]
+          || list.find(x => (x.from || 0) <= now && now <= (x.to || 0)) || null;
+        setClosing({ season: ended, standings, nextSeason });
+      }).catch(() => {});
     }).catch(() => {});
   }, []);
+  const dismissClosing = () => {
+    if (closing) { try { localStorage.setItem('boh_season_closed_' + closing.season.id, '1'); } catch (e) {} }
+    setClosing(null);
+  };
   const _ligaDockSub = ligaSeason ? ligaSeason.name : (currentLang==='en' ? 'Leaderboard' : 'Ranglista');
   // 'strip' = csík a DNR GAMES alatt · 'seal' = pecsét a logón (egy szó a váltás)
   const seasonVariant = (typeof window !== 'undefined' && window.__seasonVariant) || 'strip';
@@ -42169,6 +42322,13 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
 
   return (
     <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg, position:'relative' }}>
+      {closing && (
+        <SeasonClosingSheet
+          season={closing.season} standings={closing.standings} nextSeason={closing.nextSeason}
+          onClose={dismissClosing}
+          onOpenLeague={() => { dismissClosing(); if (onOpenSeason) onOpenSeason(closing.season.id); else go('stats'); }}
+        />
+      )}
       {showInstall && <InstallModal onClose={() => setShowInstall(false)} />}
       {showMoreApps && (
         <SheetOverlay onClose={() => setShowMoreApps(false)} title="DNR appok">
@@ -42931,17 +43091,8 @@ function PlayerProfileStats({ profileId, compact }) {
   const xp = computeXp(achStats);
   const lvl = levelFromXp(xp.total);
   // Örök szezon-jelvény: a már LEZÁRULT szezonok, amiket ez a profil nyert
-  const seasonWins = (seasons || []).filter(se => {
-    if (!se.to || se.to >= Date.now()) return false;
-    const agg = {};
-    (allEvents || []).forEach(e => {
-      const ts = e.ts || 0;
-      if (ts < (se.from || 0) || ts > se.to) return;
-      agg[e.profileId] = (agg[e.profileId] || 0) + (e.totalPoints || 0);
-    });
-    const best = Object.keys(agg).sort((a, b) => agg[b] - agg[a])[0];
-    return best === profileId && agg[best] > 0;
-  });
+  // (ugyanaz a seasonWinsOf, amit a statisztika-lista és a szezonzáró használ)
+  const seasonWins = seasonWinsOf(profileId, seasons, allEvents, profiles);
 
   // Fejlődési grafikon — kumulatív pont az egyes partik után (statEvents naplóból)
   let chart = null;
@@ -65489,6 +65640,7 @@ function BottleApp() {
   const [screen, setScreen] = useState(() => _initRoom ? 'observer' : _jukebox ? 'jukebox' : _barApp ? 'bar' : _bingoApp ? 'bingo' : _ligaApp ? 'stats' : _deepLink ? 'log' : 'home');
   const [editEventId, setEditEventId] = React.useState(null);
   const [statsInitView, setStatsInitView] = React.useState('all');
+  const [statsInitSeason, setStatsInitSeason] = React.useState(null);
   const [showOnboarding, setShowOnboarding] = React.useState(() => {
     try { return !localStorage.getItem('boh_onboarded') && !_initRoom && !_deepLink && !_jukebox && !_barApp && !_bingoApp && !_ligaApp; } catch(e) { return false; }
   });
@@ -65789,8 +65941,8 @@ function BottleApp() {
           )}
         </div>
         ) : (<>
-        {screen==='home'     && <HomeScreen     go={go} onStartGame={onStartGame} onQuickGame={onQuickGame} setTheme={handleSetTheme} currentTheme={appTheme} setLang={handleSetLang} currentLang={appLang} resumeRoomData={resumeRoomData} onResume={goResume} onOpenSeason={() => { setStatsInitView('season'); go('stats'); }} />}
-        {screen==='stats'    && <StatsScreen    go={go} onOpenObserver={openObserver} deepLink={_ligaApp} initialView={statsInitView} />}
+        {screen==='home'     && <HomeScreen     go={go} onStartGame={onStartGame} onQuickGame={onQuickGame} setTheme={handleSetTheme} currentTheme={appTheme} setLang={handleSetLang} currentLang={appLang} resumeRoomData={resumeRoomData} onResume={goResume} onOpenSeason={(sid) => { setStatsInitView('season'); setStatsInitSeason(sid || null); go('stats'); }} />}
+        {screen==='stats'    && <StatsScreen    go={go} onOpenObserver={openObserver} deepLink={_ligaApp} initialView={statsInitView} initialSeasonId={statsInitSeason} />}
         {screen==='bar'      && <BarScreen      go={go} deepLink={_barApp} />}
         {screen==='bingo'    && <BingoScreen    go={go} deepLink={_bingoApp} />}
         {screen==='log'      && <EventLogScreen go={go} goEdit={goEdit} deepLink={_deepLink} />}
