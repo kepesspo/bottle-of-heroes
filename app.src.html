@@ -34936,7 +34936,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.130';
+const APP_VERSION = 'v10.131';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -52999,13 +52999,14 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
         const failP = players.find(x => x.id === pid);
         if (failP && onResult) onResult({ correct:false, playerName: failP.name, drinks: failedPot,
           subtitle: `${failP.name} mellélőtt — ${failedPot} korty a téten` });
-        // Ha van miből választani, a játékos dönti el, melyik lapját adja fel
+        // Ha van miből választani, a játékos dönti el, melyik lapját adja fel.
+        // Amíg nem választott, SEMMI nem lép: se a tét, se az élet, se a lap —
+        // a felfordított lap és az eredmény kint marad, hogy lássa, min bukott.
+        // Mindent egyszerre a confirmDiscard könyvel el.
         const hand = (st.hands || {})[pid] || [];
         if (livesOn && hand.length > 1) {
-          const waitSt = { ...nst, pot:1 };
-          gsRef.current = waitSt; setGs({ ...waitSt }); setGuessRes(null); pendRef.current = false;
-          setDiscardFor({ pid, failedPot });
-          return;
+          setDiscardFor({ pid, failedPot, deckPos: nst.deckPos });
+          return; // pendRef marad true, guessRes marad kint
         }
         nst = applyMiss(nst, pid, failedPot, hand.length ? 0 : -1);
         if (nst.__over) { const f = { ...nst }; delete f.__over; gsRef.current=f; setGs({...f}); setGuessRes(null); pendRef.current=false; setGameOver(true); finishGame(f); return; }
@@ -53061,8 +53062,11 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
     const d = discardFor;
     if (!d) return;
     const st = gsRef.current;
-    const nst = applyMiss(st, d.pid, d.failedPot, idx);
-    setDiscardFor(null);
+    // A lap fordítása is idáig várt — most lép minden egyszerre:
+    // pakli tovább, tét vissza 1-re, élet le, hiba +1.
+    const base = typeof d.deckPos === 'number' ? { ...st, deckPos: d.deckPos } : st;
+    const nst = applyMiss(base, d.pid, d.failedPot, idx);
+    setDiscardFor(null); setGuessRes(null); pendRef.current = false;
     const over = !!nst.__over;
     const fin = { ...nst }; delete fin.__over;
     const atEnd = fin.deckPos >= fin.deck.length - 1;
@@ -53189,14 +53193,14 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
 
 
 
-      {/* Kisebb / Nagyobb buttons — a lapválasztó alatt letiltva */}
-      {!guessRes && (
-        <div style={{ display:'flex', gap:10, width:'100%', opacity: discardFor ? 0.4 : 1, pointerEvents: discardFor ? 'none' : 'auto' }}>
-          <button disabled={!!discardFor} onClick={()=>handleGuess('K')} style={{ flex:1, minHeight:58, border:'none', background:'#F2C4BC', color:'#C0504A', fontFamily:T.font, fontWeight:700, fontSize:17, borderRadius:16, cursor: discardFor ? 'not-allowed' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
-            <span style={{ fontSize:14 }}>↓</span><span>Kisebb</span>
+      {/* Kisebb / Nagyobb — a játék fő gombjai: teljes szélesség, egymás alatt */}
+      {!guessRes && !discardFor && (
+        <div style={{ display:'flex', flexDirection:'column', gap:10, width:'100%' }}>
+          <button onClick={()=>handleGuess('N')} style={{ width:'100%', minHeight:100, border:'none', background:'#B8E8D4', color:'#2E8B60', fontFamily:T.font, fontWeight:900, fontSize:26, letterSpacing:'0.01em', borderRadius:20, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:14, boxShadow:'0 6px 18px -8px rgba(46,139,96,0.55)' }}>
+            <span style={{ fontSize:38, lineHeight:1 }}>▲</span><span>Nagyobb</span>
           </button>
-          <button disabled={!!discardFor} onClick={()=>handleGuess('N')} style={{ flex:1, minHeight:58, border:'none', background:'#B8E8D4', color:'#2E8B60', fontFamily:T.font, fontWeight:700, fontSize:17, borderRadius:16, cursor: discardFor ? 'not-allowed' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
-            <span style={{ fontSize:14 }}>↑</span><span>Nagyobb</span>
+          <button onClick={()=>handleGuess('K')} style={{ width:'100%', minHeight:100, border:'none', background:'#F2C4BC', color:'#C0504A', fontFamily:T.font, fontWeight:900, fontSize:26, letterSpacing:'0.01em', borderRadius:20, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:14, boxShadow:'0 6px 18px -8px rgba(192,80,74,0.55)' }}>
+            <span style={{ fontSize:38, lineHeight:1 }}>▼</span><span>Kisebb</span>
           </button>
         </div>
       )}
