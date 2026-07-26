@@ -34981,7 +34981,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.144';
+const APP_VERSION = 'v10.145';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -52813,7 +52813,15 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
         });
       }
       if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { observerAllowed: true });
-      onAdvance && onAdvance({});
+      // Offline a buszút kortyai eddig sehol nem jelentek meg a buli állásában:
+      // online a makeGuess írja a szoba players-ét, offline viszont üres
+      // térképpel zártunk. Offline itt adjuk át őket (online NEM, mert akkor
+      // duplán számolódnának).
+      const busDm = {};
+      if (!isOnline && buszState?.busRiderDrinks) {
+        Object.entries(buszState.busRiderDrinks).forEach(([pid, d]) => { if (d > 0) busDm[pid] = d; });
+      }
+      onAdvance && onAdvance(busDm);
     }
   }, [buszState?.phase]);
 
