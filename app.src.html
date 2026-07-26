@@ -34936,7 +34936,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.129';
+const APP_VERSION = 'v10.130';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -52337,6 +52337,22 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
     prevHostDrinksRef.current = hostDrinksNow;
     if (diff > 0 && hostViewModeRef.current === 'host') setUnseenSips(n => n + diff);
   }, [hostDrinksNow, hostPlayerId]);
+  // Kapott korty — ha a host is játszik, a host (piramis) képernyőn is ugorjon fel a dialóg
+  const [hostGiftNotice, setHostGiftNotice] = useState(null);
+  const lastHostGiftTsRef = React.useRef(undefined);
+  React.useEffect(() => {
+    const lg = buszState && buszState.lastGift;
+    if (lastHostGiftTsRef.current === undefined) { lastHostGiftTsRef.current = lg ? lg.ts : null; return; }
+    if (!lg || lg.ts === lastHostGiftTsRef.current) return;
+    lastHostGiftTsRef.current = lg.ts;
+    if (!hostPlayerId) return;
+    const n = (lg.assigned || {})[hostPlayerId] || 0;
+    if (n <= 0 || lg.giverId === hostPlayerId) return;
+    const ts = lg.ts;
+    setHostGiftNotice({ name: lg.giverName || '?', n, ts, shot: !!lg.shot });
+    setUnseenSips(0);
+    setTimeout(() => setHostGiftNotice(cur => (cur && cur.ts === ts) ? null : cur), 8000);
+  }, [buszState && buszState.lastGift && buszState.lastGift.ts, hostPlayerId]);
   React.useEffect(() => { onSetBuszSwitch && onSetBuszSwitch(canShowSwitch ? { fn: () => { setUnseenSips(0); setHostViewMode('player'); }, badge: unseenSips } : null); }, [canShowSwitch, unseenSips]);
   React.useEffect(() => () => { onSetBuszSwitch && onSetBuszSwitch(null); }, []);
   React.useEffect(() => () => {
@@ -52505,6 +52521,10 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
     return (
       <>
       <div style={{display:'flex',flexDirection:'column',gap:8,width:'100%'}}>
+        {/* Kapott korty — a host is játszik, itt a piramis képernyőn is felugrik */}
+        {hostGiftNotice && (
+          <BusDrinkOverlay drinks={hostGiftNotice.n} name={(players.find(p=>p.id===hostPlayerId)||{}).name} fromName={hostGiftNotice.name} unit={hostGiftNotice.shot ? 'shot' : 'korty'} onClose={() => setHostGiftNotice(null)} />
+        )}
         {/* ZSÜLLI overlay */}
         {zsulliAnim && (
           <div style={{position:'fixed',inset:0,zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(14,14,24,0.75)',animation:'fadeIn .2s'}}>
@@ -60048,6 +60068,8 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
     setTimeout(() => setZsulliNotice(cur => (cur && cur.ts === ts) ? null : cur), 10000);
   }, [buszState && buszState.zsulliEvent && buszState.zsulliEvent.ts]);
 
+  // ── 🔺 Piramis nézőmód (csak-olvasható — a játékos nem tud lapozni) ──
+  const [pyramidWatching, setPyramidWatching] = useState(false);
   // ── 🚌 Busz nézőmód (leszállt / nem-buszozó játékosoknak) + 🌪 szélvihar ──
   const [busWatching, setBusWatching] = useState(false);
   const [szelviharBtn, setSzelviharBtn] = useState(null); // { ts } — 3 mp-ig él
@@ -60781,6 +60803,82 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
     } catch(e) { console.error('commitGift', e); }
   };
 
+  // ── 🔺 Piramis nézőmód — csak-olvasható tábla (lapozni csak a host tud) ──
+  if (pyramidWatching && buszState.phase === 'pyramid') {
+    const wPyramid = buszState.pyramid || [];
+    const wRows = buszState.settings?.pyramidRows || 5;
+    const wNextIdx = buszState.nextFlipIdx || 0;
+    const wNextCard = wNextIdx < wPyramid.length ? wPyramid[wNextIdx] : null;
+    const wActiveRow = wNextCard ? wNextCard.rowIdx : -1;
+    const wZsulli = Object.values(buszState.valueCounts||{}).filter(v=>v>=4).length;
+    return (
+      <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', background:T.bg }}>
+        {giftNotice && (
+          <BusDrinkOverlay drinks={giftNotice.n} name={player?.name} fromName={giftNotice.name} unit={giftNotice.shot ? 'shot' : 'korty'} onClose={() => setGiftNotice(null)} />
+        )}
+        {/* Fejléc */}
+        <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:10, padding:'12px 14px 8px' }}>
+          <button onClick={() => setPyramidWatching(false)} style={{ width:36, height:36, borderRadius:'50%', background:T.surface, border:'none', cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0, boxShadow:T.shadow }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke={T.inkSoft} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, lineHeight:1.1 }}>🔺 Piramis</div>
+            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>Csak megtekintés — lapozni a host tud</div>
+          </div>
+          {wZsulli > 0 && (
+            <div style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 10px', background:`${T.mint}18`, borderRadius:999, border:`1px solid ${T.mint}44`, flexShrink:0 }}>
+              <BohIcon name="cheers" size={14} />
+              <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.mint }}>{wZsulli}×</span>
+            </div>
+          )}
+        </div>
+        {/* Piramis sorok */}
+        <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'0 14px 12px' }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:7, width:'100%' }}>
+            {[...Array(wRows)].map((_,ri)=>{
+              const isActive = ri === wActiveRow;
+              const rowCards = wPyramid.filter(c=>c.rowIdx===ri).sort((a,b)=>a.posIdx-b.posIdx);
+              return (
+                <div key={ri} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderRadius:16, background:isActive?`${T.mint}18`:T.surface, border:`2px solid ${isActive?T.mint:'transparent'}`, transition:'all .3s', boxShadow:T.shadow }}>
+                  <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:isActive?T.mint:T.ink, width:24, flexShrink:0 }}>{ri+1}</div>
+                  <div style={{ flex:1, display:'flex', gap:5, justifyContent:'center', flexWrap:'wrap' }}>
+                    {rowCards.map(card=>{
+                      const cnt = card.faceUp ? (buszState.valueCounts?.[card.value]||0) : 0;
+                      const mine = card.faceUp && myHand.some(c=>c.value===card.value);
+                      return (
+                        <div key={card.id} style={{ position:'relative' }}>
+                          <PlayingCard card={card} size='md' faceDown={!card.faceUp} glow={isActive && card.faceUp} />
+                          {cnt>0&&<div style={{ position:'absolute', top:-4, right:-4, minWidth:14, height:14, borderRadius:7, background:T.coral, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:11, display:'grid', placeItems:'center', padding:'0 2px' }}>{cnt}</div>}
+                          {mine&&<div style={{ position:'absolute', bottom:-3, left:'50%', transform:'translateX(-50%)', width:6, height:6, borderRadius:'50%', background:T.mint, boxShadow:`0 0 0 2px ${T.bg}` }} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ opacity:isActive?1:0.3, flexShrink:0 }}><BohIcon name="beer" size={15} /></div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        {/* Lábléc — aktív lap + vissza */}
+        <div style={{ flexShrink:0, padding:'0 14px 8px', paddingBottom:'max(10px, env(safe-area-inset-bottom))', display:'flex', flexDirection:'column', gap:8 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, background:T.surface, borderRadius:14, padding:'10px 14px', boxShadow:T.shadow }}>
+            {lastFlipped
+              ? <div style={{ flexShrink:0 }}><PlayingCard card={lastFlipped} size='md' /></div>
+              : <div style={{ fontSize:22, flexShrink:0 }}>🂠</div>}
+            <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontSize:13, color:T.inkSoft, lineHeight:1.4 }}>
+              {!lastFlipped ? 'Még nincs felfordított lap.'
+                : playableCards.length > 0
+                  ? <React.Fragment><b style={{ color:T.mint }}>{playableCards.length} lerakható lapod</b> van — lépj vissza a lapjaidhoz!</React.Fragment>
+                  : 'Nincs lerakható lapod ebben a körben.'}
+            </div>
+          </div>
+          <button onClick={() => setPyramidWatching(false)} style={{ width:'100%', padding:'13px', borderRadius:14, border:'none', background: playableCards.length>0 ? T.mint : T.surface, color: playableCards.length>0 ? '#fff' : T.ink, fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer', boxShadow: playableCards.length>0 ? '0 5px 16px -5px rgba(79,194,160,0.6)' : T.shadow }}>← Vissza a lapjaimhoz</button>
+        </div>
+      </div>
+    );
+  }
+
   // ── Pyramid phase — hand view ─────────────────────────────────────────
   const effectiveSel = selectedCardIds.filter(id=>playableCards.some(c=>c.id===id));
   const canPlay = effectiveSel.length > 0;
@@ -60819,6 +60917,11 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
             <button onClick={onSwitchToHost} style={{ width:36, height:36, borderRadius:'50%', background:T.bg, border:'none', cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0, fontSize:18 }}>🎮</button>
           )}
         </div>
+
+        {/* 🔺 Piramis megtekintése — csak-olvasható (a host-játékosnak nem kell, neki ott a host nézet) */}
+        {!forcedPlayerId && buszState.phase === 'pyramid' && (
+          <button onClick={() => setPyramidWatching(true)} style={{ width:'100%', padding:'11px', borderRadius:14, border:'none', background:T.surface, color:T.ink, fontFamily:T.font, fontWeight:800, fontSize:14, cursor:'pointer', boxShadow:T.shadow }}>🔺 Piramis megtekintése</button>
+        )}
 
         {/* Active lap card */}
         {lastFlipped ? (

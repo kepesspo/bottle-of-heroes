@@ -41,6 +41,33 @@
     return out;
   }
   function applyFieldValues(existing, incoming) { return mergeInto(existing, incoming); }
+  // FONTOS (valódi Firestore-viselkedés): update() minden mezőút értékét CSERÉLI,
+  // nem fésüli mélyen össze a meglévő map-pel — csak a set({merge:true}) fésül.
+  function applyUpdate(existing, incoming) {
+    const out = { ...existing };
+    for (const k in incoming) {
+      const parts = k.split('.');
+      let node = out;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const seg = parts[i];
+        node[seg] = isPlainObj(node[seg]) ? { ...node[seg] } : {};
+        node = node[seg];
+      }
+      const last = parts[parts.length - 1];
+      const v = incoming[k];
+      if (v instanceof FieldValue) {
+        if (v._kind === 'delete') { delete node[last]; }
+        else if (v._kind === 'increment') { node[last] = (node[last] || 0) + v._arg; }
+        else if (v._kind === 'serverTimestamp') { node[last] = Date.now(); }
+        else if (v._kind === 'arrayUnion') { node[last] = Array.from(new Set([...(node[last]||[]), ...v._arg])); }
+        else if (v._kind === 'arrayRemove') { node[last] = (node[last]||[]).filter(x => !v._arg.includes(x)); }
+        else { node[last] = v; }
+      } else {
+        node[last] = v;
+      }
+    }
+    return out;
+  }
   function assertNoUndefined(obj, path) {
     if (obj === undefined) throw new Error('FIRESTORE_UNDEFINED_VALUE at ' + (path || 'root'));
     if (obj === null || typeof obj !== 'object' || obj instanceof FieldValue) return;
@@ -75,7 +102,7 @@
       update: (data) => {
         assertNoUndefined(data);
         if (!store[collPath][id]) return Promise.reject(new Error('not-found'));
-        store[collPath][id] = mergeInto(store[collPath][id], expandPaths(data));
+        store[collPath][id] = applyUpdate(store[collPath][id], data);
         notify(collPath); notify(collPath + '/' + id);
         return Promise.resolve();
       },

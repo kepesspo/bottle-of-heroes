@@ -21,9 +21,10 @@ const stub = fs.readFileSync(__dirname + '/fbstub.js', 'utf8');
     // az eredeti GameContent-et becsomagoljuk: a 'rulett' render-hibát dob
     const orig = window.GameContent;
     window.GameContent = function Patched(props) {
-      // a jatek-sorrend sorsolt, ezert az ELSOKENT betoltott jatekot rontjuk el
+      // A jatek-sorrend sorsolt, ezert amig nem "gyogyitunk", MINDEN jatek dob —
+      // igy fuggetlenul a sorrendtol biztosan a hibahatar fallbackje latszik.
       if (window.__broken == null) window.__broken = props.gameId;
-      if (props.gameId === window.__broken && !window.__healed) throw new Error("Cannot read properties of null (reading 'artist')");
+      if (!window.__healed) throw new Error("Cannot read properties of null (reading 'artist')");
       return React.createElement(orig, props);
     };
     const root = document.createElement('div'); root.id='__ps';
