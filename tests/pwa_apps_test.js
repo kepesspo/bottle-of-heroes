@@ -129,12 +129,15 @@ const head = (p) => p.evaluate(() => ({
         const row = Array.from(document.querySelectorAll('div')).find(d => /DNR appok/.test((d.innerText || '')) && d.getAttribute('role') === 'button');
         if (!row) return null;
         const r = row.getBoundingClientRect();
-        const icons = Array.from(row.querySelectorAll('img')).map(i => i.getAttribute('src'));
-        return { text: row.innerText.replace(/\n/g, ' | '), h: Math.round(r.height), icons, tag: row.tagName };
+        const imgs = Array.from(row.querySelectorAll('img')).length;
+        const marks = Array.from(row.querySelectorAll('span')).filter(x => !x.textContent.trim() && /^\d/.test(getComputedStyle(x).borderTopLeftRadius))
+          .map(x => getComputedStyle(x).backgroundColor);
+        return { text: row.innerText.replace(/\n/g, ' | '), h: Math.round(r.height), imgs, marks, tag: row.tagName };
       });
       ok('van egyetlen app-fiók sor', !!dock, JSON.stringify(dock));
       ok('a fiók NEM <button> (nem gomb-kinézet)', dock && dock.tag === 'DIV', dock && dock.tag);
-      ok('mind az 5 app ikonja ott van egymáson', dock && dock.icons.length === 5, JSON.stringify(dock && dock.icons));
+      ok('NINCSENEK apro, olvashatatlan app-ikonok a sorban', dock && dock.imgs === 0, 'img=' + (dock && dock.imgs));
+      ok('helyette 4 szines negyzet a markajelben', dock && dock.marks.length === 4 && new Set(dock.marks).size === 4, JSON.stringify(dock && dock.marks));
       ok('egy sor magas (<=64px)', dock && dock.h <= 64, dock && dock.h + 'px');
       ok('a digest sor élő infót mutat', dock && /Köv\. esemény|A Box most szól|Events · BOX/.test(dock.text), dock && dock.text);
       const tiles = await pp.evaluate(() => Array.from(document.querySelectorAll('button')).filter(b => /^(Events|Box|Pub|Több|Bingó|Liga)$/.test((b.innerText || '').trim().split('\n')[0])).length);
