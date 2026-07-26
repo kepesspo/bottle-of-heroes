@@ -34974,7 +34974,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.135';
+const APP_VERSION = 'v10.136';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -42013,6 +42013,11 @@ function EventCreateScreen({ go, deepLink }) {
   );
 }
 
+// A dokkban nem fero DNR appok — uj app felvetele ide egy sor
+const MORE_APPS = [
+  { screen:'bingo', name:'DNR Bingó', icon:'assets/dnr_bingo_icon.png', sub: () => 'Meccs- és bulibingó · tipp bajnokság' },
+  { screen:'stats', name:'DNR Liga',  icon:'assets/dnr_liga_icon.png',  sub: (season) => season ? `Ranglista · ${season}` : 'Ranglista, szezonok, szintek' },
+];
 function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setLang, currentLang, resumeRoomData, onResume }) {
   const [splashOn, setSplashOn] = React.useState(() => localStorage.getItem('boh_splash') !== '0');
   const [sndOn, setSndOn] = React.useState(() => { try { return localStorage.getItem('boh_snd') !== '0'; } catch(e) { return true; } });
@@ -42038,6 +42043,7 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
 
 
   const [showInstall, setShowInstall] = React.useState(false);
+  const [showMoreApps, setShowMoreApps] = React.useState(false);
   const [showSettings, setShowSettings] = React.useState(false);
   const isStandalone = typeof window !== 'undefined' && (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches);
 
@@ -42104,6 +42110,26 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
   return (
     <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg, position:'relative' }}>
       {showInstall && <InstallModal onClose={() => setShowInstall(false)} />}
+      {showMoreApps && (
+        <SheetOverlay onClose={() => setShowMoreApps(false)} title="DNR appok">
+          <div style={{ padding:'0 16px 24px', display:'flex', flexDirection:'column', gap:10 }}>
+            {MORE_APPS.map(app => (
+              <button key={app.screen} onClick={() => { setShowMoreApps(false); go(app.screen); }}
+                style={{ display:'flex', alignItems:'center', gap:13, width:'100%', boxSizing:'border-box', background:T.surface, border:'none', borderRadius:16, padding:'12px 14px', cursor:'pointer', textAlign:'left', boxShadow:T.shadow, WebkitTapHighlightColor:'transparent' }}>
+                <img src={app.icon} style={{ width:44, height:44, borderRadius:13, flexShrink:0 }} />
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>{app.name}</div>
+                  <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.inkSoft, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{app.sub(_ligaDockSub)}</div>
+                </div>
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.inkMute, flexShrink:0 }}>›</span>
+              </button>
+            ))}
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', lineHeight:1.5, marginTop:2 }}>
+              Mindegyik külön appként is telepíthető a saját ikonjával — nyisd meg a linkjét és mentsd a főképernyőre.
+            </div>
+          </div>
+        </SheetOverlay>
+      )}
       <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', display:'flex', flexDirection:'column' }}>
       <div className="home-inner">
         <div className="home-brand">
@@ -42343,40 +42369,35 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
               </button>
             )}
           </div>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
-            <button onClick={() => go('log')} style={{ flex:'1 1 28%', minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:3, padding:'6px 6px', background:T.surface, borderRadius:13, cursor:'pointer', border:'none', boxShadow:T.shadow, WebkitTapHighlightColor:'transparent' }}>
+          <div style={{ display:'flex', gap:10 }}>
+            <button onClick={() => go('log')} style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:3, padding:'6px 6px', background:T.surface, borderRadius:13, cursor:'pointer', border:'none', boxShadow:T.shadow, WebkitTapHighlightColor:'transparent' }}>
               <img src="assets/dnr_events_icon.png" style={{ width:22, height:22, borderRadius:7, flexShrink:0 }} />
               <div style={{ minWidth:0, width:'100%', textAlign:'center' }}>
                 <div style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:T.ink, lineHeight:1.05 }}>Events</div>
                 <div style={{ fontFamily:T.font, fontWeight:700, fontSize:8, color:T.inkSoft, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{_evDockSub}</div>
               </div>
             </button>
-            <button onClick={() => go('jukebox')} style={{ flex:'1 1 28%', minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:3, padding:'6px 6px', background:T.surface, borderRadius:13, cursor:'pointer', border:'none', boxShadow:T.shadow, WebkitTapHighlightColor:'transparent' }}>
+            <button onClick={() => go('jukebox')} style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:3, padding:'6px 6px', background:T.surface, borderRadius:13, cursor:'pointer', border:'none', boxShadow:T.shadow, WebkitTapHighlightColor:'transparent' }}>
               <img src="assets/dnr_box_icon.png" style={{ width:22, height:22, borderRadius:7, flexShrink:0 }} />
               <div style={{ minWidth:0, width:'100%', textAlign:'center' }}>
                 <div style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:T.ink, lineHeight:1.05 }}>Box</div>
                 <div style={{ fontFamily:T.font, fontWeight:700, fontSize:8, color:T.inkSoft, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{_boxDockSub}</div>
               </div>
             </button>
-            <button onClick={() => go('bar')} style={{ flex:'1 1 28%', minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:3, padding:'6px 6px', background:T.surface, borderRadius:13, cursor:'pointer', border:'none', boxShadow:T.shadow, WebkitTapHighlightColor:'transparent' }}>
+            <button onClick={() => go('bar')} style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:3, padding:'6px 6px', background:T.surface, borderRadius:13, cursor:'pointer', border:'none', boxShadow:T.shadow, WebkitTapHighlightColor:'transparent' }}>
               <img src="assets/dnr_pub_icon.png" style={{ width:22, height:22, borderRadius:7, flexShrink:0 }} />
               <div style={{ minWidth:0, width:'100%', textAlign:'center' }}>
                 <div style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:T.ink, lineHeight:1.05 }}>Pub</div>
                 <div style={{ fontFamily:T.font, fontWeight:700, fontSize:8, color:T.inkSoft, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>Koktél & Shot</div>
               </div>
             </button>
-            <button onClick={() => go('bingo')} style={{ flex:'1 1 28%', minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:3, padding:'6px 6px', background:T.surface, borderRadius:13, cursor:'pointer', border:'none', boxShadow:T.shadow, WebkitTapHighlightColor:'transparent' }}>
-              <img src="assets/dnr_bingo_icon.png" style={{ width:22, height:22, borderRadius:7, flexShrink:0 }} />
-              <div style={{ minWidth:0, width:'100%', textAlign:'center' }}>
-                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:T.ink, lineHeight:1.05 }}>Bingó</div>
-                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:8, color:T.inkSoft, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>Meccs & buli</div>
+            <button onClick={() => setShowMoreApps(true)} style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:3, padding:'6px 6px', background:T.surface, borderRadius:13, cursor:'pointer', border:'none', boxShadow:T.shadow, WebkitTapHighlightColor:'transparent' }}>
+              <div style={{ width:22, height:22, borderRadius:7, flexShrink:0, background:T.bgSoft, display:'grid', placeItems:'center' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.inkSoft} strokeWidth="2.6" strokeLinecap="round"><circle cx="5" cy="12" r="1.4" fill={T.inkSoft} stroke="none"/><circle cx="12" cy="12" r="1.4" fill={T.inkSoft} stroke="none"/><circle cx="19" cy="12" r="1.4" fill={T.inkSoft} stroke="none"/></svg>
               </div>
-            </button>
-            <button onClick={() => go('stats')} style={{ flex:'1 1 28%', minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:3, padding:'6px 6px', background:T.surface, borderRadius:13, cursor:'pointer', border:'none', boxShadow:T.shadow, WebkitTapHighlightColor:'transparent' }}>
-              <img src="assets/dnr_liga_icon.png" style={{ width:22, height:22, borderRadius:7, flexShrink:0 }} />
               <div style={{ minWidth:0, width:'100%', textAlign:'center' }}>
-                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:T.ink, lineHeight:1.05 }}>Liga</div>
-                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:8, color:T.inkSoft, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{_ligaDockSub}</div>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:T.ink, lineHeight:1.05 }}>Több</div>
+                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:8, color:T.inkSoft, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{MORE_APPS.length} app</div>
               </div>
             </button>
           </div>
