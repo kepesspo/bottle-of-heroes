@@ -34981,7 +34981,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.140';
+const APP_VERSION = 'v10.141';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -39017,11 +39017,50 @@ function AdminSettings({ setTheme, currentTheme }) {
 
       <AdminPinCard />
 
+      <AdminHomeToggles />
+
       <div style={{ background:T.surface, borderRadius:16, padding:16, boxShadow:T.shadow, marginTop:14 }}>
         <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:4 }}>Kényszerített frissítés</div>
         <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginBottom:12 }}>Minden megnyitott app azonnal újratölt — deploy után hasznos, ha valakinél régi verzió ragadt be.</div>
         <ForceReloadButton />
       </div>
+    </div>
+  );
+}
+
+// Fooldal-kapcsolok — a config/homeConfig dokumentumban, elonezet nelkul azonnal el.
+function AdminHomeToggles() {
+  const [cfg, setCfg] = React.useState(null);
+  const [loaded, setLoaded] = React.useState(false);
+  React.useEffect(() => {
+    if (typeof firebase === 'undefined') { setLoaded(true); return; }
+    const un = firebase.firestore().collection('config').doc('homeConfig')
+      .onSnapshot(d => { setCfg((d && d.exists && d.data()) || {}); setLoaded(true); }, () => setLoaded(true));
+    return () => { try { un(); } catch(e) {} };
+  }, []);
+  const on = !cfg || cfg.dnrAppsEnabled !== false;
+  const set = (val) => {
+    setCfg(c => Object.assign({}, c || {}, { dnrAppsEnabled: val }));
+    try { firebase.firestore().collection('config').doc('homeConfig').set({ dnrAppsEnabled: val }, { merge: true }).catch(() => {}); } catch(e) {}
+  };
+  return (
+    <div style={{ background:T.surface, borderRadius:16, padding:16, boxShadow:T.shadow, marginTop:14 }}>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:4 }}>Főoldal</div>
+      <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginBottom:12 }}>Mi jelenjen meg a Bottle of Heroes főoldalán.</div>
+      <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>„További DNR" gomb</div>
+          <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginTop:2 }}>
+            A főoldal alján a nyíllal jelzett felirat, ami a DNR appok listáját nyitja. Kikapcsolva a főoldalról a többi app nem érhető el.
+          </div>
+        </div>
+        <Toggle on={on} onChange={() => set(!on)} />
+      </div>
+      {loaded && !on && (
+        <div style={{ marginTop:10, fontFamily:T.font, fontSize:11.5, color:T.coral, fontWeight:700 }}>
+          Kikapcsolva — a felirat egyetlen készüléken sem látszik.
+        </div>
+      )}
     </div>
   );
 }
@@ -42070,6 +42109,14 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
     return () => { try { un(); } catch(e) {} };
   }, []);
   const bingoOn = !bingoCfg || bingoCfg.enabled !== false;
+  // Fooldal-kapcsolok (Admin > Rendszer > Beallitasok)
+  const [homeCfg, setHomeCfg] = React.useState(null);
+  React.useEffect(() => {
+    if (typeof firebase === 'undefined') return;
+    const un = firebase.firestore().collection('config').doc('homeConfig').onSnapshot(d => setHomeCfg((d && d.exists && d.data()) || null), () => {});
+    return () => { try { un(); } catch(e) {} };
+  }, []);
+  const dnrAppsOn = !homeCfg || homeCfg.dnrAppsEnabled !== false;
   const bingoMode = (bingoCfg && bingoCfg.mode === 'tipp') ? 'tipp' : 'bingo';
   const bingoLabel = bingoMode === 'tipp'
     ? ((bingoCfg && bingoCfg.tippTitle) ? bingoCfg.tippTitle : 'Tippbajnokság')
@@ -42430,7 +42477,9 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
       {/* DNR dokk — a család többi appja, élő infókkal, mindig a képernyő alján, elválasztva a fenti tartalomtól */}
       <div className="home-dock-wrap" style={{ background:T.bg, position:'relative', zIndex:5 }}>
         <div className="home-dock">
-          {/* Felhívás a "DNR appok" bottom sheetre — középre igazított, nyíllal */}
+          {/* Felhívás a "DNR appok" bottom sheetre — középre igazított, nyíllal.
+              Az Adminban kikapcsolható (config/homeConfig.dnrAppsEnabled). */}
+          {dnrAppsOn && (
           <div onClick={() => setShowMoreApps(true)} role="button" tabIndex={0}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setShowMoreApps(true); }}
             style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3, padding:'10px 0 6px', cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
@@ -42441,6 +42490,7 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, setL
               További <span style={{ color:T.mint }}>DNR</span>
             </div>
           </div>
+          )}
           {!isStandalone && (
             <div style={{ display:'flex', justifyContent:'center', marginTop:2 }}>
               <button onClick={() => setShowInstall(true)} style={{ display:'flex', alignItems:'center', gap:5, border:'none', background:'transparent', cursor:'pointer', padding:'2px 4px', fontFamily:T.font, fontWeight:800, fontSize:10.5, color:T.mint, opacity:0.75, WebkitTapHighlightColor:'transparent' }}>
