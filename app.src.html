@@ -34060,6 +34060,21 @@ window.triggerHaptic = function() {
   window.deletePartyTemplate = function(id) {
     return db.collection('party_templates').doc(id).delete().catch(function(e) { console.warn('deletePartyTemplate', e); });
   };
+  // Szezonok: az Adminban kezelt, mindenki szamara kozos idoszakok. A szezon
+  // statisztikaja a statEvents-bol szamolodik (ts alapjan), igy nincs kulon
+  // iras es a mar meglevo tortenet is visszamenoleg szezonokra bomlik.
+  window.getSeasons = function() {
+    return db.collection('seasons').get().then(function(snap) {
+      return snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); })
+        .sort(function(a, b) { return (b.from || 0) - (a.from || 0); });
+    }).catch(function() { return []; });
+  };
+  window.saveSeason = function(data) {
+    return db.collection('seasons').add(Object.assign({ ts: Date.now() }, data)).catch(function(e) { console.warn('saveSeason', e); });
+  };
+  window.deleteSeason = function(id) {
+    return db.collection('seasons').doc(id).delete().catch(function(e) { console.warn('deleteSeason', e); });
+  };
   window.saveTournament = function(data) {
     return db.collection('bp_tournaments').add(data).catch(function(e) { console.warn('saveTournament', e); });
   };
@@ -34936,7 +34951,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.133';
+const APP_VERSION = 'v10.134';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36578,13 +36593,14 @@ function withGameWins(stats, gameStats, profileId) {
   return Object.assign({}, stats || {}, { _gameWins: gw });
 }
 // lapos lista a régi felhasználási helyekhez (megszerzett jelvény-chipek)
+// tier = a jelveny nehezsegi foka a csaladon belul (1-tol). Az XP-bonusz ebbol jon.
 const ACHIEVEMENTS = ACHIEVEMENT_FAMILIES.flatMap(f => f.perGame
   ? (typeof GAMES !== 'undefined' ? GAMES : []).map(g => ({
-      id: f.id + '_' + g.id, icon: f.icon, label: g.name, family: f.id, goal: 1, unit: f.unit,
+      id: f.id + '_' + g.id, icon: f.icon, label: g.name, family: f.id, goal: 1, unit: f.unit, tier: 1,
       val: s => (s._gameWins || {})[g.id] || 0,
     }))
   : f.tiers.map((goal, i) => ({
-      id: f.id + '_' + goal, icon: f.icon, label: f.names[i], family: f.id, goal, unit: f.unit,
+      id: f.id + '_' + goal, icon: f.icon, label: f.names[i], family: f.id, goal, unit: f.unit, tier: i + 1,
       reverse: !!f.reverse, minSess: f.minSess, val: f.val,
     })));
 // Teszthorog: a const-ok nem kerulnek fel automatikusan a window-ra (csak a
@@ -36609,6 +36625,66 @@ function achievementState(a, s) {
   }
   const show = cur % 1 === 0 ? cur : Math.round(cur * 10) / 10;
   return { cur: show, goal, done, pct: Math.max(0, Math.min(100, Math.round(cur / goal * 100))) };
+}
+
+// ── Szint és XP ────────────────────────────────────────────────────────────
+// Vegyes képlet: a pont adja a gerincet, a lejátszott kör a kitartást, a
+// győzelem a teljesítményt, a megszerzett jelvények pedig a nehézségük
+// szerint adnak bónuszt. A szint MINDIG az örök statból számolódik — a
+// szezonok külön futnak, egymást nem befolyásolják.
+const XP_W = { point: 10, round: 1, win: 50, badge: 50 };
+function computeXp(s) {
+  const st = s || {};
+  let badge = 0;
+  ACHIEVEMENTS.forEach(a => { if (achievementState(a, st).done) badge += (a.tier || 1) * XP_W.badge; });
+  return {
+    total: Math.round((st.totalPoints || 0) * XP_W.point + (st.totalRounds || 0) * XP_W.round
+                      + (st.totalWins || 0) * XP_W.win + badge),
+    parts: {
+      point: Math.round((st.totalPoints || 0) * XP_W.point),
+      round: Math.round((st.totalRounds || 0) * XP_W.round),
+      win: Math.round((st.totalWins || 0) * XP_W.win),
+      badge,
+    },
+  };
+}
+// Kumulált XP a szint eléréséhez: 300·(L−1) + 75·(L−1)(L−2) — az első szintek
+// gyorsan jönnek, aztán fokozatosan lassul.
+function xpForLevel(L) { return L <= 1 ? 0 : 300 * (L - 1) + 75 * (L - 1) * (L - 2); }
+const LEVEL_BANDS = [
+  { min: 1,  title: 'Újonc',        color: '#8FA0B8' },
+  { min: 5,  title: 'Törzsvendég',  color: '#5BA0DB' },
+  { min: 10, title: 'Rutinos',      color: '#4FC2A0' },
+  { min: 15, title: 'Veterán',      color: '#C9A227' },
+  { min: 20, title: 'Mester',       color: '#E07A5F' },
+  { min: 25, title: 'Legenda',      color: '#7C5CC4' },
+];
+function levelFromXp(xp) {
+  const x = Math.max(0, xp || 0);
+  let L = 1;
+  while (L < 99 && xpForLevel(L + 1) <= x) L++;
+  const base = xpForLevel(L), next = xpForLevel(L + 1);
+  const band = [...LEVEL_BANDS].reverse().find(b => L >= b.min) || LEVEL_BANDS[0];
+  return {
+    level: L, xp: x, title: band.title, color: band.color,
+    into: x - base, need: Math.max(1, next - base),
+    pct: Math.max(0, Math.min(100, Math.round((x - base) / Math.max(1, next - base) * 100))),
+  };
+}
+// Szint-chip: a szám + a sáv színe. A név színe ugyanez, így a listákban
+// egy pillantásra látszik, ki hol tart.
+function LevelChip({ lvl, size }) {
+  if (!lvl) return null;
+  const sm = size === 'sm';
+  return (
+    <span title={`${lvl.level}. szint — ${lvl.title}`} style={{
+      display:'inline-flex', alignItems:'center', gap:3, flexShrink:0,
+      background:`${lvl.color}1F`, border:`1.5px solid ${lvl.color}66`, borderRadius:999,
+      padding: sm ? '1px 6px' : '2px 8px', lineHeight:1.1,
+    }}>
+      <span style={{ fontFamily:T.font, fontWeight:900, fontSize: sm ? 10 : 11.5, color:lvl.color }}>{lvl.level}</span>
+    </span>
+  );
 }
 
 // Jelvény-vitrin — minden kitüntetés egy helyen, a még nem teljesítettek
@@ -36935,6 +37011,11 @@ function StatsScreen({ go, onOpenObserver }) {
   const [customTo, setCustomTo] = React.useState('');
   const [quickStatsFor, setQuickStatsFor] = React.useState(null);
   const [showCompare, setShowCompare] = React.useState(false);
+  // Összes ↔ Szezon: két nézet ugyanazon az adaton. Az örök stat érintetlen,
+  // a szezon a statEvents idobelyegeibol szamolodik.
+  const [seasons, setSeasons] = React.useState([]);
+  const [view, setView] = React.useState('all'); // 'all' | 'season'
+  const [seasonId, setSeasonId] = React.useState(null);
 
   React.useEffect(() => {
     Promise.all([
@@ -36943,12 +37024,17 @@ function StatsScreen({ go, onOpenObserver }) {
       typeof window.getAllGameStats === 'function' ? window.getAllGameStats() : Promise.resolve({}),
       typeof window.getAllStatEvents === 'function' ? window.getAllStatEvents() : Promise.resolve([]),
       typeof window.getAllGameStatEvents === 'function' ? window.getAllGameStatEvents() : Promise.resolve([]),
-    ]).then(([profs, st, gst, sev, gsev]) => {
+      typeof window.getSeasons === 'function' ? window.getSeasons() : Promise.resolve([]),
+    ]).then(([profs, st, gst, sev, gsev, seas]) => {
       setProfiles(profs);
       setStats(st);
       setGameStats(gst);
       setStatEvents(sev);
       setGameStatEvents(gsev);
+      setSeasons(seas || []);
+      const now = Date.now();
+      const live = (seas || []).find(s => (s.from || 0) <= now && now <= (s.to || 0));
+      setSeasonId((live || (seas || [])[0] || {}).id || null);
       setLoading(false);
     });
   }, []);
@@ -36961,7 +37047,11 @@ function StatsScreen({ go, onOpenObserver }) {
       .then(list => { setTournaments(list); setTourLoading(false); });
   };
 
-  const { since: periodSince, until: periodUntil } = getStatsPeriodRange(period, customFrom, customTo);
+  const curSeason = view === 'season' ? (seasons.find(s => s.id === seasonId) || null) : null;
+  const rawRange = getStatsPeriodRange(period, customFrom, customTo);
+  const periodSince = curSeason ? (curSeason.from ?? null) : rawRange.since;
+  const periodUntil = curSeason ? (curSeason.to ?? null) : rawRange.until;
+  const isFiltered = periodSince != null || periodUntil != null;
   const inRange = ts => (periodSince == null || (ts||0) >= periodSince) && (periodUntil == null || (ts||0) <= periodUntil);
 
   let pStats = stats;
@@ -37057,6 +37147,77 @@ function StatsScreen({ go, onOpenObserver }) {
 
       {tab !== 'history' && (
         <div style={{ padding:'12px 16px 0', maxWidth:1180, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
+          {/* Összes ↔ Szezon */}
+          <div style={{ display:'flex', background:T.surface, padding:4, borderRadius:14, gap:4, boxShadow:pfShadow, marginBottom:10 }}>
+            {[{ k:'all', l:'Összes' }, { k:'season', l:'Szezon' }].map(v => {
+              const off = v.k === 'season' && seasons.length === 0;
+              return (
+                <button key={v.k} disabled={off} onClick={() => setView(v.k)} style={{
+                  flex:1, minWidth:0, minHeight:40, borderRadius:11, border:'none', cursor: off ? 'default' : 'pointer',
+                  fontFamily:T.font, fontWeight:900, fontSize:12.5, transition:'all .18s',
+                  background: view === v.k ? T.ink : 'transparent', color: view === v.k ? '#fff' : (off ? T.inkMute : T.inkSoft), opacity: off ? 0.5 : 1,
+                }}>{v.l}</button>
+              );
+            })}
+          </div>
+          {view === 'season' && (() => {
+            const now = Date.now();
+            const fmt = ms => ms ? new Date(ms).toLocaleDateString('hu-HU', { year:'2-digit', month:'short', day:'numeric' }) : '?';
+            const live = curSeason && (curSeason.from || 0) <= now && now <= (curSeason.to || 0);
+            const ended = curSeason && (curSeason.to || 0) < now;
+            const daysLeft = curSeason ? Math.max(0, Math.ceil(((curSeason.to || 0) - now) / 86400000)) : 0;
+            const podium = curSeason ? [...profiles]
+              .map(p => ({ p, pts: (pStats[p.id] || {}).totalPoints || 0 }))
+              .filter(x => x.pts > 0).sort((a, b) => b.pts - a.pts).slice(0, 3) : [];
+            return (
+              <React.Fragment>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                  {seasons.map(se => (
+                    <button key={se.id} onClick={() => setSeasonId(se.id)} style={{
+                      padding:'8px 16px', borderRadius:999, border:'none', flexShrink:0, cursor:'pointer', whiteSpace:'nowrap',
+                      background: seasonId === se.id ? T.ink : T.surface, color: seasonId === se.id ? '#fff' : T.inkSoft,
+                      fontFamily:T.font, fontWeight:800, fontSize:12.5, boxShadow:pfShadow, transition:'all .16s',
+                    }}>{se.name}</button>
+                  ))}
+                </div>
+                {curSeason && (
+                  <div style={{ marginTop:12, background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:pfShadow }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink }}>{curSeason.name}</div>
+                        <div style={{ fontFamily:T.font, fontSize:11.5, color:T.inkMute, marginTop:2 }}>{fmt(curSeason.from)} – {fmt(curSeason.to)}</div>
+                      </div>
+                      <span style={{ flexShrink:0, fontFamily:T.font, fontWeight:900, fontSize:11, padding:'5px 11px', borderRadius:999,
+                        background: live ? `${T.mint}22` : ended ? `${T.inkMute}22` : `${T.yellow||'#F59E0B'}22`,
+                        color: live ? T.mintDeep : ended ? T.inkSoft : (T.yellow||'#F59E0B') }}>
+                        {live ? `Aktív · még ${daysLeft} nap` : ended ? 'Lezárult' : 'Hamarosan'}
+                      </span>
+                    </div>
+                    {podium.length > 0 && (
+                      <div style={{ display:'flex', gap:8, marginTop:12 }}>
+                        {podium.map((x, i) => (
+                          <div key={x.p.id} style={{ flex:1, minWidth:0, background:T.bgSoft, borderRadius:14, padding:'10px 6px', display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+                            <div style={{ position:'relative' }}>
+                              <PlayerAvatar player={x.p} size={i === 0 ? 40 : 32} />
+                              <div style={{ position:'absolute', bottom:-3, right:-4, lineHeight:1 }}><BohIcon name={'medal'+(i+1)} size={13} /></div>
+                            </div>
+                            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.ink, maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{x.p.name}</div>
+                            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.yellow||'#F59E0B', lineHeight:1 }}>{x.pts}</div>
+                            {i === 0 && ended && <div style={{ fontFamily:T.font, fontWeight:900, fontSize:9, color:T.mintDeep, textTransform:'uppercase', letterSpacing:'0.08em' }}>Szezon MVP</div>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, marginTop:10, lineHeight:1.5 }}>
+                      A szezon csak az ebben az időszakban lejátszott partikat számolja. Az örök stat és a szint ettől függetlenül gyűlik tovább.
+                    </div>
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })()}
+          {view === 'all' && (
+          <React.Fragment>
           <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
             {STATS_PERIODS.map(pr => (
               <button key={pr.key} onClick={() => setPeriod(pr.key)} style={{
@@ -37087,6 +37248,8 @@ function StatsScreen({ go, onOpenObserver }) {
               {period === 'custom' ? 'A megadott időszakban lejátszott partik számítanak bele.' : 'Csak az adott időszakban lejátszott partik számítanak bele.'}
             </div>
           )}
+          </React.Fragment>
+          )}
         </div>
       )}
 
@@ -37115,8 +37278,8 @@ function StatsScreen({ go, onOpenObserver }) {
               {profilRows.length === 0 && (
                 <div style={{ textAlign:'center', padding:40, fontFamily:T.font, color:T.inkSoft }}>
                   <div style={{ marginBottom:8, display:'flex', justifyContent:'center' }}><BottleHero pose="wait" size={64} /></div>
-                  <div style={{ fontWeight:800, fontSize:15, color:T.ink }}>{period === 'all' ? 'Még nincs profil stat' : 'Nincs adat ebben az időszakban'}</div>
-                  <div style={{ fontSize:12, marginTop:6 }}>{period === 'all' ? 'Játssz névjeggyel és a statisztikák itt jelennek meg' : 'Válassz másik időszakot, vagy játssz egy partit'}</div>
+                  <div style={{ fontWeight:800, fontSize:15, color:T.ink }}>{!isFiltered ? 'Még nincs profil stat' : curSeason ? 'Ebben a szezonban még nincs adat' : 'Nincs adat ebben az időszakban'}</div>
+                  <div style={{ fontSize:12, marginTop:6 }}>{!isFiltered ? 'Játssz névjeggyel és a statisztikák itt jelennek meg' : curSeason ? 'Játssz egy partit a szezon ideje alatt' : 'Válassz másik időszakot, vagy játssz egy partit'}</div>
                 </div>
               )}
               {profilRows.map((p, i) => {
@@ -37125,6 +37288,8 @@ function StatsScreen({ go, onOpenObserver }) {
                 const lifeS = withGameWins(stats[p.id], gameStats, p.id);
                 const achDone = ACHIEVEMENTS.filter(a => achievementState(a, lifeS).done).length;
                 const achPct = Math.round(achDone / Math.max(1, ACHIEVEMENTS.length) * 100);
+                // A szint mindig az örök statból jön — szezon-nézetben is
+                const lvl = levelFromXp(computeXp(lifeS).total);
                 return (
                   <div key={p.id} onClick={() => setQuickStatsFor(p)} style={{ background:T.surface, borderRadius:16, padding:'10px 12px', boxShadow:pfShadow, border:pfBorder, cursor:'pointer', WebkitTapHighlightColor:'transparent', minWidth:0, overflow:'hidden' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:9, minWidth:0 }}>
@@ -37136,7 +37301,8 @@ function StatsScreen({ go, onOpenObserver }) {
                       <div style={{ flex:1, minWidth:0 }}>
                         {/* név + rögtön mellette a megszerzett kitüntetések */}
                         <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
-                          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', minWidth:0 }}>{p.name}</span>
+                          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:lvl.color, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', minWidth:0 }}>{p.name}</span>
+                          <LevelChip lvl={lvl} />
                           <span style={{ display:'inline-flex', alignItems:'center', gap:3, background:T.mintSoft, borderRadius:999, padding:'2px 7px 2px 5px', flexShrink:0 }} title="Megszerzett kitüntetések">
                             <BohIcon name="medal1" size={11} />
                             <span style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:T.mintDeep }}>{achDone}</span>
@@ -37656,7 +37822,7 @@ function AdminScreen({ go, setTheme, currentTheme }) {
       ['games','Játékok'],['wildcards','Wildcard'],['punishments','Büntetés'],['bingo','Bingó'],
     ]},
     { key:'system', label:'Rendszer', tabs:[
-      ['stats','Statisztika'],['zene','Zene'],['rooms','Szobák'],['message','Hirdetmény'],['settings','Beállítások'],
+      ['stats','Statisztika'],['seasons','Szezonok'],['zene','Zene'],['rooms','Szobák'],['message','Hirdetmény'],['settings','Beállítások'],
     ]},
   ];
   const [category, setCategory] = React.useState('content');
@@ -37735,6 +37901,7 @@ function AdminScreen({ go, setTheme, currentTheme }) {
         {tab === 'punishments' && <AdminPunishments />}
         {tab === 'bingo' && <AdminBingo />}
         {tab === 'stats'    && <AdminStats />}
+        {tab === 'seasons'  && <AdminSeasons />}
         {tab === 'zene'     && <AdminZene />}
         {tab === 'rooms'    && <AdminRooms />}
         {tab === 'message'  && <AdminMessage />}
@@ -38285,6 +38452,101 @@ function AdminEvents({ go }) {
 }
 
 // ── Admin: Statisztika tab ────────────────────────────────────────────────────
+// Szezonok: nevesitett, mindenki szamara kozos idoszakok. A szezon statja a
+// statEvents idobelyegeibol szamolodik, igy itt csak a hatarokat kell megadni.
+function AdminSeasons() {
+  const [list, setList] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [name, setName] = React.useState('');
+  const [from, setFrom] = React.useState('');
+  const [to, setTo] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState('');
+
+  const load = () => (window.getSeasons ? window.getSeasons() : Promise.resolve([]))
+    .then(l => { setList(l || []); setLoading(false); });
+  React.useEffect(() => { load(); }, []);
+
+  const dayMs = (d, end) => d ? new Date(d + (end ? 'T23:59:59.999' : 'T00:00:00')).getTime() : null;
+  const add = () => {
+    const f = dayMs(from, false), t = dayMs(to, true);
+    if (!name.trim()) { setErr('Adj nevet a szezonnak.'); return; }
+    if (!f || !t) { setErr('A kezdés és a vége is kell.'); return; }
+    if (t <= f) { setErr('A vége nem lehet a kezdés előtt.'); return; }
+    const clash = list.find(s => f <= (s.to || 0) && (s.from || 0) <= t);
+    if (clash) { setErr(`Átfed ezzel: ${clash.name}. A szezonok nem érhetnek egymásba.`); return; }
+    setErr(''); setBusy(true);
+    Promise.resolve(window.saveSeason ? window.saveSeason({ name: name.trim(), from: f, to: t }) : null)
+      .then(() => { setName(''); setFrom(''); setTo(''); return load(); })
+      .finally(() => setBusy(false));
+  };
+  const del = (se) => {
+    if (!window.confirm(`Törlöd ezt a szezont: ${se.name}?\n\nA statisztika nem vész el — csak a szezon-nézet szűnik meg.`)) return;
+    Promise.resolve(window.deleteSeason ? window.deleteSeason(se.id) : null).then(load);
+  };
+
+  const inp = { width:'100%', boxSizing:'border-box', padding:'11px 12px', borderRadius:12, border:`1.5px solid ${T.border}`, background:T.surfaceMuted, fontFamily:T.font, fontWeight:700, fontSize:13.5, color:T.ink, outline:'none', WebkitAppearance:'none', appearance:'none', minHeight:44 };
+  const lab = { fontFamily:T.font, fontSize:10.5, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.07em' };
+  const now = Date.now();
+  const fmt = ms => ms ? new Date(ms).toLocaleDateString('hu-HU', { year:'numeric', month:'short', day:'numeric' }) : '?';
+
+  if (loading) return <div style={{ textAlign:'center', padding:32, color:T.sub, fontFamily:T.font }}>Betöltés…</div>;
+  return (
+    <div style={{ padding:'16px 16px 40px', display:'flex', flexDirection:'column', gap:14 }}>
+      <div style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:T.shadow, display:'flex', flexDirection:'column', gap:10 }}>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink }}>Új szezon</div>
+        <label style={{ display:'flex', flexDirection:'column', gap:6 }}>
+          <span style={lab}>Név</span>
+          <input value={name} onChange={e => { setName(e.target.value); setErr(''); }} placeholder="pl. Nyár 2026" style={inp} />
+        </label>
+        <div style={{ display:'flex', gap:10 }}>
+          <label style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:6 }}>
+            <span style={lab}>Kezdés</span>
+            <input type="date" value={from} onChange={e => { setFrom(e.target.value); setErr(''); }} style={inp} />
+          </label>
+          <label style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:6 }}>
+            <span style={lab}>Vége</span>
+            <input type="date" value={to} onChange={e => { setTo(e.target.value); setErr(''); }} style={inp} />
+          </label>
+        </div>
+        {err && <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.coral }}>{err}</div>}
+        <button onClick={add} disabled={busy} style={{ width:'100%', minHeight:46, borderRadius:14, border:'none', background: busy ? T.mintSoft : T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14, cursor: busy ? 'default' : 'pointer' }}>
+          {busy ? 'Mentés…' : 'Szezon létrehozása'}
+        </button>
+        <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, lineHeight:1.5 }}>
+          A szezon a megadott időszakban lejátszott partikat gyűjti — visszamenőleg is, a már meglévő történetből. Az örök statisztika és a szint ettől függetlenül gyűlik tovább.
+        </div>
+      </div>
+
+      {list.length === 0 && (
+        <div style={{ textAlign:'center', padding:'26px 16px', fontFamily:T.font, color:T.inkSoft, fontSize:13 }}>
+          Még nincs szezon. Amíg nincs, a Statisztikában csak az „Összes" nézet érhető el.
+        </div>
+      )}
+      {list.map(se => {
+        const live = (se.from || 0) <= now && now <= (se.to || 0);
+        const ended = (se.to || 0) < now;
+        return (
+          <div key={se.id} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow, display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14.5, color:T.ink }}>{se.name}</span>
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:10, padding:'3px 9px', borderRadius:999,
+                  background: live ? `${T.mint}22` : ended ? `${T.inkMute}22` : `${T.yellow||'#F59E0B'}22`,
+                  color: live ? T.mintDeep : ended ? T.inkSoft : (T.yellow||'#F59E0B') }}>
+                  {live ? 'AKTÍV' : ended ? 'LEZÁRULT' : 'HAMAROSAN'}
+                </span>
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:11.5, color:T.inkMute, marginTop:3 }}>{fmt(se.from)} – {fmt(se.to)}</div>
+            </div>
+            <button onClick={() => del(se)} style={{ flexShrink:0, width:40, height:40, borderRadius:12, border:'none', background:`${T.coral}18`, color:T.coral, cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:16 }}>×</button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function AdminStats() {
   const [profiles, setProfiles] = React.useState([]);
   const [stats, setStats] = React.useState({});
@@ -42404,6 +42666,8 @@ function PlayerProfileStats({ profileId, compact }) {
   const [stats, setStats] = React.useState(null);
   const [profiles, setProfiles] = React.useState([]);
   const [events, setEvents] = React.useState([]);
+  const [allEvents, setAllEvents] = React.useState([]);
+  const [seasons, setSeasons] = React.useState([]);
   const [gameStats, setGameStats] = React.useState({});
   const [showAch, setShowAch] = React.useState(false);
   React.useEffect(() => {
@@ -42417,9 +42681,16 @@ function PlayerProfileStats({ profileId, compact }) {
     if (typeof window.getAllGameStats === 'function') window.getAllGameStats().then(gs => setGameStats(gs || {})).catch(() => {});
   }, [compact]);
   React.useEffect(() => {
-    if (compact || !profileId || typeof window.getAllStatEvents !== 'function') { setEvents([]); return; }
-    window.getAllStatEvents().then(evs => setEvents((evs || []).filter(e => e.profileId === profileId && (e.totalPoints || 0) > 0).sort((a, b) => (a.ts || 0) - (b.ts || 0)))).catch(() => setEvents([]));
+    if (compact || !profileId || typeof window.getAllStatEvents !== 'function') { setEvents([]); setAllEvents([]); return; }
+    window.getAllStatEvents().then(evs => {
+      setAllEvents(evs || []);
+      setEvents((evs || []).filter(e => e.profileId === profileId && (e.totalPoints || 0) > 0).sort((a, b) => (a.ts || 0) - (b.ts || 0)));
+    }).catch(() => { setEvents([]); setAllEvents([]); });
   }, [profileId, compact]);
+  React.useEffect(() => {
+    if (compact || typeof window.getSeasons !== 'function') return;
+    window.getSeasons().then(ss => setSeasons(ss || [])).catch(() => {});
+  }, [compact]);
 
   if (!stats) return (
     <div style={{ textAlign:'center', padding:'10px 0', color:T.inkMute, fontFamily:T.font, fontSize:12 }}>Statisztika betöltése…</div>
@@ -42490,6 +42761,21 @@ function PlayerProfileStats({ profileId, compact }) {
 
   const achStats = withGameWins(stats, gameStats, profileId);
   const earned = ACHIEVEMENTS.filter(a => achievementState(a, achStats).done);
+  // Szint: az ÖRÖK statból (a szezonok ezt nem befolyásolják)
+  const xp = computeXp(achStats);
+  const lvl = levelFromXp(xp.total);
+  // Örök szezon-jelvény: a már LEZÁRULT szezonok, amiket ez a profil nyert
+  const seasonWins = (seasons || []).filter(se => {
+    if (!se.to || se.to >= Date.now()) return false;
+    const agg = {};
+    (allEvents || []).forEach(e => {
+      const ts = e.ts || 0;
+      if (ts < (se.from || 0) || ts > se.to) return;
+      agg[e.profileId] = (agg[e.profileId] || 0) + (e.totalPoints || 0);
+    });
+    const best = Object.keys(agg).sort((a, b) => agg[b] - agg[a])[0];
+    return best === profileId && agg[best] > 0;
+  });
 
   // Fejlődési grafikon — kumulatív pont az egyes partik után (statEvents naplóból)
   let chart = null;
@@ -42508,6 +42794,49 @@ function PlayerProfileStats({ profileId, compact }) {
   return (
     <div style={{ width:'100%', boxSizing:'border-box', maxHeight:'54vh', overflowY:'auto', display:'flex', flexDirection:'column', gap:12 }}>
       {heroGrid}
+      {/* Szint — a 100 kitüntetés mögötti gerinc. XP = pont + kör + győzelem + jelvény. */}
+      <div style={{ background:T.bgSoft, borderRadius:14, padding:'12px 14px', display:'flex', flexDirection:'column', gap:9 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <div style={{ width:38, height:38, borderRadius:12, background:`${lvl.color}1F`, border:`2px solid ${lvl.color}66`, display:'grid', placeItems:'center', flexShrink:0 }}>
+            <span style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:lvl.color, lineHeight:1 }}>{lvl.level}</span>
+          </div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:lvl.color }}>{lvl.title}</div>
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, marginTop:1 }}>{lvl.level}. szint · {xp.total.toLocaleString('hu-HU')} XP</div>
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:800, color:T.inkMute, flexShrink:0, textAlign:'right' }}>
+            {(lvl.need - lvl.into).toLocaleString('hu-HU')} XP<br/>a {lvl.level + 1}. szintig
+          </div>
+        </div>
+        <div style={{ height:6, borderRadius:6, background:`${T.inkMute}22`, overflow:'hidden' }}>
+          <div style={{ width: lvl.pct + '%', height:'100%', background:lvl.color, transition:'width .3s' }} />
+        </div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+          {[
+            { l:'pont', v:xp.parts.point, icon:'star' },
+            { l:'kör', v:xp.parts.round, icon:'redo' },
+            { l:'győzelem', v:xp.parts.win, icon:'trophy' },
+            { l:'jelvény', v:xp.parts.badge, icon:'medal1' },
+          ].filter(x => x.v > 0).map(x => (
+            <span key={x.l} style={{ display:'inline-flex', alignItems:'center', gap:4, background:T.surface, borderRadius:999, padding:'3px 9px' }}>
+              <BohIcon name={x.icon} size={11} />
+              <span style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, color:T.inkSoft }}>{x.v.toLocaleString('hu-HU')} XP · {x.l}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+      {/* Örök szezon-jelvény — a megnyert, már lezárult szezonok */}
+      {seasonWins.length > 0 && (
+        <div style={{ background:T.bgSoft, borderRadius:14, padding:'11px 14px', display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.07em' }}>Szezongyőzelmek</span>
+          {seasonWins.map(se => (
+            <span key={se.id} style={{ display:'inline-flex', alignItems:'center', gap:5, background:`${T.yellow||'#F59E0B'}22`, border:`1.5px solid ${T.yellow||'#F59E0B'}55`, borderRadius:999, padding:'4px 11px 4px 8px' }}>
+              <BohIcon name="trophy" size={13} />
+              <span style={{ fontFamily:T.font, fontWeight:900, fontSize:11.5, color:T.ink }}>{se.name}</span>
+            </span>
+          ))}
+        </div>
+      )}
       {/* Kitüntetések: nem listázzuk ki (sok van) — egy gomb nyitja a vitrint */}
       <button onClick={()=>setShowAch(true)} style={{ display:'flex', alignItems:'center', gap:11, width:'100%', boxSizing:'border-box', background:T.bgSoft, border:'none', borderRadius:14, padding:'11px 14px', cursor:'pointer', textAlign:'left', WebkitTapHighlightColor:'transparent' }}>
         <div style={{ width:34, height:34, borderRadius:11, background:T.mintSoft, display:'grid', placeItems:'center', flexShrink:0 }}>
