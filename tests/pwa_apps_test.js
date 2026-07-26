@@ -124,26 +124,38 @@ const head = (p) => p.evaluate(() => ({
     ok(`${q || '(alap)'} → ${title}`, hh.title === title, hh.title);
     ok(`${q || '(alap)'} → ${man}`, (hh.manifest || '').split('?')[0] === man, hh.manifest);
     if (!q) {
-      // v10.137: a dokk egyetlen app-fiók (nem gomb) — minden app a lapon van
+      // v10.140: kozepre igazitott "TOVÁBBI DNR" felhivas nyillal — a sheet hozza az appokat
       const dock = await pp.evaluate(() => {
-        const row = Array.from(document.querySelectorAll('div')).find(d => /DNR appok/.test((d.innerText || '')) && d.getAttribute('role') === 'button');
+        const row = Array.from(document.querySelectorAll('div')).find(d => /TOVÁBBI DNR/i.test(d.innerText || '') && d.getAttribute('role') === 'button');
         if (!row) return null;
         const r = row.getBoundingClientRect();
-        const imgs = Array.from(row.querySelectorAll('img')).length;
-        const marks = Array.from(row.querySelectorAll('span')).filter(x => !x.textContent.trim() && /^\d/.test(getComputedStyle(x).borderTopLeftRadius))
-          .map(x => getComputedStyle(x).backgroundColor);
-        return { text: row.innerText.replace(/\n/g, ' | '), h: Math.round(r.height), imgs, marks, tag: row.tagName };
+        const cs = getComputedStyle(row);
+        const svg = row.querySelector('svg');
+        const label = Array.from(row.querySelectorAll('div')).pop();
+        const mint = label && label.querySelector('span');
+        return {
+          text: row.innerText.replace(/\n/g, ' | ').trim(), tag: row.tagName,
+          h: Math.round(r.height), align: cs.alignItems, dir: cs.flexDirection,
+          imgs: row.querySelectorAll('img').length,
+          arrow: svg ? { d: (svg.querySelector('path') || {}).getAttribute && svg.querySelector('path').getAttribute('d'), anim: getComputedStyle(svg).animationName } : null,
+          spacing: label ? getComputedStyle(label).letterSpacing : null,
+          mintWord: mint ? { t: mint.textContent, c: getComputedStyle(mint).color } : null,
+          bg: cs.backgroundColor, shadow: cs.boxShadow,
+        };
       });
-      ok('van egyetlen app-fiók sor', !!dock, JSON.stringify(dock));
-      ok('a fiók NEM <button> (nem gomb-kinézet)', dock && dock.tag === 'DIV', dock && dock.tag);
-      ok('NINCSENEK apro, olvashatatlan app-ikonok a sorban', dock && dock.imgs === 0, 'img=' + (dock && dock.imgs));
-      ok('helyette 4 szines negyzet a markajelben', dock && dock.marks.length === 4 && new Set(dock.marks).size === 4, JSON.stringify(dock && dock.marks));
-      ok('egy sor magas (<=64px)', dock && dock.h <= 64, dock && dock.h + 'px');
-      ok('a digest sor élő infót mutat', dock && /Köv\. esemény|A Box most szól|Events · BOX/.test(dock.text), dock && dock.text);
-      const tiles = await pp.evaluate(() => Array.from(document.querySelectorAll('button')).filter(b => /^(Events|Box|Pub|Több|Bingó|Liga)$/.test((b.innerText || '').trim().split('\n')[0])).length);
-      ok('nincs tobb kulon app-csempe a fooldalon', tiles === 0, 'db=' + tiles);
-      // fiók megnyitasa -> mind az 5 app
-      await pp.evaluate(() => { const row = Array.from(document.querySelectorAll('div')).find(d => /DNR appok/.test(d.innerText || '') && d.getAttribute('role') === 'button'); if (row) row.click(); });
+      ok('van "TOVÁBBI DNR" felhivas', !!dock, JSON.stringify(dock));
+      ok('csak szoveg — nincs app-ikon', dock && dock.imgs === 0, 'img=' + (dock && dock.imgs));
+      ok('kozepre igazitott, egymas ala', dock && dock.align === 'center' && dock.dir === 'column', dock && dock.align + '/' + dock.dir);
+      ok('felfele mutato nyil van folotte', dock && dock.arrow && /^M2 10l8-8 8 8$/.test(dock.arrow.d || ''), JSON.stringify(dock && dock.arrow));
+      ok('a nyil animal (a sheetre utal)', dock && dock.arrow && /hintUp/.test(dock.arrow.anim || ''), dock && dock.arrow && dock.arrow.anim);
+      ok('designolt szedes (ritkitott verzal)', dock && parseFloat(dock.spacing) >= 2, dock && dock.spacing);
+      ok('a "DNR" a marka mentazoldjeben', dock && dock.mintWord && dock.mintWord.t === 'DNR' && dock.mintWord.c === 'rgb(79, 194, 160)', JSON.stringify(dock && dock.mintWord));
+      ok('nincs kartya-kinezet (hatter/arnyek nelkul)', dock && /rgba\(0, 0, 0, 0\)|transparent/.test(dock.bg) && dock.shadow === 'none', dock && dock.bg + ' / ' + dock.shadow);
+      ok('nincs tobb app-csempe a fooldalon', (await pp.evaluate(() => Array.from(document.querySelectorAll('button')).filter(b => /^(Events|Box|Pub|Több|Bingó|Liga)$/.test((b.innerText || '').trim().split('\n')[0])).length)) === 0);
+      await pp.screenshot({ path: __dirname + '/pwa_home_dock.png', fullPage: true });
+
+      // koppintasra a sheet — mind az 5 app
+      await pp.evaluate(() => { const row = Array.from(document.querySelectorAll('div')).find(d => /TOVÁBBI DNR/i.test(d.innerText || '') && d.getAttribute('role') === 'button'); if (row) row.click(); });
       await pp.waitForTimeout(700);
       const sheet = await pp.evaluate(() => document.body.innerText);
       ok('a lap "DNR appok" cimmel nyilik', /DNR appok/.test(sheet));
@@ -157,6 +169,7 @@ const head = (p) => p.evaluate(() => ({
       // ujratoltes a fooldalra a szezon-badge teszthez
       await pp.goto(BASE, { waitUntil: 'domcontentloaded' });
       await pp.waitForTimeout(3200);
+
       // ── Szezon-badge a DNR GAMES alatt ──
       const badge = await pp.evaluate(() => {
         const b = Array.from(document.querySelectorAll('button')).find(x => /S2 · Ny[áÁ]r/i.test(x.innerText || ''));
