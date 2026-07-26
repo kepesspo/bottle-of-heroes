@@ -34936,7 +34936,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.126';
+const APP_VERSION = 'v10.129';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -53897,7 +53897,7 @@ function TapperGame({ gameIdx, challenger, opponent, onAdvance, onResult, roomCo
       advancedRef.current = true;
       if (winner && loser) onResult && onResult({ winners:[winner], losers:[loser], drinks:1, winNote:'+1 pont' });
       else if (r === 'both-lose') onResult && onResult({ losers:[p1,p2].filter(Boolean), drinks:1, loseNote:'Mindkettő túlment 😵' });
-      else onResult && onResult({ correct:true, playerName:null, drinks:0, subtitle:'Döntetlen!' });
+      else onResult && onResult({ correct:true, playerName:null, drinks:0, draw:true, subtitle:'Döntetlen!' });
       onAdvance && onAdvance(dm, pm);
     }
   }, [p1Time, p2Time]);
@@ -54391,7 +54391,7 @@ function KoPapirGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
         const loserDrinks = Math.max(cd, od);
         onResult && onResult({ winners:[winner].filter(Boolean), losers:[loser].filter(Boolean), drinks: loserDrinks, winNote:'+1 pont', loseNote:'összesen az 5 körben' });
       } else {
-        onResult && onResult({ correct:true, playerName:null, drinks:0, subtitle:`Döntetlen! (${cd}–${od})` });
+        onResult && onResult({ correct:true, playerName:null, drinks:0, draw:true, subtitle:`Döntetlen! (${cd}–${od})` });
       }
       onAdvance && onAdvance(newTotal, pm);
     } else {
@@ -56632,7 +56632,7 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
         if (onResult) onResult({ winners:[opponent], losers:[challenger], drinks: diff, winNote:`Nyerte a meccset ${p2W}–${p1W} · +1 pont` });
       } else {
         if (onAdvance) onAdvance({[p1id]: 1, [p2id]: 1}, {});
-        if (onResult) onResult({ losers:[challenger,opponent].filter(Boolean), drinks: 1, loseNote:`Döntetlen ${p1W}–${p2W} — mindenki iszik!` });
+        if (onResult) onResult({ losers:[challenger,opponent].filter(Boolean), drinks: 1, draw:true, loseNote:`Döntetlen ${p1W}–${p2W} — mindenki iszik!` });
       }
       // Marad a felfedés-képernyő (körlista + „ki nyert" sor), a banner erre jön rá.
       // Korábban egy üres "…" dobozra váltott, pont amikor a banner megjelent.
@@ -59014,8 +59014,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         </div>
       )}
 
-      {/* ConfettiPop */}
-      {gameResult?.correct && (() => {
+      {/* ConfettiPop — döntetlennél nincs ünneplés */}
+      {gameResult?.correct && !gameResult?.draw && (() => {
         const COLS = ['#F59E0B','#10B981','#6366F1','#EC4899','#F97316','#14B8A6','#EF4444','#8B5CF6','#FBBF24','#34D399','#A78BFA','#F472B6'];
         const pts = Array.from({length:14}, (_,i) => ({
           id: i,
@@ -59060,7 +59060,10 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         const loseNote = gameResult.loseNote || '';
         const WIN_G = 'linear-gradient(160deg,#2ec27e,#178a52)';
         const LOSE_G = 'linear-gradient(200deg,#ec5545,#c0281f)';
-        const glow = (hasWin && !hasLose) || neutralPos ? '#25b572' : '#e84040';
+        // Döntetlen: se nem győzelem, se nem vereség — semleges pala, ne zöld
+        const DRAW_G = 'linear-gradient(160deg,#7d8ba0,#4f5c72)';
+        const isDraw = gameResult.draw === true;
+        const glow = isDraw ? '#8a97ab' : ((hasWin && !hasLose) || neutralPos ? '#25b572' : '#e84040');
         const names = list => list.map(p=>p.name).join(', ');
         const Pile = ({ list, size, overlap, borderW, emptyEmoji }) => {
           const shown = list.slice(0,3), extra = Math.max(0, list.length - 3);
@@ -59080,7 +59083,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         if (resultMinimized === 'shrinking' || resultMinimized === true) {
           const showPill = resultMinimized === true;
           const MiniHalf = ({ list, kind }) => (
-            <div style={{ flex:1, minWidth:0, background: kind==='win'?WIN_G:LOSE_G, padding:'10px 12px', display:'flex', alignItems:'center', gap:8 }}>
+            <div style={{ flex:1, minWidth:0, background: (isDraw && kind!=='win') ? DRAW_G : (kind==='win'?WIN_G:LOSE_G), padding:'10px 12px', display:'flex', alignItems:'center', gap:8 }}>
               <Pile list={list} size={28} overlap={9} borderW={2} emptyEmoji={kind==='win'?'🌟':'🍺'} />
               <div style={{ minWidth:0 }}>
                 <div style={{ fontFamily:T.font, fontWeight:800, fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:'rgba(255,255,255,0.7)', lineHeight:1.1 }}>{kind==='win'?'Nyertes':'Iszik'}</div>
@@ -59089,7 +59092,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
             </div>
           );
           const MiniNeutral = () => (
-            <div style={{ flex:1, minWidth:0, background: neutralPos?WIN_G:LOSE_G, padding:'10px 14px', display:'flex', alignItems:'center', gap:9 }}>
+            <div style={{ flex:1, minWidth:0, background: isDraw?DRAW_G:(neutralPos?WIN_G:LOSE_G), padding:'10px 14px', display:'flex', alignItems:'center', gap:9 }}>
               <BohIcon name={neutralPos ? (/(Döntetlen|Draw)/i.test(gameResult.subtitle||'') ? 'draw' : 'star') : 'beer'} size={20} />
               <div style={{ minWidth:0 }}>
                 <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{gameResult.subtitle || (neutralPos?'Kész!':'Inni kell!')}{!neutralPos&&drinks>0?` · ${drinks} korty`:''}</div>
@@ -59130,7 +59133,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           </div>
         );
         const LoseZone = () => (
-          <div style={{ background:LOSE_G, padding: split?'26px 12px 34px':'20px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:7, width:'100%', boxSizing:'border-box', flex:'1 1 auto', minHeight:0 }}>
+          <div style={{ background: (isDraw && !hasWin) ? DRAW_G : LOSE_G, padding: split?'26px 12px 34px':'20px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:7, width:'100%', boxSizing:'border-box', flex:'1 1 auto', minHeight:0 }}>
             <Pile list={losers} size={split?52:60} overlap={16} borderW={3} emptyEmoji="🍺" />
             {split
               ? <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, letterSpacing:'0.1em', textTransform:'uppercase', color:'rgba(255,255,255,0.72)', display:'flex', alignItems:'center', gap:4 }}><BohIcon name="beer" size={12} /> {losers.length>1?'Isznak':'Iszik'}</div>
@@ -59146,7 +59149,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           </div>
         );
         const NeutralZone = () => (
-          <div style={{ background: neutralPos?WIN_G:LOSE_G, padding:'30px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10, flex:'1 1 auto', minHeight:0 }}>
+          <div style={{ background: isDraw?DRAW_G:(neutralPos?WIN_G:LOSE_G), padding:'30px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10, flex:'1 1 auto', minHeight:0 }}>
             <BohIcon name={neutralPos ? (/(Döntetlen|Draw)/i.test(gameResult.subtitle||'') ? 'draw' : 'star') : 'beer'} size={44} />
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:'#fff', textAlign:'center', lineHeight:1.15, textShadow:'0 2px 10px rgba(0,0,0,0.2)', wordBreak:'break-word' }}>{gameResult.subtitle || (neutralPos?'Kész!':'Inni kell!')}</div>
             {drinks>0 && (
@@ -59167,7 +59170,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               )}
               {/* Bottle Hero — bal felső sarok matrica, pop-in + lebegés */}
               <div style={{ position:'absolute', top:6, left:8, zIndex:4, pointerEvents:'none', animation:'heroPopIn .55s .15s cubic-bezier(.2,.9,.3,1.35) both' }}>
-                <BottleHero pose={neutral ? (neutralPos?'win':'drink') : (hasWin?'win':'drink')} size={54} style={{ filter:'drop-shadow(0 4px 10px rgba(0,0,0,0.28))', animation:'floatBob 2.6s .9s ease-in-out infinite' }} />
+                <BottleHero pose={isDraw ? 'wait' : (neutral ? (neutralPos?'win':'drink') : (hasWin?'win':'drink'))} size={54} style={{ filter:'drop-shadow(0 4px 10px rgba(0,0,0,0.28))', animation:'floatBob 2.6s .9s ease-in-out infinite' }} />
               </div>
               {split && (
                 <div style={{ position:'absolute', bottom:30, right:8, zIndex:4, pointerEvents:'none', animation:'heroPopIn .55s .3s cubic-bezier(.2,.9,.3,1.35) both' }}>
@@ -59188,11 +59191,11 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                 </React.Fragment>
               )}
               {gameResult.subtitle && !split && !neutral && (
-                <div style={{ background: hasWin?WIN_G:LOSE_G, padding:'0 22px 6px', marginTop:-2, flexShrink:0 }}>
+                <div style={{ background: isDraw?DRAW_G:(hasWin?WIN_G:LOSE_G), padding:'0 22px 6px', marginTop:-2, flexShrink:0 }}>
                   <div style={{ fontFamily:T.font, fontSize:13, color:'rgba(255,255,255,0.78)', textAlign:'center', lineHeight:1.4 }}><BohText text={gameResult.subtitle} size={12} /></div>
                 </div>
               )}
-              <div style={{ background: split?'transparent':(hasWin||neutralPos?WIN_G:LOSE_G), padding:'2px 0 8px', textAlign:'center', flexShrink:0, ...(split ? { marginTop:-30, position:'relative', zIndex:3 } : {}) }}>
+              <div style={{ background: split?'transparent':(isDraw?DRAW_G:(hasWin||neutralPos?WIN_G:LOSE_G)), padding:'2px 0 8px', textAlign:'center', flexShrink:0, ...(split ? { marginTop:-30, position:'relative', zIndex:3 } : {}) }}>
                 <span style={{ fontFamily:T.font, fontSize:11, color:'rgba(255,255,255,0.5)' }}>koppints a kicsinyítéshez</span>
               </div>
             </div>
