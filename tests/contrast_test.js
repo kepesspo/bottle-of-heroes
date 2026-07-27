@@ -25,7 +25,13 @@ const WCAG  = 4.5;   // ez alatt csak jelentjük
 const BASELINE = [
   // A mentazold a marka elsodleges szine, feher szoveggel — minden gombon,
   // minden temaban ez a lathato nyelv. 2.1-2.2, de 800-as sulyu, nagy pirula.
-  { txt: /^(Profil|Liga|Statisztika|Játékok|Mentés|Kész)$/i, why: 'márka: fehér szöveg a mentazöld pirulán' },
+  // v10.159 ota a kijelolt pirulak is ide tartoznak: korabban T.ink-et
+  // hasznaltak (semleges tinta), most a fulsorral azonos T.mint-et. A
+  // felhasznalo keresere — egy kepernyon ne legyen ketfele "kijelolt" nyelv.
+  // A warm/dark/slate mentazoldjen a feher szoveg 2.1-2.2; ez az app osszes
+  // elsodleges gombjan ugyanez, tehat paletta-szintu dontes, nem regresszio.
+  { txt: /^(Profil|Liga|Statisztika|Játékok|Mentés|Kész|Összes|Szezon|Mind|Ma|7 nap|Egyedi)$/i,
+    why: 'márka: fehér szöveg a téma kiemelőszínén (kijelölt állapot)' },
   // Erem-szinek: arany/ezust/bronz a helyezes-szamon. A jelentesuk maga a szin.
   { txt: /^[123]$/, why: 'érem-színek (arany/ezüst/bronz) a helyezésszámon' },
   // Az avatar-korong a jatekos sajat valasztott szine, benne a kezdobetu.
