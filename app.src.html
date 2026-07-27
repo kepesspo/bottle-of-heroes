@@ -35047,7 +35047,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.155';
+const APP_VERSION = 'v10.156';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -35315,6 +35315,24 @@ Object.values(THEMES).forEach(th => {
 
 // Semantic status colors — intentionally theme-invariant (contrast-tested)
 const RSVP_CLR = { yes:'#22c55e', maybe:'#c07a10', no:'#e84040' };
+
+// ── A választható témák EGYETLEN forrása ──────────────────────────────────
+// Korábban két külön lista volt ugyanerre (Beállítások + Admin per-app), és
+// szétcsúsztak: más elemszám, és UGYANARRA a témára más név — az adminban
+// „Palakő", a felhasználónál „Mélytenger". A színek se stimmeltek, mert az
+// admin listája a THEMES elavult másolatait tartalmazta. Mostantól a nevek
+// innen jönnek, a színek pedig magából a THEMES-ből: nem tudnak elcsúszni.
+const THEME_LIST = [
+  { key:'warm',  label:'Homokpart'  },
+  { key:'ice',   label:'Jéghegy'    },
+  { key:'jade',  label:'Dzsungel'   },
+  { key:'dark',  label:'Kozmosz'    },
+  { key:'slate', label:'Mélytenger' },
+];
+const themeSwatch = (key) => {
+  const th = THEMES[key] || THEMES['warm'];
+  return { bg: th.bg, accent: th.mint, surface: th.surface };
+};
 
 let T = THEMES[localStorage.getItem('boh_theme')] || THEMES['warm'];
 if (!T) T = THEMES['warm'];
@@ -38852,14 +38870,7 @@ function AdminRooms() {
 }
 
 // ── Admin: Message/Announcement tab ───────────────────────────────────────────
-const THEME_OPTIONS = [
-  { key:'warm',     label:'Meleg',    bg:'#F4C57E', mint:'#4FC2A0' },
-  { key:'dark',     label:'Sötét',    bg:'#2C3554', mint:'#5A7EF0' },
-  { key:'ice',      label:'Jég',      bg:'#E8F4FF', mint:'#3B82F6' },
-  { key:'jade',     label:'Jade',     bg:'#B8E8C8', mint:'#22A85A' },
-  { key:'slate',    label:'Palakő',   bg:'#1E2A38', mint:'#6EA8D0' },
-  { key:'midnight', label:'Éjfél',    bg:'#28204A', mint:'#A07AE8' },
-];
+const THEME_OPTIONS = THEME_LIST.map(x => ({ ...x, bg: themeSwatch(x.key).bg, mint: themeSwatch(x.key).accent }));
 
 function ThemeSelector({ title, urlHint, getFn, setFn, onFn, cacheKey, defaultKey }) {
   const [theme, setTheme] = React.useState(defaultKey);
@@ -38882,7 +38893,7 @@ function ThemeSelector({ title, urlHint, getFn, setFn, onFn, cacheKey, defaultKe
     <div style={{ background:T.surface, borderRadius:16, padding:16, boxShadow:T.shadow, marginBottom:14 }}>
       <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:4 }}>{title}</div>
       <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginBottom:16 }}>Ez a téma jelenik meg a <span style={{ fontFamily:'monospace', fontSize:11, background:T.surfaceMuted, padding:'1px 5px', borderRadius:4 }}>{urlHint}</span> URL-en (a következő megnyitáskor).</div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:6 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:6 }}>
         {THEME_OPTIONS.map(th => {
           const sel = theme === th.key;
           return (
@@ -38890,7 +38901,7 @@ function ThemeSelector({ title, urlHint, getFn, setFn, onFn, cacheKey, defaultKe
               <div style={{ height:44, background:th.bg, display:'flex', alignItems:'center', justifyContent:'center' }}>
                 <div style={{ width:20, height:20, borderRadius:'50%', background:th.mint }} />
               </div>
-              <div style={{ background:T.surfaceMuted, padding:'5px 4px', textAlign:'center', fontFamily:T.font, fontWeight: sel ? 900 : 600, fontSize:11, color: sel ? T.mint : T.inkSoft }}>{th.label}</div>
+              <div style={{ background:T.surfaceMuted, padding:'5px 2px', textAlign:'center', fontFamily:T.font, fontWeight: sel ? 900 : 600, fontSize:9.5, letterSpacing:'-0.01em', whiteSpace:'nowrap', color: sel ? T.mint : T.inkSoft }}>{th.label}</div>
             </div>
           );
         })}
@@ -42646,13 +42657,7 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
               {/* Theme */}
               {/* Theme picker — color swatch strips */}
               {(() => {
-                const THEME_DEFS = [
-                  { key:'warm',     label:'Homokpart',   bg:'#F4C57E', accent:'#4FC2A0', surface:'#FFFFFF' },
-                  { key:'ice',      label:'Jéghegy',     bg:'#E8F4FF', accent:'#2070C0', surface:'#FFFFFF' },
-                  { key:'jade',     label:'Dzsungel',    bg:'#B8E8C8', accent:'#20A060', surface:'#FFFFFF' },
-                  { key:'dark',     label:'Kozmosz',     bg:'#2C3554', accent:'#4FC2A0', surface:'#3D4870' },
-                  { key:'slate',    label:'Mélytenger',  bg:'#1E2A38', accent:'#40C8A0', surface:'#2E3E50' },
-                ];
+                const THEME_DEFS = THEME_LIST.map(x => ({ ...x, ...themeSwatch(x.key) }));
                 const ThemeBtn = ({ def }) => {
                   const active = currentTheme === def.key;
                   return (
