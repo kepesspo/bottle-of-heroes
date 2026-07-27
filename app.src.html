@@ -34981,7 +34981,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.145';
+const APP_VERSION = 'v10.146';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36600,11 +36600,11 @@ const ACHIEVEMENT_FAMILIES = [
     tiers:[1,5,10,25], names:['Első busz','Ötös busz','Buszsofőr','Buszkirály'] },
   { id:'react',  title:'Reakció',      icon:'bolt',   unit:'', reverse:true, val: s => s.bestReactionTime,
     tiers:[400,300,250,200], names:['Fürge · <400ms','Villámkéz · <300ms','Reflexbajnok · <250ms','Emberfeletti · <200ms'] },
-  { id:'wr',     title:'Win rate',     icon:'medal1', unit:'%', minSess:10, val: s => (s.totalSessions||0) >= 10 ? Math.round((s.totalWins||0)/s.totalSessions*100) : 0,
+  { id:'wr',     title:'Win rate',     icon:'medal1', unit:'%', minSess:10, ratio:true, val: s => (s.totalSessions||0) >= 10 ? Math.round((s.totalWins||0)/s.totalSessions*100) : 0,
     tiers:[50,70], names:['Nyerő típus · 50%','Dominancia · 70%'] },
-  { id:'avgd',   title:'Átlag korty / parti', icon:'beer', unit:'', minSess:5, val: s => (s.totalSessions||0) >= 5 ? (s.totalDrinks||0)/s.totalSessions : 0,
+  { id:'avgd',   title:'Átlag korty / parti', icon:'beer', unit:'', minSess:5, ratio:true, val: s => (s.totalSessions||0) >= 5 ? (s.totalDrinks||0)/s.totalSessions : 0,
     tiers:[10,15,20], names:['Nagyivó · 10+','Szomjas lélek · 15+','Feneketlen · 20+'] },
-  { id:'avgp',   title:'Átlag pont / parti', icon:'star', unit:'', minSess:5, val: s => (s.totalSessions||0) >= 5 ? (s.totalPoints||0)/s.totalSessions : 0,
+  { id:'avgp',   title:'Átlag pont / parti', icon:'star', unit:'', minSess:5, ratio:true, val: s => (s.totalSessions||0) >= 5 ? (s.totalPoints||0)/s.totalSessions : 0,
     tiers:[5,10,15], names:['Pontszerző · 5+','Pontgyűjtő · 10+','Pontgép · 15+'] },
   { id:'versat', title:'Sokoldalúság', icon:'crown', unit:'játék',
     val: s => Object.keys(s._gameWins || {}).filter(k => (s._gameWins[k]||0) > 0).length,
@@ -36631,7 +36631,7 @@ const ACHIEVEMENTS = ACHIEVEMENT_FAMILIES.flatMap(f => f.perGame
     }))
   : f.tiers.map((goal, i) => ({
       id: f.id + '_' + goal, icon: f.icon, label: f.names[i], family: f.id, goal, unit: f.unit, tier: i + 1,
-      reverse: !!f.reverse, minSess: f.minSess, val: f.val,
+      reverse: !!f.reverse, minSess: f.minSess, ratio: !!f.ratio, val: f.val,
     })));
 // Teszthorog: a const-ok nem kerulnek fel automatikusan a window-ra (csak a
 // function-ok), a fuszttesztnek viszont kellenek a lista-adatok.
@@ -36666,7 +36666,12 @@ const XP_W = { point: 10, round: 1, win: 50, badge: 50 };
 function computeXp(s) {
   const st = s || {};
   let badge = 0;
-  ACHIEVEMENTS.forEach(a => { if (achievementState(a, st).done) badge += (a.tier || 1) * XP_W.badge; });
+  // A SZINT SOSEM MEHET LEFELÉ. Az arány-alapú jelvények (átlag korty/parti,
+  // átlag pont/parti, win rate) viszont vissza tudnak esni: egy gyenge parti
+  // lehúzza az átlagot, és a már megszerzett fokozat „elveszne". A vitrinben
+  // ezek maradnak (ott a pillanatnyi forma a lényeg), az XP-be viszont csak a
+  // MONOTON jelvények számítanak — így a szint mindig csak nőhet.
+  ACHIEVEMENTS.forEach(a => { if (!a.ratio && achievementState(a, st).done) badge += (a.tier || 1) * XP_W.badge; });
   return {
     total: Math.round((st.totalPoints || 0) * XP_W.point + (st.totalRounds || 0) * XP_W.round
                       + (st.totalWins || 0) * XP_W.win + badge),
@@ -36714,6 +36719,50 @@ function LevelChip({ lvl, size }) {
     }}>
       <span style={{ fontFamily:T.font, fontWeight:900, fontSize: sm ? 10 : 11.5, color:lvl.color }}>{lvl.level}</span>
     </span>
+  );
+}
+
+// Szintlépés-ünneplés a buli végén. Csak akkor jelenik meg, ha valaki tényleg
+// átlépett egy szintet — ez az egyetlen pillanat, amikor az XP „megtörténik".
+function LevelUpSheet({ ups, onClose }) {
+  if (!ups || !ups.length) return null;
+  const many = ups.length > 1;
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.78)', zIndex:9998, display:'flex', alignItems:'center', justifyContent:'center', padding:18, animation:'fadeIn .25s' }}>
+      <Confetti originY={0.35} />
+      <div onClick={e => e.stopPropagation()} style={{ position:'relative', background:T.surface, borderRadius:28, padding:'26px 20px 20px', width:'100%', maxWidth:380, maxHeight:'86vh', overflowY:'auto', display:'flex', flexDirection:'column', alignItems:'center', gap:12, boxShadow:'0 26px 70px rgba(0,0,0,0.45)', animation:'popIn .35s cubic-bezier(.2,.9,.3,1.25)' }}>
+        <div style={{ fontSize:44, lineHeight:1 }}>⬆️</div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:11.5, color:T.mint, textTransform:'uppercase', letterSpacing:'0.16em' }}>Szintlépés</div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, textAlign:'center', lineHeight:1.2 }}>
+          {many ? `${ups.length} játékos lépett szintet!` : `${ups[0].p.name} szintet lépett!`}
+        </div>
+        <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8, marginTop:2 }}>
+          {ups.map(u => (
+            <div key={u.p.id} style={{ display:'flex', alignItems:'center', gap:12, background:`${u.lvl.color}14`, border:`2px solid ${u.lvl.color}55`, borderRadius:18, padding:'12px 14px' }}>
+              <PlayerAvatar player={u.p} size={44} />
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{u.p.name}</div>
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11.5, color:T.inkMute, marginTop:1 }}>
+                  {u.lvlBefore.level}. <span style={{ color:u.lvl.color }}>→ {u.lvl.level}. szint</span>
+                  {u.lvl.title !== u.lvlBefore.title && <span style={{ color:u.lvl.color }}> · {u.lvl.title}</span>}
+                </div>
+              </div>
+              <div style={{ textAlign:'right', flexShrink:0 }}>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:u.lvl.color, lineHeight:0.95 }}>+{u.gain}</div>
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:9, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.12em' }}>XP</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* Új rang csak akkor, ha a sáv is változott — különben csak zaj */}
+        {ups.some(u => u.lvl.title !== u.lvlBefore.title) && (
+          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, textAlign:'center', lineHeight:1.5 }}>
+            Új rang a névsorban — a név színe is ezt kapja meg.
+          </div>
+        )}
+        <button onClick={onClose} style={{ width:'100%', marginTop:4, padding:'14px', borderRadius:16, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:16, cursor:'pointer' }}>Tovább</button>
+      </div>
+    </div>
   );
 }
 
@@ -60374,10 +60423,35 @@ function EndScreen({ players, go, resetGame, lastRound, scoreHistory }) {
     } catch(e) { setShareLoading(false); }
   };
 
+  // XP-elszamolas: mennyit hozott a mai este, es lepett-e valaki szintet.
+  // FONTOS: a "before" statot MEG a novelmeny kiirasa ELOTT kell beolvasni,
+  // kulonben a delta ketszer szamolodna bele.
+  const [xpRows, setXpRows] = React.useState(null);
+  const [levelUps, setLevelUps] = React.useState(null);
+  const computeXpRows = (allSt, allG) => {
+    const winner = sorted[0];
+    const rows = players.filter(p => p.profileId).map(p => {
+      const before = withGameWins(allSt[p.profileId] || {}, allG || {}, p.profileId);
+      const isWinner = !!(winner && p.id === winner.id);
+      const after = Object.assign({}, before, {
+        totalPoints:   (before.totalPoints   || 0) + (p.points || 0),
+        totalDrinks:   (before.totalDrinks   || 0) + (p.drinks || 0),
+        totalRounds:   (before.totalRounds   || 0) + (lastRound || 1),
+        totalSessions: (before.totalSessions || 0) + 1,
+        totalWins:     (before.totalWins     || 0) + (isWinner ? 1 : 0),
+      });
+      const xb = computeXp(before).total, xa = computeXp(after).total;
+      return { p, gain: Math.max(0, xa - xb), lvlBefore: levelFromXp(xb), lvl: levelFromXp(xa) };
+    }).sort((a, b) => b.gain - a.gain);
+    setXpRows(rows);
+    const ups = rows.filter(r => r.lvl.level > r.lvlBefore.level);
+    if (ups.length) setLevelUps(ups);
+  };
+
   React.useEffect(() => {
     if (typeof window.incrementStats !== 'function') return;
     const winner = sorted[0];
-    players.forEach(p => {
+    const commit = () => players.forEach(p => {
       if (!p.profileId) return;
       const isWinner = winner && p.id === winner.id;
       const inc = { totalDrinks: p.drinks || 0, totalPoints: p.points || 0, totalSessions: 1, totalRounds: lastRound || 1 };
@@ -60386,6 +60460,16 @@ function EndScreen({ players, go, resetGame, lastRound, scoreHistory }) {
       if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, inc);
       if (typeof window.updateStreak === 'function') window.updateStreak(p.profileId, isWinner);
     });
+    if (typeof window.getAllStats === 'function' && players.some(p => p.profileId)) {
+      Promise.all([
+        window.getAllStats(),
+        typeof window.getAllGameStats === 'function' ? window.getAllGameStats() : Promise.resolve({}),
+      ]).then(([allSt, allG]) => { computeXpRows(allSt || {}, allG || {}); })
+        .catch(() => {})
+        .then(commit, commit);   // a kiiras MINDIG megtortenik, akkor is ha az olvasas bukott
+    } else {
+      commit();
+    }
 
     // ── Buli-jelvények — a legutóbbi este eredményei, tartósan mentve a
     // profilhoz, hogy máshol (pl. Játékosok lista) matricaként megjelenjenek ──
@@ -60503,6 +60587,7 @@ function EndScreen({ players, go, resetGame, lastRound, scoreHistory }) {
         </SheetOverlay>
       )}
       <Confetti originY={confettiOriginY} />
+      {levelUps && <LevelUpSheet ups={levelUps} onClose={() => setLevelUps(null)} />}
       <AppBar title={t('gameOver')} />
       <div style={{ flex:1, minHeight:0, position:'relative' }}>
         <div style={{ position:'absolute', bottom:0, left:0, right:0, height:80, background:`linear-gradient(to bottom, transparent, ${T.bg})`, pointerEvents:'none', zIndex:2 }} />
@@ -60569,6 +60654,41 @@ function EndScreen({ players, go, resetGame, lastRound, scoreHistory }) {
             </div>
           ))}
         </div>
+
+        {/* XP a mai estéből — a szint eddig csak a profilban látszott, itt
+            derül ki, hogy a parti tényleg vitte-e előre a játékosokat */}
+        {xpRows && xpRows.some(r => r.gain > 0) && (
+          <div style={{ background:T.surface, borderRadius:18, boxShadow:pfShadowR, border:pfBorderR, padding:'14px 14px 12px' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
+              <BohIcon name="star" size={14} />
+              <span style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Szintek — a mai estéből</span>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
+              {xpRows.map(r => {
+                const up = r.lvl.level > r.lvlBefore.level;
+                return (
+                  <div key={r.p.id} style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <PlayerAvatar player={r.p} size={30} />
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
+                        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:r.lvl.color, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', minWidth:0 }}>{r.p.name}</span>
+                        <LevelChip lvl={r.lvl} size="sm" />
+                        {up && <span style={{ fontFamily:T.font, fontWeight:900, fontSize:9.5, color:'#fff', background:T.mint, borderRadius:999, padding:'2px 7px', letterSpacing:'0.08em', flexShrink:0 }}>SZINTLÉPÉS</span>}
+                      </div>
+                      <div style={{ height:5, borderRadius:5, background:`${T.inkMute}22`, overflow:'hidden', marginTop:4 }}>
+                        <div style={{ width: r.lvl.pct + '%', height:'100%', background:r.lvl.color }} />
+                      </div>
+                    </div>
+                    <div style={{ textAlign:'right', flexShrink:0, minWidth:52 }}>
+                      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:r.gain > 0 ? T.mintDeep : T.inkMute, lineHeight:1 }}>+{r.gain}</div>
+                      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:9, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.1em' }}>XP</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Pont grafikon */}
         {scoreHistory && scoreHistory.length > 2 && (() => {
