@@ -34072,6 +34072,31 @@ window.triggerHaptic = function() {
     if (Object.keys(clean).length === 0) return Promise.resolve();
     return db.collection('statEvents').add(Object.assign({ profileId: profileId, ts: Date.now() }, clean)).catch(function(e) { console.warn('logStatEvent', e); });
   };
+  // ── Használat-mérés ──────────────────────────────────────────────────────
+  // Napi aggregált doksi (usage/YYYY-MM-DD). Egy megnyitás = egy increment
+  // appon(=képernyőn)ként, plusz a készülék azonosítója egy map-be, hogy a napi
+  // KÜLÖN készülékek is kijöjjenek. Szándékosan nincs esemény-szintű napló: a
+  // kérdés az, hányan és milyen gyakran nyitják meg, nem az, hogy ki mikor.
+  // FONTOS: set({merge:true}) mélyen fésüli a map-eket, ezért a devices
+  // ágyazott objektumként épül — dttal írva szó szerinti kulcs lenne.
+  window.logAppOpen = function(app) {
+    if (!app) return Promise.resolve();
+    var day = new Date().toISOString().slice(0, 10);
+    var did = 'd_unknown';
+    try {
+      did = localStorage.getItem('boh_device_id');
+      if (!did) { did = 'd' + Math.random().toString(36).slice(2, 10); localStorage.setItem('boh_device_id', did); }
+    } catch (e) {}
+    var data = { day: day, lastTs: Date.now(), devices: {} };
+    data['open_' + app] = firebase.firestore.FieldValue.increment(1);
+    data.devices[did] = true;
+    return db.collection('usage').doc(day).set(data, { merge: true }).catch(function(e) { console.warn('logAppOpen', e); });
+  };
+  window.getUsage = function() {
+    return db.collection('usage').get().then(function(snap) {
+      return snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+    }).catch(function() { return []; });
+  };
   window.getAllStatEvents = function() {
     return db.collection('statEvents').get().then(function(snap) {
       return snap.docs.map(function(d) { return d.data(); });
@@ -34981,7 +35006,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.147';
+const APP_VERSION = 'v10.148';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -37944,7 +37969,7 @@ function AdminScreen({ go, setTheme, currentTheme }) {
       ['games','Játékok'],['wildcards','Wildcard'],['punishments','Büntetés'],['bingo','Bingó'],
     ]},
     { key:'system', label:'Rendszer', tabs:[
-      ['stats','Statisztika'],['seasons','Szezonok'],['zene','Zene'],['rooms','Szobák'],['message','Hirdetmény'],['settings','Beállítások'],
+      ['growth','Növekedés'],['stats','Statisztika'],['seasons','Szezonok'],['zene','Zene'],['rooms','Szobák'],['message','Hirdetmény'],['settings','Beállítások'],
     ]},
   ];
   const [category, setCategory] = React.useState('content');
@@ -38022,6 +38047,7 @@ function AdminScreen({ go, setTheme, currentTheme }) {
         {tab === 'wildcards' && <AdminWildcards />}
         {tab === 'punishments' && <AdminPunishments />}
         {tab === 'bingo' && <AdminBingo />}
+        {tab === 'growth'   && <AdminGrowth />}
         {tab === 'stats'    && <AdminStats />}
         {tab === 'seasons'  && <AdminSeasons />}
         {tab === 'zene'     && <AdminZene />}
@@ -39121,6 +39147,246 @@ function AdminSettings({ setTheme, currentTheme }) {
 }
 
 // Fooldal-kapcsolok — a config/homeConfig dokumentumban, elonezet nelkul azonnal el.
+// ── Növekedés (Admin > Rendszer > Növekedés) ────────────────────────────────
+// Nem funkciót mér, hanem azt az egyetlen kérdést, amit funkcióval nem lehet
+// megválaszolni: elővette-e valaki MÁSODSZOR is. Minden szám a már meglévő
+// naplókból jön (statEvents / gameStatEvents), az app-megnyitás a usage-ből.
+const DAY_MS = 86400000;
+
+// Partikra bontás: a buli végén MINDEN profilos játékos kap egy statEvents sort
+// ugyanabban a másodpercben. Egy parti = az egy időre eső sorok klasztere.
+// (Két külön társaság pontosan egyszerre záruló bulija összeolvadna — ezen a
+// méreten elhanyagolható, de tudni kell róla, mielőtt bárki döntést hoz rá.)
+function clusterParties(events) {
+  const rows = (events || []).filter(e => (e.totalSessions || 0) > 0).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  const out = [];
+  let cur = null;
+  rows.forEach(e => {
+    const ts = e.ts || 0;
+    if (!cur || ts - cur.last > 120000) { cur = { ts, last: ts, ids: [] }; out.push(cur); }
+    cur.last = ts;
+    if (e.profileId && cur.ids.indexOf(String(e.profileId)) === -1) cur.ids.push(String(e.profileId));
+  });
+  return out;
+}
+
+function growthMetrics(statEvents, gameEvents, usage) {
+  const now = Date.now();
+  const parties = clusterParties(statEvents);
+  const inWin = (from, to) => parties.filter(p => p.ts >= from && p.ts < to);
+  const p30 = inWin(now - 30 * DAY_MS, now), pPrev = inWin(now - 60 * DAY_MS, now - 30 * DAY_MS);
+  const playersOf = (ps) => { const s = {}; ps.forEach(p => p.ids.forEach(id => s[id] = 1)); return Object.keys(s).length; };
+
+  // Visszatérés — profil szinten: ki játszott legalább két KÜLÖN napon
+  const daysByProfile = {};
+  parties.forEach(p => p.ids.forEach(id => {
+    const d = new Date(p.ts).toISOString().slice(0, 10);
+    (daysByProfile[id] = daysByProfile[id] || {})[d] = 1;
+  }));
+  const profileIds = Object.keys(daysByProfile);
+  const returningProfiles = profileIds.filter(id => Object.keys(daysByProfile[id]).length >= 2).length;
+
+  // Visszatérés — társaság szinten: ugyanaz a felállás legalább kétszer.
+  // Ez a legszigorúbb és legőszintébb jel: nem egy ember jött vissza, hanem egy CSAPAT.
+  const byRoster = {};
+  parties.forEach(p => { const k = [...p.ids].sort().join('|'); if (k) (byRoster[k] = byRoster[k] || []).push(p.ts); });
+  const rosters = Object.keys(byRoster);
+  const returningRosters = rosters.filter(k => byRoster[k].length >= 2).length;
+
+  // Heti idősor (12 hét, a legrégebbivel kezdve)
+  const weeks = [];
+  for (let i = 11; i >= 0; i--) {
+    const to = now - i * 7 * DAY_MS, from = to - 7 * DAY_MS;
+    const ps = inWin(from, to);
+    weeks.push({ from, parties: ps.length, players: playersOf(ps) });
+  }
+
+  // Játékok: a 45-ből hányat játszottak valaha
+  const playCount = {};
+  (gameEvents || []).forEach(e => { if (e.gameId) playCount[e.gameId] = (playCount[e.gameId] || 0) + 1; });
+  const allGames = (typeof GAMES !== 'undefined' ? GAMES : []).map(g => ({ id: g.id, name: g.name }));
+  const gameRows = allGames.map(g => ({ ...g, n: playCount[g.id] || 0 })).sort((a, b) => b.n - a.n);
+  const neverPlayed = gameRows.filter(g => g.n === 0);
+
+  // Appok: napi megnyitás az elmúlt 30 napban
+  const APPS = [
+    { key: 'games', label: 'DNR Games' }, { key: 'bar', label: 'DNR Pub' },
+    { key: 'dnrbox', label: 'DNR BOX' }, { key: 'events', label: 'DNR Events' },
+    { key: 'bingo', label: 'DNR Bingó' }, { key: 'liga', label: 'DNR Liga' },
+  ];
+  const cutoff = new Date(now - 30 * DAY_MS).toISOString().slice(0, 10);
+  const recent = (usage || []).filter(u => (u.id || '') >= cutoff);
+  const devices = {}; recent.forEach(u => Object.keys(u.devices || {}).forEach(d => devices[d] = 1));
+  const appRows = APPS.map(a => ({ ...a, n: recent.reduce((sum, u) => sum + (u['open_' + a.key] || 0), 0) }))
+                      .sort((a, b) => b.n - a.n);
+
+  return {
+    lastPartyTs: parties.length ? parties[parties.length - 1].ts : null,
+    totalParties: parties.length,
+    p30: p30.length, pPrev: pPrev.length,
+    pl30: playersOf(p30), plPrev: playersOf(pPrev),
+    profileIds: profileIds.length, returningProfiles,
+    rosters: rosters.length, returningRosters,
+    weeks, gameRows, neverPlayed, appRows,
+    devices30: Object.keys(devices).length,
+    usageDays: recent.length,
+  };
+}
+
+function GrowthTile({ label, value, sub, tone }) {
+  return (
+    <div style={{ flex:1, minWidth:0, background:T.surface, borderRadius:16, padding:'12px 12px 11px', boxShadow:T.shadow }}>
+      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:9.5, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.1em' }}>{label}</div>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:tone||T.ink, lineHeight:1.05, marginTop:3, fontVariantNumeric:'tabular-nums' }}>{value}</div>
+      {sub && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkSoft, marginTop:2 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function AdminGrowth() {
+  const [m, setM] = React.useState(null);
+  const [err, setErr] = React.useState(false);
+  const [showAll, setShowAll] = React.useState(false);
+  React.useEffect(() => {
+    Promise.all([
+      typeof window.getAllStatEvents === 'function' ? window.getAllStatEvents() : Promise.resolve([]),
+      typeof window.getAllGameStatEvents === 'function' ? window.getAllGameStatEvents() : Promise.resolve([]),
+      typeof window.getUsage === 'function' ? window.getUsage() : Promise.resolve([]),
+    ]).then(([se, ge, us]) => setM(growthMetrics(se, ge, us))).catch(() => setErr(true));
+  }, []);
+  if (err) return <div style={{ fontFamily:T.font, color:T.inkSoft, padding:'20px 4px' }}>Nem sikerült betölteni.</div>;
+  if (!m) return <div style={{ fontFamily:T.font, color:T.inkSoft, padding:'20px 4px' }}>Számolás…</div>;
+
+  const daysAgo = m.lastPartyTs == null ? null : Math.floor((Date.now() - m.lastPartyTs) / DAY_MS);
+  const freshTone = daysAgo == null ? T.inkMute : daysAgo <= 7 ? T.mintDeep : daysAgo <= 21 ? (T.yellow || '#C9A227') : T.coral;
+  const trend = (a, b) => b === 0 ? (a > 0 ? '' : '') : `${a >= b ? '+' : ''}${Math.round((a - b) / b * 100)}% vs. előző 30`;
+  const maxW = Math.max(1, ...m.weeks.map(w => w.parties));
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:12, paddingBottom:20 }}>
+
+      {/* A legfontosabb egyetlen szám */}
+      <div style={{ background:T.surface, borderRadius:18, padding:'16px 16px 14px', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:10, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.12em' }}>Az utolsó parti</div>
+        <div style={{ display:'flex', alignItems:'baseline', gap:8, marginTop:4 }}>
+          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:38, color:freshTone, lineHeight:1 }}>
+            {daysAgo == null ? '—' : daysAgo === 0 ? 'ma' : daysAgo}
+          </span>
+          {daysAgo != null && daysAgo > 0 && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.inkSoft }}>napja</span>}
+        </div>
+        <div style={{ fontFamily:T.font, fontSize:11.5, color:T.inkSoft, marginTop:5, lineHeight:1.5 }}>
+          {m.totalParties === 0
+            ? 'Még egyetlen lezárt buli sincs a naplóban.'
+            : `Összesen ${m.totalParties} lezárt buli · ${m.profileIds} külön játékos`}
+        </div>
+      </div>
+
+      {/* Aktivitás */}
+      <div style={{ display:'flex', gap:9 }}>
+        <GrowthTile label="Parti · 30 nap" value={m.p30} sub={trend(m.p30, m.pPrev)} />
+        <GrowthTile label="Játékos · 30 nap" value={m.pl30} sub={trend(m.pl30, m.plPrev)} />
+      </div>
+
+      {/* Visszatérés — ez a valódi kérdés */}
+      <div style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:10, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:9 }}>Visszatérés</div>
+        <div style={{ display:'flex', gap:14 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:m.returningRosters > 0 ? T.mintDeep : T.inkMute, lineHeight:1, fontVariantNumeric:'tabular-nums' }}>
+              {m.returningRosters}<span style={{ fontSize:14, color:T.inkMute, fontWeight:800 }}> / {m.rosters}</span>
+            </div>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft, marginTop:3, lineHeight:1.4 }}>társaság játszott<br/>legalább kétszer</div>
+          </div>
+          <div style={{ width:1, background:`${T.inkMute}22` }} />
+          <div style={{ flex:1 }}>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:m.returningProfiles > 0 ? T.mintDeep : T.inkMute, lineHeight:1, fontVariantNumeric:'tabular-nums' }}>
+              {m.returningProfiles}<span style={{ fontSize:14, color:T.inkMute, fontWeight:800 }}> / {m.profileIds}</span>
+            </div>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft, marginTop:3, lineHeight:1.4 }}>játékos jött vissza<br/>másik napon is</div>
+          </div>
+        </div>
+        <div style={{ fontFamily:T.font, fontSize:10.5, color:T.inkMute, marginTop:10, lineHeight:1.5 }}>
+          „Társaság" = ugyanaz a játékos-felállás. Ez a legszigorúbb jel: nem egy ember jött vissza, hanem egy csapat.
+        </div>
+      </div>
+
+      {/* Heti idősor */}
+      <div style={{ background:T.surface, borderRadius:18, padding:'14px 16px 12px', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:10, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:10 }}>Partik hetente · 12 hét</div>
+        <div style={{ display:'flex', alignItems:'flex-end', gap:4, height:74 }}>
+          {m.weeks.map((w, i) => (
+            <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:9, color:w.parties ? T.inkSoft : 'transparent' }}>{w.parties}</div>
+              <div title={`${w.parties} parti · ${w.players} játékos`} style={{
+                width:'100%', height: Math.max(3, Math.round(w.parties / maxW * 48)),
+                background: w.parties ? T.mint : `${T.inkMute}22`, borderRadius:4,
+              }} />
+            </div>
+          ))}
+        </div>
+        <div style={{ display:'flex', justifyContent:'space-between', marginTop:6 }}>
+          <span style={{ fontFamily:T.font, fontSize:9.5, fontWeight:700, color:T.inkMute }}>12 hete</span>
+          <span style={{ fontFamily:T.font, fontSize:9.5, fontWeight:700, color:T.inkMute }}>most</span>
+        </div>
+      </div>
+
+      {/* Játékok: hány él a 45-ből */}
+      <div style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:10, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.12em' }}>Játékok</div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, marginTop:4, fontVariantNumeric:'tabular-nums' }}>
+          {m.gameRows.length - m.neverPlayed.length}<span style={{ fontSize:14, color:T.inkMute, fontWeight:800 }}> / {m.gameRows.length}</span>
+          <span style={{ fontFamily:T.font, fontWeight:700, fontSize:11.5, color:T.inkSoft, marginLeft:8 }}>játszottak legalább egyszer</span>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:5, marginTop:10 }}>
+          {(showAll ? m.gameRows : m.gameRows.slice(0, 6)).map(g => {
+            const mx = Math.max(1, m.gameRows[0].n);
+            return (
+              <div key={g.id} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div style={{ width:96, fontFamily:T.font, fontWeight:700, fontSize:11.5, color:g.n ? T.ink : T.inkMute, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{g.name}</div>
+                <div style={{ flex:1, height:6, background:`${T.inkMute}18`, borderRadius:4, overflow:'hidden' }}>
+                  <div style={{ width:`${Math.round(g.n / mx * 100)}%`, height:'100%', background:g.n ? T.mint : 'transparent' }} />
+                </div>
+                <div style={{ width:32, textAlign:'right', fontFamily:T.font, fontWeight:800, fontSize:11, color:g.n ? T.inkSoft : T.inkMute, fontVariantNumeric:'tabular-nums' }}>{g.n}</div>
+              </div>
+            );
+          })}
+        </div>
+        <button onClick={() => setShowAll(v => !v)} style={{ marginTop:10, background:'none', border:'none', padding:0, cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:11, color:T.mintDeep }}>
+          {showAll ? 'Kevesebb' : `Mind a ${m.gameRows.length} · ${m.neverPlayed.length} még sosem futott`}
+        </button>
+      </div>
+
+      {/* Appok */}
+      <div style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:10, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.12em' }}>App-megnyitás · 30 nap</div>
+        {m.usageDays === 0 ? (
+          <div style={{ fontFamily:T.font, fontSize:11.5, color:T.inkSoft, marginTop:7, lineHeight:1.55 }}>
+            Még nincs adat — a mérés csak innentől gyűlik. Pár nap kell, mire mondhat valamit.
+          </div>
+        ) : (
+          <React.Fragment>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft, marginTop:3 }}>{m.devices30} külön készülék</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:5, marginTop:9 }}>
+              {m.appRows.map(a => {
+                const mx = Math.max(1, m.appRows[0].n);
+                return (
+                  <div key={a.key} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <div style={{ width:96, fontFamily:T.font, fontWeight:700, fontSize:11.5, color:a.n ? T.ink : T.inkMute }}>{a.label}</div>
+                    <div style={{ flex:1, height:6, background:`${T.inkMute}18`, borderRadius:4, overflow:'hidden' }}>
+                      <div style={{ width:`${Math.round(a.n / mx * 100)}%`, height:'100%', background:a.n ? T.coral : 'transparent' }} />
+                    </div>
+                    <div style={{ width:32, textAlign:'right', fontFamily:T.font, fontWeight:800, fontSize:11, color:a.n ? T.inkSoft : T.inkMute, fontVariantNumeric:'tabular-nums' }}>{a.n}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </React.Fragment>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AdminHomeToggles() {
   const [cfg, setCfg] = React.useState(null);
   const [loaded, setLoaded] = React.useState(false);
@@ -66259,6 +66525,19 @@ ReactDOM.createRoot = function(container, opts) {
   };
   return root;
 };
+
+// Használat-mérés: melyik appot nyitották meg. Késleltetve, hogy ne versenyezzen
+// az indulással; a Firebase ekkorra biztosan felállt.
+try {
+  var _q = location.search;
+  var _openedApp = (_q.indexOf('screen=events') !== -1 || _q.indexOf('screen=calendar') !== -1) ? 'events'
+                 : _q.indexOf('screen=dnrbox') !== -1 ? 'dnrbox'
+                 : _q.indexOf('screen=bar')    !== -1 ? 'bar'
+                 : _q.indexOf('screen=bingo')  !== -1 ? 'bingo'
+                 : _q.indexOf('screen=liga')   !== -1 ? 'liga'
+                 : 'games';
+  setTimeout(function () { if (typeof window.logAppOpen === 'function') window.logAppOpen(_openedApp); }, 4000);
+} catch (e) {}
 
 ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
 </script>
