@@ -102,6 +102,41 @@ const pinOpen = (p) => p.evaluate(() => /PIN|Admin belépés|admin/i.test(docume
   await p.screenshot({ path: __dirname + '/adminpress.png' });
   await p.close();
 
+  // ── Az al-fulek arnyeka a PIRULARA legyen szabva ────────────────────────
+  // A T.shadow kartyara van hangolva (12px-re tolt, 28px szorasu reteg). Kis
+  // pirulan az elszakad a gombtol, es a szomszedok arnyeka egy savva folyik
+  // ossze — a kepen ugy nezett ki, mintha a konteneré volna.
+  console.log('\n===== AL-FUL PIRULAK ARNYEKA =====');
+  p = await home(b);
+  await p.evaluate(() => {
+    const r = document.getElementById('root'); if (r) r.style.display = 'none';
+    const root = document.createElement('div'); root.id = '__ad';
+    root.style.cssText = 'position:fixed;inset:0;display:flex;flex-direction:column;background:' + ((window._T && window._T.bg) || '#EFC77A');
+    document.body.appendChild(root);
+    ReactDOM.createRoot(root).render(React.createElement(window.AdminScreen, { go:()=>{}, setTheme:()=>{}, currentTheme:'classic' }));
+  });
+  await p.waitForTimeout(1200);
+  const sh = await p.evaluate(() => {
+    const row = Array.from(document.querySelectorAll('#__ad div')).find(d => d.style.overflowX === 'auto');
+    if (!row) return null;
+    const pills = Array.from(row.querySelectorAll('button'));
+    const inactive = pills.find(x => getComputedStyle(x).boxShadow !== 'none');
+    const active = pills.find(x => getComputedStyle(x).boxShadow === 'none');
+    const css = inactive ? getComputedStyle(inactive).boxShadow : '';
+    // a leghosszabb px-ertek az arnyekban (eltolas vagy szoras)
+    const maxPx = Math.max(0, ...(css.match(/-?\d+(\.\d+)?px/g) || []).map(v => Math.abs(parseFloat(v))));
+    const pillH = inactive ? Math.round(inactive.getBoundingClientRect().height) : 0;
+    return { n: pills.length, hasActiveFlat: !!active, css, maxPx, pillH,
+             rowPadBottom: getComputedStyle(row).paddingBottom };
+  });
+  ok('megvannak az al-ful pirulak', sh && sh.n >= 3, JSON.stringify(sh && sh.n));
+  ok('a kivalasztott pirula lapos marad', sh && sh.hasActiveFlat);
+  ok('az arnyek NEM a kartya-arnyek (nincs 28px szoras)', sh && !/28px/.test(sh.css), sh && sh.css);
+  ok('az arnyek a pirula magassagahoz merten kicsi (<= 8px)', sh && sh.maxPx <= 8, `${sh && sh.maxPx}px, pirula ${sh && sh.pillH}px`);
+  ok('a sor also paddingje is egyutt szukult', sh && sh.rowPadBottom === '7px', sh && sh.rowPadBottom);
+  ok('nincs JS hiba', p.__errs.filter(e => !/ServiceWorker/.test(e)).length === 0, p.__errs.join(' | '));
+  await p.close();
+
   await b.close();
   console.log('\n' + (fail === 0 ? '✅ MINDEN ELLENORZES RENDBEN' : '❌ ' + fail + ' ELLENORZES BUKOTT'));
   process.exit(fail === 0 ? 0 : 1);
