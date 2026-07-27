@@ -96,7 +96,12 @@ const sw = `// GENERÁLT FÁJL — forrás: build.js (node build.js)
 const CACHE = 'boh-${version}';
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', 'index.html']).catch(() => {})));
+  // A betutipus is elore a cache-be: sajat domainrol jon (nem Google Fonts),
+  // igy a nyito kepernyo rossz haloval / offline is a helyes fonttal jelenik meg.
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll([
+    './', 'index.html',
+    'assets/fonts/nunito-latin.woff2', 'assets/fonts/nunito-latin-ext.woff2',
+  ]).catch(() => {})));
   self.skipWaiting();
 });
 
