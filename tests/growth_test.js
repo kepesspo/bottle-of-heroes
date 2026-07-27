@@ -167,6 +167,19 @@ const baseSeed = `
     return { scroll: el.scrollWidth, client: el.clientWidth };
   });
   ok('nem log ki vizszintesen', wide.scroll <= wide.client + 1, JSON.stringify(wide));
+
+  // A kartyak NE erjenek ki a keperyo szeleig — ugyanaz a 16px, mint a tobbi admin fulon
+  const pad = await p.evaluate(() => {
+    const root = document.getElementById('__gr');
+    const wrap = root.firstElementChild;                    // az AdminGrowth kulso doboza
+    const cards = Array.from(wrap.children).filter(c => c.getBoundingClientRect().width > 100);
+    const rw = wrap.getBoundingClientRect();
+    const lefts = cards.map(c => Math.round(c.getBoundingClientRect().left - rw.left));
+    const rights = cards.map(c => Math.round(rw.right - c.getBoundingClientRect().right));
+    return { n: cards.length, left: Math.min(...lefts), right: Math.min(...rights) };
+  });
+  ok('minden kartya bal oldalt 16px-re all a szelotol', pad.left === 16, JSON.stringify(pad));
+  ok('es jobb oldalt is 16px-re', pad.right === 16, JSON.stringify(pad));
   ok('nincs JS hiba', p.__errs.filter(e => !/ServiceWorker/.test(e)).length === 0, p.__errs.join(' | '));
   await p.screenshot({ path: __dirname + '/growth_panel.png', fullPage: true });
   await p.close();
