@@ -273,6 +273,41 @@ const DRIVERS = {
     }
   },
 
+  // Finger It: 5 kör, mindegyik Start → 3 mp visszaszamlalas → korty-kiosztas.
+  // A generikus driver itt elvérzik: a visszaszamlalas alatt NINCS gomb a
+  // kepernyon, amitol "beragadtnak" hiszi a kepet es racsmodra valt — vagyis
+  // veletlen cellakra kattint a megerosito gomb helyett. Idozites-erzekeny,
+  // ezert egy ideig veletlenul atment. A jatek maga hibatlan.
+  async fingerit(p) {
+    for (let round = 0; round < 8; round++) {
+      if (await p.evaluate(() => window.__adv.length > 0)) break;
+      // Start
+      await p.evaluate(() => {
+        const b = Array.from(document.querySelectorAll('#__g button')).find(x => /Start/i.test(x.innerText || '') && !x.disabled);
+        if (b) b.click();
+      });
+      // megvarjuk a kioszto kepernyot (a visszaszamlalas ~3 mp)
+      for (let k = 0; k < 30; k++) {
+        await p.waitForTimeout(250);
+        const ready = await p.evaluate(() => /KI ISZIK/i.test(document.getElementById('__g').innerText || ''));
+        if (ready) break;
+      }
+      // az elso jatekosnak adunk egy kortyot, hogy legyen mit konyvelni
+      await p.evaluate(() => {
+        const plus = Array.from(document.querySelectorAll('#__g button')).find(x => x.innerText.trim() === '+' && !x.disabled);
+        if (plus) plus.click();
+      });
+      await p.waitForTimeout(200);
+      await p.evaluate(() => {
+        // a + utan a gomb felirata "N korty kiosztva ✔"-re valt, nem "Senki sem iszik ✔"
+        const b = Array.from(document.querySelectorAll('#__g button'))
+          .find(x => /kiosztva|iszik|Kész|Rendben|Tovább/i.test(x.innerText || '') && !x.disabled);
+        if (b) b.click();
+      });
+      await p.waitForTimeout(500);
+    }
+  },
+
   // Időzített bomba: indítás → 15–45 mp múlva csörög → megjelöljük, kinél volt
   async ticktak(p) {
     await p.evaluate(() => {
