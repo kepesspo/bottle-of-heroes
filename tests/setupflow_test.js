@@ -297,6 +297,28 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
     await p.close();
   }
 
+  // ─── 6) A LAPOZAS IRANYA ───
+  // A kepernyok sorrendje adja az iranyt: elore jobbrol (slideIn), vissza
+  // balrol (slideBack). Ami kimarad a listabol, arra az indexOf -1-et ad, es
+  // a kepernyo MINDIG balrol jon — igy csuszott be a Jatekmenet oldal rosszul.
+  // Ezert nem eleg a 'setup'-ot felvenni: azt kell vedeni, hogy a routerben
+  // szereplo OSSZES kepernyo benne legyen.
+  console.log('\n===== LAPOZÁS IRÁNYA =====');
+  {
+    const src = fs.readFileSync('/home/user/bottle-of-heroes/app.src.html', 'utf8');
+    const routed = [...src.matchAll(/\{screen===\s*'([a-z]+)'/g)].map(m => m[1]);
+    const om = src.match(/const order = \[([\s\S]*?)\];/);
+    const order = om ? [...om[1].matchAll(/'([a-z]+)'/g)].map(m => m[1]) : [];
+    const missing = [...new Set(routed)].filter(k => !order.includes(k));
+    ok('a router minden képernyője szerepel a sorrendben', missing.length === 0,
+       missing.length ? 'hiányzik: ' + missing.join(', ') : `${routed.length} képernyő rendben`);
+    ok('a Játékmenet a Játékok után, a Játék előtt van',
+       order.indexOf('setup') > order.indexOf('games') && order.indexOf('setup') < order.indexOf('play'),
+       order.join(' → '));
+    ok('az ismeretlen képernyő ELŐRE számít, nem vissza',
+       /i === -1 \? order\.length/.test(src), 'posOf fallback');
+  }
+
   // ─── 6) EGY FORRAS: a beallithato jatekok listaja ne csusszon el ───
   console.log('\n===== EGY FORRÁS =====');
   {
