@@ -35053,7 +35053,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.160';
+const APP_VERSION = 'v10.161';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -43583,7 +43583,7 @@ function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
         />
 
         {/* Mode */}
-        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'16px 0 8px' }}>{t('gameModeSection')}</div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin:'16px 0 8px' }}>{t('gameModeSection')}</div>
         <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4 }}>
           {[{key:'egyeni',label:'Egyéni',imgKey:'szures-egyeni'},{key:'csapat',label:'Csapat',imgKey:'szures-csapat'}].map(m => (
             <button key={m.key} onClick={() => setConfig(c => ({...c, mode:m.key}))} style={{ flex:1, padding:'11px 6px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background: mode===m.key?T.mint:'transparent', color:mode===m.key?'#fff':T.inkSoft, boxShadow:mode===m.key?'0 2px 7px -1px rgba(79,194,160,0.5)':'none', transition:'all .15s', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
@@ -43606,7 +43606,7 @@ function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
         ))}
 
         {/* Tournament type — two-stage selector */}
-        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'16px 0 8px' }}>Bajnokság típusa</div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin:'16px 0 8px' }}>Bajnokság típusa</div>
         {/* Stage toggle */}
         <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4, marginBottom:10 }}>
           {[{key:'1', label:'1 lépcsős'},{key:'2', label:'2 lépcsős'}].map(s => {
@@ -44062,11 +44062,13 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
   const [openCfg, setOpenCfg] = React.useState(null);
   const [limits, setLimits] = React.useState({});   // profileId -> limit (szam vagy '')
   const [limitsLoaded, setLimitsLoaded] = React.useState(false);
+  const [limitsOpen, setLimitsOpen] = React.useState(false);
 
   const games = (selectedGames || []).map(id => GAMES.find(g => g.id === id)).filter(Boolean);
   const configurable = games.filter(g => hasGameConfig(g.id));
   const minutes = Math.max(5, Math.round((selectedGames || []).length * 2.5 / 5) * 5);
   const withProfile = (players || []).filter(p => p.profileId);
+  const limitCount = withProfile.filter(p => Number(limits[p.profileId]) > 0).length;
 
   React.useEffect(() => {
     if (!withProfile.length || typeof window.getProfiles !== 'function') { setLimitsLoaded(true); return; }
@@ -44086,12 +44088,28 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
     if (typeof window.setProfileDrinkLimit === 'function') window.setProfileDrinkLimit(profileId, v);
   };
 
-  const Section = ({ title, sub, children }) => (
+  const headStyle = { fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.1em',
+    textTransform:'uppercase', color:T.inkSoft, textAlign:'left' };
+  const Section = ({ title, sub, badge, open, onToggle, children }) => (
     <div style={{ marginTop:18 }}>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.1em',
-        textTransform:'uppercase', color:T.inkMute, marginBottom:8 }}>{title}</div>
-      {sub && <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, marginBottom:10, lineHeight:1.5 }}>{sub}</div>}
-      {children}
+      {onToggle ? (
+        <button onClick={onToggle} style={{ width:'100%', display:'flex', alignItems:'center', gap:8,
+          background:'transparent', border:'none', cursor:'pointer', padding:'0 2px 8px' }}>
+          <span style={{ ...headStyle, flex:1 }}>{title}</span>
+          {badge && <span style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.mintDeep,
+            background:T.mintSoft, borderRadius:999, padding:'2px 8px' }}>{badge}</span>}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0,
+            transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition:'transform .2s' }}>
+            <path d="M6 9l6 6 6-6" stroke={T.inkMute} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+      ) : (
+        <div style={{ ...headStyle, marginBottom:8 }}>{title}</div>
+      )}
+      {(!onToggle || open) && <>
+        {sub && <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, marginBottom:10, lineHeight:1.5 }}>{sub}</div>}
+        {children}
+      </>}
     </div>
   );
 
@@ -44117,9 +44135,7 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
         </div>
 
         <Section title="Játékmenet">
-          <div style={{ background:T.surface, borderRadius:16, padding:'4px 14px 14px', boxShadow:T.shadow }}>
-            <GameSettingsContent meta={gameMeta} setMeta={setGameMeta} />
-          </div>
+          <GameSettingsContent meta={gameMeta} setMeta={setGameMeta} />
         </Section>
 
         <Section title="A játékok beállításai"
@@ -44157,6 +44173,8 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
 
         {withProfile.length > 0 && (
           <Section title="Kortyolási limit"
+            open={limitsOpen} onToggle={() => setLimitsOpen(v => !v)}
+            badge={limitCount > 0 ? limitCount + ' beállítva' : null}
             sub="Ha valaki eléri a sajátját, a kör végén figyelmeztetünk. Üresen hagyva nincs limit. A profilhoz mentődik, tehát a következő bulira is megmarad.">
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
               {withProfile.map(p => (
@@ -45097,7 +45115,7 @@ function GameSettingsContent({ meta, setMeta, onDone, go }) {
 
   return (
     <div style={{ padding:'0 18px 18px', display:'flex', flexDirection:'column' }} onClick={() => setOpenInfo(null)}>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'8px 0 8px' }}>Módok</div>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin:'8px 0 8px' }}>Módok</div>
       <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
         {modes.map(m => {
           const on = meta.modes.includes(m.id);
@@ -45124,7 +45142,7 @@ function GameSettingsContent({ meta, setMeta, onDone, go }) {
         })}
       </div>
 
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'20px 0 8px' }}>{t('difficulty')}</div>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin:'20px 0 8px' }}>{t('difficulty')}</div>
       <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4 }}>
         {diffs.map(d => {
           const on = meta.difficulty===d.id;
@@ -45137,7 +45155,7 @@ function GameSettingsContent({ meta, setMeta, onDone, go }) {
         </div>
       )}
 
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'20px 0 8px' }}>{t('gameOrder')}</div>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin:'20px 0 8px' }}>{t('gameOrder')}</div>
       <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4 }}>
         {[{key:'sorban',label:t('inOrder')},{key:'random',label:t('randomGames')}].map(o => {
           const on = ( meta.gameOrder||'random')===o.key;
@@ -45145,7 +45163,7 @@ function GameSettingsContent({ meta, setMeta, onDone, go }) {
         })}
       </div>
 
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'20px 0 8px' }}>{t('maxRoundsLabel')}</div>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin:'20px 0 8px' }}>{t('maxRoundsLabel')}</div>
       <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4 }}>
         {[10,25,50,null].map(n => {
           const on = (meta.maxRounds||null) === n;
@@ -45157,7 +45175,7 @@ function GameSettingsContent({ meta, setMeta, onDone, go }) {
         })}
       </div>
 
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkMute, margin:'20px 0 4px' }}>{t('other')}</div>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin:'20px 0 4px' }}>{t('other')}</div>
       <ToggleRow
         icon="counter"
         label={t('roundCounter')}
