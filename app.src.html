@@ -33893,17 +33893,41 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   // tehát üresen indul.
   //
   // Alapértelmezés az ÉLES. Teszt módba a kezdőképernyőn a verziószámra
-  // háromszor koppintva lehet váltani; az állapot eszközönként él
-  // (localStorage), tehát egy teszt-telefon attól még nem viszi teszt módba a
-  // többiek telefonját.
+  // háromszor koppintva lehet váltani.
+  //
+  // A beállítás GLOBÁLIS: a config/dbMode dokumentum dönt, nem az eszköz — így
+  // nem eshet ketté egy buli statisztikája attól, hogy az egyik telefon teszt
+  // módban maradt. A localStorage csak gyorsítótár: a coll() szinkron dönt,
+  // a Firestore válasza viszont csak a betöltés után pár tizeddel érkezik.
   var BOH_SPLIT_COLLECTIONS = ['stats', 'statEvents', 'game_stats', 'gameStatEvents', 'usage', 'bp_tournaments'];
   window.BOH_TESTDB_KEY = 'boh_testdb';
   window.isTestDb = function() {
     try { return localStorage.getItem(window.BOH_TESTDB_KEY) === '1'; } catch (e) { return false; }
   };
-  window.setTestDb = function(on) {
+  window._setTestDbCache = function(on) {
     try { localStorage.setItem(window.BOH_TESTDB_KEY, on ? '1' : '0'); } catch (e) {}
   };
+  window.setTestDb = function(on) {
+    // Helyben azonnal — hogy a visszajelzés ne várjon a hálózatra.
+    window._setTestDbCache(on);
+    try {
+      return db.collection('config').doc('dbMode').set({ test: !!on, ts: Date.now() });
+    } catch (e) { return Promise.resolve(); }
+  };
+  // Aki máshol kapcsolt, itt is átáll. Újratöltés kell hozzá: a képernyőn már
+  // a MÁSIK adatbázis adata állna, miközben az írás új helyre menne.
+  try {
+    db.collection('config').doc('dbMode').onSnapshot(function(d) {
+      // Nem letezo dokumentum = nincs jelzes, nem "eles". Az alapertelmezett
+      // eles onnan jon, hogy a gyorsitotar is ures — igy egy elakadt olvasas
+      // nem kapcsol at senkit menet kozben.
+      if (!d || !d.exists || !d.data()) return;
+      var v = d.data().test === true;
+      if (v === window.isTestDb()) return;
+      window._setTestDbCache(v);
+      location.reload();
+    }, function() {});
+  } catch (e) {}
   // Minden statisztika-hivas ezen megy at. Futasidoben dont, nem betoltesekor —
   // igy a valtas utan az elso iras mar a helyere kerul.
   function coll(name) {
@@ -35057,7 +35081,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.180';
+const APP_VERSION = 'v10.181';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -42623,8 +42647,8 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
       {dbToast !== null && (
         <Toast tone="info" wide offset={120} icon={dbToast ? '🧪' : '🎯'}>
           {dbToast
-            ? 'Teszt adatbázis bekapcsolva — a statisztika mostantól a teszt-adatokhoz megy.'
-            : 'Éles adatbázis — a statisztika mostantól élesbe megy.'}
+            ? 'Teszt adatbázis — mostantól MINDEN eszközön a teszt-adatokhoz megy a statisztika.'
+            : 'Éles adatbázis — mostantól MINDEN eszközön élesbe megy a statisztika.'}
         </Toast>
       )}
       {showMoreApps && (

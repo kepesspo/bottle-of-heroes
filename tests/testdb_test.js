@@ -5,11 +5,16 @@
 // adatnak, es az ELES megy uj, 'live_' prefixu kollekciokba — igy egyetlen
 // dokumentumot sem kellett mozgatni, es az eles nullarol indul.
 //
-// Harom dolog dolhet el csendben:
+// v10.181 ota a kapcsolo GLOBALIS (config/dbMode) — eszkozonkent tarolva egy
+// buli statisztikaja ketfele eshetett volna attol, hogy az egyik telefon teszt
+// modban maradt.
+//
+// Negy dolog dolhet el csendben:
 //   1) egy elfelejtett db.collection('stats') hivas, ami mindket modban
 //      ugyanoda irna — a kapcsolo latszolag mukodne, az adat megis keveredne;
 //   2) a coll() rossz iranyba prefixel (alapbol ELES kell legyen);
-//   3) a kapcsolo tenyleg 3 koppintasra vall, nem 1-re vagy 2-re.
+//   3) a kapcsolo tenyleg 3 koppintasra vall, nem 1-re vagy 2-re;
+//   4) a valtas csak helyben tortenik meg, a tobbi keszulek nem tud rola.
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const stub = fs.readFileSync(__dirname + '/fbstub.js', 'utf8');
@@ -19,22 +24,30 @@ const SRC = '/home/user/bottle-of-heroes/app.src.html';
 // ezek a kollekciok leteznek ket peldanyban
 const SPLIT = ['stats', 'statEvents', 'game_stats', 'gameStatEvents', 'usage', 'bp_tournaments'];
 
+// Sajat kontextus kell: file:// alatt minden lap ugyanazt a localStorage-t
+// latja, tehat a kapcsolo allasa atszivarogna az egyik esetbol a masikba.
 const open = async (b, testMode) => {
-  const p = await b.newPage({ viewport: { width: 390, height: 1000 } });
+  const ctx = await b.newContext({ viewport: { width: 390, height: 1000 } });
+  const p = await ctx.newPage();
+  p.__ctx = ctx;
   p.__errs = []; p.on('pageerror', e => p.__errs.push(e.message));
   await p.route('**://**', r => r.request().url().startsWith('file://') ? r.continue() : r.abort());
   await p.addInitScript(stub);
   await p.addInitScript(`
     try {
       localStorage.setItem('boh_onboarded','1');
-      // a stub alapbol teszt modba all — itt mindket iranyt kimondjuk
-      localStorage.setItem('boh_testdb', ${testMode ? "'1'" : "'0'"});
+      // A stub alapbol teszt modba all — itt mindket iranyt kimondjuk, de CSAK
+      // az elso betolteskor: ujratoltes utan epp azt vizsgaljuk, mire allt at.
+      if (!localStorage.getItem('boh_seeded')) {
+        localStorage.setItem('boh_seeded','1');
+        localStorage.setItem('boh_testdb', ${testMode ? "'1'" : "'0'"});
+      }
     } catch(e) {}
     window.__fbStore['profiles'] = { p_a:{ name:'Anna', color:'#5BA0DB' } };
     ['stats','game_stats','statEvents','gameStatEvents','seasons','usage','config']
       .forEach(k => window.__fbStore[k] = {});
   `);
-  await p.goto(BASE, { waitUntil: 'domcontentloaded' });
+  await p.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await p.waitForTimeout(3600);
   return p;
 };
@@ -92,7 +105,7 @@ const open = async (b, testMode) => {
     ok('a profilok közösek maradnak (ugyanaz az Anna, csak külön statisztikával)',
        shared[0] === 'profiles' && shared[1] === 'profiles', shared.join(' / '));
     ok('nincs JS hiba', p.__errs.length === 0, p.__errs.join(' | '));
-    await p.close();
+    await p.__ctx.close();
   }
 
   // ─── 3) A rejtett kapcsolo ───
@@ -127,9 +140,9 @@ const open = async (b, testMode) => {
     ok('három koppintásra teszt módba vált', (await state()) === '1', await state());
 
     const toast = await p.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
-    ok('a váltásról üzenet szól', /Teszt adatbázis bekapcsolva/.test(toast),
+    ok('a váltásról üzenet szól', /Teszt adatbázis — mostantól MINDEN eszközön/.test(toast),
        (toast.match(/Teszt adatbázis.{0,60}/) || ['NINCS ÜZENET'])[0]);
-    await p.close();
+    await p.__ctx.close();
   }
 
   // ─── 4) Teszt modban latszik is, hogy teszt modban vagyunk ───
@@ -152,10 +165,10 @@ const open = async (b, testMode) => {
        (await p.evaluate(() => localStorage.getItem('boh_testdb'))) === '0',
        await p.evaluate(() => localStorage.getItem('boh_testdb')));
     const t2 = await p.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
-    ok('erről is szól üzenet', /Éles adatbázis/.test(t2),
+    ok('erről is szól üzenet', /Éles adatbázis — mostantól MINDEN eszközön/.test(t2),
        (t2.match(/Éles adatbázis.{0,50}/) || ['NINCS ÜZENET'])[0]);
     ok('nincs JS hiba', p.__errs.length === 0, p.__errs.join(' | '));
-    await p.close();
+    await p.__ctx.close();
   }
 
   // ─── 5) Az iras tenyleg a helyere kerul ───
@@ -177,8 +190,69 @@ const open = async (b, testMode) => {
       ok(`${mode ? 'teszt' : 'éles'} módban a(z) ${want} kapja az adatot`,
          hit.includes('p_a') && !miss.includes('p_a'),
          `${want}: [${hit.join(',')}] · ${other}: [${miss.join(',')}]`);
-      await p.close();
+      await p.__ctx.close();
     }
+  }
+
+  // ─── 6) A valtas GLOBALIS ───
+  // Ez a v10.181 lenyege. Eszkozonkent tarolva egy buli statisztikaja ketfele
+  // eshetett: az egyik telefon a teszt-, a masik az eles kollekciokba irt volna,
+  // es semmi nem jelezte volna.
+  console.log('\n===== MINDENKINÉL VÁLT =====');
+  {
+    // a) a koppintas kiirja a kozos dokumentumot — enelkul a tobbi keszulek
+    //    sosem ertesulne rola
+    const p = await open(b, false);
+    await p.evaluate(() => {
+      const all = [...document.querySelectorAll('div')].filter(x => /v\d+\.\d+/.test(x.textContent));
+      all.sort((a, b) => a.textContent.length - b.textContent.length);
+      for (let i = 0; i < 3; i++) all[0].click();
+    });
+    await p.waitForTimeout(400);
+    const doc = await p.evaluate(() => (window.__fbStore['config'] || {}).dbMode);
+    ok('a koppintás a közös config/dbMode dokumentumba ír', !!doc && doc.test === true,
+       JSON.stringify(doc));
+    await p.__ctx.close();
+  }
+  {
+    // b) ha valaki MASHOL kapcsol, ez a keszulek is atall — es ujratolt,
+    //    kulonben a kepernyon a masik adatbazis adata maradna
+    const p = await open(b, false);
+    // A location.reload nem irhato felul (a Location [LegacyUnforgeable]), ezert
+    // egy jelzot teszunk le: az ujratoltes uj window-t hoz, tehat ha a jelzo
+    // eltunt, a lap tenyleg ujratoltott.
+    await p.evaluate(() => { window.__alive = 1; });
+    await p.evaluate(() => firebase.firestore().collection('config').doc('dbMode')
+      .set({ test: true, ts: Date.now() }));
+    await p.waitForTimeout(4500);   // ujratoltes + ujboli indulas
+    ok('a másik készüléken indított váltást ez is átveszi',
+       (await p.evaluate(() => localStorage.getItem('boh_testdb'))) === '1',
+       await p.evaluate(() => localStorage.getItem('boh_testdb')));
+    ok('és újratölt, hogy ne a másik adatbázis adata maradjon a képernyőn',
+       (await p.evaluate(() => window.__alive)) === undefined);
+
+    // ugyanaz az ertek ujra — NEM szabad ujra ujratolteni, kulonben egy
+    // ismetlodo snapshot vegtelen ujratoltes-hurkot csinalna
+    await p.evaluate(() => { window.__alive = 1; });
+    await p.evaluate(() => firebase.firestore().collection('config').doc('dbMode')
+      .set({ test: true, ts: Date.now() + 1 }));
+    await p.waitForTimeout(1500);
+    ok('változatlan érték nem tölt újra (nincs újratöltés-hurok)',
+       (await p.evaluate(() => window.__alive)) === 1);
+    await p.__ctx.close();
+  }
+  {
+    // c) hianyzo dokumentum = nincs jelzes. Ha ezt "eles"-nek vennenk, egy
+    //    elakadt olvasas menet kozben kikapcsolna a teszt modot mindenkinel.
+    const p = await open(b, true);
+    await p.evaluate(() => { window.__alive = 1; });
+    await p.waitForTimeout(1200);
+    const r = await p.evaluate(() => ({
+      cache: localStorage.getItem('boh_testdb'), alive: window.__alive === 1 }));
+    ok('hiányzó dokumentum nem kapcsol át senkit menet közben',
+       r.cache === '1' && r.alive === true, JSON.stringify(r));
+    ok('nincs JS hiba', p.__errs.length === 0, p.__errs.join(' | '));
+    await p.__ctx.close();
   }
 
   await b.close();

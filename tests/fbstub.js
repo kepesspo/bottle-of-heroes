@@ -6,7 +6,8 @@
   // neveket toltik fel, ezert alapertelmezesben teszt modba allunk — kulonben
   // minden seed melle irna. Amelyik teszt maga akar donteni (testdb_test),
   // az a stub UTAN allitja at.
-  try { localStorage.setItem('boh_testdb', '1'); } catch (e) {}
+  // csak ha a teszt maga nem mondta meg — es ujratoltes utan sem irjuk felul
+  try { if (localStorage.getItem('boh_testdb') === null) localStorage.setItem('boh_testdb', '1'); } catch (e) {}
   class FieldValue {
     constructor(kind, arg) { this._kind = kind; this._arg = arg; }
   }
