@@ -154,7 +154,11 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
     // a kivalasztott negybol kettonek van sajat beallitasa (busz, zene)
     ok('csak a beállítható kiválasztott játékok jelennek meg',
        /Zene/i.test(t) && /Kisebb|kisebb/i.test(t) && !/Anagramma/i.test(t),
-       (t.match(/A JÁTÉKOK BEÁLLÍTÁSAI.{0,120}/i) || ['—'])[0]);
+       (t.match(/Zene.{0,80}/i) || ['—'])[0]);
+    // v10.163: a "Játékok beállításai" fejléc is kikerult — a sorok magukert
+    // beszelnek (nev + "Beallitasok megnyitasa" + nyil).
+    ok('nincs "A játékok beállításai" fejléc', !/A JÁTÉKOK BEÁLLÍTÁSAI/i.test(t),
+       (t.match(/.{0,30}JÁTÉKOK BEÁLLÍTÁSAI.{0,30}/i) || ['—'])[0]);
     // v10.161 ota osszecsukhato, alapbol zarva — opcionalis dolog, ne tolja le
     // a lenyeget a kepernyorol. A jelvenynek zart allapotban is latszania kell,
     // kulonben eszre sem venni, hogy van beallitott limit.
