@@ -397,6 +397,20 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
        ids.join(', '));
   }
 
+  // ─── A KABALA KIVEZETESE (v10.179) ───
+  // 14 megjelenesi hely + a 173 soros SVG komponens + a hozza tartozo CSS.
+  // Fel-eltavolitasnal maradna hivatkozas valamelyik reteghez, ezert a forrast
+  // nezzuk, nem egyetlen kepernyot.
+  console.log('\n===== KABALA =====');
+  {
+    const src = fs.readFileSync('/home/user/bottle-of-heroes/app.src.html', 'utf8');
+    const leftovers = ['BottleHero', 'heroPopIn', 'bhFlyX', '.bh-'].filter(k => src.includes(k));
+    ok('nincs maradvány a forrásban', leftovers.length === 0, leftovers.join(', ') || 'egy sem');
+    // ezek NEM a kabalae, maradniuk kell
+    ok('a floatBob megmaradt (emoji-díszek használják)', src.includes('floatBob'));
+    ok('a konfetti megmaradt (bhConfFall — a név megtévesztő)', src.includes('bhConfFall'));
+  }
+
   // ─── A NETFLIX-NEZET KIVEZETESE (v10.167) ───
   // Ket parhuzamos elrendezes ket kulon csempe-komponenssel: minden
   // kartya-valtoztatast ketszer kellett elvegezni, es epp ilyenbol szuletnek az
