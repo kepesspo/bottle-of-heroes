@@ -159,25 +159,14 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
     // beszelnek (nev + "Beallitasok megnyitasa" + nyil).
     ok('nincs "A játékok beállításai" fejléc', !/A JÁTÉKOK BEÁLLÍTÁSAI/i.test(t),
        (t.match(/.{0,30}JÁTÉKOK BEÁLLÍTÁSAI.{0,30}/i) || ['—'])[0]);
-    // v10.161 ota osszecsukhato, alapbol zarva — opcionalis dolog, ne tolja le
-    // a lenyeget a kepernyorol. A jelvenynek zart allapotban is latszania kell,
-    // kulonben eszre sem venni, hogy van beallitott limit.
-    ok('a kortyolási limit alapból össze van csukva',
-       /KORTYOLÁSI LIMIT/i.test(t) && !/Anna/.test(t), (t.match(/KORTYOLÁSI LIMIT.{0,30}/i) || ['—'])[0]);
-    ok('zárt állapotban is látszik, hány limit van beállítva',
-       /1 beállítva/.test(t), (t.match(/KORTYOLÁSI LIMIT.{0,20}/i) || ['—'])[0]);
-    await p.evaluate(() => {
-      const btn = [...document.querySelectorAll('#__g button')].find(x => /KORTYOLÁSI LIMIT/i.test(x.innerText || ''));
-      if (btn) btn.click();
-    });
-    await p.waitForTimeout(500);
-    const t2 = await txt(p);
-    ok('kinyitva szerkeszthető', /Anna/.test(t2), (t2.match(/KORTYOLÁSI LIMIT.{0,40}/i) || ['—'])[0]);
-    ok('a profilban tárolt limit betöltődik',
-       await p.evaluate(() => {
-         const inp = [...document.querySelectorAll('#__g input[type="number"]')];
-         return inp.some(x => x.value === '8');
-       }), 'Anna limitje 8');
+    // v10.165: a kortyolasi limit KIKERULT innen. A profilra mentodik, nem a
+    // partira — egy partinkenti kepernyon megkerdezni azt sugallta, hogy "ma
+    // estere" allitod, kozben tartosan atirta a profilt. A helye az
+    // Admin > Tartalom > Profilok, ahol egyszer kell vegigmenni mindenkin.
+    ok('a kortyolási limit nincs a Játékmenet oldalon', !/KORTYOLÁSI LIMIT/i.test(t),
+       (t.match(/.{0,25}KORTYOLÁSI.{0,25}/i) || ['—'])[0]);
+    ok('nincs számbeviteli mező az oldalon',
+       await p.evaluate(() => document.querySelectorAll('#__g input[type="number"]').length) === 0);
 
     // v10.162: a beallitasok KULON feher dobozokba kerultek, es minden doboz
     // olyan szeles, mint a felso osszefoglalo. A csoportositas is szamit:

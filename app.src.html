@@ -34015,12 +34015,6 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
       return snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
     }).catch(function() { return []; });
   };
-  window.setProfileDrinkLimit = function(profileId, limit) {
-    if (!profileId) return Promise.resolve();
-    var v = Number(limit) > 0 ? Number(limit) : firebase.firestore.FieldValue.delete();
-    return db.collection('profiles').doc(profileId).set({ drinkLimit: v }, { merge: true })
-      .catch(function(e) { console.warn('setProfileDrinkLimit', e); });
-  };
   window.saveProfile = function(profile) {
     var ref = profile.id ? db.collection('profiles').doc(profile.id) : db.collection('profiles').doc();
     var data = { name: profile.name, color: profile.color };
@@ -35053,7 +35047,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.164';
+const APP_VERSION = 'v10.165';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -44041,60 +44035,15 @@ function useSetupFlow() {
 // kikapcsolva a Jatekok oldalrol indul a parti, mint korabban.
 function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
   const [openCfg, setOpenCfg] = React.useState(null);
-  const [limits, setLimits] = React.useState({});   // profileId -> limit (szam vagy '')
-  const [limitsLoaded, setLimitsLoaded] = React.useState(false);
-  const [limitsOpen, setLimitsOpen] = React.useState(false);
 
   const games = (selectedGames || []).map(id => GAMES.find(g => g.id === id)).filter(Boolean);
   const configurable = games.filter(g => hasGameConfig(g.id));
   const minutes = Math.max(5, Math.round((selectedGames || []).length * 2.5 / 5) * 5);
-  const withProfile = (players || []).filter(p => p.profileId);
-  const limitCount = withProfile.filter(p => Number(limits[p.profileId]) > 0).length;
 
-  React.useEffect(() => {
-    if (!withProfile.length || typeof window.getProfiles !== 'function') { setLimitsLoaded(true); return; }
-    let alive = true;
-    window.getProfiles().then(list => {
-      if (!alive) return;
-      const map = {};
-      (list || []).forEach(pr => { if (pr.drinkLimit) map[pr.id] = pr.drinkLimit; });
-      setLimits(map); setLimitsLoaded(true);
-    }, () => setLimitsLoaded(true));
-    return () => { alive = false; };
-  }, [players]);
 
-  const writeLimit = (profileId, raw) => {
-    const v = raw.replace(/[^0-9]/g, '');
-    setLimits(m => Object.assign({}, m, { [profileId]: v }));
-    if (typeof window.setProfileDrinkLimit === 'function') window.setProfileDrinkLimit(profileId, v);
-  };
 
   // Minden doboz ugyanezt hasznalja — a szelesseguk igy nem tud elcsuszni.
   const cardStyle = { background:T.surface, borderRadius:16, boxShadow:T.shadow };
-  const headStyle = { fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.1em',
-    textTransform:'uppercase', color:T.inkSoft, textAlign:'left' };
-  const Section = ({ title, sub, badge, open, onToggle, children }) => (
-    <div style={{ marginTop:18 }}>
-      {onToggle ? (
-        <button onClick={onToggle} style={{ width:'100%', display:'flex', alignItems:'center', gap:8,
-          background:'transparent', border:'none', cursor:'pointer', padding:'0 2px 8px' }}>
-          <span style={{ ...headStyle, flex:1 }}>{title}</span>
-          {badge && <span style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.mintDeep,
-            background:T.mintSoft, borderRadius:999, padding:'2px 8px' }}>{badge}</span>}
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0,
-            transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition:'transform .2s' }}>
-            <path d="M6 9l6 6 6-6" stroke={T.inkMute} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
-      ) : (
-        <div style={{ ...headStyle, marginBottom:8 }}>{title}</div>
-      )}
-      {(!onToggle || open) && <>
-        {sub && <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, marginBottom:10, lineHeight:1.5 }}>{sub}</div>}
-        {children}
-      </>}
-    </div>
-  );
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
@@ -44154,33 +44103,6 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
           )}
         </div>
 
-        {withProfile.length > 0 && (
-          <Section title="Kortyolási limit"
-            open={limitsOpen} onToggle={() => setLimitsOpen(v => !v)}
-            badge={limitCount > 0 ? limitCount + ' beállítva' : null}
-            sub="Ha valaki eléri a sajátját, a kör végén figyelmeztetünk. Üresen hagyva nincs limit. A profilhoz mentődik, tehát a következő bulira is megmarad.">
-            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              {withProfile.map(p => (
-                <div key={p.id} style={{ ...cardStyle, display:'flex', alignItems:'center', gap:12,
-                  padding:'10px 14px', minHeight:60 }}>
-                  <div style={{ width:36, height:36, borderRadius:'50%', background:p.color || T.mint, flexShrink:0,
-                    display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:15, color:'#fff' }}>
-                    {(p.name || '?').charAt(0).toUpperCase()}
-                  </div>
-                  <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:14.5, color:T.ink,
-                    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
-                  <input value={limits[p.profileId] == null ? '' : String(limits[p.profileId])}
-                    onChange={e => writeLimit(p.profileId, e.target.value)}
-                    placeholder={limitsLoaded ? 'nincs' : '…'} inputMode="numeric" type="number"
-                    style={{ width:76, flexShrink:0, textAlign:'center', padding:'9px 6px', borderRadius:11,
-                      border:`2px solid ${T.inkMute}28`, background:T.bgSoft, color:T.ink,
-                      fontFamily:T.font, fontWeight:900, fontSize:15, outline:'none' }} />
-                  <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11.5, color:T.inkMute, flexShrink:0 }}>korty</span>
-                </div>
-              ))}
-            </div>
-          </Section>
-        )}
       </div>
 
       <BottomBar>
