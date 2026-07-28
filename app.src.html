@@ -34015,6 +34015,12 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
       return snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
     }).catch(function() { return []; });
   };
+  window.setProfileDrinkLimit = function(profileId, limit) {
+    if (!profileId) return Promise.resolve();
+    var v = Number(limit) > 0 ? Number(limit) : firebase.firestore.FieldValue.delete();
+    return db.collection('profiles').doc(profileId).set({ drinkLimit: v }, { merge: true })
+      .catch(function(e) { console.warn('setProfileDrinkLimit', e); });
+  };
   window.saveProfile = function(profile) {
     var ref = profile.id ? db.collection('profiles').doc(profile.id) : db.collection('profiles').doc();
     var data = { name: profile.name, color: profile.color };
@@ -35047,7 +35053,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.159';
+const APP_VERSION = 'v10.160';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -39210,6 +39216,7 @@ function AdminHomeToggles() {
   }, []);
   const on = !cfg || cfg.dnrAppsEnabled !== false;
   const closeMode = (cfg && cfg.seasonCloseMode) || 'always';
+  const setupFlow = !!(cfg && cfg.setupFlowEnabled);
   const write = (patch) => {
     setCfg(c => Object.assign({}, c || {}, patch));
     try { firebase.firestore().collection('config').doc('homeConfig').set(patch, { merge: true }).catch(() => {}); } catch(e) {}
@@ -39233,6 +39240,25 @@ function AdminHomeToggles() {
           Kikapcsolva — a felirat egyetlen készüléken sem látszik.
         </div>
       )}
+
+      <div style={{ height:1, background:`${T.inkMute}22`, margin:'14px 0' }} />
+
+      <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>Játékmenet oldal</div>
+          <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginTop:2 }}>
+            Bekapcsolva a játékok kiválasztása után jön egy Játékmenet oldal, ahol a nehézség, a módok
+            és a kiválasztott játékok saját beállításai egy helyen vannak. Kikapcsolva a Játékok
+            oldalról indul a parti, mint eddig.
+          </div>
+        </div>
+        <Toggle on={setupFlow} onChange={() => write({ setupFlowEnabled: !setupFlow })} />
+      </div>
+      <div style={{ marginTop:10, fontFamily:T.font, fontSize:11.5, fontWeight:700, color: setupFlow ? T.mintDeep : T.inkMute }}>
+        {setupFlow
+          ? 'Játékosok → Játékok → Játékmenet → Játék'
+          : 'Játékosok → Játékok → Játék'}
+      </div>
 
       <div style={{ height:1, background:`${T.inkMute}22`, margin:'14px 0' }} />
 
@@ -42941,10 +42967,7 @@ function PlayersScreen({ players, setPlayers, go }) {
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
       <AppBar title={`${t('players')} (${players.length})`} onBack={() => go('home')}
         right={
-          <div style={{ display:'flex', gap:6, padding:4, background:T.mintSoft, borderRadius:999 }}>
-            <div style={{ width:34, height:34, borderRadius:999, background:T.mint, display:'grid', placeItems:'center' }}>{Icon.users('#fff')}</div>
-            <div style={{ width:34, height:34, display:'grid', placeItems:'center', color:T.mintDeep }}>{Icon.controller(T.mintDeep)}</div>
-          </div>
+          <StepDots active={1} />
         }
       />
 
@@ -43986,6 +44009,233 @@ function CollectBoomConfigSheet({ config, setConfig, onClose }) {
   );
 }
 
+// A jatekindito folyamat: regi (Jatekosok -> Jatekok -> Jatek) vagy uj
+// (… -> Jatekmenet -> Jatek). Adminbol kapcsolhato, elo. Az utolso ismert
+// allast localStorage-ben tartjuk, kulonben halozat nelkul mindig a regi
+// folyamat jonne, fuggetlenul a beallitastol.
+const SETUP_FLOW_KEY = 'boh_setup_flow';
+function useSetupFlow() {
+  const [on, setOn] = React.useState(() => {
+    try { return localStorage.getItem(SETUP_FLOW_KEY) === '1'; } catch (e) { return false; }
+  });
+  React.useEffect(() => {
+    if (typeof firebase === 'undefined') return;
+    let un;
+    try {
+      un = firebase.firestore().collection('config').doc('homeConfig').onSnapshot(d => {
+        const v = (d && d.exists && d.data() && d.data().setupFlowEnabled) === true;
+        setOn(v);
+        try { localStorage.setItem(SETUP_FLOW_KEY, v ? '1' : '0'); } catch (e) {}
+      }, () => {});
+    } catch (e) {}
+    return () => { try { un && un(); } catch (e) {} };
+  }, []);
+  return on;
+}
+
+// Melyik jateknak van sajat beallito lapja. EGY forras: ebbol dolgozik a
+// hosszu nyomas, a kartya fogaskerek-jelzese es a Jatekmenet oldal is.
+// A kartyan ulo fogaskerek. Ugyanaz a forma, mint az info gomb, csak a masik
+// sarokban — igy ranezesre latszik, hogy a jateknak van sajat beallitasa.
+function ConfigDot({ onOpen, pos }) {
+  if (!onOpen) return null;
+  return (
+    <button onClick={e => { e.stopPropagation(); onOpen(); }} aria-label="Beállítások" style={Object.assign({
+      position:'absolute', zIndex:3, borderRadius:'50%', border:'none', padding:0,
+      background:T.surface, cursor:'pointer', display:'grid', placeItems:'center',
+      boxShadow:'0 2px 6px rgba(0,0,0,0.12), 0 0 0 1px rgba(20,30,50,0.04)', color:T.inkSoft,
+    }, pos)}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.mintDeep} strokeWidth="2.4"
+           strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3.2"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+  );
+}
+
+// ─── JATEKMENET OLDAL ──────────────────────────────────────────
+// A jatekvalasztas UTAN jon, mert a jatek-beallitasok csak akkor ertelmesek,
+// ha mar tudjuk, mit jatszunk. Adminbol kapcsolhato (setupFlowEnabled);
+// kikapcsolva a Jatekok oldalrol indul a parti, mint korabban.
+function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
+  const [openCfg, setOpenCfg] = React.useState(null);
+  const [limits, setLimits] = React.useState({});   // profileId -> limit (szam vagy '')
+  const [limitsLoaded, setLimitsLoaded] = React.useState(false);
+
+  const games = (selectedGames || []).map(id => GAMES.find(g => g.id === id)).filter(Boolean);
+  const configurable = games.filter(g => hasGameConfig(g.id));
+  const minutes = Math.max(5, Math.round((selectedGames || []).length * 2.5 / 5) * 5);
+  const withProfile = (players || []).filter(p => p.profileId);
+
+  React.useEffect(() => {
+    if (!withProfile.length || typeof window.getProfiles !== 'function') { setLimitsLoaded(true); return; }
+    let alive = true;
+    window.getProfiles().then(list => {
+      if (!alive) return;
+      const map = {};
+      (list || []).forEach(pr => { if (pr.drinkLimit) map[pr.id] = pr.drinkLimit; });
+      setLimits(map); setLimitsLoaded(true);
+    }, () => setLimitsLoaded(true));
+    return () => { alive = false; };
+  }, [players]);
+
+  const writeLimit = (profileId, raw) => {
+    const v = raw.replace(/[^0-9]/g, '');
+    setLimits(m => Object.assign({}, m, { [profileId]: v }));
+    if (typeof window.setProfileDrinkLimit === 'function') window.setProfileDrinkLimit(profileId, v);
+  };
+
+  const Section = ({ title, sub, children }) => (
+    <div style={{ marginTop:18 }}>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.1em',
+        textTransform:'uppercase', color:T.inkMute, marginBottom:8 }}>{title}</div>
+      {sub && <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, marginBottom:10, lineHeight:1.5 }}>{sub}</div>}
+      {children}
+    </div>
+  );
+
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
+      <AppBar title="Játékmenet" onBack={() => go('games')} right={<StepDots active={3} />} />
+
+      <div className="screen-wide screen-pad" style={{ flex:1, overflowY:'auto', paddingTop:14, paddingBottom:110 }}>
+
+        {/* Osszefoglalo — mi var ra, mielott belemegy a reszletekbe */}
+        <div style={{ display:'flex', gap:10, background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow }}>
+          {[
+            { v: (players || []).length, l: 'játékos' },
+            { v: games.length,          l: 'játék' },
+            { v: '~' + minutes,         l: 'perc' },
+          ].map((x, i) => (
+            <div key={i} style={{ flex:1, minWidth:0, textAlign:'center' }}>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, lineHeight:1 }}>{x.v}</div>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, letterSpacing:'0.08em',
+                textTransform:'uppercase', color:T.inkMute, marginTop:4 }}>{x.l}</div>
+            </div>
+          ))}
+        </div>
+
+        <Section title="Játékmenet">
+          <div style={{ background:T.surface, borderRadius:16, padding:'4px 14px 14px', boxShadow:T.shadow }}>
+            <GameSettingsContent meta={gameMeta} setMeta={setGameMeta} />
+          </div>
+        </Section>
+
+        <Section title="A játékok beállításai"
+          sub={configurable.length
+            ? 'Ezeknek a kiválasztott játékoknak van saját beállítása.'
+            : undefined}>
+          {configurable.length === 0 ? (
+            <div style={{ background:T.surface, borderRadius:16, padding:16, boxShadow:T.shadow,
+              fontFamily:T.font, fontSize:13, color:T.inkMute, lineHeight:1.6 }}>
+              A kiválasztott játékokhoz nincs külön beállítás — mehet az indítás.
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {configurable.map(g => (
+                <button key={g.id} onClick={() => setOpenCfg(g.id)} style={{
+                  display:'flex', alignItems:'center', gap:12, width:'100%', textAlign:'left',
+                  background:T.surface, border:'none', borderRadius:16, padding:'12px 14px',
+                  boxShadow:T.shadow, cursor:'pointer', minHeight:64,
+                }}>
+                  <div style={{ width:44, height:44, borderRadius:13, flexShrink:0, display:'grid', placeItems:'center',
+                    background: g.color ? g.color + '22' : T.surfaceMuted }}>
+                    {g.img ? <img src={g.img} style={{ width:30, height:30, objectFit:'contain' }} />
+                           : <span style={{ fontSize:22 }}>{g.emoji}</span>}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>{tg(g, 'name')}</div>
+                    <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, marginTop:2 }}>Beállítások megnyitása</div>
+                  </div>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.mintDeep, flexShrink:0 }}>›</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </Section>
+
+        {withProfile.length > 0 && (
+          <Section title="Kortyolási limit"
+            sub="Ha valaki eléri a sajátját, a kör végén figyelmeztetünk. Üresen hagyva nincs limit. A profilhoz mentődik, tehát a következő bulira is megmarad.">
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {withProfile.map(p => (
+                <div key={p.id} style={{ display:'flex', alignItems:'center', gap:12,
+                  background:T.surface, borderRadius:16, padding:'10px 14px', boxShadow:T.shadow, minHeight:60 }}>
+                  <div style={{ width:36, height:36, borderRadius:'50%', background:p.color || T.mint, flexShrink:0,
+                    display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:15, color:'#fff' }}>
+                    {(p.name || '?').charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:14.5, color:T.ink,
+                    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
+                  <input value={limits[p.profileId] == null ? '' : String(limits[p.profileId])}
+                    onChange={e => writeLimit(p.profileId, e.target.value)}
+                    placeholder={limitsLoaded ? 'nincs' : '…'} inputMode="numeric" type="number"
+                    style={{ width:76, flexShrink:0, textAlign:'center', padding:'9px 6px', borderRadius:11,
+                      border:`2px solid ${T.inkMute}28`, background:T.bgSoft, color:T.ink,
+                      fontFamily:T.font, fontWeight:900, fontSize:15, outline:'none' }} />
+                  <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11.5, color:T.inkMute, flexShrink:0 }}>korty</span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+      </div>
+
+      <BottomBar>
+        <PrimaryButton disabled={(selectedGames || []).length < 1} onClick={() => go('play')}>
+          <span>{t('startGame')} ({(selectedGames || []).length})</span>
+          <span style={{ display:'block', fontWeight:600, fontSize:12, opacity:0.75, marginTop:2 }}>⏱ kb. {minutes} perc</span>
+        </PrimaryButton>
+      </BottomBar>
+
+      <GameConfigHost openId={openCfg} onClose={() => setOpenCfg(null)}
+        gameMeta={gameMeta} setGameMeta={setGameMeta} playerCount={(players || []).length} />
+    </div>
+  );
+}
+
+// A fuggveny-deklaraciok hoistolodnak, ezert a lapokra itt mar hivatkozhatunk
+// akkor is, ha lejjebb vannak definialva.
+const GAME_CONFIG_DEFS = {
+  busz:      { metaKey:'buszConfig',      Comp: BuszConfigSheet },
+  beerpong:  { metaKey:'beerpongConfig',  Comp: BeerPongConfigSheet },
+  kisebb:    { metaKey:'kisebbConfig',    Comp: KisebbConfigSheet },
+  collect:   { metaKey:'collectConfig',   Comp: CollectBoomConfigSheet },
+  ovfj:      { metaKey:'ovfjConfig',      Comp: OVFJConfigSheet },
+  zene:      { metaKey:'zeneConfig',      Comp: ZeneConfigSheet },
+  blackjack: { metaKey:'blackjackConfig', Comp: BlackjackConfigSheet },
+};
+const GAME_CONFIG_IDS = Object.keys(GAME_CONFIG_DEFS);
+const hasGameConfig = (id) => GAME_CONFIG_IDS.indexOf(id) !== -1;
+
+// Egyetlen helyen mountolja a megnyitott beallito lapot. Enelkul mindket
+// kepernyonek hetszer kellene leirnia ugyanazt az accessor-part.
+function GameConfigHost({ openId, onClose, gameMeta, setGameMeta, playerCount }) {
+  if (!openId || !GAME_CONFIG_DEFS[openId]) return null;
+  const { metaKey, Comp } = GAME_CONFIG_DEFS[openId];
+  const config = (gameMeta && gameMeta[metaKey]) || {};
+  const setConfig = (cfg) => setGameMeta(m => Object.assign({}, m, {
+    [metaKey]: typeof cfg === 'function' ? cfg((m && m[metaKey]) || {}) : cfg,
+  }));
+  return <Comp config={config} setConfig={setConfig} onClose={onClose} playerCount={playerCount} />;
+}
+
+// A folyamat lepesjelzoje. Harmadik pont csak akkor, ha a Jatekmenet oldal el.
+function StepDots({ active }) {
+  const setupFlow = useSetupFlow();
+  const dots = [Icon.users, Icon.controller].concat(setupFlow ? [Icon.settings] : []);
+  return (
+    <div data-steps={dots.length} style={{ display:'flex', gap:6, padding:4, background:T.mintSoft, borderRadius:999 }}>
+      {dots.map((ic, i) => i + 1 === active ? (
+        <div key={i} style={{ width:34, height:34, borderRadius:999, background:T.mint, display:'grid', placeItems:'center' }}>{ic('#fff')}</div>
+      ) : (
+        <div key={i} style={{ width:34, height:34, display:'grid', placeItems:'center', color:T.mintDeep }}>{ic(T.mintDeep)}</div>
+      ))}
+    </div>
+  );
+}
+
 function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, go }) {
   const [info, setInfo] = useState(null);
   const [sheet, setSheet] = useState(false);
@@ -44004,6 +44254,16 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   const [ovfjSheet, setOvfjSheet] = useState(false);
   const [zeneSheet, setZeneSheet] = useState(false);
   const [filterSheet, setFilterSheet] = useState(false);
+  const setupFlow = useSetupFlow();
+  // A het beallito lap egy helyen. A hosszu nyomas es a kartyan levo
+  // fogaskerek is ezt hivja, igy nem tudnak elcsuszni egymastol.
+  const CONFIG_OPENERS = { busz: setBuszSheet, beerpong: setBeerpongSheet, kisebb: setKisebbSheet,
+    collect: setCollectSheet, ovfj: setOvfjSheet, zene: setZeneSheet, blackjack: setBlackjackSheet };
+  const openGameConfig = (id) => {
+    if (!selectedGames.includes(id)) toggle(id);
+    const open = CONFIG_OPENERS[id]; if (open) open(true);
+  };
+  const longPressFor = (id) => hasGameConfig(id) ? () => openGameConfig(id) : undefined;
   const [lockToast, setLockToast] = React.useState(null);
   const lockToastRef = React.useRef(null);
   // Buli-sablonok
@@ -44149,10 +44409,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
                 </svg>
               )}
             </button>
-            <div style={{ display:'flex', gap:6, padding:4, background:T.mintSoft, borderRadius:999 }}>
-              <div style={{ width:34, height:34, display:'grid', placeItems:'center', color:T.mintDeep }}>{Icon.users(T.mintDeep)}</div>
-              <div style={{ width:34, height:34, borderRadius:999, background:T.mint, display:'grid', placeItems:'center' }}>{Icon.controller('#fff')}</div>
-            </div>
+            <StepDots active={2} />
           </div>
         }
       />
@@ -44236,11 +44493,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
                   const isSelected = selectedGames.includes(g.id);
                   const locked = isLocked(g.id);
                   const dim = locked || (anySelected && !isSelected);
-                  const longPress = g.id==='busz' ? ()=>{ if(!selectedGames.includes('busz')) toggle('busz'); setBuszSheet(true); }
-                    : g.id==='beerpong' ? ()=>{ if(!selectedGames.includes('beerpong')) toggle('beerpong'); setBeerpongSheet(true); }
-                    : g.id==='zene' ? ()=>{ if(!selectedGames.includes('zene')) toggle('zene'); setZeneSheet(true); }
-                    : g.id==='blackjack' ? ()=>{ if(!selectedGames.includes('blackjack')) toggle('blackjack'); setBlackjackSheet(true); }
-                    : undefined;
+                  const longPress = longPressFor(g.id);
                   return (
                     <FavTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked}
                       onClick={() => toggle(g.id)} onInfo={() => setInfo(g.id)} onLongPress={longPress} />
@@ -44294,7 +44547,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
                       return (
                         <NetflixTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked || !!g.comingSoon}
                           onClick={() => { if (!g.comingSoon) toggle(g.id); }} onInfo={() => setInfo(g.id)}
-                          onLongPress={g.id==='busz' ? ()=>{ if(!selectedGames.includes('busz')) toggle('busz'); setBuszSheet(true); } : g.id==='beerpong' ? ()=>{ if(!selectedGames.includes('beerpong')) toggle('beerpong'); setBeerpongSheet(true); } : g.id==='kisebb' ? ()=>{ if(!selectedGames.includes('kisebb')) toggle('kisebb'); setKisebbSheet(true); } : g.id==='collect' ? ()=>{ if(!selectedGames.includes('collect')) toggle('collect'); setCollectSheet(true); } : g.id==='ovfj' ? ()=>{ if(!selectedGames.includes('ovfj')) toggle('ovfj'); setOvfjSheet(true); } : g.id==='zene' ? ()=>{ if(!selectedGames.includes('zene')) toggle('zene'); setZeneSheet(true); } : g.id==='blackjack' ? ()=>{ if(!selectedGames.includes('blackjack')) toggle('blackjack'); setBlackjackSheet(true); } : undefined} />
+                          onLongPress={longPressFor(g.id)} />
                       );
                     })}
                   </div>
@@ -44311,7 +44564,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
                     return (
                       <GameTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked || !!g.comingSoon}
                         onClick={() => { if (!g.comingSoon) toggle(g.id); }} onInfo={() => setInfo(g.id)}
-                        onLongPress={g.id==='busz' ? ()=>{ if(!selectedGames.includes('busz')) toggle('busz'); setBuszSheet(true); } : g.id==='beerpong' ? ()=>{ if(!selectedGames.includes('beerpong')) toggle('beerpong'); setBeerpongSheet(true); } : g.id==='kisebb' ? ()=>{ if(!selectedGames.includes('kisebb')) toggle('kisebb'); setKisebbSheet(true); } : g.id==='collect' ? ()=>{ if(!selectedGames.includes('collect')) toggle('collect'); setCollectSheet(true); } : g.id==='ovfj' ? ()=>{ if(!selectedGames.includes('ovfj')) toggle('ovfj'); setOvfjSheet(true); } : g.id==='zene' ? ()=>{ if(!selectedGames.includes('zene')) toggle('zene'); setZeneSheet(true); } : g.id==='blackjack' ? ()=>{ if(!selectedGames.includes('blackjack')) toggle('blackjack'); setBlackjackSheet(true); } : undefined} />
+                        onLongPress={longPressFor(g.id)} />
                     );
                   })}
                 </div>
@@ -44378,15 +44631,15 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
           🔒 {lockToast}
         </div>
       )}
-      <BottomBar extra={
-        <button onClick={() => setSheet(true)} style={{
+      <BottomBar extra={setupFlow ? null : (
+        <button data-gameplay-sheet="1" onClick={() => setSheet(true)} style={{
           width:60, height:60, minHeight:60, flexShrink:0,
           background:T.surfaceMuted, border:'none', borderRadius:999,
           color:T.ink, cursor:'pointer', display:'grid', placeItems:'center', boxShadow:T.shadow,
         }}>{Icon.settings(T.ink)}</button>
-      }>
-        <PrimaryButton disabled={selectedGames.length < 1} onClick={() => go('play')}>
-          <span>{t('startGame')} ({selectedGames.length})</span>
+      )}>
+        <PrimaryButton disabled={selectedGames.length < 1} onClick={() => go(setupFlow ? 'setup' : 'play')}>
+          <span>{setupFlow ? 'Tovább' : t('startGame')} ({selectedGames.length})</span>
           {selectedGames.length > 0 && <span style={{ display:'block', fontWeight:600, fontSize:12, opacity:0.75, marginTop:2 }}>⏱ kb. {Math.max(5, Math.round(selectedGames.length * 2.5 / 5) * 5)} perc</span>}
         </PrimaryButton>
       </BottomBar>
@@ -44541,6 +44794,7 @@ function NetflixTile({ g, selected, dim, locked, onClick, onInfo, onLongPress })
           <div style={{position: 'absolute', top: 7, right: 7}}><BohIcon name="lock" size={13} /></div>
         )}
         {/* Info button */}
+        <ConfigDot onOpen={locked ? null : onLongPress} pos={{ top:6, right:6, width:26, height:26 }} />
         <button onClick={e => { e.stopPropagation(); onInfo(); }} style={{
           position: 'absolute', top: 6, left: 6,
           width: 26, height: 26, borderRadius: '50%',
@@ -44625,6 +44879,7 @@ function FavTile({ g, selected, dim, locked, onClick, onInfo, onLongPress }) {
         transition:'all .15s',
         position:'relative', overflow:'visible',
       }}>
+      <ConfigDot onOpen={locked ? null : onLongPress} pos={{ top:-8, right:-6, width:26, height:26 }} />
       {/* Color accent bar — a saroktól behúzva, hogy ne lógjon ki a lekerekített élen */}
       <div style={{ position:'absolute', left:0, top:16, bottom:16, width:5, borderRadius:'0 4px 4px 0', background: selected ? T.mint : g.color || T.surfaceMuted }} />
       {/* Icon */}
@@ -44695,6 +44950,7 @@ function GameTile({ g, selected, dim, locked, onClick, onInfo, onLongPress }) {
       </div>
 
       {/* info button — top-left */}
+      <ConfigDot onOpen={locked ? null : onLongPress} pos={{ top:-9, right:-7, width:28, height:28 }} />
       <button onClick={e => { e.stopPropagation(); onInfo(); }} style={{
         position:'absolute', top:-9, left:-7, width:28, height:28, zIndex:2,
         borderRadius:'50%', background:T.surface, border:'none',
@@ -66176,6 +66432,7 @@ function BottleApp() {
         {screen==='create'   && <EventCreateScreen go={go} editId={editEventId} deepLink={_deepLink} />}
         {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
         {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
+        {screen==='setup'    && <SetupScreen    go={go} players={players} selectedGames={selectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} gameMeta={gameMeta} setGameMeta={setGameMeta} setLastGameRound={setLastGameRound} setScoreHistory={setScoreHistory} />}
         {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} lastRound={lastGameRound} scoreHistory={scoreHistory} />}
         {screen==='observer' && <ObserverScreen go={go} initialCode={observerInitCode || (!_initRoomConsumedRef.current && _initRoom ? (_initRoomConsumedRef.current = true, _initRoom) : '')} onJoinAsHost={goJoinAsHost} />}
