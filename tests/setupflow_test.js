@@ -110,17 +110,21 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
     await p.close();
   }
 
-  // ─── 3) A FOGASKEREK A KARTYAKON — ez volt a lathatatlan funkcio ───
-  console.log('\n===== FOGASKERÉK A JÁTÉKKÁRTYÁKON =====');
+  // ─── 3) A CERUZA-GOMB A KARTYAKON ───
+  // Helyesbites a v10.160-hoz: NEM volt lathatatlan a funkcio, mar volt rajta
+  // egy lila ceruza-gomb. Ami tenyleg hianyzott: harom jateknal (kisebb,
+  // collect, ovfj) sosem jelent meg, mert a kedvencek-sor kulon ternaryja
+  // csak negyet sorolt fel a hetbol. Ezert a szam a lenyeg, nem a puszta letezes.
+  console.log('\n===== BEÁLLÍTÁS-GOMB A JÁTÉKKÁRTYÁKON =====');
   {
     // Ures valasztassal indulunk: a Busz/Beer Pong kizarolagossagi szabalya
     // kulonben mindent zarol, zarolt jatekon pedig szandekosan nincs fogaskerek
     // (a megnyitasa kijelolne a jatekot, amit a zar epp tilt).
     const p = await open(b, 'games', false, []);
     const n = await p.evaluate(() => document.querySelectorAll('#__g button[aria-label="Beállítások"]').length);
-    ok('van látható fogaskerék a beállítható játékokon', n >= 7, n + ' db (7 beállítható játék van)');
+    ok('mind a 7 beállítható játék kap gombot', n >= 7, n + ' db (7 beállítható játék van)');
 
-    // a fogaskerek NEM csak jelzes: meg is nyitja a lapot
+    // a gomb NEM csak jelzes: meg is nyitja a lapot
     const opened = await p.evaluate(() => {
       const before = document.body.innerText.length;
       const g = document.querySelector('#__g button[aria-label="Beállítások"]');
@@ -130,7 +134,7 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
     });
     await p.waitForTimeout(700);
     const after = await p.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
-    ok('a fogaskerékre kattintva megnyílik a beállító lap',
+    ok('a gombra kattintva megnyílik a beállító lap',
        typeof opened === 'number' && /Beállítás|beállítás|Kész|Rendben/i.test(after),
        (after.match(/.{0,60}beállítás.{0,40}/i) || ['—'])[0]);
     ok('nincs JS hiba', p.__errs.length === 0, p.__errs.join(' | '));
@@ -171,20 +175,42 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
          return inp.some(x => x.value === '8');
        }), 'Anna limitje 8');
 
-    // a jatekmenet mar NINCS kartya-dobozba zarva — a doboz elvitte a szeleket
-    ok('a játékmenet nincs kártya-dobozban',
-       await p.evaluate(() => {
-         const lbl = [...document.querySelectorAll('#__g div')]
-           .find(d => d.textContent.trim() === 'Módok' || d.textContent.trim() === 'MÓDOK');
-         if (!lbl) return false;
-         // a szuloi lancban ne legyen boxShadow-os feher kartya a szekcio es a lap kozott
-         let cur = lbl, boxed = false;
-         for (let i = 0; i < 4 && cur; i++) {
-           cur = cur.parentElement;
-           if (cur && getComputedStyle(cur).boxShadow !== 'none') boxed = true;
-         }
-         return !boxed;
-       }), 'nincs körülötte árnyékolt lap');
+    // v10.162: a beallitasok KULON feher dobozokba kerultek, es minden doboz
+    // olyan szeles, mint a felso osszefoglalo. A csoportositas is szamit:
+    // nehezseg + sorrend + max korok EGY dobozba.
+    ok('a törzsben nincs "Játékmenet" felirat (a fejlécben már ott van)',
+       !/^\s*JÁTÉKMENET\b/im.test(t.replace(/ /g, ' ')) || (t.match(/JÁTÉKMENET/g) || []).length === 0,
+       (t.match(/JÁTÉKMENET/g) || []).length + ' előfordulás');
+    ok('nincs többé hangos műsorvezető', !/műsorvezet/i.test(t), (t.match(/.{0,20}űsorvezet.{0,10}/i) || ['—'])[0]);
+
+    const boxes = await p.evaluate(() => {
+      const lab = txt => [...document.querySelectorAll('#__g div')]
+        .find(d => d.textContent.trim().toLowerCase() === txt);
+      const card = el => { let c = el;
+        for (let i = 0; i < 5 && c; i++) { c = c.parentElement;
+          if (c && getComputedStyle(c).boxShadow !== 'none') return c; }
+        return null; };
+      const b = k => { const l = lab(k); const c = l && card(l);
+        return c ? { w: Math.round(c.getBoundingClientRect().width), el: c } : null; };
+      const modes = b('módok'), diff = b('nehézségi szint'), order = b('játéksorrend'),
+            max = b('max körök'), other = b('egyéb');
+      const summary = [...document.querySelectorAll('#__g div')]
+        .find(d => /játékos/i.test(d.textContent) && /perc/i.test(d.textContent)
+                && getComputedStyle(d).boxShadow !== 'none');
+      return {
+        w: { modes: modes && modes.w, other: other && other.w,
+             summary: summary && Math.round(summary.getBoundingClientRect().width) },
+        egyBenA3: !!(diff && order && max && diff.el === order.el && order.el === max.el),
+        modokKulon: !!(modes && diff && modes.el !== diff.el),
+        egyebKulon: !!(other && diff && other.el !== diff.el),
+      };
+    });
+    ok('a Módok külön dobozban van', boxes.modokKulon, JSON.stringify(boxes.w));
+    ok('nehézség + sorrend + max körök EGY dobozban', boxes.egyBenA3);
+    ok('az Egyéb külön dobozban van', boxes.egyebKulon);
+    ok('minden doboz olyan széles, mint a felső összefoglaló',
+       boxes.w.modes === boxes.w.summary && boxes.w.other === boxes.w.summary,
+       `módok=${boxes.w.modes} egyéb=${boxes.w.other} összefoglaló=${boxes.w.summary}`);
     ok('látszik a becsült idő', /perc/i.test(t), (t.match(/~?\d+ ?PERC/i) || ['—'])[0]);
 
     // beallito lap nyitasa a listabol

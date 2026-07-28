@@ -35053,7 +35053,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.161';
+const APP_VERSION = 'v10.162';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -44035,25 +44035,6 @@ function useSetupFlow() {
 
 // Melyik jateknak van sajat beallito lapja. EGY forras: ebbol dolgozik a
 // hosszu nyomas, a kartya fogaskerek-jelzese es a Jatekmenet oldal is.
-// A kartyan ulo fogaskerek. Ugyanaz a forma, mint az info gomb, csak a masik
-// sarokban — igy ranezesre latszik, hogy a jateknak van sajat beallitasa.
-function ConfigDot({ onOpen, pos }) {
-  if (!onOpen) return null;
-  return (
-    <button onClick={e => { e.stopPropagation(); onOpen(); }} aria-label="Beállítások" style={Object.assign({
-      position:'absolute', zIndex:3, borderRadius:'50%', border:'none', padding:0,
-      background:T.surface, cursor:'pointer', display:'grid', placeItems:'center',
-      boxShadow:'0 2px 6px rgba(0,0,0,0.12), 0 0 0 1px rgba(20,30,50,0.04)', color:T.inkSoft,
-    }, pos)}>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={T.mintDeep} strokeWidth="2.4"
-           strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="3.2"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </svg>
-    </button>
-  );
-}
-
 // ─── JATEKMENET OLDAL ──────────────────────────────────────────
 // A jatekvalasztas UTAN jon, mert a jatek-beallitasok csak akkor ertelmesek,
 // ha mar tudjuk, mit jatszunk. Adminbol kapcsolhato (setupFlowEnabled);
@@ -44088,6 +44069,8 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
     if (typeof window.setProfileDrinkLimit === 'function') window.setProfileDrinkLimit(profileId, v);
   };
 
+  // Minden doboz ugyanezt hasznalja — a szelesseguk igy nem tud elcsuszni.
+  const cardStyle = { background:T.surface, borderRadius:16, boxShadow:T.shadow };
   const headStyle = { fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.1em',
     textTransform:'uppercase', color:T.inkSoft, textAlign:'left' };
   const Section = ({ title, sub, badge, open, onToggle, children }) => (
@@ -44120,7 +44103,7 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
       <div className="screen-wide screen-pad" style={{ flex:1, overflowY:'auto', paddingTop:14, paddingBottom:110 }}>
 
         {/* Osszefoglalo — mi var ra, mielott belemegy a reszletekbe */}
-        <div style={{ display:'flex', gap:10, background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow }}>
+        <div style={{ ...cardStyle, display:'flex', gap:10, padding:'12px 14px' }}>
           {[
             { v: (players || []).length, l: 'játékos' },
             { v: games.length,          l: 'játék' },
@@ -44134,16 +44117,19 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
           ))}
         </div>
 
-        <Section title="Játékmenet">
-          <GameSettingsContent meta={gameMeta} setMeta={setGameMeta} />
-        </Section>
+        {/* A "Játékmenet" felirat itt nem kell — a fejlécben már ott van. */}
+        {[['modes'], ['difficulty', 'order', 'maxRounds'], ['other']].map((grp, i) => (
+          <div key={i} style={{ ...cardStyle, marginTop:12, padding:'14px 16px' }}>
+            <GameSettingsContent meta={gameMeta} setMeta={setGameMeta} group={grp} />
+          </div>
+        ))}
 
         <Section title="A játékok beállításai"
           sub={configurable.length
             ? 'Ezeknek a kiválasztott játékoknak van saját beállítása.'
             : undefined}>
           {configurable.length === 0 ? (
-            <div style={{ background:T.surface, borderRadius:16, padding:16, boxShadow:T.shadow,
+            <div style={{ ...cardStyle, padding:16,
               fontFamily:T.font, fontSize:13, color:T.inkMute, lineHeight:1.6 }}>
               A kiválasztott játékokhoz nincs külön beállítás — mehet az indítás.
             </div>
@@ -44152,8 +44138,7 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
               {configurable.map(g => (
                 <button key={g.id} onClick={() => setOpenCfg(g.id)} style={{
                   display:'flex', alignItems:'center', gap:12, width:'100%', textAlign:'left',
-                  background:T.surface, border:'none', borderRadius:16, padding:'12px 14px',
-                  boxShadow:T.shadow, cursor:'pointer', minHeight:64,
+                  ...cardStyle, border:'none', padding:'12px 14px', cursor:'pointer', minHeight:64,
                 }}>
                   <div style={{ width:44, height:44, borderRadius:13, flexShrink:0, display:'grid', placeItems:'center',
                     background: g.color ? g.color + '22' : T.surfaceMuted }}>
@@ -44178,8 +44163,8 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
             sub="Ha valaki eléri a sajátját, a kör végén figyelmeztetünk. Üresen hagyva nincs limit. A profilhoz mentődik, tehát a következő bulira is megmarad.">
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
               {withProfile.map(p => (
-                <div key={p.id} style={{ display:'flex', alignItems:'center', gap:12,
-                  background:T.surface, borderRadius:16, padding:'10px 14px', boxShadow:T.shadow, minHeight:60 }}>
+                <div key={p.id} style={{ ...cardStyle, display:'flex', alignItems:'center', gap:12,
+                  padding:'10px 14px', minHeight:60 }}>
                   <div style={{ width:36, height:36, borderRadius:'50%', background:p.color || T.mint, flexShrink:0,
                     display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:15, color:'#fff' }}>
                     {(p.name || '?').charAt(0).toUpperCase()}
@@ -44812,7 +44797,6 @@ function NetflixTile({ g, selected, dim, locked, onClick, onInfo, onLongPress })
           <div style={{position: 'absolute', top: 7, right: 7}}><BohIcon name="lock" size={13} /></div>
         )}
         {/* Info button */}
-        <ConfigDot onOpen={locked ? null : onLongPress} pos={{ top:6, right:6, width:26, height:26 }} />
         <button onClick={e => { e.stopPropagation(); onInfo(); }} style={{
           position: 'absolute', top: 6, left: 6,
           width: 26, height: 26, borderRadius: '50%',
@@ -44825,7 +44809,7 @@ function NetflixTile({ g, selected, dim, locked, onClick, onInfo, onLongPress })
         </button>
         {/* Config pencil button */}
         {onLongPress && (
-          <button onClick={e => { e.stopPropagation(); onLongPress(); }} style={{
+          <button aria-label="Beállítások" onClick={e => { e.stopPropagation(); onLongPress(); }} style={{
             position: 'absolute', bottom: 6, right: 6,
             width: 26, height: 26, borderRadius: '50%',
             background: T.purple, border: 'none', cursor: 'pointer',
@@ -44897,7 +44881,6 @@ function FavTile({ g, selected, dim, locked, onClick, onInfo, onLongPress }) {
         transition:'all .15s',
         position:'relative', overflow:'visible',
       }}>
-      <ConfigDot onOpen={locked ? null : onLongPress} pos={{ top:-8, right:-6, width:26, height:26 }} />
       {/* Color accent bar — a saroktól behúzva, hogy ne lógjon ki a lekerekített élen */}
       <div style={{ position:'absolute', left:0, top:16, bottom:16, width:5, borderRadius:'0 4px 4px 0', background: selected ? T.mint : g.color || T.surfaceMuted }} />
       {/* Icon */}
@@ -44916,7 +44899,7 @@ function FavTile({ g, selected, dim, locked, onClick, onInfo, onLongPress }) {
       </div>
       {/* Pencil button for configurable games — top-right, outside card */}
       {onLongPress && (
-        <button onClick={e => { e.stopPropagation(); onLongPress(); }} style={{
+        <button aria-label="Beállítások" onClick={e => { e.stopPropagation(); onLongPress(); }} style={{
           position:'absolute', top:-9, right:-9, width:28, height:28, borderRadius:'50%',
           background:T.purple, border:'none', cursor:'pointer',
           display:'grid', placeItems:'center', boxShadow:'0 2px 8px rgba(124,58,237,0.45)', padding:0,
@@ -44968,7 +44951,6 @@ function GameTile({ g, selected, dim, locked, onClick, onInfo, onLongPress }) {
       </div>
 
       {/* info button — top-left */}
-      <ConfigDot onOpen={locked ? null : onLongPress} pos={{ top:-9, right:-7, width:28, height:28 }} />
       <button onClick={e => { e.stopPropagation(); onInfo(); }} style={{
         position:'absolute', top:-9, left:-7, width:28, height:28, zIndex:2,
         borderRadius:'50%', background:T.surface, border:'none',
@@ -44980,7 +44962,7 @@ function GameTile({ g, selected, dim, locked, onClick, onInfo, onLongPress }) {
 
       {/* pencil chip for configurable games — top-right */}
       {onLongPress && (
-        <button onClick={e => { e.stopPropagation(); onLongPress(); }} style={{
+        <button aria-label="Beállítások" onClick={e => { e.stopPropagation(); onLongPress(); }} style={{
           position:'absolute', top:-9, right:-7, zIndex:4,
           width:28, height:28, borderRadius:'50%',
           background:T.purple, border:'none', cursor:'pointer',
@@ -45074,7 +45056,7 @@ function GameInfoModal({ game, onClose }) {
   );
 }
 
-function GameSettingsContent({ meta, setMeta, onDone, go }) {
+function GameSettingsContent({ meta, setMeta, onDone, go, group }) {
   const [openInfo, setOpenInfo] = React.useState(null);
   const toggleInfo = (key, e) => { e.stopPropagation(); setOpenInfo(p => p === key ? null : key); };
 
@@ -45113,98 +45095,99 @@ function GameSettingsContent({ meta, setMeta, onDone, go }) {
     </div>
   );
 
-  return (
-    <div style={{ padding:'0 18px 18px', display:'flex', flexDirection:'column' }} onClick={() => setOpenInfo(null)}>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin:'8px 0 8px' }}>Módok</div>
-      <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
-        {modes.map(m => {
-          const on = meta.modes.includes(m.id);
-          return (
-            <div key={m.id} style={{ paddingTop:8, marginTop:0 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <button onClick={() => toggleMode(m.id)} style={{ flex:1, padding:'13px 12px', borderRadius:14, border: on?'none':'1.5px solid rgba(26,42,74,0.10)', background: on?T.mint:`${T.surfaceMuted}`, color: on?onInk():T.ink, fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer', textAlign:'left', transition:'all .15s', display:'flex', alignItems:'center', gap:8 }}><BohIcon name={m.icon} size={17} />{m.label}</button>
-                <InfoBtn id={m.id} />
-              </div>
-              <InfoBox id={m.id} text={m.info} />
-              {m.id === 'wildcard' && on && (
-                <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:8, padding:'10px 12px', background:T.surfaceMuted, borderRadius:12 }}>
-                  <span style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkSoft, flex:1 }}>Hányadik körönként?</span>
-                  <div style={{ display:'flex', gap:4 }}>
-                    {[3,5,7,10].map(n => {
-                      const sel = (meta.wildcardFreq || 5) === n;
-                      return <button key={n} onClick={() => setMeta({...meta, wildcardFreq:n})} style={{ width:38, padding:'8px 0', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background: sel?T.mint:T.surface, color: sel?'#fff':T.inkSoft, transition:'all .15s' }}>{n}</button>;
-                    })}
-                  </div>
+  const SECTIONS = {
+    modes: (first) => (<React.Fragment>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin: first ? '0 0 8px' : '20px 0 8px' }}>Módok</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+          {modes.map(m => {
+            const on = meta.modes.includes(m.id);
+            return (
+              <div key={m.id} style={{ paddingTop:8, marginTop:0 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <button onClick={() => toggleMode(m.id)} style={{ flex:1, padding:'13px 12px', borderRadius:14, border: on?'none':'1.5px solid rgba(26,42,74,0.10)', background: on?T.mint:`${T.surfaceMuted}`, color: on?onInk():T.ink, fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer', textAlign:'left', transition:'all .15s', display:'flex', alignItems:'center', gap:8 }}><BohIcon name={m.icon} size={17} />{m.label}</button>
+                  <InfoBtn id={m.id} />
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin:'20px 0 8px' }}>{t('difficulty')}</div>
-      <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4 }}>
-        {diffs.map(d => {
-          const on = meta.difficulty===d.id;
-          return <button key={d.id} onClick={() => setMeta({...meta,difficulty:d.id})} style={{ flex:1, padding:'11px 6px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background:on?T.mint:'transparent', color:on?'#fff':T.inkSoft, boxShadow:on?'0 2px 7px -1px rgba(79,194,160,0.5)':'none', transition:'all .15s' }}>{d.label}</button>;
-        })}
-      </div>
-      {selDiff && (
-        <div style={{ marginTop:8, padding:'8px 12px', background:`${T.mint}12`, borderRadius:10, borderLeft:`3px solid ${T.mint}`, fontFamily:T.font, fontSize:12, color:T.inkSoft, lineHeight:1.5 }}>
-          <strong style={{ color:T.ink }}>{selDiff.label}:</strong> {selDiff.note}
+                <InfoBox id={m.id} text={m.info} />
+                {m.id === 'wildcard' && on && (
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:8, padding:'10px 12px', background:T.surfaceMuted, borderRadius:12 }}>
+                    <span style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkSoft, flex:1 }}>Hányadik körönként?</span>
+                    <div style={{ display:'flex', gap:4 }}>
+                      {[3,5,7,10].map(n => {
+                        const sel = (meta.wildcardFreq || 5) === n;
+                        return <button key={n} onClick={() => setMeta({...meta, wildcardFreq:n})} style={{ width:38, padding:'8px 0', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background: sel?T.mint:T.surface, color: sel?'#fff':T.inkSoft, transition:'all .15s' }}>{n}</button>;
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
-      )}
-
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin:'20px 0 8px' }}>{t('gameOrder')}</div>
-      <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4 }}>
-        {[{key:'sorban',label:t('inOrder')},{key:'random',label:t('randomGames')}].map(o => {
-          const on = ( meta.gameOrder||'random')===o.key;
-          return <button key={o.key} onClick={() => setMeta({...meta, gameOrder: o.key})} style={{ flex:1, padding:'11px 6px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background:on?T.mint:'transparent', color:on?'#fff':T.inkSoft, boxShadow:on?'0 2px 7px -1px rgba(79,194,160,0.5)':'none', transition:'all .15s' }}>{o.label}</button>;
-        })}
-      </div>
-
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin:'20px 0 8px' }}>{t('maxRoundsLabel')}</div>
-      <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4 }}>
-        {[10,25,50,null].map(n => {
-          const on = (meta.maxRounds||null) === n;
-          return (
-            <button key={n??'inf'} onClick={() => setMeta({...meta, maxRounds: n})} style={{ flex:1, padding:'11px 4px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background:on?T.mint:'transparent', color:on?'#fff':T.inkSoft, boxShadow:on?'0 2px 7px -1px rgba(79,194,160,0.5)':'none', transition:'all .15s' }}>
-              {n === null ? '∞' : n}
-            </button>
-          );
-        })}
-      </div>
-
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin:'20px 0 4px' }}>{t('other')}</div>
-      <ToggleRow
-        icon="counter"
-        label={t('roundCounter')}
-        value={meta.showRoundCounter !== false}
-        onChange={() => setMeta({...meta, showRoundCounter: meta.showRoundCounter === false ? true : false})}
-        infoKey="roundcounter"
-        infoText="Minden körváltásnál megjelenik egy nagy 'KÖR X!' felirat. Ha kikapcsolod, a körváltás csendesen történik (a Wildcard kivételével, az mindig megjelenik)."
-      />
-      <ToggleRow
-        icon="drop"
-        label={t('hydroBreak')}
-        value={!!meta.hydrationReminder}
-        onChange={() => setMeta({...meta, hydrationReminder: !meta.hydrationReminder})}
-        infoKey="hydration"
-        infoText="30 percenként megjelenik egy 'Igyál egy pohár vizet!' értesítés. 60 másodpercig nem lehet eltüntetni — addig a játék szünetel."
-      />
-      <ToggleRow
-        icon="party"
-        label="Hangos műsorvezető"
-        value={!!meta.ttsHost}
-        onChange={() => {
-          const next = !meta.ttsHost;
-          setMeta({...meta, ttsHost: next});
-          // Bekapcsoláskor egy koppintáson belül megszólal → iOS-en is feloldja a beszédet
-          if (next && typeof window.bohSpeak === 'function') window.bohSpeak('Műsorvezető bekapcsolva!');
-        }}
-        infoKey="ttshost"
-        infoText="A telefon hangosan bekonferálja a köröket, a wildcardokat és az eredményeket. (A böngésző beszédszintézisét használja — magyar hanggal, ahol elérhető.)"
-      />
+  
+    </React.Fragment>),
+    difficulty: (first) => (<React.Fragment>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin: first ? '0 0 8px' : '20px 0 8px' }}>{t('difficulty')}</div>
+        <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4 }}>
+          {diffs.map(d => {
+            const on = meta.difficulty===d.id;
+            return <button key={d.id} onClick={() => setMeta({...meta,difficulty:d.id})} style={{ flex:1, padding:'11px 6px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background:on?T.mint:'transparent', color:on?'#fff':T.inkSoft, boxShadow:on?'0 2px 7px -1px rgba(79,194,160,0.5)':'none', transition:'all .15s' }}>{d.label}</button>;
+          })}
+        </div>
+        {selDiff && (
+          <div style={{ marginTop:8, padding:'8px 12px', background:`${T.mint}12`, borderRadius:10, borderLeft:`3px solid ${T.mint}`, fontFamily:T.font, fontSize:12, color:T.inkSoft, lineHeight:1.5 }}>
+            <strong style={{ color:T.ink }}>{selDiff.label}:</strong> {selDiff.note}
+          </div>
+        )}
+  
+    </React.Fragment>),
+    order: (first) => (<React.Fragment>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin: first ? '0 0 8px' : '20px 0 8px' }}>{t('gameOrder')}</div>
+        <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4 }}>
+          {[{key:'sorban',label:t('inOrder')},{key:'random',label:t('randomGames')}].map(o => {
+            const on = ( meta.gameOrder||'random')===o.key;
+            return <button key={o.key} onClick={() => setMeta({...meta, gameOrder: o.key})} style={{ flex:1, padding:'11px 6px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background:on?T.mint:'transparent', color:on?'#fff':T.inkSoft, boxShadow:on?'0 2px 7px -1px rgba(79,194,160,0.5)':'none', transition:'all .15s' }}>{o.label}</button>;
+          })}
+        </div>
+  
+    </React.Fragment>),
+    maxRounds: (first) => (<React.Fragment>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin: first ? '0 0 8px' : '20px 0 8px' }}>{t('maxRoundsLabel')}</div>
+        <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4 }}>
+          {[10,25,50,null].map(n => {
+            const on = (meta.maxRounds||null) === n;
+            return (
+              <button key={n??'inf'} onClick={() => setMeta({...meta, maxRounds: n})} style={{ flex:1, padding:'11px 4px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background:on?T.mint:'transparent', color:on?'#fff':T.inkSoft, boxShadow:on?'0 2px 7px -1px rgba(79,194,160,0.5)':'none', transition:'all .15s' }}>
+                {n === null ? '∞' : n}
+              </button>
+            );
+          })}
+        </div>
+  
+    </React.Fragment>),
+    other: (first) => (<React.Fragment>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin: first ? '0 0 4px' : '20px 0 4px' }}>{t('other')}</div>
+        <ToggleRow
+          icon="counter"
+          label={t('roundCounter')}
+          value={meta.showRoundCounter !== false}
+          onChange={() => setMeta({...meta, showRoundCounter: meta.showRoundCounter === false ? true : false})}
+          infoKey="roundcounter"
+          infoText="Minden körváltásnál megjelenik egy nagy 'KÖR X!' felirat. Ha kikapcsolod, a körváltás csendesen történik (a Wildcard kivételével, az mindig megjelenik)."
+        />
+        <ToggleRow
+          icon="drop"
+          label={t('hydroBreak')}
+          value={!!meta.hydrationReminder}
+          onChange={() => setMeta({...meta, hydrationReminder: !meta.hydrationReminder})}
+          infoKey="hydration"
+          infoText="30 percenként megjelenik egy 'Igyál egy pohár vizet!' értesítés. 60 másodpercig nem lehet eltüntetni — addig a játék szünetel."
+        />
+    </React.Fragment>),
+  };
+  const keys = (group && group.length ? group : ['modes', 'difficulty', 'order', 'maxRounds', 'other']).filter(k => SECTIONS[k]);
+  return (
+    <div style={{ padding: group ? 0 : '0 18px 18px', display:'flex', flexDirection:'column' }} onClick={() => setOpenInfo(null)}>
+      {keys.map((k, i) => <React.Fragment key={k}>{SECTIONS[k](i === 0)}</React.Fragment>)}
     </div>
   );
 }
@@ -59448,7 +59431,6 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       const drinks = diff === 'nehéz' ? 3 : diff === 'közepes' ? 2 : 1;
       setGroupDrinkOverlay({ drinks });
       if (typeof window.bohSound === 'function') window.bohSound('cheers');
-      if (gameMeta?.ttsHost && typeof window.bohSpeak === 'function') window.bohSpeak('Csoportos ivászat! Mindenki iszik ' + drinks + ' kortyot!');
     }, 1800);
     return () => clearTimeout(t);
   }, [gameIdx, round]);
@@ -59540,7 +59522,6 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         if (isWildcardRound && wc) {
           setActiveWildcard({ ...wc, round: newRound });
           if (typeof window.bohSound === 'function') window.bohSound('wildcard');
-          if (gameMeta?.ttsHost && typeof window.bohSpeak === 'function') window.bohSpeak('Wildcard kör! ' + (wc.text || ''));
           // Szerencsekör: véletlen aktív játékos kap +1 pontot, és a banner kiírja, ki
           if (wc.effect === 'lucky') {
             const activePl = newPlayers.filter(p => p.active !== false);
@@ -59548,12 +59529,10 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               const lucky = activePl[Math.floor(Math.random() * activePl.length)];
               setPlayers(prev => prev.map(p => p.id === lucky.id ? { ...p, points: (p.points||0) + 1 } : p));
               setTimeout(() => setGameResult({ winners:[lucky], winNote:'+1 pont', subtitle:`${lucky.name} — Szerencsekör!`, drinks:0, effect:'lucky', ts:Date.now() }), 500);
-              if (gameMeta?.ttsHost && typeof window.bohSpeak === 'function') setTimeout(() => window.bohSpeak('Szerencsekör! ' + lucky.name + ' kapott egy pontot!'), 700);
             }
           }
         }
         // Show popup if: counter is on OR it's a wildcard round
-        if (showCounter && !isWildcardRound && gameMeta?.ttsHost && typeof window.bohSpeak === 'function') window.bohSpeak(newRound + '. kör');
         if (showCounter || isWildcardRound) {
           setRoundPopup({ round: newRound, wildcard: wc, showRound: showCounter, leaving: false });
           const duration = isWildcardRound ? null : 1500; // wildcard: stays until tapped
@@ -59646,16 +59625,6 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       const hasL = (res.losers || []).length > 0;
       const positive = hasW || (!hasL && scaled === 0 && res.correct !== false);
       window.bohSound(positive ? 'win' : 'lose');
-    }
-    if (gameMeta?.ttsHost && typeof window.bohSpeak === 'function') {
-      const nm = x => typeof x === 'string' ? x : (x && x.name) || '';
-      const wn = (r.winners || []).map(nm).filter(Boolean);
-      const ls = (r.losers || []).map(nm).filter(Boolean);
-      let say = wcEffect === 'reverse' ? 'Fordított kör! ' : wcEffect === 'double' ? 'Dupla kör! ' : '';
-      if (wn.length) say += wn.join(', ') + (wn.length > 1 ? ' nyertek! ' : ' nyert! ');
-      if (ls.length) say += ls.join(', ') + (ls.length > 1 ? ' isznak' : ' iszik') + (scaled > 0 ? ' ' + scaled + ' kortyot' : '') + '!';
-      else if (!wn.length && r.subtitle) say += r.subtitle;
-      if (say.trim()) window.bohSpeak(say);
     }
     if (roomCode && typeof syncRoom === 'function') {
       syncRoom(roomCode, { gameEvent: { correct: !!res.correct, playerName: res.playerName || null, drinks: scaled, subtitle: subtitle || null, ts } });
