@@ -198,6 +198,20 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
         egyebKulon: !!(other && diff && other.el !== diff.el),
       };
     });
+    // v10.168: rogzitett sorrend. Enelkul egy kesobbi atrendezes eszrevetlenul
+    // felcserelne a szekciokat.
+    const sorrend = await p.evaluate(() => {
+      const want = ['játékos', 'nehézségi szint', 'zene', 'módok', 'egyéb'];
+      const tops = want.map(w => {
+        const el = [...document.querySelectorAll('#__g div, #__g button')]
+          .find(d => d.textContent.trim().toLowerCase().startsWith(w));
+        return el ? Math.round(el.getBoundingClientRect().top) : -1;
+      });
+      return { want, tops };
+    });
+    ok('a szekciók sorrendje: összegző → nehézség → játékok → módok → egyéb',
+       sorrend.tops.every((v, i) => v > 0 && (i === 0 || v > sorrend.tops[i - 1])),
+       sorrend.want.map((w, i) => `${w}:${sorrend.tops[i]}`).join('  '));
     ok('a Módok külön dobozban van', boxes.modokKulon, JSON.stringify(boxes.w));
     ok('nehézség + sorrend + max körök EGY dobozban', boxes.egyBenA3);
     ok('az Egyéb külön dobozban van', boxes.egyebKulon);
