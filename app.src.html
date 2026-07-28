@@ -35052,7 +35052,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.171';
+const APP_VERSION = 'v10.172';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -44166,6 +44166,15 @@ function DifficultyInfoSheet({ current, onClose }) {
 // beerpong szabalya aszimmetrikus a masik negyhez kepest (oket akkor sem lehet
 // felvenni, ha mar van kivalasztott jatek — a masik negyet igen). Azt a
 // viselkedest most nem valtoztatjuk meg.
+// A wildcard percalapu: ezekbol a tartomanyokbol sorsol veletlen idopontot.
+// (Korabban korszamolo volt — az a magukban futo jatekokra nem volt rahuzhato.)
+const WILDCARD_RANGES = [
+  { lo: 4,  hi: 8,  label: '4–8' },
+  { lo: 8,  hi: 15, label: '8–15' },
+  { lo: 15, hi: 25, label: '15–25' },
+  { lo: 25, hi: 40, label: '25–40' },
+];
+
 const SOLO_GAME_IDS = ['busz', 'beerpong', 'powerhour', 'ovfj', 'farkasos', 'blackjack'];
 const isSoloGame = (id) => SOLO_GAME_IDS.indexOf(id) !== -1;
 
@@ -45030,11 +45039,11 @@ function GameSettingsContent({ meta, setMeta, onDone, go, group }) {
                 <InfoBox id={m.id} text={m.info} />
                 {m.id === 'wildcard' && on && (
                   <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:8, padding:'10px 12px', background:T.surfaceMuted, borderRadius:12 }}>
-                    <span style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkSoft, flex:1 }}>Hányadik körönként?</span>
+                    <span style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkSoft, flex:1 }}>Milyen gyakran?</span>
                     <div style={{ display:'flex', gap:4 }}>
-                      {[3,5,7,10].map(n => {
-                        const sel = (meta.wildcardFreq || 5) === n;
-                        return <button key={n} onClick={() => setMeta({...meta, wildcardFreq:n})} style={{ width:38, padding:'8px 0', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background: sel?T.mint:T.surface, color: sel?'#fff':T.inkSoft, transition:'all .15s' }}>{n}</button>;
+                      {WILDCARD_RANGES.map(n => {
+                        const sel = (meta.wildcardMin || 8) === n.lo;
+                        return <button key={n.lo} onClick={() => setMeta({...meta, wildcardMin:n.lo, wildcardMax:n.hi})} style={{ width:52, padding:'8px 0', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background: sel?T.mint:T.surface, color: sel?'#fff':T.inkSoft, transition:'all .15s' }}>{n.label}</button>;
                       })}
                     </div>
                   </div>
@@ -45982,17 +45991,17 @@ const WC_EFFECTS = {
   reverse: { badge:'FORDÍTOTT ⇄',   color:'#7C5CC4' },
 };
 const WILDCARDS_DEFAULT = [
-  { emoji:'🤚', text:'Bal kézzel kell inni ezen a körön!' },
+  { emoji:'🤚', text:'Bal kézzel kell inni, amíg ez a lap érvényben van!' },
   { emoji:'🤫', text:'Csend kör — aki hangosan nevet, iszik egyet!' },
   { emoji:'👆', text:'Mindenki mutasson valakire — a legtöbb ujj irányába eső játékos iszik!' },
   { emoji:'🔄', text:'Fordított kör — a vesztes kap pontot, a nyertes iszik!', effect:'reverse' },
   { emoji:'🤜', text:'Bumm kör — mindenki ökölbe szorítja a kezét, aki elfelejti, iszik!' },
-  { emoji:'👅', text:'Csak szavak nélkül lehet kommunikálni ezen a körön!' },
+  { emoji:'👅', text:'Csak szavak nélkül lehet kommunikálni, amíg ez a lap érvényben van!' },
   { emoji:'🎭', text:'Karakterkör — mindenki felvesz egy karaktert, aki kilép belőle, iszik!' },
   { emoji:'🥂', text:'Dupla kör — az összes ital és pont duplán számít!', effect:'double' },
   { emoji:'😐', text:'Pókerpofa kör — aki mosolyog vagy nevet, iszik egyet!' },
   { emoji:'🫵', text:'Vád kör — az aktuális játékos megnevez valakit, aki iszik egyet!' },
-  { emoji:'🔊', text:'Hangos kör — mindent hangosan kell mondani ezen a körön!' },
+  { emoji:'🔊', text:'Hangos kör — mindent hangosan kell mondani, amíg ez a lap érvényben van!' },
   { emoji:'⏪', text:'Visszapörgetős kör — a múlt körben nyerő játékos most iszik!' },
   { emoji:'🍀', text:'Szerencsekör — véletlenszerű játékos kap egy extra pontot!', effect:'lucky' },
   { emoji:'🤙', text:'Csak mutogatással lehet kommunikálni — aki szól, iszik!' },
@@ -59105,6 +59114,47 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const [starAnim, setStarAnim] = useState(false);
   const [roundPopup, setRoundPopup] = useState(null); // {round, wildcard, leaving}
   const [activeWildcard, setActiveWildcard] = useState(null); // {emoji, text, round} — a kör alatt végig látható szabály
+
+  // ── Wildcard idozito ──────────────────────────────────────────────
+  // Korabban a korszam hozta (newRound % freq). Az nem volt rahuzhato a
+  // magukban futo jatekokra: a Busz ~6 korlepest csinal osszesen, a Power Hour
+  // meg a sajat 60 perces oraja szerint fut. Az ido minden jatekra ugyanaz.
+  const wildcardOn = (gameMeta?.modes || []).includes('wildcard');
+  const activeWcRef = React.useRef(null);
+  React.useEffect(() => { activeWcRef.current = activeWildcard; }, [activeWildcard]);
+  React.useEffect(() => {
+    if (!wildcardOn) return;
+    const lo = Math.max(1, gameMeta?.wildcardMin || 8);
+    const hi = Math.max(lo, gameMeta?.wildcardMax || 15);
+    let timer = null;
+    const fire = () => {
+      const cur = activeWcRef.current;
+      const pool = (cur && WILDCARDS.length > 1) ? WILDCARDS.filter(w => w.text !== cur.text) : WILDCARDS;
+      if (!pool.length) return;
+      const wc = pool[Math.floor(Math.random() * pool.length)];
+      setActiveWildcard({ ...wc, ts: Date.now() });
+      if (typeof window.bohSound === 'function') window.bohSound('wildcard');
+      // A savra koppintva is ez a nezet jon fel — nincs uj felulet.
+      setRoundPopup({ round: null, wildcard: wc, showRound: false, leaving: false });
+      // Szerencsekor: veletlen aktiv jatekos kap +1 pontot
+      if (wc.effect === 'lucky') {
+        setPlayers(prev => {
+          const act = prev.filter(p => p.active !== false);
+          if (!act.length) return prev;
+          const lucky = act[Math.floor(Math.random() * act.length)];
+          setTimeout(() => setGameResult({ winners:[lucky], winNote:'+1 pont',
+            subtitle:`${lucky.name} — Szerencsekör!`, drinks:0, effect:'lucky', ts:Date.now() }), 900);
+          return prev.map(p => p.id === lucky.id ? { ...p, points: (p.points || 0) + 1 } : p);
+        });
+      }
+    };
+    const schedule = () => {
+      const ms = (lo + Math.random() * (hi - lo)) * 60000;
+      timer = setTimeout(() => { fire(); schedule(); }, ms);
+    };
+    schedule();
+    return () => { if (timer) clearTimeout(timer); };
+  }, [wildcardOn, gameMeta?.wildcardMin, gameMeta?.wildcardMax]);
   const [wcPunishOpen, setWcPunishOpen] = useState(false);
   const [wcToast, setWcToast] = useState(null); // {name}
   const [hydrationPopup, setHydrationPopup] = useState(null); // {countdown, dismissable}
@@ -59437,35 +59487,11 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       }
       if (newRound > round) {
                 const showCounter = gameMeta?.showRoundCounter !== false;
-        const wcFreq = gameMeta?.wildcardFreq || 5;
-        const isWildcardRound = gameMeta?.modes?.includes('wildcard') && newRound % wcFreq === 0;
-        // Az aktív wildcard a KÖVETKEZŐ wildcard körig érvényben marad (pl. freq 3: 3-5. kör),
-        // akkor új kártya váltja — ami nem lehet ugyanaz, mint az előző.
-        const wc = isWildcardRound ? (() => {
-          const pool = (activeWildcard && WILDCARDS.length > 1) ? WILDCARDS.filter(w => w.text !== activeWildcard.text) : WILDCARDS;
-          return pool[Math.floor(Math.random() * pool.length)];
-        })() : null;
-        if (isWildcardRound && wc) {
-          setActiveWildcard({ ...wc, round: newRound });
-          if (typeof window.bohSound === 'function') window.bohSound('wildcard');
-          // Szerencsekör: véletlen aktív játékos kap +1 pontot, és a banner kiírja, ki
-          if (wc.effect === 'lucky') {
-            const activePl = newPlayers.filter(p => p.active !== false);
-            if (activePl.length) {
-              const lucky = activePl[Math.floor(Math.random() * activePl.length)];
-              setPlayers(prev => prev.map(p => p.id === lucky.id ? { ...p, points: (p.points||0) + 1 } : p));
-              setTimeout(() => setGameResult({ winners:[lucky], winNote:'+1 pont', subtitle:`${lucky.name} — Szerencsekör!`, drinks:0, effect:'lucky', ts:Date.now() }), 500);
-            }
-          }
-        }
-        // Show popup if: counter is on OR it's a wildcard round
-        if (showCounter || isWildcardRound) {
-          setRoundPopup({ round: newRound, wildcard: wc, showRound: showCounter, leaving: false });
-          const duration = isWildcardRound ? null : 1500; // wildcard: stays until tapped
-          if (duration) {
-            setTimeout(() => setRoundPopup(p => p ? {...p, leaving:true} : p), duration);
-            setTimeout(() => setRoundPopup(null), duration + 500);
-          }
+        // A wildcardot mar nem a korszam hozza, hanem az idozito (lasd lentebb).
+        if (showCounter) {
+          setRoundPopup({ round: newRound, wildcard: null, showRound: true, leaving: false });
+          setTimeout(() => setRoundPopup(p => p ? {...p, leaving:true} : p), 1500);
+          setTimeout(() => setRoundPopup(null), 2000);
         }
       }
     }, 700);
