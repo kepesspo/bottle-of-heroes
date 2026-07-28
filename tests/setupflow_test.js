@@ -177,8 +177,8 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
     ok('nincs többé hangos műsorvezető', !/műsorvezet/i.test(t), (t.match(/.{0,20}űsorvezet.{0,10}/i) || ['—'])[0]);
 
     const boxes = await p.evaluate(() => {
-      const lab = txt => [...document.querySelectorAll('#__g div')]
-        .find(d => d.textContent.trim().toLowerCase() === txt);
+      const lab = txt => [...document.querySelectorAll('#__g div, #__g span')]
+        .find(d => d.children.length === 0 && d.textContent.trim().toLowerCase().startsWith(txt));
       const card = el => { let c = el;
         for (let i = 0; i < 5 && c; i++) { c = c.parentElement;
           if (c && getComputedStyle(c).boxShadow !== 'none') return c; }
@@ -218,6 +218,37 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
     ok('minden doboz olyan széles, mint a felső összefoglaló',
        boxes.w.modes === boxes.w.summary && boxes.w.other === boxes.w.summary,
        `módok=${boxes.w.modes} egyéb=${boxes.w.other} összefoglaló=${boxes.w.summary}`);
+    // v10.169: a nehezseg magyarazata info gombra nyilo lapra kerult. Az inline
+    // magyarazo sor kikerult (egy sorral rovidebb az oldal), es a lap mind a
+    // negy szintet mutatja — a valasztashoz ez kell, nem a kivalasztott egy
+    // mondata. A tartalom a kodbol jon: a fo hatas a KORTYSZORZO (1/2/3/5),
+    // nem az idozito. Ha a szorzo elcsuszna a diffDrinks-tol, ez bukjon.
+    ok('nincs inline nehézség-magyarázó sor', !/Hosszabb időzítők|Normál játéksebesség/i.test(t));
+    ok('van info gomb a nehézségi szint mellett',
+       await p.evaluate(() => !!document.querySelector('#__g button[aria-label="Nehézségi szintek"]')));
+    await p.evaluate(() => document.querySelector('#__g button[aria-label="Nehézségi szintek"]').click());
+    await p.waitForTimeout(800);
+    const sheet = await p.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
+    ok('a lap mind a négy szintet mutatja',
+       ['Könnyű','Közepes','Nehéz','Extrém'].every(x => sheet.includes(x)));
+    ok('a kortyszorzó szerepel és egyezik a kóddal',
+       ['1× korty','2× korty','3× korty','5× korty'].every(x => sheet.includes(x)),
+       (sheet.match(/\d× korty/g) || []).join(' '));
+    {
+      const src = fs.readFileSync('/home/user/bottle-of-heroes/app.src.html', 'utf8');
+      const m = src.match(/const diffDrinks = [^;]+;/);
+      const code = m ? m[0] : '';
+      ok('a szorzók a diffDrinks-ből valók (extreme 5, hard 3, mid 2, egyébként 1)',
+         /'extreme' \? 5/.test(code) && /'hard' \? 3/.test(code) && /'mid' \? 2/.test(code) && /: 1/.test(code),
+         code.slice(0, 100));
+    }
+    ok('a jelenlegi szint meg van jelölve', /MOST EZ/i.test(sheet));
+    await p.evaluate(() => {
+      const b2 = [...document.querySelectorAll('button')].find(x => /^Értem$/.test(x.innerText.trim()));
+      if (b2) b2.click();
+    });
+    await p.waitForTimeout(600);
+
     ok('látszik a becsült idő', /perc/i.test(t), (t.match(/~?\d+ ?PERC/i) || ['—'])[0]);
 
     // beallito lap nyitasa a listabol
