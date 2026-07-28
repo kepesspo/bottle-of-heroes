@@ -185,7 +185,20 @@
       enableNetwork: () => Promise.resolve(),
       settings: () => {},
       enablePersistence: () => Promise.resolve(),
-      batch: () => ({ set(){}, update(){}, delete(){}, commit: () => Promise.resolve() }),
+      // A koteg korabban ures burok volt: a batch.set/delete csendben eldobta az
+      // irast, tehat minden kotegben iro kod (profil-osszevonas, atemeles)
+      // teszteletlen maradt. Most a muveleteket eltesszuk, es commit()-kor
+      // ugyanazon a doc-referencian futtatjuk le oket.
+      batch: () => {
+        const ops = [];
+        const b = {
+          set: (ref, data, opts) => { ops.push(() => ref.set(data, opts)); return b; },
+          update: (ref, data) => { ops.push(() => ref.update(data)); return b; },
+          delete: (ref) => { ops.push(() => ref.delete()); return b; },
+          commit: () => ops.reduce((chain, f) => chain.then(f), Promise.resolve()).then(() => {}),
+        };
+        return b;
+      },
     };
   };
   firestoreFn.FieldValue = FieldValue;

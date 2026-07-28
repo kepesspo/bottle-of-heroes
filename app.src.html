@@ -33887,10 +33887,15 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   });
 
   // ── Teszt / éles adatbázis ────────────────────────────────
-  // A statisztika-kollekciók két példányban léteznek. A MOSTANI, prefix nélküli
-  // nevek a TESZT-adatot tartják — így a váltáshoz nem kellett egyetlen
-  // dokumentumot sem mozgatni. Az éles adat 'live_' prefixű kollekciókba megy,
-  // tehát üresen indul.
+  // A statisztika- és profil-kollekciók két példányban léteznek. A MOSTANI,
+  // prefix nélküli nevek a TESZT-adatot tartják — így a váltáshoz nem kellett
+  // egyetlen dokumentumot sem mozgatni. Az éles adat 'live_' prefixű
+  // kollekciókba megy, tehát üresen indul.
+  //
+  // Közös marad: config, rooms, barDrinks, tasks, party_templates, seasons —
+  // ezek nem az eredményekről szólnak. A szezonok azért maradhatnak közösek,
+  // mert csak a dátumokat tárolják; az állás mindig az épp aktív statisztikából
+  // számolódik.
   //
   // Alapértelmezés az ÉLES. Teszt módba a kezdőképernyőn a verziószámra
   // háromszor koppintva lehet váltani.
@@ -33899,7 +33904,7 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   // nem eshet ketté egy buli statisztikája attól, hogy az egyik telefon teszt
   // módban maradt. A localStorage csak gyorsítótár: a coll() szinkron dönt,
   // a Firestore válasza viszont csak a betöltés után pár tizeddel érkezik.
-  var BOH_SPLIT_COLLECTIONS = ['stats', 'statEvents', 'game_stats', 'gameStatEvents', 'usage', 'bp_tournaments'];
+  var BOH_SPLIT_COLLECTIONS = ['stats', 'statEvents', 'game_stats', 'gameStatEvents', 'usage', 'bp_tournaments', 'profiles'];
   window.BOH_TESTDB_KEY = 'boh_testdb';
   window.isTestDb = function() {
     try { return localStorage.getItem(window.BOH_TESTDB_KEY) === '1'; } catch (e) { return false; }
@@ -34039,18 +34044,18 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
     }).catch(function(e){ console.warn('popPendingDrinks', e); return []; });
   };
   window.getProfiles = function() {
-    return db.collection('profiles').orderBy('name').get().then(function(snap) {
+    return coll('profiles').orderBy('name').get().then(function(snap) {
       return snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
     }).catch(function() { return []; });
   };
   window.setProfileDrinkLimit = function(profileId, limit) {
     if (!profileId) return Promise.resolve();
     var v = Number(limit) > 0 ? Number(limit) : firebase.firestore.FieldValue.delete();
-    return db.collection('profiles').doc(profileId).set({ drinkLimit: v }, { merge: true })
+    return coll('profiles').doc(profileId).set({ drinkLimit: v }, { merge: true })
       .catch(function(e) { console.warn('setProfileDrinkLimit', e); });
   };
   window.saveProfile = function(profile) {
-    var ref = profile.id ? db.collection('profiles').doc(profile.id) : db.collection('profiles').doc();
+    var ref = profile.id ? coll('profiles').doc(profile.id) : coll('profiles').doc();
     var data = { name: profile.name, color: profile.color };
     if (profile.nickname) data.nickname = profile.nickname;
     if (profile.phone) data.phone = profile.phone;
@@ -35081,7 +35086,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.181';
+const APP_VERSION = 'v10.182';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -37985,6 +37990,72 @@ function AdminDrinkLimits({ profiles, onSaved }) {
   );
 }
 
+// Egyszeri átemelés a teszt profilokból az élesbe. Csak a személyes adatok
+// mennek át — az eredmények (statisztika, kitüntetések, beerpong-párharcok) a
+// stats/ kollekciókban élnek, azok szándékosan nulláról indulnak élesben.
+//
+// A profil-azonosítók megmaradnak: a közös kollekciók (szobák, bár-értékelések,
+// szezonok) ezekre hivatkoznak, új azonosítókkal névtelenné válnának.
+const PROFILE_PERSONAL_FIELDS = ['name', 'color', 'nickname', 'phone', 'birthday',
+                                 'img', 'avatarId', 'email', 'drinkLimit'];
+
+function AdminProfileCopy({ onDone }) {
+  const [busy, setBusy] = React.useState(false);
+  const [result, setResult] = React.useState(null);
+
+  const run = () => {
+    if (busy || typeof firebase === 'undefined') return;
+    setBusy(true); setResult(null);
+    const fdb = firebase.firestore();
+    Promise.all([fdb.collection('profiles').get(), fdb.collection('live_profiles').get()])
+      .then(([srcSnap, dstSnap]) => {
+        const have = new Set((dstSnap.docs || []).map(d => d.id));
+        const batch = fdb.batch();
+        let copied = 0, existed = 0, unnamed = 0;
+        (srcSnap.docs || []).forEach(d => {
+          // Ami már megvan élesben, azt nem írjuk felül — különben egy második
+          // kattintás visszaállítaná az élesben azóta javított neveket.
+          if (have.has(d.id)) { existed++; return; }
+          const s = d.data() || {}, out = {};
+          PROFILE_PERSONAL_FIELDS.forEach(k => { if (s[k] !== undefined && s[k] !== null) out[k] = s[k]; });
+          if (!out.name) { unnamed++; return; }
+          batch.set(fdb.collection('live_profiles').doc(d.id), out);
+          copied++;
+        });
+        return (copied ? batch.commit() : Promise.resolve()).then(() => ({ copied, existed, unnamed }));
+      })
+      .then(r => { setResult(r); setBusy(false); onDone && onDone(); })
+      .catch(e => { setResult({ err: String(e && e.message || e) }); setBusy(false); });
+  };
+
+  return (
+    <div style={{ background:T.surface, borderRadius:16, padding:'12px 16px', marginBottom:14, boxShadow:T.shadow }}>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink }}>Profilok átemelése az élesbe</div>
+      <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:4, lineHeight:1.5 }}>
+        A teszt profilok személyes adatait (név, becenév, szín, avatar, telefon, e-mail,
+        születésnap, korty limit) átmásolja az éles adatbázisba, ugyanazokkal az
+        azonosítókkal. Az eredmények nem jönnek át — élesben nulláról indul a statisztika.
+        Ami élesben már megvan, azt nem írja felül.
+      </div>
+      <button onClick={run} disabled={busy}
+        style={{ marginTop:10, width:'100%', padding:'11px 0', borderRadius:12, border:'none',
+                 background: busy ? T.surfaceMuted : T.mint, color: busy ? T.inkSoft : '#fff',
+                 fontFamily:T.font, fontWeight:900, fontSize:14, cursor: busy ? 'default' : 'pointer' }}>
+        {busy ? 'Másolás…' : 'Átemelés indítása'}
+      </button>
+      {result && (
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12, marginTop:8,
+                      color: result.err ? T.coral : T.mint }}>
+          {result.err ? ('Nem sikerült: ' + result.err)
+            : `${result.copied} profil átemelve`
+              + (result.existed ? `, ${result.existed} már megvolt` : '')
+              + (result.unnamed ? `, ${result.unnamed} névtelen kihagyva` : '') + '.'}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminProfiles() {
   const [profiles, setProfiles] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -38096,7 +38167,7 @@ function AdminProfiles() {
   function deleteProfile(id) {
     if (typeof firebase === 'undefined') return;
     setDeleting(id);
-    firebase.firestore().collection('profiles').doc(id).delete().then(() => { setDeleting(null); load(); }).catch(() => setDeleting(null));
+    window.bohColl('profiles').doc(id).delete().then(() => { setDeleting(null); load(); }).catch(() => setDeleting(null));
   }
 
   function openEditProfile(p) {
@@ -38165,6 +38236,7 @@ function AdminProfiles() {
 
   return (
     <div style={{ padding:'16px' }}>
+      <AdminProfileCopy onDone={load} />
       {profiles.length >= 2 && <ProfileMergeCard profiles={profiles} onDone={load} />}
       {birthdayToday.length > 0 && (
         <div style={{ background:'linear-gradient(135deg,#f472b6,#a855f7)', borderRadius:16, padding:'14px 16px', marginBottom:14, display:'flex', alignItems:'center', gap:12 }}>
@@ -38758,8 +38830,8 @@ function ProfileMergeCard({ profiles, onDone }) {
     setBusy(true);
     const db2 = firebase.firestore();
     Promise.all([
-      db2.collection('stats').doc(srcId).get(), db2.collection('stats').doc(dstId).get(),
-      db2.collection('profiles').doc(srcId).get(), db2.collection('profiles').doc(dstId).get(),
+      window.bohColl('stats').doc(srcId).get(), window.bohColl('stats').doc(dstId).get(),
+      window.bohColl('profiles').doc(srcId).get(), window.bohColl('profiles').doc(dstId).get(),
     ]).then(([ss, ds, sp, dp]) => {
       const s = ss.exists ? ss.data() : {}, d = ds.exists ? ds.data() : {};
       const merged = { ...d };
@@ -38771,10 +38843,10 @@ function ProfileMergeCard({ profiles, onDone }) {
       const profPatch = {};
       ['nickname', 'phone', 'birthday', 'img'].forEach(k => { if (!dpd[k] && spd[k]) profPatch[k] = spd[k]; });
       const batch = db2.batch();
-      batch.set(db2.collection('stats').doc(dstId), merged);
-      if (Object.keys(profPatch).length) batch.set(db2.collection('profiles').doc(dstId), profPatch, { merge: true });
-      batch.delete(db2.collection('profiles').doc(srcId));
-      batch.delete(db2.collection('stats').doc(srcId));
+      batch.set(window.bohColl('stats').doc(dstId), merged);
+      if (Object.keys(profPatch).length) batch.set(window.bohColl('profiles').doc(dstId), profPatch, { merge: true });
+      batch.delete(window.bohColl('profiles').doc(srcId));
+      batch.delete(window.bohColl('stats').doc(srcId));
       return batch.commit();
     }).then(() => { setSrcId(''); setDstId(''); setOpen(false); onDone && onDone(); }).finally(() => setBusy(false));
   };
@@ -40443,7 +40515,7 @@ function BingoScreen({ go, deepLink }) {
     setGateErr(''); setGateSending(true);
     const code = (authRec && authRec.code) ? authRec.code : genCode();
     const rec = { email, code, at: Date.now() };
-    if (db && (!whoProf || whoProf.email !== email)) db.collection('profiles').doc(who).set({ email }, { merge: true }).catch(() => {});
+    if (db && (!whoProf || whoProf.email !== email)) window.bohColl('profiles').doc(who).set({ email }, { merge: true }).catch(() => {});
     const done = () => { setGateSending(false); setGateSent(true); };
     if (db) db.collection('config').doc('tippAuth').set({ [who]: rec }, { merge: true }).then(() => sendCodeMail(email, code)).then(done).catch(() => { sendCodeMail(email, code).finally(done); });
     else { sendCodeMail(email, code).finally(done); }
