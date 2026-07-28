@@ -331,6 +331,50 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
     await p.close();
   }
 
+  // ─── EGYEDUL FUTO JATEK (v10.171) ───
+  // Hat jatek egyedul megy (busz, beerpong, powerhour, ovfj, farkasos,
+  // blackjack). Ilyenkor a jateksorrend ertelmetlen, a max korok pedig
+  // felbevagna a menetet — mindketto kimarad. A nehezseg es a modok viszont
+  // HATNAK, azok maradnak: elrejtesuk valodi kontrollt venne el.
+  console.log('\n===== EGYEDÜL FUTÓ JÁTÉK =====');
+  {
+    const p = await open(b, 'setup', true, ['busz']);
+    const t = await txt(p);
+    ok('a játéksorrend kimarad', !/JÁTÉKSORREND/i.test(t));
+    ok('a max körök kimarad', !/MAX KÖRÖK/i.test(t));
+    ok('a nehézségi szint MARAD (kortyszorzó)', /NEHÉZSÉGI SZINT/i.test(t));
+    ok('a módok MARADNAK', /MÓDOK/i.test(t));
+    ok('az összegzőben a játék neve áll, nem az "1"', /Busz/i.test(t) && !/\b1 JÁTÉK\b/i.test(t),
+       (t.match(/JÁTÉKOS.{0,24}/i) || ['—'])[0]);
+    // a jatek sajat beallitasa elore kerul: a nehezseg fole
+    const pos = await p.evaluate(() => {
+      const find = re => { const el = [...document.querySelectorAll('#__g div, #__g span, #__g button')]
+        .find(d => re.test(d.textContent.trim())); return el ? Math.round(el.getBoundingClientRect().top) : -1; };
+      return { busz: find(/^Busz$/), diff: find(/^Nehézségi szint$/i) };
+    });
+    ok('a játék saját beállítása a nehézség FÖLÖTT van',
+       pos.busz > 0 && pos.diff > 0 && pos.busz < pos.diff, JSON.stringify(pos));
+    ok('nincs JS hiba', p.__errs.length === 0, p.__errs.join(' | '));
+    await p.close();
+  }
+
+  // ─── A KORLIMIT NE VAGJA EL A MAGABAN FUTO JATEKOT ───
+  // Ez a Jatekmenet oldaltol fuggetlenul is hiba volt: a Busz ot belso
+  // lepesbol all, mindegyik noveli a korszamlalot, es 10 korre allitott
+  // limitnel a jatek KOZEPEN jott volna az Eredmeny kepernyo.
+  console.log('\n===== KÖRLIMIT ÉS AZ EGYEDÜL FUTÓ JÁTÉK =====');
+  {
+    const src = fs.readFileSync('/home/user/bottle-of-heroes/app.src.html', 'utf8');
+    ok('a körlimit kihagyja a magában futó játékokat',
+       /newRound > maxRounds && !isSoloGame\(currentGameId\)/.test(src),
+       (src.match(/if \(maxRounds && newRound > maxRounds[^)]*\)/) || ['—'])[0]);
+    const m = src.match(/const SOLO_GAME_IDS = \[([^\]]*)\]/);
+    const ids = m ? [...m[1].matchAll(/'([a-z]+)'/g)].map(x => x[1]) : [];
+    ok('mind a hat egyedül futó játék szerepel',
+       ['busz','beerpong','powerhour','ovfj','farkasos','blackjack'].every(x => ids.includes(x)),
+       ids.join(', '));
+  }
+
   // ─── A NETFLIX-NEZET KIVEZETESE (v10.167) ───
   // Ket parhuzamos elrendezes ket kulon csempe-komponenssel: minden
   // kartya-valtoztatast ketszer kellett elvegezni, es epp ilyenbol szuletnek az

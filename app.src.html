@@ -35052,7 +35052,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.170';
+const APP_VERSION = 'v10.171';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -44159,6 +44159,16 @@ function DifficultyInfoSheet({ current, onClose }) {
   );
 }
 
+// Ezek a jatekok egyedul futnak: nem valaszthato melleuk masik. Sajat belso
+// lepesekbol allnak, ezert a korlimit es a Jatekmenet oldal is ebbol dolgozik.
+//
+// MEGJEGYZES: a GamesScreen isLocked() NEM ebbol dolgozik, mert ott a busz es a
+// beerpong szabalya aszimmetrikus a masik negyhez kepest (oket akkor sem lehet
+// felvenni, ha mar van kivalasztott jatek — a masik negyet igen). Azt a
+// viselkedest most nem valtoztatjuk meg.
+const SOLO_GAME_IDS = ['busz', 'beerpong', 'powerhour', 'ovfj', 'farkasos', 'blackjack'];
+const isSoloGame = (id) => SOLO_GAME_IDS.indexOf(id) !== -1;
+
 // Melyik jateknak van sajat beallito lapja. EGY forras: ebbol dolgozik a
 // hosszu nyomas, a kartya fogaskerek-jelzese es a Jatekmenet oldal is.
 // ─── JATEKMENET OLDAL ──────────────────────────────────────────
@@ -44171,11 +44181,46 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
   const games = (selectedGames || []).map(id => GAMES.find(g => g.id === id)).filter(Boolean);
   const configurable = games.filter(g => hasGameConfig(g.id));
   const minutes = Math.max(5, Math.round((selectedGames || []).length * 2.5 / 5) * 5);
+  // Pontosan egy, magaban futo jatek — ilyenkor mas a kepernyo sulypontja.
+  const soloGame = games.length === 1 && isSoloGame(games[0].id) ? games[0] : null;
 
 
 
   // Minden doboz ugyanezt hasznalja — a szelesseguk igy nem tud elcsuszni.
   const cardStyle = { background:T.surface, borderRadius:16, boxShadow:T.shadow };
+
+  // A kivalasztott jatekok sajat beallitasai. Egyedul futo jateknal ez az
+  // egyetlen erdemi dolog a kepernyon, ezert oda a nehezseg ELE kerul.
+  const gamesBlock = (
+          <div style={{ marginTop:12 }}>
+            {configurable.length === 0 ? (
+              <div style={{ ...cardStyle, padding:16,
+                fontFamily:T.font, fontSize:13, color:T.inkMute, lineHeight:1.6 }}>
+                A kiválasztott játékokhoz nincs külön beállítás — mehet az indítás.
+              </div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {configurable.map(g => (
+                  <button key={g.id} onClick={() => setOpenCfg(g.id)} style={{
+                    display:'flex', alignItems:'center', gap:12, width:'100%', textAlign:'left',
+                    ...cardStyle, border:'none', padding:'12px 14px', cursor:'pointer', minHeight:64,
+                  }}>
+                    <div style={{ width:44, height:44, borderRadius:13, flexShrink:0, display:'grid', placeItems:'center',
+                      background: g.color ? g.color + '22' : T.surfaceMuted }}>
+                      {g.img ? <img src={g.img} style={{ width:30, height:30, objectFit:'contain' }} />
+                             : <span style={{ fontSize:22 }}>{g.emoji}</span>}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>{tg(g, 'name')}</div>
+                      <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, marginTop:2 }}>Beállítások megnyitása</div>
+                    </div>
+                    <span style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.mintDeep, flexShrink:0 }}>›</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+  );
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
@@ -44187,11 +44232,13 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
         <div style={{ ...cardStyle, display:'flex', gap:10, padding:'12px 14px' }}>
           {[
             { v: (players || []).length, l: 'játékos' },
-            { v: games.length,          l: 'játék' },
+            soloGame ? { v: tg(soloGame, 'name'), l: 'játék', small: true }
+                     : { v: games.length, l: 'játék' },
             { v: '~' + minutes,         l: 'perc' },
           ].map((x, i) => (
             <div key={i} style={{ flex:1, minWidth:0, textAlign:'center' }}>
-              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, lineHeight:1 }}>{x.v}</div>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize: x.small ? 14 : 22, color:T.ink,
+                lineHeight: x.small ? 1.2 : 1, paddingTop: x.small ? 4 : 0 }}>{x.v}</div>
               <div style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, letterSpacing:'0.08em',
                 textTransform:'uppercase', color:T.inkMute, marginTop:4 }}>{x.l}</div>
             </div>
@@ -44199,44 +44246,32 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
         </div>
 
         {/* A "Játékmenet" felirat itt nem kell — a fejlécben már ott van. */}
+        {/* Egyedül futó játéknál a játéksorrend értelmetlen (egy játék van), a
+            max körök pedig félbevágná a menetet — mindkettő kimarad. */}
+        {soloGame && gamesBlock}
         <div style={{ ...cardStyle, marginTop:12, padding:'14px 16px' }}>
-          <GameSettingsContent meta={gameMeta} setMeta={setGameMeta} group={['difficulty', 'order', 'maxRounds']} />
+          <GameSettingsContent meta={gameMeta} setMeta={setGameMeta}
+            group={soloGame ? ['difficulty'] : ['difficulty', 'order', 'maxRounds']} />
         </div>
 
-        {/* Fejléc nélkül: a játék-sorok magukért beszélnek. */}
-        <div style={{ marginTop:12 }}>
-          {configurable.length === 0 ? (
-            <div style={{ ...cardStyle, padding:16,
-              fontFamily:T.font, fontSize:13, color:T.inkMute, lineHeight:1.6 }}>
-              A kiválasztott játékokhoz nincs külön beállítás — mehet az indítás.
-            </div>
-          ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              {configurable.map(g => (
-                <button key={g.id} onClick={() => setOpenCfg(g.id)} style={{
-                  display:'flex', alignItems:'center', gap:12, width:'100%', textAlign:'left',
-                  ...cardStyle, border:'none', padding:'12px 14px', cursor:'pointer', minHeight:64,
-                }}>
-                  <div style={{ width:44, height:44, borderRadius:13, flexShrink:0, display:'grid', placeItems:'center',
-                    background: g.color ? g.color + '22' : T.surfaceMuted }}>
-                    {g.img ? <img src={g.img} style={{ width:30, height:30, objectFit:'contain' }} />
-                           : <span style={{ fontSize:22 }}>{g.emoji}</span>}
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>{tg(g, 'name')}</div>
-                    <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, marginTop:2 }}>Beállítások megnyitása</div>
-                  </div>
-                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.mintDeep, flexShrink:0 }}>›</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {!soloGame && gamesBlock}
 
         {[['modes'], ['other']].map((grp, i) => (
-          <div key={i} style={{ ...cardStyle, marginTop:12, padding:'14px 16px' }}>
-            <GameSettingsContent meta={gameMeta} setMeta={setGameMeta} group={grp} />
-          </div>
+          <React.Fragment key={i}>
+            <div style={{ ...cardStyle, marginTop:12, padding:'14px 16px' }}>
+              <GameSettingsContent meta={gameMeta} setMeta={setGameMeta} group={grp} />
+            </div>
+            {/* A wildcard kör a menet közepébe is beugrik — egyetlen hosszú
+                játéknál ez meglepetés, ezért itt kimondjuk. */}
+            {grp[0] === 'modes' && soloGame && (gameMeta?.modes || []).includes('wildcard') && (
+              <div style={{ ...cardStyle, marginTop:8, padding:'11px 14px',
+                borderLeft:`4px solid ${T.yellow}`,
+                fontFamily:T.font, fontSize:12.5, color:T.inkSoft, lineHeight:1.55 }}>
+                A wildcard kör a <strong style={{ color:T.ink }}>{tg(soloGame, 'name')}</strong> közben is beugrik,
+                nem csak játékok között.
+              </div>
+            )}
+          </React.Fragment>
         ))}
 
 
@@ -59390,7 +59425,10 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       // amig a kor-popup ("N. Kör" / wildcard) lement, kulonben egymasra csusznanak.
       if (pendingLimitWarnRef.current) setLimitArmed(v => v + 1);
       const maxRounds = gameMeta?.maxRounds || null;
-      if (maxRounds && newRound > maxRounds) {
+      // A magukban futo jatekok sajat belso lepesekbol allnak, es azok is
+      // noveli a korszamlalot — a korlimit igy a MENET KOZEPEN zarna le a bulit
+      // (pl. Busz 10 korre allitott limitnel). Rajuk a limit nem vonatkozik.
+      if (maxRounds && newRound > maxRounds && !isSoloGame(currentGameId)) {
         saveCurrentGameStats();
         if (setLastGameRound) setLastGameRound(newRound);
         try { localStorage.removeItem('boh_session'); } catch(e) {}
