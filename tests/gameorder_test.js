@@ -111,6 +111,35 @@ const soloNames = (p) => p.evaluate(() => {
     await p.close();
   }
 
+  // ─── A JATEK-BANNEREK ───
+  // A fejlecben a banner-kep jelenik meg; ha egy jateknak nincs, a tartalek
+  // (ikon + szoveg) jon fel, ami ranezesre ugy hat, mintha rossz kep toltodne.
+  // Negy jatek volt igy (erem, tabu, reakcio, szamsor) — ez ne fordulhasson elo
+  // ujra, es a hivatkozott fajl letezzen is.
+  console.log('\n===== JÁTÉK-BANNEREK =====');
+  {
+    const path = require('path');
+    const root = path.join(__dirname, '..');
+    const src = fs.readFileSync(path.join(root, 'app.src.html'), 'utf8');
+    const from = src.indexOf('const GAMES = [');
+    const body = src.slice(from, src.indexOf('\n];', from));
+    const rows = body.split('\n').filter(l => /^\s*\{ id:'/.test(l));
+    const noBanner = rows.filter(l => !/banner:/.test(l))
+      .map(l => (l.match(/id:'([^']+)'/) || [])[1]);
+    ok('minden játéknak van bannere', noBanner.length === 0,
+       noBanner.length ? 'hiányzik: ' + noBanner.join(', ') : rows.length + ' játék');
+
+    // a hivatkozott fajlok tenyleg megvannak — egy elgepelt kulcs csendben
+    // ugyanoda vezetne, mint a hianyzo banner
+    const keys = [...body.matchAll(/banner:IMGS\['([^']+)'\]/g)].map(m => m[1]);
+    const missing = [...new Set(keys)].filter(k => {
+      const m = src.match(new RegExp("'" + k.replace('.', '\\.') + "':\\s*'([^']+)'"));
+      return !m || !fs.existsSync(path.join(root, m[1]));
+    });
+    ok('minden hivatkozott banner-fájl létezik', missing.length === 0,
+       missing.length ? 'nincs meg: ' + missing.join(', ') : keys.length + ' hivatkozás');
+  }
+
   await b.close();
   console.log('\n' + (fail === 0 ? '✅ MINDEN ELLENORZES RENDBEN' : '❌ ' + fail + ' ELLENORZES BUKOTT'));
   process.exit(fail === 0 ? 0 : 1);
