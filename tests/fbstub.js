@@ -1,6 +1,12 @@
 // Minimal in-memory Firestore compat stub, faithful enough to reproduce real
 // undefined-value throw behavior and FieldValue sentinel identity checks.
 (function () {
+  // v10.180 ota a statisztika-kollekciok ket peldanyban leteznek: eles modban
+  // 'live_' prefixszel, teszt modban prefix nelkul. A tesztek a prefix nelkuli
+  // neveket toltik fel, ezert alapertelmezesben teszt modba allunk — kulonben
+  // minden seed melle irna. Amelyik teszt maga akar donteni (testdb_test),
+  // az a stub UTAN allitja at.
+  try { localStorage.setItem('boh_testdb', '1'); } catch (e) {}
   class FieldValue {
     constructor(kind, arg) { this._kind = kind; this._arg = arg; }
   }
@@ -129,6 +135,9 @@
   function collRef(collPath) {
     if (!store[collPath]) store[collPath] = {};
     return {
+      // a valodi CollectionReference is ismeri — igy megkerdezheto, hova mutat
+      path: collPath,
+      id: collPath.split('/').pop(),
       doc: (id) => docRef(collPath, id || genId()),
       add: (data) => {
         assertNoUndefined(data);

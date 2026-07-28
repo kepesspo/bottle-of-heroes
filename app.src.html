@@ -33886,6 +33886,33 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
     // failed-precondition = multiple tabs; unimplemented = browser doesn't support it
   });
 
+  // ── Teszt / éles adatbázis ────────────────────────────────
+  // A statisztika-kollekciók két példányban léteznek. A MOSTANI, prefix nélküli
+  // nevek a TESZT-adatot tartják — így a váltáshoz nem kellett egyetlen
+  // dokumentumot sem mozgatni. Az éles adat 'live_' prefixű kollekciókba megy,
+  // tehát üresen indul.
+  //
+  // Alapértelmezés az ÉLES. Teszt módba a kezdőképernyőn a verziószámra
+  // háromszor koppintva lehet váltani; az állapot eszközönként él
+  // (localStorage), tehát egy teszt-telefon attól még nem viszi teszt módba a
+  // többiek telefonját.
+  var BOH_SPLIT_COLLECTIONS = ['stats', 'statEvents', 'game_stats', 'gameStatEvents', 'usage', 'bp_tournaments'];
+  window.BOH_TESTDB_KEY = 'boh_testdb';
+  window.isTestDb = function() {
+    try { return localStorage.getItem(window.BOH_TESTDB_KEY) === '1'; } catch (e) { return false; }
+  };
+  window.setTestDb = function(on) {
+    try { localStorage.setItem(window.BOH_TESTDB_KEY, on ? '1' : '0'); } catch (e) {}
+  };
+  // Minden statisztika-hivas ezen megy at. Futasidoben dont, nem betoltesekor —
+  // igy a valtas utan az elso iras mar a helyere kerul.
+  function coll(name) {
+    var split = BOH_SPLIT_COLLECTIONS.indexOf(name) !== -1;
+    return db.collection(split && !window.isTestDb() ? 'live_' + name : name);
+  }
+  // Kivul is elerheto, hogy meg lehessen kerdezni: ez a hivas hova megy?
+  window.bohColl = coll;
+
   // Shared song blacklist: songs that never load get written here by any user
   window._zeneBadIds = new Set();
   window._zeneBadLoaded = false;
@@ -34033,26 +34060,26 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   }
   window.__expandDotKeys = expandDotKeys;
   window.getStats = function(profileId) {
-    return db.collection('stats').doc(profileId).get().then(function(d) {
+    return coll('stats').doc(profileId).get().then(function(d) {
       return d.exists ? expandDotKeys(d.data()) : {};
     }).catch(function() { return {}; });
   };
   window.getAllStats = function() {
-    return db.collection('stats').get().then(function(snap) {
+    return coll('stats').get().then(function(snap) {
       var result = {};
       snap.docs.forEach(function(d) { result[d.id] = expandDotKeys(d.data()); });
       return result;
     }).catch(function() { return {}; });
   };
   window.updateStats = function(profileId, updates) {
-    return db.collection('stats').doc(profileId).set(expandDotKeys(updates), { merge: true }).catch(function(e) { console.warn('updateStats', e); });
+    return coll('stats').doc(profileId).set(expandDotKeys(updates), { merge: true }).catch(function(e) { console.warn('updateStats', e); });
   };
   window.incrementStats = function(profileId, increments, bestValues) {
     var data = {};
     Object.keys(increments || {}).forEach(function(k) {
       if (increments[k]) data[k] = firebase.firestore.FieldValue.increment(increments[k]);
     });
-    var ref = db.collection('stats').doc(profileId);
+    var ref = coll('stats').doc(profileId);
     if (bestValues && bestValues.bestReactionTime != null) {
       return ref.get().then(function(d) {
         var cur = d.exists ? (d.data().bestReactionTime || Infinity) : Infinity;
@@ -34084,7 +34111,7 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
     var clean = {};
     Object.keys(deltas).forEach(function(k) { if (typeof deltas[k] === 'number' && deltas[k]) clean[k] = deltas[k]; });
     if (Object.keys(clean).length === 0) return Promise.resolve();
-    return db.collection('statEvents').add(Object.assign({ profileId: profileId, ts: Date.now() }, clean)).catch(function(e) { console.warn('logStatEvent', e); });
+    return coll('statEvents').add(Object.assign({ profileId: profileId, ts: Date.now() }, clean)).catch(function(e) { console.warn('logStatEvent', e); });
   };
   // ── Használat-mérés ──────────────────────────────────────────────────────
   // Napi aggregált doksi (usage/YYYY-MM-DD). Egy megnyitás = egy increment
@@ -34104,15 +34131,15 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
     var data = { day: day, lastTs: Date.now(), devices: {} };
     data['open_' + app] = firebase.firestore.FieldValue.increment(1);
     data.devices[did] = true;
-    return db.collection('usage').doc(day).set(data, { merge: true }).catch(function(e) { console.warn('logAppOpen', e); });
+    return coll('usage').doc(day).set(data, { merge: true }).catch(function(e) { console.warn('logAppOpen', e); });
   };
   window.getUsage = function() {
-    return db.collection('usage').get().then(function(snap) {
+    return coll('usage').get().then(function(snap) {
       return snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
     }).catch(function() { return []; });
   };
   window.getAllStatEvents = function() {
-    return db.collection('statEvents').get().then(function(snap) {
+    return coll('statEvents').get().then(function(snap) {
       return snap.docs.map(function(d) { return d.data(); });
     }).catch(function() { return []; });
   };
@@ -34145,10 +34172,10 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
     return db.collection('seasons').doc(id).delete().catch(function(e) { console.warn('deleteSeason', e); });
   };
   window.saveTournament = function(data) {
-    return db.collection('bp_tournaments').add(data).catch(function(e) { console.warn('saveTournament', e); });
+    return coll('bp_tournaments').add(data).catch(function(e) { console.warn('saveTournament', e); });
   };
   window.getTournaments = function() {
-    return db.collection('bp_tournaments').orderBy('ts', 'desc').limit(30).get().then(function(snap) {
+    return coll('bp_tournaments').orderBy('ts', 'desc').limit(30).get().then(function(snap) {
       return snap.docs.map(function(d) { return { id: d.id, ...d.data() }; });
     }).catch(function() { return []; });
   };
@@ -34157,7 +34184,7 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
     Object.keys(increments || {}).forEach(function(k) {
       if (increments[k]) data[k] = firebase.firestore.FieldValue.increment(increments[k]);
     });
-    var ref = db.collection('game_stats').doc(gameId);
+    var ref = coll('game_stats').doc(gameId);
     if (bestValues && bestValues.bestReactionTime != null) {
       return ref.get().then(function(d) {
         var cur = d.exists ? (d.data().bestReactionTime || Infinity) : Infinity;
@@ -34172,18 +34199,18 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   window.recordGameWin = function(gameId, profileId) {
     var update = {};
     update['winners.' + profileId] = firebase.firestore.FieldValue.increment(1);
-    return db.collection('game_stats').doc(gameId).set(expandDotKeys(update), { merge: true }).catch(function(e) { console.warn('recordGameWin', e); });
+    return coll('game_stats').doc(gameId).set(expandDotKeys(update), { merge: true }).catch(function(e) { console.warn('recordGameWin', e); });
   };
   window.updateStreak = function(profileId, won) {
-    return db.collection('stats').doc(profileId).get().then(function(d) {
+    return coll('stats').doc(profileId).get().then(function(d) {
       var s = d.exists ? d.data() : {};
       var cur = won ? (s.currentStreak || 0) + 1 : 0;
       var best = Math.max(cur, s.bestStreak || 0);
-      return db.collection('stats').doc(profileId).set({ currentStreak: cur, bestStreak: best }, { merge: true });
+      return coll('stats').doc(profileId).set({ currentStreak: cur, bestStreak: best }, { merge: true });
     }).catch(function(e) { console.warn('updateStreak', e); });
   };
   window.getAllGameStats = function() {
-    return db.collection('game_stats').get().then(function(snap) {
+    return coll('game_stats').get().then(function(snap) {
       var result = {};
       snap.docs.forEach(function(d) { result[d.id] = expandDotKeys(d.data()); });
       return result;
@@ -34196,10 +34223,10 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
     if (!Object.keys(clean).length && !winnerProfileId) return Promise.resolve();
     var doc = Object.assign({ gameId: gameId, ts: Date.now() }, clean);
     if (winnerProfileId) doc.winnerProfileId = winnerProfileId;
-    return db.collection('gameStatEvents').add(doc).catch(function(e) { console.warn('logGameStatEvent', e); });
+    return coll('gameStatEvents').add(doc).catch(function(e) { console.warn('logGameStatEvent', e); });
   };
   window.getAllGameStatEvents = function() {
-    return db.collection('gameStatEvents').get().then(function(snap) {
+    return coll('gameStatEvents').get().then(function(snap) {
       return snap.docs.map(function(d) { return d.data(); });
     }).catch(function() { return []; });
   };
@@ -34215,7 +34242,7 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   // A statisztika (bp_tournaments) által hivatkozott szobakódok — ezek a szobák
   // az admin felületről nem törölhetők, különben a Torna előzmények "Megnyit" linkje meghal.
   window.getStatRoomCodes = function() {
-    return db.collection('bp_tournaments').get().then(function(snap) {
+    return coll('bp_tournaments').get().then(function(snap) {
       var codes = {};
       snap.docs.forEach(function(d) { var rc = d.data().roomCode; if (rc) codes[rc] = true; });
       return codes;
@@ -35030,7 +35057,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.179';
+const APP_VERSION = 'v10.180';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -42563,6 +42590,26 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
   const _greetDays = ['Vasárnap','Hétfő','Kedd','Szerda','Csütörtök','Péntek','Szombat'];
   const greetSub = `${_greetDays[new Date().getDay()]} · ${APP_VERSION}`;
 
+  // Teszt adatbázis — rejtett kapcsoló a verziószámon (3 koppintás 1,5 mp-en belül).
+  // Alapból ÉLES: aki nem nyúl hozzá, annak minden statisztikája élesbe megy.
+  const testDb = typeof window !== 'undefined' && !!(window.isTestDb && window.isTestDb());
+  const [dbToast, setDbToast] = React.useState(null);
+  const dbTaps = React.useRef({ n: 0, t: 0 });
+  const tapVersion = () => {
+    if (!window.setTestDb) return;
+    const now = Date.now(), s = dbTaps.current;
+    s.n = (now - s.t < 1500) ? s.n + 1 : 1;
+    s.t = now;
+    if (s.n < 3) return;
+    s.n = 0;
+    const on = !testDb;
+    window.setTestDb(on);
+    setDbToast(on);
+    // Ujratoltes: a mar betoltott statisztikak a MASIK adatbazisbol jonnenek,
+    // vagyis a kepernyon teszt-adat allna, mikozben az iras mar elesbe menne.
+    setTimeout(() => { try { window.location.reload(); } catch (e) {} }, 1500);
+  };
+
   return (
     <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg, position:'relative' }}>
       {closing && (
@@ -42573,6 +42620,13 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
         />
       )}
       {showInstall && <InstallModal onClose={() => setShowInstall(false)} />}
+      {dbToast !== null && (
+        <Toast tone="info" wide offset={120} icon={dbToast ? '🧪' : '🎯'}>
+          {dbToast
+            ? 'Teszt adatbázis bekapcsolva — a statisztika mostantól a teszt-adatokhoz megy.'
+            : 'Éles adatbázis — a statisztika mostantól élesbe megy.'}
+        </Toast>
+      )}
       {showMoreApps && (
         <SheetOverlay onClose={() => setShowMoreApps(false)} title="DNR appok">
           <div style={{ padding:'0 16px 24px', display:'flex', flexDirection:'column', gap:10 }}>
@@ -42675,7 +42729,12 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
         <div style={{ position:'absolute', top:14, left:18, zIndex:20, display:'flex', flexDirection:'column', gap:8, alignItems:'flex-start', maxWidth:'calc(100vw - 220px)', pointerEvents:'none' }}>
           <div style={{ pointerEvents:'auto' }}>
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:19, color:T.ink, letterSpacing:'-0.01em', lineHeight:1.05, whiteSpace:'nowrap' }}>👋 {greetHi}</div>
-            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft, marginTop:2 }}>{greetSub}</div>
+            <div onClick={tapVersion} style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft, marginTop:2, cursor:'pointer', userSelect:'none', WebkitTapHighlightColor:'transparent', display:'flex', alignItems:'center', gap:6 }}>
+              {greetSub}
+              {testDb && (
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:9, letterSpacing:'0.1em', color:'#fff', background:T.coral, borderRadius:999, padding:'2px 7px' }}>TESZT DB</span>
+              )}
+            </div>
           </div>
           {resumeRoomData && onResume && (
             <button onClick={() => onResume(resumeRoomData)} style={{ display:'flex', alignItems:'center', gap:7, padding:'8px 14px', borderRadius:999, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer', boxShadow:T.shadowLift, animation:'pulse 2s infinite', pointerEvents:'auto' }}>
