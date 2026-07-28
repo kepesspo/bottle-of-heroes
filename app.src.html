@@ -35052,7 +35052,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.172';
+const APP_VERSION = 'v10.173';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -55667,6 +55667,22 @@ function OVFJConfigSheet({ config, setConfig, onClose }) {
             })}
           </div>
         </div>
+        <div style={{ padding:'13px 0', borderTop:`1px solid ${T.surfaceMuted}`, display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color: roundTime == null ? T.inkMute : T.ink }}>
+              Várjuk meg a kör végét
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1, lineHeight:1.5 }}>
+              {roundTime == null
+                ? 'Idő nélküli körnél nem választható — ilyenkor a 10 mp az egyetlen, ami lezárja a kört.'
+                : (config.waitFullTime
+                    ? 'A kör ideje mindig végig lejár, akkor is ha valaki hamarabb végez.'
+                    : 'Ha valaki kész, a többieknek 10 mp marad.')}
+            </div>
+          </div>
+          <Toggle on={roundTime != null && !!config.waitFullTime}
+            onChange={() => { if (roundTime != null) setConfig(c => ({ ...c, waitFullTime: !c.waitFullTime })); }} />
+        </div>
       </div>
     </SheetOverlay>
   );
@@ -55674,6 +55690,25 @@ function OVFJConfigSheet({ config, setConfig, onClose }) {
 
 // ═══════════════ ORSZÁG-VÁROS — közös segédek ═══════════════
 const OVFJ_DRAW_MS = 4000;
+const OVFJ_GRACE_MS = 10000;
+// Mennyi ido van meg az irasbol. EGY forras: a hoszt es a vendeg oldala eddig
+// kulon masolatban szamolta ugyanezt.
+//
+// Alapbol az elso "kesz" utan 10 mp marad a tobbieknek. A waitFullTime
+// kapcsoloval viszont a teljes korido lejar — ilyenkor a "kesz" csak azt
+// jelenti, hogy az illeto mar nem ir tovabb.
+//
+// Ido nelkuli korideonel a 10 mp az EGYETLEN lezaro mechanizmus, ezert ott a
+// kapcsolo nem szamit (a beallito lap nem is engedi bekapcsolni).
+function ovfjRemaining({ phase, roundTime, writingStart, doneAt, waitFullTime }) {
+  if (phase !== 'writing') return null;
+  if (roundTime == null) {
+    return doneAt ? Math.max(0, Math.ceil((doneAt + OVFJ_GRACE_MS - Date.now()) / 1000)) : null;
+  }
+  let deadline = (writingStart != null ? writingStart : Date.now()) + roundTime * 1000;
+  if (doneAt && !waitFullTime) deadline = Math.min(deadline, doneAt + OVFJ_GRACE_MS);
+  return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+}
 function ovfjVoteKey(round, pid, catKey) { return 'r' + round + '_' + pid + '_' + catKey; }
 // Érvényesség: üres / rossz kezdőbetű / egyező (case-insensitive, trim)
 function ovfjBuildValidity(answers, letter, round) {
@@ -55882,6 +55917,7 @@ function OVFJStandings({ players, roundScores, cumScores, myPid, final }) {
 function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta }) {
   const totalRounds = gameMeta?.ovfjConfig?.rounds ?? 5;
   const roundTime = gameMeta?.ovfjConfig?.roundTime === undefined ? 90 : gameMeta.ovfjConfig.roundTime;
+  const waitFullTime = !!gameMeta?.ovfjConfig?.waitFullTime;
   const pl = players || [];
   const sessRef = React.useRef(Date.now());
   const sess = sessRef.current;
@@ -55920,13 +55956,13 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
   // Reset a szoba dokumentumban induláskor (új játék / gameIdx váltás)
   React.useEffect(() => {
     if (!roomCode || typeof syncRoom !== 'function') return;
-    syncRoom(roomCode, { ovfjTakenIds: [], ovfjState: { sess, phase:'pick', round:1, totalRounds, roundTime, letter:null, drawTs:null, doneAt:null, hostPid:null } });
+    syncRoom(roomCode, { ovfjTakenIds: [], ovfjState: { sess, phase:'pick', round:1, totalRounds, roundTime, waitFullTime, letter:null, drawTs:null, doneAt:null, hostPid:null } });
   }, []);
 
   // Host az egyetlen, aki a teljes ovfjState-et írja
   React.useEffect(() => {
     if (!roomCode || typeof syncRoom !== 'function') return;
-    syncRoom(roomCode, { ovfjState: { sess, phase, round, totalRounds, roundTime, letter, drawTs, doneAt, hostPid, answers, roundScores, cumScores } });
+    syncRoom(roomCode, { ovfjState: { sess, phase, round, totalRounds, roundTime, waitFullTime, letter, drawTs, doneAt, hostPid, answers, roundScores, cumScores } });
   }, [phase, round, letter, drawTs, doneAt, hostPid, answers, roundScores, cumScores]);
 
   // Telefonos válaszok + szavazatok begyűjtése
@@ -56084,13 +56120,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
 
   const joinUrl = roomCode ? window.location.href.split('?')[0] + '?room=' + roomCode : null;
   const writingStart = drawTs != null ? drawTs + OVFJ_DRAW_MS : null;
-  const remaining = (() => {
-    if (phase !== 'writing') return null;
-    if (roundTime == null) return doneAt ? Math.max(0, Math.ceil((doneAt + 10000 - Date.now()) / 1000)) : null;
-    let deadline = (writingStart != null ? writingStart : Date.now()) + roundTime * 1000;
-    if (doneAt) deadline = Math.min(deadline, doneAt + 10000);
-    return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-  })();
+  const remaining = ovfjRemaining({ phase, roundTime, writingStart, doneAt, waitFullTime });
   const tallies = React.useMemo(() => {
     const t = {};
     Object.entries(votes).forEach(([vk, per]) => {
@@ -56121,7 +56151,11 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
   if (phase === 'lobby') return (
     <div style={{display:'flex',flexDirection:'column',gap:12,width:'100%'}}>
       {showQR && joinUrl && <QRModal url={joinUrl} onClose={() => setShowQR(false)} />}
-      <LobbyTicketCard desc="Betűt sorsolunk, mindenki a saját telefonján tölti ki a 8 kategóriát. Az első kész után 10 mp marad, utána szavazás — minden érvényes szó 1 pont." roomCode={roomCode} onShowQR={() => setShowQR(true)} />
+      <LobbyTicketCard desc={"Betűt sorsolunk, mindenki a saját telefonján tölti ki a 8 kategóriát. "
+          + (waitFullTime && roundTime != null
+              ? "A kör ideje mindig végig lejár, akkor is ha valaki hamarabb végez."
+              : "Az első kész után 10 mp marad,")
+          + " utána szavazás — minden érvényes szó 1 pont."} roomCode={roomCode} onShowQR={() => setShowQR(true)} />
       {(() => {
         const joinedCount = pl.filter(p => claimedPids.has(p.id) || p.id === hostPid).length;
         return (
@@ -56298,13 +56332,8 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
 
   const obsRoundTime = ovfj.roundTime === undefined ? 90 : ovfj.roundTime;
   const obsWritingStart = ovfj.drawTs != null ? ovfj.drawTs + OVFJ_DRAW_MS : null;
-  const remaining = (() => {
-    if (ovfj.phase !== 'writing') return null;
-    if (obsRoundTime == null) return ovfj.doneAt ? Math.max(0, Math.ceil((ovfj.doneAt + 10000 - Date.now()) / 1000)) : null;
-    let deadline = (obsWritingStart != null ? obsWritingStart : Date.now()) + obsRoundTime * 1000;
-    if (ovfj.doneAt) deadline = Math.min(deadline, ovfj.doneAt + 10000);
-    return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-  })();
+  const remaining = ovfjRemaining({ phase: ovfj.phase, roundTime: obsRoundTime,
+    writingStart: obsWritingStart, doneAt: ovfj.doneAt, waitFullTime: !!ovfj.waitFullTime });
   // Lejárt a 10 mp → automatikus beadás lokálisan is
   React.useEffect(() => {
     if (ovfj.phase === 'writing' && remaining === 0 && myPid && !submittedRef.current) submitAnswers(false);
