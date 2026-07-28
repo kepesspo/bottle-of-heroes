@@ -147,6 +147,60 @@ const pillText = (p) => p.evaluate(() => {
   await p.screenshot({ path: __dirname + '/drink_limit_menu.png', fullPage: true });
   await p.close();
 
+  // ─── v10.166: a limit SZERKESZTESE az Admin > Tartalom > Profilok alatt ───
+  // A limit a profilon el, ezert a Jatekmenet oldalrol kikerult (v10.165).
+  // Egy helyen, egy gorgetessel kell tudni vegigmenni mindenkin — ha ez a
+  // kartya eltunik, a limitet csak profilonkent kulon megnyitva lehetne allitani.
+  console.log('\n===== TÖMEGES SZERKESZTŐ (Admin > Profilok) =====');
+  {
+    const p2 = await b.newPage({ viewport: { width: 390, height: 1000 } });
+    const errs = []; p2.on('pageerror', e => errs.push(e.message));
+    await p2.route('**://**', r => r.request().url().startsWith('file://') ? r.continue() : r.abort());
+    await p2.addInitScript(stub);
+    await p2.addInitScript(seed);
+    await p2.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await p2.waitForTimeout(3600);
+    await p2.evaluate(() => {
+      const r = document.getElementById('root'); if (r) r.style.display = 'none';
+      const root = document.createElement('div'); root.id = '__ad';
+      root.style.cssText = 'position:fixed;inset:0;display:flex;flex-direction:column;background:#EFC77A;overflow:auto';
+      document.body.appendChild(root);
+      ReactDOM.createRoot(root).render(React.createElement(window.AdminScreen,
+        { go: () => {}, setTheme: () => {}, currentTheme: 'warm' }));
+    });
+    await p2.waitForTimeout(2200);
+    const at = () => p2.evaluate(() => document.querySelector('#__ad').innerText.replace(/\s+/g, ' '));
+
+    ok('a kártya ott van a Profilok panelen', /Kortyolási limitek/.test(await at()));
+    ok('zárva is látszik, hány limit van', /1 beállítva/.test(await at()),
+       ((await at()).match(/Kortyolási limitek.{0,120}/) || ['—'])[0].slice(-30));
+
+    await p2.evaluate(() => {
+      const b2 = [...document.querySelectorAll('#__ad button')].find(x => /Kortyolási limitek/.test(x.innerText));
+      if (b2) b2.click();
+    });
+    await p2.waitForTimeout(700);
+    const n = await p2.evaluate(() => document.querySelectorAll('#__ad input[type="number"]').length);
+    ok('minden profil egy sorban, egy görgetéssel', n === 2, n + ' mező (2 profil)');
+    ok('a meglévő limit betöltődik',
+       await p2.evaluate(() => [...document.querySelectorAll('#__ad input[type="number"]')][0].value) === '3');
+
+    // Belanak adunk limitet — a mezobol kilepeskor mentodik
+    await p2.evaluate(() => {
+      const i = [...document.querySelectorAll('#__ad input[type="number"]')][1];
+      const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      i.focus(); set.call(i, '5');
+      i.dispatchEvent(new Event('input', { bubbles: true }));
+      i.blur();
+    });
+    await p2.waitForTimeout(900);
+    const saved = await p2.evaluate(() => window.__fbStore['profiles'].p_b);
+    ok('a mezőből kilépve a profilba mentődik', saved && saved.drinkLimit === 5, JSON.stringify(saved));
+    ok('a többi profilmező érintetlen', saved && saved.name === 'Bela' && !!saved.color, JSON.stringify(saved));
+    ok('nincs JS hiba', errs.filter(e => !/ServiceWorker/.test(e)).length === 0, errs.join(' | '));
+    await p2.close();
+  }
+
   await b.close();
   console.log('\n' + (fail === 0 ? '✅ MINDEN ELLENORZES RENDBEN' : '❌ ' + fail + ' ELLENORZES BUKOTT'));
   process.exit(fail === 0 ? 0 : 1);

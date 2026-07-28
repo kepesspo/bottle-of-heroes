@@ -34015,6 +34015,12 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
       return snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
     }).catch(function() { return []; });
   };
+  window.setProfileDrinkLimit = function(profileId, limit) {
+    if (!profileId) return Promise.resolve();
+    var v = Number(limit) > 0 ? Number(limit) : firebase.firestore.FieldValue.delete();
+    return db.collection('profiles').doc(profileId).set({ drinkLimit: v }, { merge: true })
+      .catch(function(e) { console.warn('setProfileDrinkLimit', e); });
+  };
   window.saveProfile = function(profile) {
     var ref = profile.id ? db.collection('profiles').doc(profile.id) : db.collection('profiles').doc();
     var data = { name: profile.name, color: profile.color };
@@ -35047,7 +35053,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.165';
+const APP_VERSION = 'v10.166';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -37881,6 +37887,72 @@ function AdminScreen({ go, setTheme, currentTheme }) {
 
 // ── Admin: Profiles tab ────────────────────────────────────────────────────────
 const AVATAR_COLORS = ['#E8631A','#25b572','#5b7cf6','#c07a10','#d63884','#0ea5e9','#8b5cf6','#ef4444'];
+// Tomeges kortyolasi-limit szerkeszto. A limit a profilon el, es tipikusan
+// egyszer allitja be az ember mindenkinek — ezert egy listaban, nem profilonkent
+// kulon megnyitva. Alapbol osszecsukva: ritkan nyulnak hozza.
+function AdminDrinkLimits({ profiles, onSaved }) {
+  const [open, setOpen] = React.useState(false);
+  const [vals, setVals] = React.useState({});
+  React.useEffect(() => {
+    const m = {};
+    (profiles || []).forEach(p => { m[p.id] = p.drinkLimit ? String(p.drinkLimit) : ''; });
+    setVals(m);
+  }, [profiles]);
+
+  const commit = (id, raw) => {
+    const v = (raw == null ? (vals[id] || '') : raw).replace(/[^0-9]/g, '');
+    const before = (profiles || []).find(p => p.id === id);
+    if (String(before && before.drinkLimit ? before.drinkLimit : '') === v) return;  // nem valtozott
+    if (typeof window.setProfileDrinkLimit === 'function') {
+      window.setProfileDrinkLimit(id, v).then(() => { onSaved && onSaved(); });
+    }
+  };
+  const count = (profiles || []).filter(p => Number(vals[p.id]) > 0).length;
+
+  return (
+    <div style={{ background:T.surface, borderRadius:16, boxShadow:T.shadow, marginBottom:14, overflow:'hidden' }}>
+      <button onClick={() => setOpen(o => !o)} style={{ width:'100%', display:'flex', alignItems:'center', gap:10,
+        background:'transparent', border:'none', cursor:'pointer', padding:'14px 16px', textAlign:'left' }}>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>Kortyolási limitek</div>
+          <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginTop:2 }}>
+            Ha valaki eléri a sajátját, a kör végén figyelmeztetünk, és a neve mellé kerül egy 💧.
+          </div>
+        </div>
+        {count > 0 && <span style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.mintDeep,
+          background:T.mintSoft, borderRadius:999, padding:'3px 9px', flexShrink:0 }}>{count} beállítva</span>}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0,
+          transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition:'transform .2s' }}>
+          <path d="M6 9l6 6 6-6" stroke={T.inkMute} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+      {open && (
+        <div style={{ padding:'0 16px 14px', display:'flex', flexDirection:'column', gap:8 }}>
+          {(profiles || []).length === 0 ? (
+            <div style={{ fontFamily:T.font, fontSize:13, color:T.sub }}>Még nincs profil.</div>
+          ) : (profiles || []).map(p => (
+            <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, minHeight:52 }}>
+              <div style={{ width:32, height:32, borderRadius:'50%', background:p.color || T.mint, flexShrink:0,
+                display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff' }}>
+                {(p.nickname || p.name || '?').charAt(0).toUpperCase()}
+              </div>
+              <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink,
+                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.nickname || p.name}</div>
+              <input value={vals[p.id] == null ? '' : vals[p.id]}
+                onChange={e => setVals(m => Object.assign({}, m, { [p.id]: e.target.value.replace(/[^0-9]/g, '') }))}
+                onBlur={e => commit(p.id, e.target.value)} placeholder="nincs" inputMode="numeric" type="number"
+                style={{ width:74, flexShrink:0, textAlign:'center', padding:'9px 6px', borderRadius:10,
+                  border:`2px solid ${T.inkMute}28`, background:T.bgSoft, color:T.ink,
+                  fontFamily:T.font, fontWeight:900, fontSize:15, outline:'none' }} />
+              <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkMute, flexShrink:0 }}>korty</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminProfiles() {
   const [profiles, setProfiles] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -38073,6 +38145,7 @@ function AdminProfiles() {
           </div>
         </div>
       )}
+      <AdminDrinkLimits profiles={profiles} onSaved={load} />
       <button onClick={() => setShowForm(s => !s)} style={{ width:'100%', padding:'13px', borderRadius:14, border:`2px dashed ${T.mint}`, background:'transparent', fontFamily:T.font, fontWeight:900, fontSize:14, color:T.mint, cursor:'pointer', marginBottom:14 }}>
         + Új profil hozzáadása
       </button>
