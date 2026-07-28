@@ -35052,7 +35052,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.175';
+const APP_VERSION = 'v10.176';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -44490,17 +44490,11 @@ function StepDots({ active }) {
   );
 }
 
-function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, go }) {
+function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, go, players }) {
   const [info, setInfo] = useState(null);
   const [sheet, setSheet] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState({});
-  const [buszSheet, setBuszSheet] = useState(false);
-  const [blackjackSheet, setBlackjackSheet] = useState(false);
-  const [beerpongSheet, setBeerpongSheet] = useState(false);
-  const [kisebbSheet, setKisebbSheet] = useState(false);
-  const [collectSheet, setCollectSheet] = useState(false);
-  const [ovfjSheet, setOvfjSheet] = useState(false);
-  const [zeneSheet, setZeneSheet] = useState(false);
+  const [openCfg, setOpenCfg] = useState(null);   // melyik jatek beallito lapja van nyitva
   const [filterSheet, setFilterSheet] = useState(false);
   // Hanyszor jatszottuk az egyes jatekokat (game_stats/{id}.playCount).
   // Az ELSO festeshez a legutobb latott szamokat hasznaljuk, a friss adatot
@@ -44523,11 +44517,9 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   const setupFlow = useSetupFlow();
   // A het beallito lap egy helyen. A hosszu nyomas es a kartyan levo
   // fogaskerek is ezt hivja, igy nem tudnak elcsuszni egymastol.
-  const CONFIG_OPENERS = { busz: setBuszSheet, beerpong: setBeerpongSheet, kisebb: setKisebbSheet,
-    collect: setCollectSheet, ovfj: setOvfjSheet, zene: setZeneSheet, blackjack: setBlackjackSheet };
   const openGameConfig = (id) => {
     if (!selectedGames.includes(id)) toggle(id);
-    const open = CONFIG_OPENERS[id]; if (open) open(true);
+    setOpenCfg(id);
   };
   const longPressFor = (id) => hasGameConfig(id) ? () => openGameConfig(id) : undefined;
   const [lockToast, setLockToast] = React.useState(null);
@@ -44543,20 +44535,6 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   }, []);
   React.useEffect(() => { loadTemplates(); }, [loadTemplates]);
   const [activeFilters, setActiveFilters] = useState([]); // [] = show all
-  const buszConfig = gameMeta?.buszConfig || {};
-  const setBuszConfig = cfg => setGameMeta(m => ({...m, buszConfig: typeof cfg === 'function' ? cfg(m?.buszConfig||{}) : cfg}));
-  const kisebbConfig = gameMeta?.kisebbConfig || {};
-  const setKisebbConfig = cfg => setGameMeta(m => ({...m, kisebbConfig: typeof cfg === 'function' ? cfg(m?.kisebbConfig||{}) : cfg}));
-  const collectConfig = gameMeta?.collectConfig || {};
-  const setCollectConfig = cfg => setGameMeta(m => ({...m, collectConfig: typeof cfg === 'function' ? cfg(m?.collectConfig||{}) : cfg}));
-  const ovfjConfig = gameMeta?.ovfjConfig || {};
-  const setOvfjConfig = cfg => setGameMeta(m => ({...m, ovfjConfig: typeof cfg === 'function' ? cfg(m?.ovfjConfig||{}) : cfg}));
-  const beerpongConfig = gameMeta?.beerpongConfig || {};
-  const setBeerpongConfig = cfg => setGameMeta(m => ({...m, beerpongConfig: typeof cfg === 'function' ? cfg(m?.beerpongConfig||{}) : cfg}));
-  const zeneConfig = gameMeta?.zeneConfig || {};
-  const setZeneConfig = cfg => setGameMeta(m => ({...m, zeneConfig: typeof cfg === 'function' ? cfg(m?.zeneConfig||{}) : cfg}));
-  const blackjackConfig = gameMeta?.blackjackConfig || {};
-  const setBlackjackConfig = cfg => setGameMeta(m => ({...m, blackjackConfig: typeof cfg === 'function' ? cfg(m?.blackjackConfig||{}) : cfg}));
 
   const allOn = selectedGames.length === GAMES.length;
   const anySelected = selectedGames.length > 0;
@@ -44878,13 +44856,8 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
         <GameSettingsContent meta={gameMeta} setMeta={setGameMeta} onDone={() => setSheet(false)} go={go} />
       </SheetOverlay>}
       {info && <GameInfoModal game={GAMES.find(g=>g.id===info)} onClose={() => setInfo(null)} />}
-      {buszSheet && <BuszConfigSheet config={buszConfig} setConfig={setBuszConfig} onClose={() => setBuszSheet(false)} />}
-      {kisebbSheet && <KisebbConfigSheet config={kisebbConfig} setConfig={setKisebbConfig} onClose={() => setKisebbSheet(false)} />}
-      {collectSheet && <CollectBoomConfigSheet config={collectConfig} setConfig={setCollectConfig} onClose={() => setCollectSheet(false)} />}
-      {ovfjSheet && <OVFJConfigSheet config={ovfjConfig} setConfig={setOvfjConfig} onClose={() => setOvfjSheet(false)} />}
-      {zeneSheet && <ZeneConfigSheet config={zeneConfig} setConfig={setZeneConfig} onClose={() => setZeneSheet(false)} />}
-      {blackjackSheet && <BlackjackConfigSheet config={blackjackConfig} setConfig={setBlackjackConfig} onClose={() => setBlackjackSheet(false)} />}
-      {beerpongSheet && <BeerPongConfigSheet config={beerpongConfig} setConfig={setBeerpongConfig} onClose={() => setBeerpongSheet(false)} playerCount={99} />}
+      <GameConfigHost openId={openCfg} onClose={() => setOpenCfg(null)}
+        gameMeta={gameMeta} setGameMeta={setGameMeta} playerCount={(players || []).length} />
       {filterSheet && (
         <SheetOverlay onClose={() => setFilterSheet(false)} title="Szűrés" footer={
           <div style={{ display:'flex', gap:8 }}>
@@ -66579,7 +66552,7 @@ function BottleApp() {
         {screen==='admin'    && <AdminScreen go={go} setTheme={handleSetTheme} currentTheme={appTheme} />}
         {screen==='create'   && <EventCreateScreen go={go} editId={editEventId} deepLink={_deepLink} />}
         {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
-        {screen==='games'    && <GamesScreen    go={go} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
+        {screen==='games'    && <GamesScreen    go={go} players={players} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='setup'    && <SetupScreen    go={go} players={players} selectedGames={selectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
         {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} gameMeta={gameMeta} setGameMeta={setGameMeta} setLastGameRound={setLastGameRound} setScoreHistory={setScoreHistory} />}
         {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} lastRound={lastGameRound} scoreHistory={scoreHistory} />}

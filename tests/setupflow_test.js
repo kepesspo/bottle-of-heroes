@@ -124,19 +124,41 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
     const n = await p.evaluate(() => document.querySelectorAll('#__g button[aria-label="Beállítások"]').length);
     ok('minden beállítható játék kap gombot', n >= 13, n + ' db (13 beállítható játék van)');
 
-    // a gomb NEM csak jelzes: meg is nyitja a lapot
-    const opened = await p.evaluate(() => {
-      const before = document.body.innerText.length;
-      const g = document.querySelector('#__g button[aria-label="Beállítások"]');
-      if (!g) return 'nincs gomb';
-      g.click();
-      return before;
+    // A v10.175-ben hat uj jatek kapott beallitast, de a GamesScreen sajat
+    // opener-terkepe a regi hetnel maradt: a ceruza megjelent, a nyitas viszont
+    // CSENDBEN elmaradt. Az akkori teszt csak az ELSO gombot nyomta meg (egy
+    // regi jatekot), ezert atment. Ezert most MINDEGYIKET vegigprobaljuk.
+    const perGame = await p.evaluate(async () => {
+      const out = [];
+      const btns = [...document.querySelectorAll('#__g button[aria-label="Beállítások"]')];
+      for (let i = 0; i < btns.length; i++) {
+        const before = document.body.innerText.length;
+        btns[i].click();
+        await new Promise(r => setTimeout(r, 450));
+        const t = document.body.innerText;
+        const opened = /beállítások|Kész/i.test(t) && t.length > before;
+        // lap bezarasa a kovetkezo elott
+        const done = [...document.querySelectorAll('button')].find(x => /^(Kész|Értem|Rendben)$/.test(x.innerText.trim()));
+        if (done) done.click();
+        await new Promise(r => setTimeout(r, 350));
+        const card = btns[i].parentElement;
+        out.push({ name: (card && card.innerText || '').split('\n')[0].slice(0, 22), opened });
+      }
+      return out;
     });
-    await p.waitForTimeout(700);
-    const after = await p.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
-    ok('a gombra kattintva megnyílik a beállító lap',
-       typeof opened === 'number' && /Beállítás|beállítás|Kész|Rendben/i.test(after),
-       (after.match(/.{0,60}beállítás.{0,40}/i) || ['—'])[0]);
+    const dead = perGame.filter(x => !x.opened);
+    ok('MINDEN beállítás-gomb tényleg megnyitja a lapját', dead.length === 0,
+       dead.length ? 'némán nem nyílik: ' + dead.map(x => x.name).join(', ') : perGame.length + ' gomb rendben');
+
+    // egy forras: a GamesScreen ne tartson sajat listat a beallithato jatekokrol
+    {
+      const src = fs.readFileSync('/home/user/bottle-of-heroes/app.src.html', 'utf8');
+      ok('a GamesScreen nem tart külön opener-listát', !src.includes('CONFIG_OPENERS'),
+         (src.match(/.{0,40}CONFIG_OPENERS.{0,30}/) || ['—'])[0]);
+      ok('a beállító lapokat egy közös dispatcher mountolja',
+         (src.match(/<GameConfigHost/g) || []).length === 2,
+         (src.match(/<GameConfigHost/g) || []).length + ' hely (Játékok + Játékmenet)');
+    }
     ok('nincs JS hiba', p.__errs.length === 0, p.__errs.join(' | '));
     await p.close();
   }
