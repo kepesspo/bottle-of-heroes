@@ -12,7 +12,7 @@ const stub = fs.readFileSync(__dirname + '/fbstub.js', 'utf8');
 const BASE = 'file:///home/user/bottle-of-heroes/index.html';
 
 const seed = (flowOn) => `
-  try { localStorage.setItem('boh_onboarded','1'); localStorage.setItem('boh_games_view','grid'); } catch(e){}
+  try { localStorage.setItem('boh_onboarded','1'); } catch(e){}
   window.__fbStore['profiles'] = { p_a:{name:'Anna',color:'#5BA0DB',drinkLimit:8}, p_b:{name:'Béla',color:'#E07A5F'} };
   ['stats','game_stats','statEvents','gameStatEvents','seasons','usage'].forEach(k => window.__fbStore[k] = {});
   window.__fbStore['config'] = { homeConfig: { setupFlowEnabled: ${flowOn ? 'true' : 'false'} } };
@@ -283,6 +283,31 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
     ok('a felirat az új utat mutatja', /Játékosok → Játékok → Játékmenet → Játék/.test(after),
        (after.match(/Játékosok → Játékok[^A-ZÁ]{0,26}/) || ['—'])[0]);
     ok('nincs JS hiba', errs.length === 0, errs.join(' | '));
+    await p.close();
+  }
+
+  // ─── A NETFLIX-NEZET KIVEZETESE (v10.167) ───
+  // Ket parhuzamos elrendezes ket kulon csempe-komponenssel: minden
+  // kartya-valtoztatast ketszer kellett elvegezni, es epp ilyenbol szuletnek az
+  // elcsuszasok (a beallitas-gomb is emiatt hianyzott harom jaterol).
+  // Ha barmelyik darabja visszaszivarogna, ez bukjon.
+  console.log('\n===== NETFLIX-NÉZET =====');
+  {
+    const src = fs.readFileSync('/home/user/bottle-of-heroes/app.src.html', 'utf8');
+    const leftovers = ['viewMode', 'NetflixTile', 'netflix', 'boh_games_view']
+      .filter(k => src.includes(k));
+    ok('nincs maradvány a forrásban', leftovers.length === 0, leftovers.join(', ') || 'egy sem');
+
+    const p = await open(b, 'games', false, []);
+    const btns = await p.evaluate(() => {
+      const bar = document.querySelector('#__g [data-steps]');
+      const head = bar && bar.closest('div').parentElement;
+      return head ? head.querySelectorAll('button').length : -1;
+    });
+    ok('a fejlécben nincs nézetváltó gomb', btns === 0, btns + ' gomb a lépésjelző mellett');
+    ok('a rácsos elrendezés renderel',
+       await p.evaluate(() => document.querySelectorAll('#__g .grid-games').length) > 0);
+    ok('nincs JS hiba', p.__errs.length === 0, p.__errs.join(' | '));
     await p.close();
   }
 
