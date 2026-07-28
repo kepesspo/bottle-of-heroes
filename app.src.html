@@ -35052,7 +35052,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.174';
+const APP_VERSION = 'v10.175';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -44159,6 +44159,150 @@ function DifficultyInfoSheet({ current, onClose }) {
   );
 }
 
+// ── Kozos vaz a jatek-beallito lapokhoz ─────────────────────────────
+// A meglevo lapok (Busz, Beer Pong, ...) mind ugyanezt a szerkezetet irtak le
+// kezzel. Az uj hat mar ebbol dolgozik, hogy ne szulessen hat ujabb masolat.
+function CfgSheet({ title, subtitle, onClose, children }) {
+  return (
+    <SheetOverlay onClose={onClose} title={title} footer={
+      <button onClick={onClose} style={{ width:'100%', padding:'15px', borderRadius:16, background:T.mint,
+        border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer' }}>Kész</button>
+    }>
+      <div style={{ padding:'0 18px 18px' }}>
+        {subtitle && <div style={{ fontFamily:T.font, fontSize:11.5, color:T.inkSoft, padding:'10px 0 6px', lineHeight:1.5 }}>{subtitle}</div>}
+        {children}
+      </div>
+    </SheetOverlay>
+  );
+}
+// Egy sor: cimke + magyarazat + pirulasor. A `value` az aktualis ertek.
+function CfgRow({ label, hint, options, value, onPick, wide }) {
+  return (
+    <div style={{ padding:'13px 0', borderTop:`1px solid ${T.surfaceMuted}` }}>
+      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{label}</div>
+      {hint && <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1, lineHeight:1.5 }}>{hint}</div>}
+      <div style={{ display:'flex', background:T.surfaceMuted, padding:4, borderRadius:12, gap:3, marginTop:8 }}>
+        {options.map(o => {
+          const sel = value === o.v;
+          return (
+            <button key={String(o.v)} onClick={() => onPick(o.v)} style={{
+              flex:1, minWidth:0, padding: wide ? '8px 2px' : '8px 4px', borderRadius:9, border:'none', cursor:'pointer',
+              fontFamily:T.font, fontWeight:800, fontSize: wide ? 12 : 13, transition:'all .15s',
+              background: sel ? T.mint : 'transparent', color: sel ? '#fff' : T.inkSoft,
+            }}>{o.l}</button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MemoriaConfigSheet({ config, setConfig, onClose }) {
+  const pairs = config.pairs || 8;
+  return (
+    <CfgSheet title="Memória beállítások" onClose={onClose}
+      subtitle="Emoji-párokat kell megtalálni. Minél több a pár, annál hosszabb és nehezebb a kör.">
+      <CfgRow label="Párok száma" hint="Kevesebb pár = rövidebb, könnyebb kör"
+        options={[4,6,8,10,12].map(n => ({ v:n, l:String(n) }))}
+        value={pairs} onPick={v => setConfig(c => ({ ...c, pairs: v }))} />
+    </CfgSheet>
+  );
+}
+
+function RitmusConfigSheet({ config, setConfig, onClose }) {
+  return (
+    <CfgSheet title="Ritmus beállítások" onClose={onClose}
+      subtitle="Koppints a felvillanó emojikra — a koponyát viszont hagyd ki.">
+      <CfgRow label="Hossz" hint="Mennyi ideig tart egy kör"
+        options={[{v:20,l:'20 mp'},{v:30,l:'30 mp'},{v:45,l:'45 mp'},{v:60,l:'60 mp'}]}
+        value={config.duration || 30} onPick={v => setConfig(c => ({ ...c, duration: v }))} />
+      <CfgRow label="Rács mérete" hint="Több mező = nehezebb eltalálni"
+        options={[{v:9,l:'9'},{v:12,l:'12'},{v:16,l:'16'}]}
+        value={config.grid || 12} onPick={v => setConfig(c => ({ ...c, grid: v }))} />
+      <CfgRow wide label="Csapdák" hint="Milyen gyakran jelenjen meg a koponya"
+        options={[{v:0,l:'Nincs'},{v:0.1,l:'Kevés'},{v:0.2,l:'Normál'},{v:0.35,l:'Sok'}]}
+        value={config.trapChance ?? 0.2} onPick={v => setConfig(c => ({ ...c, trapChance: v }))} />
+    </CfgSheet>
+  );
+}
+
+function UtvesztoConfigSheet({ config, setConfig, onClose }) {
+  return (
+    <CfgSheet title="Útvesztő beállítások" onClose={onClose}
+      subtitle="Egyik saroktól a másikig kell eljutni, a csapdákat kerülgetve.">
+      <CfgRow label="Pálya mérete" hint="Nagyobb pálya = hosszabb út, több csapda"
+        options={[{v:4,l:'4×4'},{v:5,l:'5×5'},{v:6,l:'6×6'},{v:7,l:'7×7'}]}
+        value={config.grid || 5} onPick={v => setConfig(c => ({ ...c, grid: v }))} />
+    </CfgSheet>
+  );
+}
+
+function MeduzaConfigSheet({ config, setConfig, onClose }) {
+  return (
+    <CfgSheet title="Medúza beállítások" onClose={onClose}
+      subtitle="Mindenki lenéz, majd felnéz valakire. Akik egymásra néznek, isznak.">
+      <CfgRow label="Körök száma" hint="Ennyi menet után zárul a játék"
+        options={[3,5,7,10].map(n => ({ v:n, l:String(n) }))}
+        value={config.rounds || 5} onPick={v => setConfig(c => ({ ...c, rounds: v }))} />
+    </CfgSheet>
+  );
+}
+
+function CardBattleConfigSheet({ config, setConfig, onClose }) {
+  return (
+    <CfgSheet title="Kártyacsata beállítások" onClose={onClose}
+      subtitle="Két játékos lapokat oszt szét — a magasabb érték nyeri a párharcot.">
+      <CfgRow label="Körök száma" hint="Ennyi lapot oszt ki mindkét játékos"
+        options={[3,4,5,6,7].map(n => ({ v:n, l:String(n) }))}
+        value={config.rounds || 5} onPick={v => setConfig(c => ({ ...c, rounds: v }))} />
+    </CfgSheet>
+  );
+}
+
+// A Kviz mar eddig is olvasta a gameMeta?.quizConfig?.cats-ot — csak felulet
+// nem volt hozza. Ures/hianyzo lista = mind a negy temakor.
+const QUIZ_CATS = [
+  { k:'altalanos', l:'Általános 🧠' },
+  { k:'sport',     l:'Sport ⚽' },
+  { k:'zene',      l:'Zene 🎵' },
+  { k:'film',      l:'Film & TV 🎬' },
+];
+function QuizConfigSheet({ config, setConfig, onClose }) {
+  const all = QUIZ_CATS.map(c => c.k);
+  const cats = (config.cats && config.cats.length) ? config.cats : all;
+  const toggle = (k) => setConfig(c => {
+    const cur = (c.cats && c.cats.length) ? c.cats : all;
+    const next = cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k];
+    // Az utolso temakort nem lehet kikapcsolni — kerdes nelkul nincs jatek.
+    return { ...c, cats: next.length ? next : cur };
+  });
+  return (
+    <CfgSheet title="Kvíz beállítások" onClose={onClose}
+      subtitle="Melyik témakörökből jöjjenek a kérdések. Legalább egy kell.">
+      <div style={{ display:'flex', flexDirection:'column', gap:8, paddingTop:10 }}>
+        {QUIZ_CATS.map(c => {
+          const on = cats.includes(c.k);
+          const last = on && cats.length === 1;
+          return (
+            <button key={c.k} onClick={() => toggle(c.k)} disabled={last} style={{
+              display:'flex', alignItems:'center', gap:10, width:'100%', textAlign:'left',
+              padding:'13px 14px', borderRadius:14, cursor: last ? 'default' : 'pointer',
+              border: on ? `2px solid ${T.mint}` : `2px solid ${T.inkMute}22`,
+              background: on ? `${T.mint}14` : T.surface, opacity: last ? 0.65 : 1,
+              fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink,
+            }}>
+              <span style={{ flex:1 }}>{c.l}</span>
+              <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color: on ? T.mintDeep : T.inkMute }}>
+                {on ? '✓' : ''}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </CfgSheet>
+  );
+}
+
 // Ezek a jatekok egyedul futnak: nem valaszthato melleuk masik. Sajat belso
 // lepesekbol allnak, ezert a korlimit es a Jatekmenet oldal is ebbol dolgozik.
 //
@@ -44309,6 +44453,12 @@ const GAME_CONFIG_DEFS = {
   ovfj:      { metaKey:'ovfjConfig',      Comp: OVFJConfigSheet },
   zene:      { metaKey:'zeneConfig',      Comp: ZeneConfigSheet },
   blackjack: { metaKey:'blackjackConfig', Comp: BlackjackConfigSheet },
+  memoria:    { metaKey:'memoriaConfig',    Comp: MemoriaConfigSheet },
+  ritmus:     { metaKey:'ritmusConfig',     Comp: RitmusConfigSheet },
+  utveszto:   { metaKey:'utvesztoConfig',   Comp: UtvesztoConfigSheet },
+  meduza:     { metaKey:'meduzaConfig',     Comp: MeduzaConfigSheet },
+  cardbattle: { metaKey:'cardbattleConfig', Comp: CardBattleConfigSheet },
+  quiz:       { metaKey:'quizConfig',       Comp: QuizConfigSheet },
 };
 const GAME_CONFIG_IDS = Object.keys(GAME_CONFIG_DEFS);
 const hasGameConfig = (id) => GAME_CONFIG_IDS.indexOf(id) !== -1;
@@ -56769,9 +56919,9 @@ function KategoriaGame({ gameIdx, players, onAdvance, onResult }) {
   );
 }
 
-function MemoriaGame({ gameIdx, players, onAdvance, onResult }) {
+function MemoriaGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   const EMOJIS = ['🍕','🎸','🐶','🌈','🚀','🍦','🎩','🦄','🍄','🎲','🐙','🌮'];
-  const PAIR_COUNT = 8;
+  const PAIR_COUNT = Math.min(EMOJIS.length, gameMeta?.memoriaConfig?.pairs || 8);
   const cards = React.useMemo(() => {
     const deck = [...EMOJIS.slice(0,PAIR_COUNT), ...EMOJIS.slice(0,PAIR_COUNT)];
     let s = (gameIdx * 1234567891 + 42) >>> 0;
@@ -57469,15 +57619,15 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'collect') return <CollectBoomGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
   if (gameId === 'powerhour') return <PowerHourGame key={gameIdx} players={players||[]} onAdvance={onAdvance} />;
   if (gameId === 'kategoria') return <KategoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'memoria') return <MemoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'memoria') return <MemoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
   if (gameId === 'kezcsere') return <KezCsereGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'hajime') return <HajimeGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'otdolog') return <OtdologGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
   if (gameId === 'sohanem') return <SohanemGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'fingerit') return <FingeritGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'cardbattle') return <CardBattleGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} />;
+  if (gameId === 'cardbattle') return <CardBattleGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} gameMeta={gameMeta} />;
   if (gameId === 'quiz') return <QuizGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} gameMeta={gameMeta} />;
-  if (gameId === 'utveszto') return <UtvesztoGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} />;
+  if (gameId === 'utveszto') return <UtvesztoGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} gameMeta={gameMeta} />;
   if (gameId === 'beerpong') return <BeerPongGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} initialBpState={null} onSetHideFooter={onSetHideFooter} onSetBpEnded={onSetBpEnded} />;
   if (gameId === 'blackjack') return <BlackjackGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onLiveDrinkUpdate={onLiveDrinkUpdate} onSetBuszSwitch={onSetBuszSwitch} />;
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onSetBuszSwitch={onSetBuszSwitch} />;
@@ -57491,8 +57641,8 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'farkasos') return <FarkasosGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'meduza') return <MeduzaGame key={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'ritmus') return <RitmusGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'meduza') return <MeduzaGame key={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
+  if (gameId === 'ritmus') return <RitmusGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
   if (gameId === 'szamsor') return <SzamsorGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'tabu') return <TabuGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
   if (gameId === 'mutasd') return <MutasdGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
@@ -57517,9 +57667,9 @@ const CB = {
   label:'rgba(26,42,74,.45)',
 };
 
-function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, onSetHideFooter }) {
+function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, onSetHideFooter, gameMeta }) {
   const VALS = [3,4,5,6,7];
-  const NR = 5;
+  const NR = gameMeta?.cardbattleConfig?.rounds || 5;
 
   const CB_BG    = CB.bg;
   const CB_GREEN = T.mint;
@@ -58146,8 +58296,10 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
   );
 }
 
-function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onResult, onSetHideFooter }) {
-  const GRID = 5;
+function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onResult, onSetHideFooter, gameMeta }) {
+  const GRID = gameMeta?.utvesztoConfig?.grid || 5;
+  // A csapdaszam kovesse a palyat: a mezok otode, de legalabb 3.
+  const TRAPS = Math.max(3, Math.round(GRID * GRID / 5));
   const START_IDX = 0;
   const END_IDX = GRID * GRID - 1;
 
@@ -58215,7 +58367,7 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
     }
     const alreadyHas = board[idx] !== null;
     const total = board.filter(Boolean).length;
-    if (!alreadyHas && total >= 5) return;
+    if (!alreadyHas && total >= TRAPS) return;
     // only 1 of each type
     if (board.includes(selTrap) && !alreadyHas) return;
     const nb = [...board]; nb[idx] = selTrap; setBoard(nb);
@@ -58348,7 +58500,7 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
         {/* Szabályok */}
         <div style={{background:T.surface,borderRadius:16,padding:'14px 16px',boxShadow:T.shadow}}>
           <div style={{fontFamily:T.font,fontSize:10,fontWeight:900,color:T.inkSoft,letterSpacing:1.5,marginBottom:8}}>HOGYAN JÁTSZIK</div>
-          {['1️⃣ Helyezz el 5 csapdát a saját 5×5-ös pályádon','2️⃣ Az ellenfél vakon rajzolja az útját','3️⃣ Animáció — csapdák feltárulnak','4️⃣ Kevesebb késés = győzelem 🏆'].map((s,i)=>(
+          {[`1️⃣ Helyezz el ${TRAPS} csapdát a saját ${GRID}×${GRID}-ös pályádon`,'2️⃣ Az ellenfél vakon rajzolja az útját','3️⃣ Animáció — csapdák feltárulnak','4️⃣ Kevesebb késés = győzelem 🏆'].map((s,i)=>(
             <div key={i} style={{fontFamily:T.font,fontSize:13,color:T.ink,lineHeight:1.6}}>{s}</div>
           ))}
         </div>
@@ -58381,16 +58533,16 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
   // ── SETUP 1 (P1 places traps) ──
   if (phase === 'setup1') {
     const placed = board1.filter(Boolean).length;
-    const canPlace = (id) => !board1.includes(id) && placed < 5;
+    const canPlace = (id) => !board1.includes(id) && placed < TRAPS;
     return (
       <div style={wrapStyle}>
         <div style={{background:T.surface,borderRadius:14,padding:'10px 14px',boxShadow:T.shadow,display:'flex',alignItems:'center',gap:10}}>
           <PlayerAvatar player={p1} size={34} />
           <div>
             <div style={{fontFamily:T.font,fontWeight:900,fontSize:14,color:T.ink}}>{p1?.name||'Játékos 1'} csapdái</div>
-            <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft}}>Helyezz el {5-placed} csapdát · Start mező védett</div>
+            <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft}}>Helyezz el {TRAPS-placed} csapdát · Start mező védett</div>
           </div>
-          <div style={{marginLeft:'auto',fontFamily:T.font,fontWeight:900,fontSize:16,color:T.mint}}>{placed}/5</div>
+          <div style={{marginLeft:'auto',fontFamily:T.font,fontWeight:900,fontSize:16,color:T.mint}}>{placed}/{TRAPS}</div>
         </div>
         {renderGrid({ board:board1, showTraps:true, onCellTap:(idx)=>placeOrRemove(board1,setBoard1,idx), pcolor:p1?.color||T.mint })}
         <div style={{display:'flex',gap:6,marginTop:10,flexWrap:'wrap',justifyContent:'center'}}>
@@ -58419,7 +58571,7 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
           background:placed>0?T.mint:T.bgSoft,color:placed>0?'#fff':T.inkMute,
           fontFamily:T.font,fontWeight:900,fontSize:14,cursor:placed>0?'pointer':'default',
           boxShadow:placed>0?'0 4px 14px -4px '+T.mint+'88':'none',
-        }}>Kész ({placed}/5) → Add át {p2?.name||'Játékos 2'}-nek</button>
+        }}>Kész ({placed}/{TRAPS}) → Add át {p2?.name||'Játékos 2'}-nek</button>
       </div>
     );
   }
@@ -58433,9 +58585,9 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
           <PlayerAvatar player={p2} size={34} />
           <div>
             <div style={{fontFamily:T.font,fontWeight:900,fontSize:14,color:T.ink}}>{p2?.name||'Játékos 2'} csapdái</div>
-            <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft}}>Helyezz el {5-placed} csapdát · Az ellenfél nem látja</div>
+            <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft}}>Helyezz el {TRAPS-placed} csapdát · Az ellenfél nem látja</div>
           </div>
-          <div style={{marginLeft:'auto',fontFamily:T.font,fontWeight:900,fontSize:16,color:T.mint}}>{placed}/5</div>
+          <div style={{marginLeft:'auto',fontFamily:T.font,fontWeight:900,fontSize:16,color:T.mint}}>{placed}/{TRAPS}</div>
         </div>
         {renderGrid({ board:board2, showTraps:true, onCellTap:(idx)=>placeOrRemove(board2,setBoard2,idx), pcolor:p2?.color||T.coral })}
         <div style={{display:'flex',gap:6,marginTop:10,flexWrap:'wrap',justifyContent:'center'}}>
@@ -58464,7 +58616,7 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
           background:placed>0?T.mint:T.bgSoft,color:placed>0?'#fff':T.inkMute,
           fontFamily:T.font,fontWeight:900,fontSize:14,cursor:placed>0?'pointer':'default',
           boxShadow:placed>0?'0 4px 14px -4px '+T.mint+'88':'none',
-        }}>Kész ({placed}/5) → Útvonal rajzolás</button>
+        }}>Kész ({placed}/{TRAPS}) → Útvonal rajzolás</button>
       </div>
     );
   }
@@ -62502,12 +62654,12 @@ function BracketView({ seRoundsArr, seCurRound, seCurMatch }) {
 }
 
 // ── Ritmus Játék ──────────────────────────────────────────────────────────────
-function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResult }) {
-  const GRID = 12;
-  const DURATION = 30;
+function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResult, gameMeta }) {
+  const GRID = gameMeta?.ritmusConfig?.grid || 12;
+  const DURATION = gameMeta?.ritmusConfig?.duration || 30;
   const EMOJIS = ['🎯','⭐','🔥','💎','🎵','🍀','⚡','🎪','🦋','🎸','🎲','🚀'];
   const TRAP_EMOJI = '💀';
-  const TRAP_CHANCE = 0.2;
+  const TRAP_CHANCE = gameMeta?.ritmusConfig?.trapChance ?? 0.2;
   const [phase, setPhase] = useState('intro');
   const [timeLeft, setTimeLeft] = useState(DURATION);
   const [activeBtn, setActiveBtn] = useState(null);
@@ -62917,8 +63069,8 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult, difficul
 }
 
 // ── Medúza ─────────────────────────────────────────────────────────────────────
-function MeduzaGame({ players, onAdvance, onResult }) {
-  const TOTAL_ROUNDS = 5;
+function MeduzaGame({ players, onAdvance, onResult, gameMeta }) {
+  const TOTAL_ROUNDS = gameMeta?.meduzaConfig?.rounds || 5;
   const [phase, setPhase] = useState('intro');
   const [count, setCount] = useState(3);
   const [round, setRound] = useState(1);

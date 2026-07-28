@@ -122,7 +122,7 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
     // (a megnyitasa kijelolne a jatekot, amit a zar epp tilt).
     const p = await open(b, 'games', false, []);
     const n = await p.evaluate(() => document.querySelectorAll('#__g button[aria-label="Beállítások"]').length);
-    ok('mind a 7 beállítható játék kap gombot', n >= 7, n + ' db (7 beállítható játék van)');
+    ok('minden beállítható játék kap gombot', n >= 13, n + ' db (13 beállítható játék van)');
 
     // a gomb NEM csak jelzes: meg is nyitja a lapot
     const opened = await p.evaluate(() => {
