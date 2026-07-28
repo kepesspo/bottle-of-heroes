@@ -35052,7 +35052,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.173';
+const APP_VERSION = 'v10.174';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -44352,6 +44352,24 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   const [ovfjSheet, setOvfjSheet] = useState(false);
   const [zeneSheet, setZeneSheet] = useState(false);
   const [filterSheet, setFilterSheet] = useState(false);
+  // Hanyszor jatszottuk az egyes jatekokat (game_stats/{id}.playCount).
+  // Az ELSO festeshez a legutobb latott szamokat hasznaljuk, a friss adatot
+  // csak elmentjuk — igy a lista nem rendezodik at a kez alatt.
+  const PLAYCOUNT_KEY = 'boh_playcounts';
+  const [playCounts] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(PLAYCOUNT_KEY) || '{}') || {}; } catch (e) { return {}; }
+  });
+  React.useEffect(() => {
+    if (typeof window.getAllGameStats !== 'function') return;
+    window.getAllGameStats().then(all => {
+      const counts = {};
+      Object.keys(all || {}).forEach(id => {
+        const n = all[id] && all[id].playCount;
+        if (typeof n === 'number' && n > 0) counts[id] = n;
+      });
+      try { localStorage.setItem(PLAYCOUNT_KEY, JSON.stringify(counts)); } catch (e) {}
+    }, () => {});
+  }, []);
   const setupFlow = useSetupFlow();
   // A het beallito lap egy helyen. A hosszu nyomas es a kartyan levo
   // fogaskerek is ezt hivja, igy nem tudnak elcsuszni egymastol.
@@ -44481,7 +44499,12 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
       window.getHiddenGames && window.getHiddenGames().then(ids => _setHiddenGames(ids));
     }
   }, []);
-  const visibleGames = GAMES.filter(g => !_hiddenGames.includes(g.id)).filter(gameMatchesFilter).sort((a,b) => (a.comingSoon?1:0) - (b.comingSoon?1:0));
+  // Sorrend: eloszor a hamarosan-erkezok hatra, aztan a legtobbet jatszottak
+  // elore. A sort stabil, ezert az azonos jatszottsaguak (jellemzoen a meg
+  // sosem jatszottak, 0-val) a GAMES tomb eredeti sorrendjeben maradnak.
+  const visibleGames = GAMES.filter(g => !_hiddenGames.includes(g.id)).filter(gameMatchesFilter)
+    .sort((a, b) => (a.comingSoon ? 1 : 0) - (b.comingSoon ? 1 : 0)
+                 || (playCounts[b.id] || 0) - (playCounts[a.id] || 0));
   const hasFilter = activeFilters.length > 0;
 
   return (
