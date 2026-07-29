@@ -1,0 +1,266 @@
+// v10.184 — Ország-Város: több szó egy kategóriához (1 / 2 / 3 / bármennyi)
+//
+// A legfontosabb, hogy az ALAPÉRTELMEZÉS ne változtasson semmit: aki nem nyúl a
+// választóhoz, annak a játék pontosan olyan maradjon, mint eddig.
+//
+// Ami csendben elromolhat:
+//   1) a limit nem korlátoz — a 4. szó is pontot ér;
+//   2) az önismétlés ("Ausztria, Ausztria") háromszor számít;
+//   3) a szavazat-kulcsok összecsúsznak: egy szóra adott X a másik szóra is hat;
+//   4) a régi, egyszavas körök elromlanak az új olvasótól.
+const { chromium } = require('/opt/node22/lib/node_modules/playwright');
+const fs = require('fs');
+const stub = fs.readFileSync(__dirname + '/fbstub.js', 'utf8');
+const BASE = 'file:///home/user/bottle-of-heroes/index.html';
+const SRC = '/home/user/bottle-of-heroes/app.src.html';
+
+const PLAYERS = [
+  { id:'a', name:'Anna', color:'#5BA0DB' },
+  { id:'b', name:'Béla', color:'#E07A5F' },
+  { id:'c', name:'Cili', color:'#A78BFA' },
+];
+
+(async () => {
+  let fail = 0;
+  const ok = (l, c, e) => { console.log((c ? '  OK   ' : '  HIBA ') + l + (e !== undefined ? '  → ' + e : '')); if (!c) fail++; };
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const p = await b.newPage({ viewport: { width: 390, height: 1400 } });
+  const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.route('**://**', r => r.request().url().startsWith('file://') ? r.continue() : r.abort());
+  await p.addInitScript(stub);
+  await p.addInitScript(`
+    try { localStorage.setItem('boh_onboarded','1'); } catch(e){}
+    ['profiles','stats','game_stats','statEvents','gameStatEvents','seasons','usage','config']
+      .forEach(k => window.__fbStore[k] = {});
+  `);
+  await p.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 90000 });
+  await p.waitForTimeout(3600);
+
+  // ─── 1) A limit ertelmezese ───
+  // A hianyzo ertek 1, nem "barmennyi" — egy regi szoba (vagy egy regebbi
+  // kliens) a megszokott jatekot kell hozza.
+  console.log('\n===== A LIMIT ÉRTELMEZÉSE =====');
+  {
+    const r = await p.evaluate(() => ({
+      undef: ovfjLimit(undefined), nul: ovfjLimit(null), zero: ovfjLimit(0),
+      one: ovfjLimit(1), three: ovfjLimit(3), junk: ovfjLimit('x'), neg: ovfjLimit(-2),
+    }));
+    ok('hiányzó érték = 1 (a megszokott játék)', r.undef === 1 && r.nul === 1, `${r.undef} / ${r.nul}`);
+    ok('a 0 jelenti a "bármennyit"', r.zero === 0, String(r.zero));
+    ok('a számok átmennek', r.one === 1 && r.three === 3, `${r.one} / ${r.three}`);
+    ok('hibás érték nem old fel korlátot', r.junk === 1 && r.neg === 1, `${r.junk} / ${r.neg}`);
+  }
+
+  // ─── 2) A szavak kiolvasasa ───
+  console.log('\n===== A SZAVAK KIOLVASÁSA =====');
+  {
+    const r = await p.evaluate(() => {
+      const rec = { orszag: 'Ausztria, Albánia ,Argentína,  ,Andorra', varos: 'Athén' };
+      return {
+        lim2: ovfjVals(rec, 'orszag', 2),
+        lim0: ovfjVals(rec, 'orszag', 0),
+        limDef: ovfjVals(rec, 'orszag', undefined),
+        single: ovfjVals(rec, 'varos', 3),
+        empty: ovfjVals(rec, 'allat', 0),
+        noRec: ovfjVals(null, 'orszag', 0),
+      };
+    });
+    ok('a limit tényleg vág', r.lim2.length === 2 && r.lim2[1] === 'Albánia', r.lim2.join(' | '));
+    ok('"bármennyi" mindet hozza', r.lim0.length === 4, r.lim0.join(' | '));
+    ok('alapból csak az elsőt', r.limDef.length === 1 && r.limDef[0] === 'Ausztria', r.limDef.join(' | '));
+    ok('az üres tagok kiesnek, a szóközök lekopnak',
+       r.lim0.every(x => x === x.trim() && x.length > 0), JSON.stringify(r.lim0));
+    ok('a régi, vessző nélküli válasz változatlan', r.single.length === 1 && r.single[0] === 'Athén', r.single.join(' | '));
+    ok('üres kategória / hiányzó rekord nem dob', r.empty.length === 0 && r.noRec.length === 0);
+  }
+
+  // ─── 3) Ervenyesseg ───
+  console.log('\n===== ÉRVÉNYESSÉG =====');
+  {
+    const r = await p.evaluate(() => {
+      const answers = {
+        a: { round:1, orszag:'Ausztria, Albánia, Belgium, Andorra' }, // 3. rossz betu, 4. limiten kivul
+        b: { round:1, orszag:'Albánia, Ausztrália' },                 // Albania egyezik Annaval
+        c: { round:1, orszag:'Argentína, argentína, Angola' },        // onismetles (kis/nagybetu)
+      };
+      const V = ovfjBuildValidity(answers, 'A', 1, 3);
+      const dump = pid => V(pid, 'orszag').map(x => x.val + ':' + (x.valid ? 'ok' : x.reason));
+      return { a: dump('a'), b: dump('b'), c: dump('c'),
+               // limit nelkul a 4. szo is bejon
+               a0: ovfjBuildValidity(answers, 'A', 1, 0)('a', 'orszag').map(x => x.val) };
+    });
+    ok('a limiten felüli szó meg sem jelenik', r.a.length === 3, r.a.join(' | '));
+    ok('a rossz kezdőbetű kiesik', /Belgium:✗ betű/.test(r.a.join('|')), r.a.join(' | '));
+    ok('a két játékos egyező szava mindkettőnél kiesik',
+       /Albánia:× egyező/.test(r.a.join('|')) && /Albánia:× egyező/.test(r.b.join('|')),
+       r.a.join(' | ') + '  ·  ' + r.b.join(' | '));
+    // Enelkul "Ausztria, Ausztria, Ausztria" harom pont lenne.
+    ok('az önismétlés csak egyszer ér (kis/nagybetűtől függetlenül)',
+       r.c[0].endsWith(':ok') && r.c[1].endsWith(':× ismétlés'), r.c.join(' | '));
+    ok('az önismétlés nem teszi "egyezővé" a többiek szavát',
+       r.c[2] === 'Angola:ok', r.c.join(' | '));
+    ok('"bármennyi" mellett a 4. szó is bejön', r.a0.length === 4, r.a0.join(' | '));
+  }
+
+  // ─── 4) A szavazat-kulcsok ───
+  // Ha ket szo ugyanazt a kulcsot kapna, egy X mindkettot leszavazna.
+  console.log('\n===== A SZAVAZAT-KULCSOK =====');
+  {
+    const r = await p.evaluate(() => ({
+      k0: ovfjVoteKey(1, 'a', 'orszag', 0),
+      kNo: ovfjVoteKey(1, 'a', 'orszag'),
+      k1: ovfjVoteKey(1, 'a', 'orszag', 1),
+      k2: ovfjVoteKey(1, 'a', 'orszag', 2),
+    }));
+    ok('a 0. szó kulcsa a régi marad (a beérkezett szavazat nem vész el)',
+       r.k0 === 'r1_a_orszag' && r.kNo === r.k0, `${r.kNo} / ${r.k0}`);
+    ok('a további szavak külön kulcsot kapnak',
+       new Set([r.k0, r.k1, r.k2]).size === 3, [r.k0, r.k1, r.k2].join(' · '));
+  }
+
+  // ─── 5) A szavazo nezet: szavankent egy sor ───
+  console.log('\n===== SZAVANKÉNT EGY SOR =====');
+  {
+    const mount = (limit) => p.evaluate((lim) => {
+      const old = document.getElementById('__m'); if (old) old.remove();
+      const r = document.getElementById('root'); if (r) r.style.display = 'none';
+      const root = document.createElement('div'); root.id = '__m';
+      root.style.cssText = 'position:fixed;inset:0;z-index:1;background:var(--app-bg);overflow:auto;padding:12px';
+      document.body.appendChild(root);
+      ReactDOM.createRoot(root).render(React.createElement(OVFJVotingView, {
+        letter:'A', round:1, myPid:'a', myVotes:{}, tallies:null, onVote:()=>{}, limit: lim,
+        players:[{id:'a',name:'Anna',color:'#5BA0DB'},{id:'b',name:'Béla',color:'#E07A5F'}],
+        answers:{ a:{round:1,orszag:'Ausztria'}, b:{round:1,orszag:'Albánia, Andorra, Angola'} },
+      }));
+    }, limit);
+
+    await mount(1); await p.waitForTimeout(900);
+    const one = await p.evaluate(() => document.querySelector('#__m').innerText.replace(/\s+/g, ' '));
+    ok('1-es limitnél csak az első szó látszik',
+       one.includes('Albánia') && !one.includes('Andorra'), (one.match(/Albánia.{0,30}/) || [''])[0]);
+
+    await mount(0); await p.waitForTimeout(900);
+    const all = await p.evaluate(() => {
+      const card = [...document.querySelectorAll('#__m div')]
+        .filter(d => d.textContent.includes('Ország') && d.textContent.includes('Angola'))
+        .sort((a, b) => a.textContent.length - b.textContent.length)[0];
+      const t = document.querySelector('#__m').innerText;
+      return { text: t.replace(/\s+/g, ' '),
+               btns: card.querySelectorAll('button').length,
+               belaCount: (card.textContent.match(/Béla/g) || []).length };
+    });
+    ok('"bármennyi" mellett mindhárom szó megjelenik',
+       ['Albánia','Andorra','Angola'].every(w => all.text.includes(w)), all.text.slice(0, 90));
+    ok('mindhárom szóra külön értékelő gombpár jut', all.btns === 6, (all.btns / 2) + ' gombpár');
+    // A nev ismetlese zajos lenne, es a szavak oszlopa is szetesne.
+    ok('a nevet csak az első szónál írjuk ki', all.belaCount === 1, all.belaCount + '× "Béla" a kártyán');
+
+    const lefts = await p.evaluate(() => [...document.querySelectorAll('#__m span')]
+      .filter(s => /^(Albánia|Andorra|Angola)$/.test(s.textContent.trim()))
+      .map(s => Math.round(s.getBoundingClientRect().left)));
+    ok('a szavak így is egy oszlopban állnak',
+       lefts.length === 3 && new Set(lefts).size === 1, lefts.join(', '));
+  }
+
+  // ─── 6) A valaszto ───
+  console.log('\n===== A VÁLASZTÓ =====');
+  {
+    await p.evaluate(() => {
+      const old = document.getElementById('__m'); if (old) old.remove();
+      const root = document.createElement('div'); root.id = '__m';
+      root.style.cssText = 'position:fixed;inset:0;z-index:1;background:var(--app-bg);padding:12px';
+      document.body.appendChild(root);
+      function H() { const [v, sv] = React.useState(undefined); window.__lim = v;
+        return React.createElement(OVFJLimitPicker, { value: v, onChange: sv }); }
+      ReactDOM.createRoot(root).render(React.createElement(H));
+    });
+    await p.waitForTimeout(900);
+    const labels = await p.evaluate(() => [...document.querySelectorAll('#__m button')].map(x => x.innerText.trim()));
+    ok('négy gomb van: 1, 2, 3, Bármennyi',
+       labels.join('|') === '1|2|3|Bármennyi', labels.join(' | '));
+
+    // alapbol az 1 aktiv, meg akkor is, ha meg nem valasztott senki
+    const active = () => p.evaluate(() => [...document.querySelectorAll('#__m button')]
+      .map(x => getComputedStyle(x).backgroundColor !== 'rgba(0, 0, 0, 0)'));
+    ok('alapból az 1 a kijelölt', (await active())[0] === true, JSON.stringify(await active()));
+
+    await p.evaluate(() => [...document.querySelectorAll('#__m button')]
+      .find(x => x.innerText.trim() === 'Bármennyi').click());
+    await p.waitForTimeout(400);
+    ok('a "Bármennyi" 0-t ad vissza', (await p.evaluate(() => window.__lim)) === 0,
+       String(await p.evaluate(() => window.__lim)));
+    ok('és át is vált rá a kijelölés', (await active())[3] === true, JSON.stringify(await active()));
+    ok('a magyarázat is átvált',
+       /Vesszővel sorold/.test(await p.evaluate(() => document.querySelector('#__m').innerText)));
+
+    await p.evaluate(() => [...document.querySelectorAll('#__m button')]
+      .find(x => x.innerText.trim() === '3').click());
+    await p.waitForTimeout(400);
+    ok('a 3 gomb 3-at ad vissza', (await p.evaluate(() => window.__lim)) === 3);
+  }
+
+  // ─── 7) A kitolto urlap ───
+  console.log('\n===== A KITÖLTŐ ŰRLAP =====');
+  {
+    const mountForm = (limit) => p.evaluate((lim) => {
+      const old = document.getElementById('__f'); if (old) old.remove();
+      const root = document.createElement('div'); root.id = '__f';
+      root.style.cssText = 'position:fixed;inset:0;z-index:1;background:var(--app-bg);overflow:auto;padding:12px';
+      document.body.appendChild(root);
+      function H() {
+        const [a, sa] = React.useState({ orszag:'Ausztria, Belgium, Albánia, Andorra' });
+        window.__ans = a;
+        return React.createElement(OVFJWritingForm, { letter:'A', remaining:60, localAns:a,
+          setLocalAns:sa, submitted:false, onSubmit:()=>{}, doneInfo:null, limit: lim });
+      }
+      ReactDOM.createRoot(root).render(React.createElement(H));
+    }, limit);
+
+    await mountForm(1); await p.waitForTimeout(900);
+    const t1 = await p.evaluate(() => document.querySelector('#__f').innerText.replace(/\s+/g, ' '));
+    ok('1-es limitnél nincs chip-sor (a mai űrlap)', !t1.includes('Belgium'), t1.slice(0, 70));
+
+    await mountForm(3); await p.waitForTimeout(900);
+    const t3 = await p.evaluate(() => document.querySelector('#__f').innerText.replace(/\s+/g, ' '));
+    ok('több szónál chipként megjelenik, amit felismertünk',
+       ['Ausztria','Belgium','Albánia'].every(w => t3.includes(w)), t3.slice(0, 110));
+    ok('a limiten felüli szó is látszik — de látszik, hogy nem számít',
+       t3.includes('Andorra'), t3.slice(0, 130));
+    // 4 szo, ebbol Belgium rossz betu, Andorra limiten kivul -> 2/3
+    ok('a számláló az érvényeseket mutatja', /2\/3/.test(t3), (t3.match(/\d\/\d/g) || []).join(' '));
+
+    const chips = await p.evaluate(() => [...document.querySelectorAll('#__f span')]
+      .filter(s => /^(Ausztria|Belgium|Albánia|Andorra)$/.test(s.textContent.trim()))
+      .map(s => ({ w: s.textContent.trim(), strike: getComputedStyle(s).textDecorationLine })));
+    const st = w => (chips.find(c => c.w === w) || {}).strike || '';
+    ok('a rossz betűs és a limiten felüli szó át van húzva',
+       /line-through/.test(st('Belgium')) && /line-through/.test(st('Andorra')),
+       chips.map(c => c.w + ':' + c.strike).join(', '));
+    ok('az érvényesek nincsenek áthúzva',
+       !/line-through/.test(st('Ausztria')) && !/line-through/.test(st('Albánia')),
+       st('Ausztria') + ' / ' + st('Albánia'));
+  }
+
+  // ─── 8) A ket szabaly, ami a forrasban dol el ───
+  // Ez a ketto a komponensen belul, a szavazas lezarasakor fut — kivulrol nem
+  // hivhato, ezert a forrasban rogzitjuk. Ha valaki visszaallitja, itt bukik.
+  console.log('\n===== A PONTOZÁS KÉT SZABÁLYA =====');
+  {
+    const src = fs.readFileSync(SRC, 'utf8');
+    ok('amire senki nem szavazott, az elfogadott',
+       /vals\.length === 0 \|\| yes > no/.test(src),
+       (src.match(/if \(vals\.length[^\n]*/) || ['NINCS MEG'])[0]);
+    ok('a körönkénti korty be van sapkázva',
+       /Math\.min\(CAP, maxRs - \(rs\[p\.id\]\|\|0\)\)/.test(src),
+       (src.match(/const CAP = [^\n]*/) || ['NINCS PLAFON'])[0]);
+    ok('a beállítás átmegy a vendégnek is (syncRoom)',
+       (src.match(/ovfjState: \{[^}]*answerLimit/g) || []).length === 2,
+       (src.match(/ovfjState: \{[^}]*answerLimit/g) || []).length + ' hely');
+  }
+
+  ok('nincs JS hiba', errs.filter(e => !/ServiceWorker/.test(e)).length === 0, errs.join(' | '));
+  await p.close();
+  await b.close();
+  console.log('\n' + (fail === 0 ? '✅ MINDEN ELLENORZES RENDBEN' : '❌ ' + fail + ' ELLENORZES BUKOTT'));
+  process.exit(fail === 0 ? 0 : 1);
+})().catch(e => { console.error('CRASH', e); process.exit(1); });
