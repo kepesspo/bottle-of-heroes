@@ -316,9 +316,9 @@ const PLAYERS = [
     ok('amire senki nem szavazott, az elfogadott',
        /vals\.length === 0 \|\| yes > no/.test(src),
        (src.match(/if \(vals\.length[^\n]*/) || ['NINCS MEG'])[0]);
-    ok('a körönkénti korty be van sapkázva',
-       /Math\.min\(CAP, maxRs - \(rs\[p\.id\]\|\|0\)\)/.test(src),
-       (src.match(/const CAP = [^\n]*/) || ['NINCS PLAFON'])[0]);
+    ok('a korty a TELJES pontkülönbség — szándékosan nincs plafon',
+       /drinks: maxRs - \(rs\[p\.id\]\|\|0\)/.test(src) && !/Math\.min\(CAP/.test(src),
+       (src.match(/drinks: maxRs[^\n]*/) || ['NINCS MEG'])[0]);
     ok('a beállítás átmegy a vendégnek is (syncRoom)',
        (src.match(/ovfjState: \{[^}]*answerLimit/g) || []).length === 2,
        (src.match(/ovfjState: \{[^}]*answerLimit/g) || []).length + ' hely');
