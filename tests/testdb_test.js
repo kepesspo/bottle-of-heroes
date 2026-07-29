@@ -273,10 +273,14 @@ const open = async (b, testMode) => {
   }
 
   // ─── 7) A profilok atemelese ───
-  // Az eles profil-lista uresen indulna, ezert egy egyszeri atemeles hozza at a
-  // SZEMELYES adatokat. Ket dolog szamit: az azonositok maradjanak (a kozos
-  // kollekciok — szobak, bar-ertekelesek — ezekre hivatkoznak), es eredmeny NE
-  // jojjon at. Ezert mezo-feherlista van, nem teljes dokumentum-masolas.
+  // Az eles profil-lista uresen indul, ezert egy egyszeri atemeles hozza at a
+  // SZEMELYES adatokat. Harom dolog szamit: az azonositok maradjanak, eredmeny
+  // NE jojjon at, es a mar elesben levo, HIANYOS profil is toltodjon fel.
+  //
+  // Ez utobbi valos hiba volt: a Jatekosok kepernyo indulaskor beirja a 12 elore
+  // beallitott profilt az EPP AKTIV adatbazisba. Aki eles modban ranyitott,
+  // annal letrejottek a hardkodolt alapertekekkel, es a regi atemeles ezeket
+  // "mar megvolt"-kent kihagyta — a becenev, avatar, korty limit sosem jott at.
   console.log('\n===== A PROFILOK ÁTEMELÉSE =====');
   {
     const p = await open(b, true);
@@ -286,26 +290,45 @@ const open = async (b, testMode) => {
                birthday:'1990-05-05', img:'assets/avatars/char_1.png', avatarId:'c1', drinkLimit:12,
                // eredmeny-jellegu mezok: ezeknek NEM szabad atmenniuk
                games:99, wins:42, bp_h2h:{ p_b:{ w:3 } }, badges:['x'] },
+        // ezt a Jatekosok kepernyo mar letrehozta elesben, alapertekekkel
+        preset_x: { name:'Tóth Bence', color:'#10B981', nickname:'Tóth', drinkLimit:8, phone:'+3620' },
         p_b: { name:'Béla', color:'#E07A5F' },
         p_junk: { color:'#000' },          // nev nelkuli szemet — kimarad
       };
-      window.__fbStore['live_profiles'] = { p_b: { name:'Béla (élesben javítva)', color:'#111' } };
+      window.__fbStore['live_profiles'] = {
+        p_b: { name:'Béla (élesben javítva)', color:'#111' },
+        preset_x: { name:'Tóth Bence', color:'#10B981' },   // becenev, limit, telefon hianyzik
+      };
       const r = document.getElementById('root'); if (r) r.style.display = 'none';
       const root = document.createElement('div'); root.id = '__cp';
       root.style.cssText = 'position:fixed;inset:0;z-index:1;background:var(--app-bg);padding:16px';
       document.body.appendChild(root);
       ReactDOM.createRoot(root).render(React.createElement(AdminProfileCopy, { onDone: () => {} }));
     });
-    await p.waitForTimeout(1200);
+    await p.waitForTimeout(1400);
+
+    // a) MEG A GOMB ELOTT megmondja, mi hianyzik
+    const before = await p.evaluate(() => document.querySelector('#__cp').innerText.replace(/\s+/g, ' '));
+    ok('gombnyomás nélkül kiírja a két oldal darabszámát',
+       /teszt 4/i.test(before) && /éles 2/i.test(before),
+       (before.match(/TESZT \d+ ÉLES \d+/i) || ['—'])[0]);
+    ok('névszerint megmondja, ki nincs meg élesben',
+       /Élesben még nincs meg \(1\): Anna/.test(before),
+       (before.match(/Élesben még nincs meg[^E]*/) || ['NEM ÍRJA KI'])[0]);
+    ok('azt is, ki van fent hiányos adattal',
+       /Hiányos adattal van fenn \(1\): Tóth Bence/.test(before),
+       (before.match(/Hiányos adattal[^A-ZÉ]*[^ ]*/) || ['NEM ÍRJA KI'])[0]);
+
     await p.evaluate(() => {
       const btn = [...document.querySelectorAll('#__cp button')].find(x => /Átemelés/.test(x.innerText));
       if (btn) btn.click();
     });
-    await p.waitForTimeout(1200);
+    await p.waitForTimeout(1400);
 
     const live = await p.evaluate(() => window.__fbStore['live_profiles']);
-    ok('a profil ugyanazzal az azonosítóval kerül át', !!live.p_a, Object.keys(live).join(', '));
+    // b) a hianyzo profil teljes egeszeben atjon
     const a = live.p_a || {};
+    ok('a hiányzó profil ugyanazzal az azonosítóval kerül át', !!live.p_a, Object.keys(live).join(', '));
     const wantPersonal = ['name','color','nickname','phone','email','birthday','img','avatarId','drinkLimit'];
     const missing = wantPersonal.filter(k => a[k] === undefined);
     ok('a személyes adatok mind átmennek', missing.length === 0,
@@ -313,25 +336,64 @@ const open = async (b, testMode) => {
     const leaked = ['games','wins','bp_h2h','badges'].filter(k => a[k] !== undefined);
     ok('az eredmények NEM mennek át', leaked.length === 0,
        leaked.length ? 'átszivárgott: ' + leaked.join(', ') : 'egy sem');
-    ok('ami élesben már megvolt, azt nem írja felül',
-       (live.p_b || {}).name === 'Béla (élesben javítva)', (live.p_b || {}).name);
+
+    // c) EZ A JAVITAS: a mar fent levo, hianyos profil feltoltodik
+    const px = live.preset_x || {};
+    ok('a hiányos éles profil megkapja a hiányzó mezőket',
+       px.nickname === 'Tóth' && px.drinkLimit === 8 && px.phone === '+3620',
+       JSON.stringify(px));
+    // d) de amit elesben mar kitoltottek, ahhoz nem nyulunk
+    ok('a már kitöltött éles érték marad', (live.p_b || {}).name === 'Béla (élesben javítva)',
+       (live.p_b || {}).name);
     ok('a név nélküli szemét kimarad', live.p_junk === undefined, JSON.stringify(live.p_junk));
 
     const msg = await p.evaluate(() => document.querySelector('#__cp').innerText.replace(/\s+/g, ' '));
-    ok('megmondja, mi történt', /1 profil átemelve/.test(msg) && /1 már megvolt/.test(msg) && /1 névtelen/.test(msg),
-       (msg.match(/\d+ profil átemelve[^.]*/) || ['NINCS VISSZAJELZÉS'])[0]);
+    ok('megmondja, mi történt',
+       /1 új profil/.test(msg) && /1 kiegészítve/.test(msg) && /1 névtelen kihagyva/.test(msg),
+       (msg.match(/\d+ új profil[^.]*/) || ['NINCS VISSZAJELZÉS'])[0]);
+    ok('utána már nincs eltérés', /Minden teszt profil fent van élesben/.test(msg),
+       (msg.match(/Minden teszt profil[^.]*/) || ['MÉG VAN ELTÉRÉS'])[0]);
 
-    // ujra futtatva mar nincs mit atemelni — a gomb tobbszor is megnyomhato
+    // e) masodszorra nincs mit tenni
     await p.evaluate(() => {
       const btn = [...document.querySelectorAll('#__cp button')].find(x => /Átemelés/.test(x.innerText));
       if (btn) btn.click();
     });
-    await p.waitForTimeout(1000);
+    await p.waitForTimeout(1200);
     const msg2 = await p.evaluate(() => document.querySelector('#__cp').innerText.replace(/\s+/g, ' '));
-    ok('másodszorra nem másol újra (nem írja felül az élest)', /0 profil átemelve/.test(msg2),
-       (msg2.match(/\d+ profil átemelve[^.]*/) || ['—'])[0]);
+    ok('másodszorra nem másol újra', /0 új profil/.test(msg2),
+       (msg2.match(/\d+ új profil[^.]*/) || ['—'])[0]);
     ok('a teszt profilok érintetlenül maradnak',
-       (await p.evaluate(() => Object.keys(window.__fbStore['profiles']).length)) === 3);
+       (await p.evaluate(() => Object.keys(window.__fbStore['profiles']).length)) === 4);
+    ok('nincs JS hiba', p.__errs.length === 0, p.__errs.join(' | '));
+    await p.__ctx.close();
+  }
+
+  // ─── 8) Sok profil: a koteg 500-nal elhasad ───
+  // A Firestore egy kotegben 500 irast enged. Egyetlen kotegben a 600. profil
+  // csendben nem jonne at — es a visszajelzes megis sikert mondana.
+  console.log('\n===== SOK PROFIL =====');
+  {
+    const p = await open(b, true);
+    await p.evaluate(() => {
+      const src = {};
+      for (let i = 0; i < 600; i++) src['p' + i] = { name: 'J' + i, color: '#111' };
+      window.__fbStore['profiles'] = src;
+      window.__fbStore['live_profiles'] = {};
+      const r = document.getElementById('root'); if (r) r.style.display = 'none';
+      const root = document.createElement('div'); root.id = '__cp';
+      root.style.cssText = 'position:fixed;inset:0;z-index:1;background:var(--app-bg);padding:16px';
+      document.body.appendChild(root);
+      ReactDOM.createRoot(root).render(React.createElement(AdminProfileCopy, { onDone: () => {} }));
+    });
+    await p.waitForTimeout(1400);
+    await p.evaluate(() => {
+      const btn = [...document.querySelectorAll('#__cp button')].find(x => /Átemelés/.test(x.innerText));
+      if (btn) btn.click();
+    });
+    await p.waitForTimeout(2500);
+    const n = await p.evaluate(() => Object.keys(window.__fbStore['live_profiles'] || {}).length);
+    ok('600 profil is hiánytalanul átmegy (több kötegben)', n === 600, n + ' profil');
     ok('nincs JS hiba', p.__errs.length === 0, p.__errs.join(' | '));
     await p.__ctx.close();
   }
