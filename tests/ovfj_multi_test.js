@@ -199,46 +199,112 @@ const PLAYERS = [
     ok('a 3 gomb 3-at ad vissza', (await p.evaluate(() => window.__lim)) === 3);
   }
 
-  // ─── 7) A kitolto urlap ───
+  // ─── 7) A kitolto urlap: + gomb, lablec, badge ───
+  // Marad a nyolc sor; a sor vegen a pipa helyett + gomb. Ket dolog kritikus:
+  //   a) amit a vegen NEM mentett le, az is szamitson (kulonben elveszne az
+  //      utolso szo, amit epp gepelt, amikor lejart az ido);
+  //   b) a + ne engedjen tullepni a limiten.
   console.log('\n===== A KITÖLTŐ ŰRLAP =====');
   {
-    const mountForm = (limit) => p.evaluate((lim) => {
+    const mountForm = (limit, start) => p.evaluate(([lim, st]) => {
       const old = document.getElementById('__f'); if (old) old.remove();
       const root = document.createElement('div'); root.id = '__f';
       root.style.cssText = 'position:fixed;inset:0;z-index:1;background:var(--app-bg);overflow:auto;padding:12px';
       document.body.appendChild(root);
       function H() {
-        const [a, sa] = React.useState({ orszag:'Ausztria, Belgium, Albánia, Andorra' });
+        const [a, sa] = React.useState(st);
         window.__ans = a;
         return React.createElement(OVFJWritingForm, { letter:'A', remaining:60, localAns:a,
           setLocalAns:sa, submitted:false, onSubmit:()=>{}, doneInfo:null, limit: lim });
       }
       ReactDOM.createRoot(root).render(React.createElement(H));
-    }, limit);
+    }, [limit, start]);
 
-    await mountForm(1); await p.waitForTimeout(900);
-    const t1 = await p.evaluate(() => document.querySelector('#__f').innerText.replace(/\s+/g, ' '));
-    ok('1-es limitnél nincs chip-sor (a mai űrlap)', !t1.includes('Belgium'), t1.slice(0, 70));
+    // az elso sor (Orszag) elemei
+    const row = () => p.evaluate(() => {
+      const inp = document.querySelectorAll('#__f input')[0];
+      const card = inp.closest('div').parentElement.parentElement;
+      const chips = [...card.querySelectorAll('button')].filter(x => !/Szó hozzáadása/.test(x.getAttribute('aria-label')||''));
+      const plus = [...card.querySelectorAll('button')].find(x => /Szó hozzáadása/.test(x.getAttribute('aria-label')||''));
+      return { value: inp.value, disabled: inp.disabled, placeholder: inp.placeholder,
+               chips: chips.map(c => c.textContent.trim()),
+               plusOn: plus ? !plus.disabled : null, hasPlus: !!plus,
+               label: card.querySelector('div').textContent };
+    });
+    const type = (t) => p.evaluate((txt) => {
+      const inp = document.querySelectorAll('#__f input')[0];
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      setter.call(inp, txt);
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+    }, t);
+    const plus = () => p.evaluate(() => {
+      const b = [...document.querySelectorAll('#__f button')]
+        .find(x => /Szó hozzáadása/.test(x.getAttribute('aria-label')||''));
+      if (b && !b.disabled) b.click();
+    });
 
-    await mountForm(3); await p.waitForTimeout(900);
-    const t3 = await p.evaluate(() => document.querySelector('#__f').innerText.replace(/\s+/g, ' '));
-    ok('több szónál chipként megjelenik, amit felismertünk',
-       ['Ausztria','Belgium','Albánia'].every(w => t3.includes(w)), t3.slice(0, 110));
-    ok('a limiten felüli szó is látszik — de látszik, hogy nem számít',
-       t3.includes('Andorra'), t3.slice(0, 130));
-    // 4 szo, ebbol Belgium rossz betu, Andorra limiten kivul -> 2/3
-    ok('a számláló az érvényeseket mutatja', /2\/3/.test(t3), (t3.match(/\d\/\d/g) || []).join(' '));
+    // a) 1-es limitnel a MAI urlap: pipa, nincs +, nincs chip
+    await mountForm(1, { orszag:'Ausztria' }); await p.waitForTimeout(900);
+    let r = await row();
+    ok('1-es limitnél nincs + gomb (a mai űrlap)', r.hasPlus === false, JSON.stringify(r.chips));
+    ok('1-es limitnél a mező a teljes választ mutatja', r.value === 'Ausztria', r.value);
 
-    const chips = await p.evaluate(() => [...document.querySelectorAll('#__f span')]
-      .filter(s => /^(Ausztria|Belgium|Albánia|Andorra)$/.test(s.textContent.trim()))
-      .map(s => ({ w: s.textContent.trim(), strike: getComputedStyle(s).textDecorationLine })));
-    const st = w => (chips.find(c => c.w === w) || {}).strike || '';
-    ok('a rossz betűs és a limiten felüli szó át van húzva',
-       /line-through/.test(st('Belgium')) && /line-through/.test(st('Andorra')),
-       chips.map(c => c.w + ':' + c.strike).join(', '));
-    ok('az érvényesek nincsenek áthúzva',
-       !/line-through/.test(st('Ausztria')) && !/line-through/.test(st('Albánia')),
-       st('Ausztria') + ' / ' + st('Albánia'));
+    // b) tobb szonal: + gomb a sor vegen
+    await mountForm(3, {}); await p.waitForTimeout(900);
+    r = await row();
+    ok('több szónál + gomb van a sor végén', r.hasPlus === true);
+    ok('üres mezőnél a + nem aktív', r.plusOn === false);
+
+    await type('Ausztria'); await p.waitForTimeout(300);
+    ok('gépelésre aktiválódik a +', (await row()).plusOn === true);
+
+    await plus(); await p.waitForTimeout(400);
+    r = await row();
+    ok('a + lementi a szót — chipként megjelenik', r.chips.some(c => c.startsWith('Ausztria')), r.chips.join(' | '));
+    ok('és a mező kiürül, jöhet a következő', r.value === '', JSON.stringify(r.value));
+    ok('a badge 1-et mutat', /1\/3/.test(r.label), r.label);
+
+    // c) a limit betelik
+    await type('Albánia'); await p.waitForTimeout(250); await plus(); await p.waitForTimeout(300);
+    await type('Angola');  await p.waitForTimeout(250); await plus(); await p.waitForTimeout(400);
+    r = await row();
+    ok('három szó után a badge 3/3', /3\/3/.test(r.label), r.label);
+    ok('a limit felett a + nem enged többet', r.plusOn === false);
+    // Ha a mezo nyitva maradna, a negyedik szo csendben elveszne beadaskor.
+    ok('és a mező is lezár, hogy ne vesszen el csendben szó', r.disabled === true);
+    ok('meg is mondja, miért', /megvan mind/i.test(r.placeholder), r.placeholder);
+    ok('a mentett érték vesszős lista', /^Ausztria,\s*Albánia,\s*Angola,?$/.test(
+       (await p.evaluate(() => window.__ans)).orszag || ''),
+       (await p.evaluate(() => window.__ans)).orszag);
+
+    // d) chip koppintasra kikerul
+    await p.evaluate(() => {
+      const b = [...document.querySelectorAll('#__f button')].find(x => /Albánia/.test(x.textContent));
+      if (b) b.click();
+    });
+    await p.waitForTimeout(400);
+    r = await row();
+    ok('a chipre koppintva kikerül a szó', !r.chips.some(c => c.startsWith('Albánia')), r.chips.join(' | '));
+    ok('és a mező újra nyílik', r.disabled === false && /2\/3/.test(r.label), r.label);
+
+    // e) A LENYEG: amit nem mentett le, az is szamit
+    await type('Argentína'); await p.waitForTimeout(400);
+    const raw = (await p.evaluate(() => window.__ans)).orszag;
+    const counted = await p.evaluate((v) => ovfjVals({ orszag: v }, 'orszag', 3), raw);
+    ok('a le nem mentett szó is beleszámít a beadott válaszba',
+       counted.length === 3 && counted[2] === 'Argentína', counted.join(' | '));
+
+    // f) rossz kezdobetu a lableben is latszik
+    await mountForm(0, { orszag:'Ausztria, Belgium,' }); await p.waitForTimeout(900);
+    const bad = await p.evaluate(() => {
+      const b = [...document.querySelectorAll('#__f button')].find(x => /Belgium/.test(x.textContent));
+      return b ? getComputedStyle(b).textDecorationLine : 'nincs chip';
+    });
+    ok('a rossz kezdőbetűs mentett szó át van húzva', /line-through/.test(bad), bad);
+    const lbl = (await row()).label;
+    ok('"bármennyi" mellett a badge nem ír limitet', !lbl.includes('/'), lbl);
+    ok('a badge az érvényes szavakat számolja (a rossz betűs nem számít)',
+       /Ország1/.test(lbl), lbl);
   }
 
   // ─── 8) A ket szabaly, ami a forrasban dol el ───
