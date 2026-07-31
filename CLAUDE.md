@@ -68,6 +68,25 @@ Az advance funkciók nem commitálnak azonnal — `setPendingCommit({newPlayers,
 - Középre igazított verzió: `game-headers-centered/` (automatikusan generált PIL-lel)
 - Beágyazva: `IMGS['<id>_banner.png']` kulcs alatt
 
+## ⚠️ Safe area és felső státuszsáv (iOS PWA) — VISSZATÉRŐ HIBA
+**Mielőtt hozzányúlsz: `docs/safe-area.md`.** Automata védelem:
+`node tests/safearea_test.js`.
+
+Röviden, ami a legtöbb kört elvitte:
+- **Böngészőben ez NEM reprodukálható** (`env(safe-area-inset-*)` = 0). Soha ne
+  "ránézésre" javítsd — szimulálj (lásd a doksit), vagy kérj számot a
+  készülékről (Beállítások alja, TESZT DB módban).
+- A **service worker `stale-while-revalidate`**: az első indítás a push után
+  még az ELŐZŐ buildet futtatja. Verziót ellenőrizni, mielőtt kijelentenéd,
+  hogy a javítás nem működik.
+- **iOS a `position:fixed` rétegeket üresnek látja** a státuszsáv mögött → a sáv
+  színének *folyamban lévő* tartalomból kell jönnie (a gyökér konténer
+  háttere), és a `theme-color` metának is ugyanazt kell adnia.
+- **`100dvh` iOS PWA-ban nem következetes** → a teljes képernyős magasság
+  `var(--app-h, 100dvh)`, ahol az `--app-h` mért érték, és csak a konkrét
+  iOS-aláírásra (`screen.height - innerHeight == env(safe-area-inset-top)`)
+  aktiválódik.
+
 ## Fontos szabályok
 1. Minden commitnál verzióbump kötelező (az `app.src.html`-ben!)
 2. Kódot CSAK az `app.src.html`-ben szerkessz, majd `node build.js` (lásd BUILD WORKFLOW fent)
