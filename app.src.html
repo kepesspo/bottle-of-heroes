@@ -76,13 +76,16 @@
                  (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
         if(st) document.documentElement.classList.add('pwa-standalone');
         else   document.documentElement.classList.remove('pwa-standalone');
-        var d = 0;
-        if(st && window.screen && window.screen.height)
-          d = Math.round(window.screen.height - window.innerHeight);
-        if(!(d > 0) || d > 200) d = 0;   // csak pozitiv, ertelmes hiany
-        document.documentElement.style.setProperty('--app-vh-fix', d + 'px');
-        window.__bohVh = { standalone: !!st, screenH: (window.screen||{}).height,
-                           innerH: window.innerHeight, fix: d };
+        // Telepitett modban a teljes kepernyos magassag = a FIZIKAI kijelzo
+        // magassaga. Abszolut, mert ertek: nem fugg attol, hogy az iOS mit ert
+        // 100dvh alatt (az verziorol verziora mast adott). Bongeszoben nem
+        // allitjuk be -> a CSS 100dvh tartalek lep eletbe, ott az a helyes.
+        var sh = (window.screen && window.screen.height) || 0;
+        var ok = st && sh > 0 && sh >= window.innerHeight && sh - window.innerHeight <= 200;
+        if(ok) document.documentElement.style.setProperty('--app-h', sh + 'px');
+        else   document.documentElement.style.removeProperty('--app-h');
+        window.__bohVh = { standalone: !!st, screenH: sh, innerH: window.innerHeight,
+                           appH: ok ? sh : null };
       }catch(e){}
     }
     upd();
@@ -153,7 +156,9 @@
        korrekcióval a teljes képernyős elemek a kijelző aljáig érnek.
        Böngészőben / opaque PWA-ban a .pwa-standalone class nincs kitéve,
        tehát 0px — ott semmi nem változik. */
-    :root { --app-vh-fix: 0px; }   /* erteket a fejlecben futo szkript meri es allitja be */
+    /* --app-h: a teljes kepernyos elemek magassaga. Telepitett PWA-ban a
+       fejlecben futo szkript meri be (a fizikai kijelzo magassaga); bongeszoben
+       nincs beallitva, ilyenkor a 100dvh tartalek ervenyes. */
     html, body {
       height: 100%; width: 100%;
       min-height: 100dvh;
@@ -35123,7 +35128,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.228';
+const APP_VERSION = 'v10.229';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36282,7 +36287,7 @@ function SheetOverlay({ onClose, children, footer, title, zIndex }) {
 
   return ReactDOM.createPortal(
     <div onClick={dismiss} data-noshot="1" style={{
-      position:'fixed', inset:0, height:'calc(100dvh + var(--app-vh-fix))',
+      position:'fixed', inset:0, height:'var(--app-h, 100dvh)',
       background:'rgba(14,14,24,0.55)',
       backdropFilter:'blur(6px)',
       WebkitBackdropFilter:'blur(6px)',
@@ -43084,18 +43089,22 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
                   Ha a layout jo, ez kikerul. */}
               {(() => {
                 const v = (typeof window !== 'undefined' && window.__bohVh) || {};
-                const envTop = (() => { try {
+                const probe = (css) => { try {
                   const p = document.createElement('div');
-                  p.style.cssText = 'position:fixed;top:0;height:env(safe-area-inset-top);visibility:hidden';
+                  p.style.cssText = 'position:fixed;top:0;visibility:hidden;height:' + css;
                   document.body.appendChild(p);
                   const h = Math.round(p.getBoundingClientRect().height);
                   p.remove(); return h;
-                } catch (e) { return '?'; } })();
+                } catch (e) { return '?'; } };
+                const envTop = probe('env(safe-area-inset-top)');
+                const envBot = probe('env(safe-area-inset-bottom)');
+                const dvh = probe('100dvh');
                 return (
                   <div style={{ marginTop:20, paddingTop:12, borderTop:`1px solid ${T.inkMute}22`,
                                 fontFamily:'monospace', fontSize:10.5, color:T.inkMute, lineHeight:1.6 }}>
                     {APP_VERSION} · {v.standalone ? 'PWA' : 'böngésző'}<br/>
-                    screen={String(v.screenH)} inner={String(v.innerH)} fix={String(v.fix)}px envTop={String(envTop)}px
+                    screen={String(v.screenH)} inner={String(v.innerH)} 100dvh={String(dvh)}<br/>
+                    appH={String(v.appH)} envTop={String(envTop)} envBot={String(envBot)}
                   </div>
                 );
               })()}
@@ -66992,7 +67001,7 @@ function BottleApp() {
           a képernyő aljától (top:100dvh) lefelé kitölti az app háttérszínével, MINDEN képernyőn.
           Az opaque fő app PWA-nál a 100dvh a fizikai aljáig ér, így a csík a képernyőn kívülre esik. */}
       {ReactDOM.createPortal(
-        <div style={{ position:'fixed', left:0, right:0, top:'calc(100dvh + var(--app-vh-fix) - 1px)', height:'160px', background:T.bg, zIndex:1, pointerEvents:'none' }} />,
+        <div style={{ position:'fixed', left:0, right:0, top:'calc(var(--app-h, 100dvh) - 1px)', height:'160px', background:T.bg, zIndex:1, pointerEvents:'none' }} />,
         document.body
       )}
       {showOnboarding && <OnboardingOverlay onDone={() => setShowOnboarding(false)} />}
@@ -67000,7 +67009,7 @@ function BottleApp() {
           az iOS a status bar színét a folyamban lévő tartalomból veszi, a fixed
           rétegeket üresnek látja (fehér sávot adna). Így úgy viselkedik, mint a
           játék képernyő, ahol a sáv színe bizonyítottan jó. */}
-      <div key={creatingRoom ? 'creating' : screen} style={{ height:'calc(100dvh + var(--app-vh-fix))', width:'100%', display:'flex', flexDirection:'column', overflow:'hidden', boxSizing:'border-box', paddingTop:'env(safe-area-inset-top)', background: statusBarBg, animation:`slide${dir>0?'In':'Back'} .35s cubic-bezier(.2,.85,.3,1.05)` }}>
+      <div key={creatingRoom ? 'creating' : screen} style={{ height:'var(--app-h, 100dvh)', width:'100%', display:'flex', flexDirection:'column', overflow:'hidden', boxSizing:'border-box', paddingTop:'env(safe-area-inset-top)', background: statusBarBg, animation:`slide${dir>0?'In':'Back'} .35s cubic-bezier(.2,.85,.3,1.05)` }}>
         {creatingRoom ? (
         <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, padding:24 }}>
           {!roomCreateError ? (
