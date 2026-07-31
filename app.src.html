@@ -282,7 +282,6 @@
     button:not(:disabled){ transition: scale .12s ease; }
     button:not(:disabled):active{ scale: .95; }
     @keyframes floatScoreUp{0%{transform:translate(-50%,0) scale(.8);opacity:0}15%{opacity:1;transform:translate(-50%,-10px) scale(1.12)}100%{transform:translate(-50%,-46px) scale(1);opacity:0}}
-    @keyframes avatarNudge{0%,86%,100%{transform:rotate(0deg)}89%{transform:rotate(-8deg)}92%{transform:rotate(7deg)}95%{transform:rotate(-4deg)}98%{transform:rotate(2deg)}}
     @keyframes drinkNumPop { 0%{transform:scale(0.2);opacity:0} 65%{transform:scale(1.18)} 100%{transform:scale(1);opacity:1} }
     @keyframes starPop { 0%{transform:scale(0) rotate(-20deg);opacity:0} 55%{transform:scale(1.25) rotate(12deg);opacity:1} 100%{transform:scale(1) rotate(0deg)} }
     @keyframes resultFadeOut { from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(0.88)} }
@@ -35142,7 +35141,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.237';
+const APP_VERSION = 'v10.238';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -37142,6 +37141,14 @@ function StatsScreen({ go, onOpenObserver, deepLink, initialView, initialSeasonI
     const wr = id => { const s = pStats[id]||{}; const mw=s.bp_match_wins||0,ml=s.bp_match_losses||0,md=s.bp_match_draws||0; const p=mw+ml+md; return p>0?mw/p:-1; };
     return wr(b.id) - wr(a.id);
   });
+  // Az összehasonlító gomb a szűrősorban ül, tehát a lista renderelése ELŐTT
+  // kell tudni, van-e mit összehasonlítani. Ugyanaz a feltétel, mint a
+  // profilRows-nál lejjebb.
+  const comparableCount = profiles.filter(p => {
+    const s = pStats[p.id] || {};
+    return (s.totalSessions||0) > 0 || (s.totalPoints||0) > 0 || (s.totalDrinks||0) > 0 || (s.totalRounds||0) > 0;
+  }).length;
+
   const buszRows = [...profiles].filter(p => (pStats[p.id]?.busz_played || 0) > 0).sort((a, b) => {
     const ap = pStats[a.id]?.busz_played || 0, bp2 = pStats[b.id]?.busz_played || 0;
     return bp2 - ap;
@@ -37205,7 +37212,8 @@ function StatsScreen({ go, onOpenObserver, deepLink, initialView, initialSeasonI
               egy "Összes ↔ Szezon" kapcsoló, alatta a Mind/Ma/7 nap/Egyedi
               pirulák. Mindkettő időszakot választ — a szezon is csak egy
               időszak —, ezért egy sorba kerültek. */}
-          <div style={{ display:'flex', flexWrap:'wrap', gap:6, alignItems:'center' }}>
+          <div style={{ display:'flex', alignItems:'flex-start', gap:6 }}>
+          <div style={{ flex:1, minWidth:0, display:'flex', flexWrap:'wrap', gap:6, alignItems:'center' }}>
             {STATS_PERIODS.map(pr => {
               const on = view === 'all' && period === pr.key;
               return (
@@ -37238,6 +37246,18 @@ function StatsScreen({ go, onOpenObserver, deepLink, initialView, initialSeasonI
                 </button>
               );
             })()}
+          </div>
+          {/* Összehasonlítás — a fülsorban a MÚLT-tal egy vonalban, jobb szélen.
+              Korábban teljes szélességű gomb volt a lista tetején: egy egész
+              sort vitt el, és elgörgött a listával. */}
+          {tab === 'profil' && comparableCount >= 2 && (
+            <button onClick={() => setShowCompare(true)} title="Két játékos összehasonlítása" aria-label="Két játékos összehasonlítása" style={{
+              flexShrink:0, width:34, height:34, borderRadius:999, border:'none', background:T.surface,
+              boxShadow:pfShadow, cursor:'pointer', display:'grid', placeItems:'center', padding:0,
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.mint} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5M8 21H3v-5M21 3l-7 7M3 21l7-7"/></svg>
+            </button>
+          )}
           </div>
           {view === 'season' && (() => {
             const now = Date.now();
@@ -37344,12 +37364,6 @@ function StatsScreen({ go, onOpenObserver, deepLink, initialView, initialSeasonI
           });
           return (
             <div className="grid-statlist">
-              {profilRows.length >= 2 && (
-                <button onClick={() => setShowCompare(true)} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, width:'100%', padding:'9px', borderRadius:14, border:'none', background:T.surface, boxShadow:pfShadow, color:T.ink, fontFamily:T.font, fontWeight:800, fontSize:13.5, cursor:'pointer', marginBottom:2 }}>
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={T.mint} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5M8 21H3v-5M21 3l-7 7M3 21l7-7"/></svg>
-                  Két játékos összehasonlítása
-                </button>
-              )}
               {profilRows.length === 0 && (
                 <div style={{ textAlign:'center', padding:40, fontFamily:T.font, color:T.inkSoft }}>
                   <div style={{ fontWeight:800, fontSize:15, color:T.ink }}>{!isFiltered ? 'Még nincs profil stat' : curSeason ? 'Ebben a szezonban még nincs adat' : 'Nincs adat ebben az időszakban'}</div>
@@ -60857,7 +60871,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           <div key={currentPlayer.id + (pairedOpponent?.id||'')} style={{ flex:1, position:'relative', display:'flex', alignItems:'center', gap:8, background:T.surfaceMuted, borderRadius:15, padding:'9px 12px 7px', animation:'popIn .35s cubic-bezier(.2,.9,.3,1.4)', overflow:'hidden' }}>
             <div style={{ position:'absolute', top:0, left:0, right:0, height:4, background:currentPlayer.color }} />
             <div style={{ position:'relative', width:46, height:32, flexShrink:0 }}>
-              <div style={{ position:'absolute', left:0, top:0, width:32, height:32, borderRadius:'50%', background:currentPlayer.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:13, color:'#fff', border:`2px solid ${T.surface}`, zIndex:2, overflow:'hidden', animation:'avatarNudge 3.4s 1.2s ease-in-out infinite' }}>{currentPlayer.img ? <img src={currentPlayer.img} style={{width:32,height:32,objectFit:'cover'}} /> : currentPlayer.name.charAt(0).toUpperCase()}</div>
+              <div style={{ position:'absolute', left:0, top:0, width:32, height:32, borderRadius:'50%', background:currentPlayer.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:13, color:'#fff', border:`2px solid ${T.surface}`, zIndex:2, overflow:'hidden' }}>{currentPlayer.img ? <img src={currentPlayer.img} style={{width:32,height:32,objectFit:'cover'}} /> : currentPlayer.name.charAt(0).toUpperCase()}</div>
               <div style={{ position:'absolute', left:16, top:4, width:24, height:24, borderRadius:'50%', background:pairedOpponent.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:12, color:'#fff', opacity:0.85, border:`2px solid ${T.surface}`, zIndex:1, overflow:'hidden' }}>{pairedOpponent.img ? <img src={pairedOpponent.img} style={{width:24,height:24,objectFit:'cover'}} /> : pairedOpponent.name.charAt(0).toUpperCase()}</div>
             </div>
             <div style={{ flex:1, minWidth:0 }}>
@@ -60868,7 +60882,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         ) : (
           <div key={currentPlayer.id} style={{ flex:1, position:'relative', display:'flex', alignItems:'center', gap:8, background:T.surfaceMuted, borderRadius:15, padding:'9px 12px 7px', overflow:'hidden', animation:'popIn .35s cubic-bezier(.2,.9,.3,1.4)' }}>
             <div style={{ position:'absolute', top:0, left:0, right:0, height:4, background:currentPlayer.color }} />
-            <div style={{ width:32, height:32, borderRadius:'50%', background:currentPlayer.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:14, color:'#fff', boxShadow: scorePulse ? `0 0 0 4px ${currentPlayer.color}44` : `0 0 0 2px ${currentPlayer.color}30`, transition:'box-shadow .3s', flexShrink:0, overflow:'hidden', animation:'avatarNudge 3.4s 1.2s ease-in-out infinite' }}>{currentPlayer.img ? <img src={currentPlayer.img} style={{width:32,height:32,objectFit:'cover'}} /> : currentPlayer.name.charAt(0).toUpperCase()}</div>
+            <div style={{ width:32, height:32, borderRadius:'50%', background:currentPlayer.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:14, color:'#fff', boxShadow: scorePulse ? `0 0 0 4px ${currentPlayer.color}44` : `0 0 0 2px ${currentPlayer.color}30`, transition:'box-shadow .3s', flexShrink:0, overflow:'hidden' }}>{currentPlayer.img ? <img src={currentPlayer.img} style={{width:32,height:32,objectFit:'cover'}} /> : currentPlayer.name.charAt(0).toUpperCase()}</div>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:`${currentPlayer.color}cc`, letterSpacing:'0.06em', textTransform:'uppercase', lineHeight:1 }}>{t('nowPlaying')}</div>
               <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:15, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentPlayer.name}{isOverLimit(currentPlayer) ? ' 💧' : ''}</div>
