@@ -35091,7 +35091,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.195';
+const APP_VERSION = 'v10.196';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -55177,7 +55177,9 @@ const _shuffle = arr => { const a=[...arr]; for(let i=a.length-1;i>0;i--){const 
 const ANAGRAMMA_SZAVAK_SHUFFLED = _shuffle([...ANAGRAMMA_SZAVAK[4], ...ANAGRAMMA_SZAVAK[5].slice(0,20)]);
 
 function AnagrammaGame({ gameIdx, challenger, onAdvance, onResult, gameMeta }) {
-  const TILE_COLORS = [T.mint, T.mint, T.coral, T.yellow];
+  // Hat kulonbozo halvany szin: het betunel sem ismetlodik ket szomszed, es
+  // a sotet betu rajtuk minden temaban olvashato marad.
+  const TILE_COLORS = ['#F2C4C4', '#CFC2EE', '#BFE3C9', '#BFD8EF', '#F2DDA8', '#EFC9DE'];
   const diff = gameMeta?.difficulty;
   const wordPool = React.useMemo(() => {
     if (diff === 'extreme') return _shuffle([...ANAGRAMMA_SZAVAK[5], ...ANAGRAMMA_SZAVAK[6]]);
@@ -55275,104 +55277,101 @@ function AnagrammaGame({ gameIdx, challenger, onAdvance, onResult, gameMeta }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14 }}>
 
-      {/* Arc timer */}
-      {phase === 'playing' && (
-        <div style={{ position:'relative', width:76, height:76 }}>
-          <svg width={76} height={76} style={{ transform:'rotate(-90deg)' }}>
-            <circle cx={38} cy={38} r={R} fill="none" stroke="rgba(0,0,0,0.09)" strokeWidth={6} />
-            <circle cx={38} cy={38} r={R} fill="none" stroke={timerColor}
-              strokeWidth={6} strokeLinecap="round"
-              strokeDasharray={`${circ}`} strokeDashoffset={`${circ*(1-timeLeft/5)}`}
-              style={{ transition:'stroke-dashoffset 0.1s linear, stroke 0.3s' }} />
-          </svg>
-          <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
-            <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:22, color:timerColor, lineHeight:1 }}>{Math.ceil(timeLeft)}</span>
-            <span style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>mp</span>
-          </div>
-        </div>
-      )}
+      {/* A feladat egy kártyán: felirat + helyek + idő. Külön elemekként
+          szétszórva nem látszott, hogy ezek együtt egy feladvány. */}
+      <div style={{ width:'100%', boxSizing:'border-box', background:T.surface, borderRadius:18,
+                    padding:'18px 14px', boxShadow:T.shadow,
+                    display:'flex', flexDirection:'column', alignItems:'center', gap:14 }}>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, letterSpacing:'0.1em' }}>RAKD KI A SZÓT!</div>
 
-      {/* Word-building slots */}
-      {phase !== 'hidden' && (
-        <div style={{ display:'flex', gap:8 }}>
+        {/* Helyek */}
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'center' }}>
           {word.split('').map((_, i) => (
             <div key={i} style={{
-              width:48, height:56, borderRadius:8,
-              background: i < pressed.length ? 'rgba(80,200,130,0.18)' : 'rgba(0,0,0,0.07)',
-              border: `2px solid ${i < pressed.length ? T.mint : T.inkMute+'20'}`,
-              display:'flex', alignItems:'center', justifyContent:'center',
-              fontFamily:'Georgia,serif', fontWeight:800, fontSize:24, color:T.ink,
+              width:48, height:54, borderRadius:12,
+              background: i < pressed.length ? T.mint+'26' : T.inkMute+'1a',
+              border: `2px solid ${i < pressed.length ? T.mint : 'transparent'}`,
+              display:'grid', placeItems:'center',
+              fontFamily:T.font, fontWeight:900, fontSize:24, color:T.ink,
               transition:'all .12s',
             }}>
               {i < pressed.length ? shuffled[pressed[i]] : ''}
             </div>
           ))}
         </div>
-      )}
 
-      {/* Tiles */}
-      {phase === 'hidden' ? (
-        <div style={{ display:'flex', gap:10 }}>
-          {word.split('').map((_, i) => (
-            <div key={i} style={{ width:70, height:78, borderRadius:10, background:T.ink, boxShadow:'0 4px 0 rgba(0,0,0,0.22)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-              <span style={{ fontSize:32, color:'rgba(255,255,255,0.25)' }}>?</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div style={{ display:'flex', gap:10 }}>
-          {shuffled.map((letter, i) => {
-            const used = pressed.includes(i);
-            return (
-              <div key={i} onClick={() => handleTap(i)} style={{
-                width:70, height:78, borderRadius:10,
-                background: used ? '#C8CCD8' : wrongFlash ? '#F47060' : TILE_COLORS[i % TILE_COLORS.length],
-                boxShadow: used ? 'none' : `0 4px 0 rgba(0,0,0,0.18)`,
-                display:'flex', alignItems:'center', justifyContent:'center',
-                fontFamily:'Georgia,serif', fontWeight:900, fontSize:36, color:'#fff',
-                opacity: used ? 0.45 : 1,
-                transform: used ? 'translateY(4px)' : 'none',
-                cursor: used || phase !== 'playing' ? 'default' : 'pointer',
-                userSelect:'none', transition:'all .1s',
-              }}>
-                {letter}
-              </div>
-            );
-          })}
-        </div>
-      )}
+        {/* Idő — pirulában, hogy a kártya része legyen */}
+        {phase === 'playing' && (
+          <div style={{ display:'flex', alignItems:'center', gap:8, background: timerColor+'1f',
+                        borderRadius:999, padding:'8px 18px' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={timerColor}
+                 strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="13" r="8" /><path d="M12 9.5V13l2.4 1.6M9 2h6" />
+            </svg>
+            <span style={{ fontFamily:T.font, fontWeight:900, fontSize:19, color:timerColor,
+                           fontVariantNumeric:'tabular-nums', lineHeight:1 }}>
+              {'00:' + String(Math.ceil(timeLeft)).padStart(2,'0')}
+            </span>
+          </div>
+        )}
 
-      {/* Dot indicators */}
-      <div style={{ display:'flex', gap:6 }}>
-        {shuffled.map((_, i) => (
-          <div key={i} style={{ width:7, height:7, borderRadius:'50%', background:TILE_COLORS[i % TILE_COLORS.length], opacity:0.6 }} />
-        ))}
+        {/* Hidden phase: Start button */}
+        {phase === 'hidden' && (
+          <button onClick={startGame} style={{ padding:'12px 32px', background:`${T.mint}22`, border:`2px solid ${T.mint}`, color:T.mint, fontFamily:T.font, fontWeight:700, fontSize:16, borderRadius:14, cursor:'pointer' }}>
+            ▶ Start!
+          </button>
+        )}
+
+        {/* Won */}
+        {phase === 'won' && (
+          <div style={{ textAlign:'center', animation:'popIn .3s' }}>
+            <BohIcon name="party" size={29} />
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:17, color:T.mint, marginTop:4 }}>{t('anagrammaWin')} {word}</div>
+          </div>
+        )}
+
+        {/* Lost */}
+        {phase === 'lost' && (
+          <div style={{ textAlign:'center', animation:'popIn .3s' }}>
+            <div style={{ fontSize:32 }}>⏱️</div>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:15, color:T.coral, marginTop:4 }}>{t('anagrammaTimeUp')} <strong>{word}</strong></div>
+          </div>
+        )}
       </div>
 
-      {/* Hidden phase: Start button */}
-      {phase === 'hidden' && (
-        <button onClick={startGame} style={{ padding:'12px 32px', background:`${T.mint}22`, border:`2px solid ${T.mint}`, color:T.mint, fontFamily:T.font, fontWeight:700, fontSize:16, borderRadius:14, cursor:'pointer' }}>
-          ▶ Start!
-        </button>
+      {/* BETŰK — a cimke a kartya ala bujik, igy latszik, hogy a lapkak
+          a fenti helyekhez tartoznak. */}
+      {phase !== 'hidden' && (
+        <div style={{ marginTop:-24, background:T.surface, borderRadius:999, padding:'5px 14px', boxShadow:T.shadowPill,
+                      fontFamily:T.font, fontWeight:900, fontSize:10, color:T.inkSoft, letterSpacing:1.6 }}>BETŰK</div>
       )}
 
-      {/* Won */}
-      {phase === 'won' && (
-        <div style={{ textAlign:'center', animation:'popIn .3s' }}>
-          <BohIcon name="party" size={29} />
-          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:17, color:T.mint, marginTop:4 }}>{t('anagrammaWin')} {word}</div>
-        </div>
-      )}
-
-      {/* Lost */}
-      {phase === 'lost' && (
-        <div style={{ textAlign:'center', animation:'popIn .3s' }}>
-          <div style={{ fontSize:32 }}>⏱️</div>
-          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:15, color:T.coral, marginTop:4 }}>{t('anagrammaTimeUp')} <strong>{word}</strong></div>
-        </div>
-      )}
-
-
+      {/* Betű-lapkák */}
+      <div style={{ display:'flex', gap:9, flexWrap:'wrap', justifyContent:'center' }}>
+        {phase === 'hidden'
+          ? word.split('').map((_, i) => (
+              <div key={i} style={{ width:56, height:64, borderRadius:14, background:T.inkMute+'22', display:'grid', placeItems:'center' }}>
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:T.inkMute }}>?</span>
+              </div>
+            ))
+          : shuffled.map((letter, i) => {
+              const used = pressed.includes(i);
+              return (
+                <div key={i} onClick={() => handleTap(i)} style={{
+                  width:56, height:64, borderRadius:14,
+                  background: used ? T.inkMute+'26' : wrongFlash ? T.coral : TILE_COLORS[i % TILE_COLORS.length],
+                  boxShadow: used ? 'none' : T.shadowPill,
+                  display:'grid', placeItems:'center',
+                  fontFamily:T.font, fontWeight:900, fontSize:30,
+                  color: used ? T.inkMute : (wrongFlash ? '#fff' : T.ink),
+                  opacity: used ? 0.5 : 1,
+                  transform: used ? 'translateY(3px)' : 'none',
+                  cursor: used || phase !== 'playing' ? 'default' : 'pointer',
+                  userSelect:'none', transition:'all .1s',
+                }}>{letter}</div>
+              );
+            })}
+      </div>
     </div>
   );
 }
