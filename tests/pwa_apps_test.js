@@ -213,6 +213,45 @@ const head = (p) => p.evaluate(() => ({
     await pp.close();
   }
 
+  // ─── AZ APP-IKONOK ───
+  // Egy elgepelt utvonal vagy egy nem negyzetes kep nem dob hibat: a telefon
+  // egyszeruen a sajat tartalek ikonjat teszi ki, es ez csak a fokepernyore
+  // mentesnel derul ki. Ezert a fajlokat magukat nezzuk meg.
+  console.log('\n===== AZ APP-IKONOK =====');
+  {
+    const path = require('path');
+    const root = path.join(__dirname, '..');
+    const png = (f) => {
+      // PNG fejlec: 8 bajt alairas, majd az IHDR-ben a szelesseg/magassag
+      const buf = fs.readFileSync(f);
+      return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+    };
+    const manifests = fs.readdirSync(root).filter(f => /^manifest.*\.json$/.test(f));
+    ok('minden manifest megvan', manifests.length >= 6, manifests.join(', '));
+
+    const bad = [], notSquare = [], tooSmall = [];
+    manifests.forEach(m => {
+      const j = JSON.parse(fs.readFileSync(path.join(root, m), 'utf8'));
+      (j.icons || []).forEach(i => {
+        const f = path.join(root, i.src);
+        if (!fs.existsSync(f)) { bad.push(m + ' → ' + i.src); return; }
+        const { w, h } = png(f);
+        if (w !== h) notSquare.push(i.src + ' (' + w + '×' + h + ')');
+        if (w < 512) tooSmall.push(i.src + ' (' + w + 'px)');
+      });
+    });
+    ok('minden hivatkozott ikon-fájl létezik', bad.length === 0, bad.join(', ') || 'mind megvan');
+    ok('minden ikon négyzetes', notSquare.length === 0, notSquare.join(', ') || 'mind az');
+    ok('minden ikon legalább 512px', tooSmall.length === 0, tooSmall.join(', ') || 'mind az');
+
+    // a head-ben kezzel kiirt apple-touch-icon utvonalak is eljenek
+    const srcHtml = fs.readFileSync(path.join(root, 'app.src.html'), 'utf8');
+    const hrefs = [...srcHtml.matchAll(/rel="(?:apple-touch-icon|icon)"[^>]*href="(assets\/[^"?]+)"/g)].map(x => x[1]);
+    const missing = [...new Set(hrefs)].filter(h => !fs.existsSync(path.join(root, h)));
+    ok('a fejlécben hivatkozott ikonok is léteznek', missing.length === 0,
+       missing.join(', ') || hrefs.length + ' hivatkozás');
+  }
+
   await b.close();
   console.log('\n' + (fail === 0 ? '✅ MINDEN ELLENORZES RENDBEN' : '❌ ' + fail + ' ELLENORZES BUKOTT'));
   process.exit(fail === 0 ? 0 : 1);
