@@ -63,10 +63,12 @@ const ok = (cond, name, extra) => {
   await p.waitForTimeout(900);
   const menuTxt = await p.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
   ok(!/Koccint/i.test(menuTxt), 'a Koccintó eltűnt a menüből');
-  ok(/Büntetés — ki igyon\?/.test(menuTxt), 'a Büntetés gomb korty-kiosztót ígér');
+  // v10.215 óta ikon-csak gomb a Vissza mellett — a title attribútum viszi a szöveget
+  const penaltyBtnTitle = await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => x.title === 'Büntetés — ki igyon?'); return b ? b.title : null; });
+  ok(penaltyBtnTitle === 'Büntetés — ki igyon?', 'a Büntetés gomb korty-kiosztót ígér', penaltyBtnTitle);
 
   console.log('\n===== KORTY KIOSZTÁSA =====');
-  await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /Büntetés/i.test(x.innerText || '')); if (b) b.click(); });
+  await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => x.title === 'Büntetés — ki igyon?'); if (b) b.click(); });
   await p.waitForTimeout(1100);
 
   const clicked = await p.evaluate(() => {
@@ -138,7 +140,7 @@ const ok = (cond, name, extra) => {
   await p2.waitForTimeout(2400);
   await p2.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /MENÜ/i.test(x.innerText || '')); if (b) b.click(); });
   await p2.waitForTimeout(800);
-  await p2.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /Büntetés/i.test(x.innerText || '')); if (b) b.click(); });
+  await p2.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => x.title === 'Büntetés — ki igyon?'); if (b) b.click(); });
   await p2.waitForTimeout(1000);
   const geo = await p2.evaluate(() => {
     const titleEl = [...document.querySelectorAll('*')].find(e => (e.textContent || '').trim() === 'Büntetés — ki igyon?');
