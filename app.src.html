@@ -35142,7 +35142,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.236';
+const APP_VERSION = 'v10.237';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -59517,7 +59517,7 @@ function QuizGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHide
       setGifts(initGifts);
       setPhase('distribute');
     } else {
-      if (onAdvance) onAdvance({});
+      if (onAdvance) onAdvance({}, { [challenger?.id]: 1 });
       if (onResult) onResult({ correct: true, playerName: challenger?.name, drinks: 0, subtitle: '+1 pont!' });
       setPhase('done');
     }
@@ -59544,7 +59544,7 @@ function QuizGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHide
     if (!giftPool) return;
     const drinkMap = {};
     Object.entries(giftPool.assigned).forEach(([pid,n]) => { if(n>0) drinkMap[pid]=n; });
-    if (onAdvance) onAdvance(drinkMap);
+    if (onAdvance) onAdvance(drinkMap, { [challenger?.id]: 1 });
     const names = Object.entries(giftPool.assigned)
       .filter(([,n])=>n>0)
       .map(([pid,n]) => { const p=players.find(x=>x.id===pid); return `${p?.name||'?'} iszik ${n} kortyt`; });
@@ -59554,7 +59554,7 @@ function QuizGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHide
   };
 
   const distribute = (pid) => {
-    if (onAdvance) onAdvance({[pid]: kortyok});
+    if (onAdvance) onAdvance({[pid]: kortyok}, { [challenger?.id]: 1 });
     const target = players.find(p => p.id === pid);
     if (onResult) onResult({ correct: false, playerName: target?.name, drinks: kortyok, subtitle: (target?.name||'Valaki') + ` iszik ${kortyok} kortyt` });
     setDistributeTarget(pid);
@@ -59677,16 +59677,16 @@ function QuizGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHide
     const confirmGifts = () => {
       const drinkMap = {};
       Object.entries(gifts).forEach(([pid,n]) => { if(n>0) drinkMap[pid]=n; });
-      if (onAdvance) onAdvance(drinkMap);
+      if (onAdvance) onAdvance(drinkMap, { [challenger?.id]: 1 });
       const names = Object.entries(gifts).filter(([,n])=>n>0)
         .map(([pid,n]) => { const p=players.find(x=>x.id===pid); return `${p?.name||'?'} iszik ${n} kortyt`; });
       if (onResult) onResult({ correct: true, playerName: challenger?.name, drinks: 0,
-        subtitle: names.length > 0 ? names.join(' · ') : `${pName} kiosztotta a kortyokat` });
+        subtitle: names.length > 0 ? `+1 pont · ${names.join(' · ')}` : `+1 pont · ${pName} kiosztotta a kortyokat` });
       setPhase('done');
     };
     const skipGifts = () => {
-      if (onAdvance) onAdvance({});
-      if (onResult) onResult({ correct: true, playerName: challenger?.name, drinks: 0, subtitle: `${pName} bankolt — ${kortyok} korty!` });
+      if (onAdvance) onAdvance({}, { [challenger?.id]: 1 });
+      if (onResult) onResult({ correct: true, playerName: challenger?.name, drinks: 0, subtitle: `+1 pont · ${pName} nem osztott ki kortyot` });
       setPhase('done');
     };
     return (
