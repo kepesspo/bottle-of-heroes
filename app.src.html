@@ -35091,7 +35091,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.211';
+const APP_VERSION = 'v10.212';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -51263,6 +51263,51 @@ function DrinkDistributor({ players, onFinish, title }) {
   );
 }
 
+// Büntetés lap — mint a DrinkDistributor, de a zaro gomb a SheetOverlay
+// FIX footer-jebe kerul, a nevek pedig kulon gorgetheto reszben vannak.
+// Igy sok jatekosnal sem kell a lista vegere gorgetni a gombhoz.
+function PenaltySheet({ players, onClose, onFinish }) {
+  const [drinks, setDrinks] = React.useState({});
+  const add = (pid) => setDrinks(d => ({ ...d, [pid]: (d[pid]||0)+1 }));
+  const remove = (pid) => setDrinks(d => {
+    const cur = d[pid]||0; if (cur<=0) return d;
+    const n = {...d}; if (cur===1) delete n[pid]; else n[pid]=cur-1; return n;
+  });
+  const total = Object.values(drinks).reduce((s,v)=>s+v,0);
+  return (
+    <SheetOverlay onClose={onClose} title="Büntetés — ki igyon?" footer={
+      <button onClick={()=>onFinish(drinks)} style={{ width:'100%', padding:'12px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:15, borderRadius:14, border:'none', cursor:'pointer', boxShadow:T.shadow }}>
+        {total>0 ? `${total} korty kiosztva ✔` : 'Senki sem iszik ✔'}
+      </button>
+    }>
+      <div style={{ padding:'0 16px', display:'flex', flexDirection:'column', gap:12 }}>
+        <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, lineHeight:1.5 }}>
+          Játékon kívüli korty — wildcard megszegése, fogadás, bármi.
+          A kiosztott korty a játékban szerzettel együtt számít.
+        </div>
+        <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8 }}>
+          {players.map(p => {
+            const cnt = drinks[p.id]||0;
+            return (
+              <div key={p.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 10px', background:T.surface, borderRadius:12, boxShadow:T.shadow }}>
+                <PlayerAvatar player={p} size={30} />
+                <div style={{ flex:1, fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
+                <div style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0 }}>
+                  <button onClick={()=>remove(p.id)} disabled={cnt===0}
+                    style={{ width:26, height:26, borderRadius:7, border:'none', background:cnt>0?T.surfaceMuted:T.surfaceMuted, color:cnt>0?T.inkSoft:T.inkMute, fontFamily:T.font, fontSize:16, fontWeight:700, cursor:cnt>0?'pointer':'default' }}>−</button>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:cnt>0?T.coral:T.inkMute, minWidth:26, textAlign:'center' }}>{cnt>0?<React.Fragment>{cnt} <BohIcon name="beer" size={12} /></React.Fragment>:'–'}</span>
+                  <button onClick={(e)=>{ add(p.id); if (window.bohFloat) window.bohFloat(e.currentTarget, `+${(drinks[p.id]||0)+1} 🍺`, T.coral); }}
+                    style={{ width:26, height:26, borderRadius:7, border:'none', background:T.coral+'22', color:T.coral, fontFamily:T.font, fontSize:16, fontWeight:700, cursor:'pointer' }}>+</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </SheetOverlay>
+  );
+}
+
 // ── Lóverseny ovál pálya: geometria + felülnézeti sávos pálya ───────────────
 // Stadion (lekerekített téglalap) útvonal, tetőközépről indul, óramutató szerint.
 function lovStadiumPath(x, y, w, h, r) {
@@ -60196,10 +60241,10 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     const upd = playersRef.current.map(p => (map[p.id] || 0) > 0 ? { ...p, drinks: (p.drinks || 0) + map[p.id] } : p);
     setPlayers(upd);
     if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { players: upd, turn, gameIdx, round });
-    const names = upd.filter(p => (map[p.id] || 0) > 0).map(p => `${p.name} ${map[p.id]}`).join(' · ');
-    setWcToast({ name: names, penalty: true });
-    setTimeout(() => setWcToast(null), 2600);
-    try { if (typeof window.bohSound === 'function') window.bohSound('lose'); } catch (e) {}
+    // Fejenkent mas az osszeg, ezert nincs egyetlen kozos "drinks" szam —
+    // a loseNote sorolja fel nevenkent, ugyanugy mint pl. a Sohanem/Fingerit.
+    const drinkers = upd.filter(p => (map[p.id] || 0) > 0);
+    onResult({ losers: drinkers, loseNote: drinkers.map(p => `${p.name} ${map[p.id]}🍺`).join(', ') });
   };
 
   return (
@@ -60780,15 +60825,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       </div>}
       {showInfo && <GameInfoModal game={currentGame} onClose={() => setShowInfo(false)} />}
       {penaltyOpen && (
-        <SheetOverlay onClose={() => setPenaltyOpen(false)} title="Büntetés — ki igyon?">
-          <div style={{ padding:'0 16px 20px', display:'flex', flexDirection:'column', gap:12 }}>
-            <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, lineHeight:1.5 }}>
-              Játékon kívüli korty — wildcard megszegése, fogadás, bármi.
-              A kiosztott korty a játékban szerzettel együtt számít.
-            </div>
-            <DrinkDistributor players={players || []} onFinish={applyPenalty} />
-          </div>
-        </SheetOverlay>
+        <PenaltySheet players={players || []} onClose={() => setPenaltyOpen(false)} onFinish={applyPenalty} />
       )}
       {groupDrinkOverlay && (
         <div style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.72)', zIndex:60, display:'flex', alignItems:'center', justifyContent:'center', padding:28, animation:'fadeIn .2s' }}>
@@ -60825,11 +60862,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         </div>
       )}
       {wcToast && (
-        <Toast>
-          {wcToast.penalty
-            ? <React.Fragment>Büntetés: {wcToast.name} <BohIcon name="beer" size={16} /></React.Fragment>
-            : <React.Fragment>{wcToast.name} iszik 1-et! <BohIcon name="beer" size={16} /></React.Fragment>}
-        </Toast>
+        <Toast>{wcToast.name} iszik 1-et! <BohIcon name="beer" size={16} /></Toast>
       )}
       {drinkLimitWarn && ReactDOM.createPortal((
         <div onClick={() => setDrinkLimitWarn(null)} style={{ position:'fixed', inset:0, zIndex:9991, display:'flex', alignItems:'center', justifyContent:'center', padding:24, background:'rgba(14,14,24,0.45)', animation:'fadeIn .15s' }}>
