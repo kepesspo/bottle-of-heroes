@@ -35091,7 +35091,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.203';
+const APP_VERSION = 'v10.204';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -59762,7 +59762,6 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const collectConfigPS = gameMeta?.collectConfig || {};
   const setCollectConfigPS = cfg => setGameMeta && setGameMeta(m => ({...m, collectConfig: typeof cfg === 'function' ? cfg(m?.collectConfig||{}) : cfg}));
   const [showMenu, setShowMenu] = useState(false);
-  const [toastText, setToastText] = useState(null);
   const [menuTab, setMenuTab] = useState('vezérlés');
   const [menuAddName, setMenuAddName] = useState('');
   const [menuAddOpen, setMenuAddOpen] = React.useState(false);
@@ -60185,38 +60184,22 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   };
 
   // Toast-generátor — a játékosok aktuális állásából gyárt egy köszöntőt/beszólást
-  const genToast = () => {
-    const act = (players || []).filter(p => p && p.active !== false);
-    if (!act.length) return 'Emeljük poharunkat — egészségünkre!';
-    const byPts = [...act].sort((a,b) => (b.points||0)-(a.points||0));
-    const byDr  = [...act].sort((a,b) => (b.drinks||0)-(a.drinks||0));
-    const leader = byPts[0], drunk = byDr[0];
-    const rnd = () => act[Math.floor(Math.random()*act.length)];
-    const r1 = rnd(), r2 = rnd();
-    const opts = [
-      'Emeljük poharunkat! ' + leader.name + ' vezet — de az este még fiatal!',
-      drunk.name + ' ma már ' + (drunk.drinks||0) + ' kortyot ledöntött. Legenda vagy csak szomjas? Egészségére!',
-      r1.name + ', te vagy a társaság lelke. Vagy legalábbis a leghangosabb. Csirió!',
-      'Igyunk mindannyian ' + r1.name + ' egészségére — mert megérdemli, és mert úgyis rákényszerítjük!',
-      leader.name + ' vezet, ' + drunk.name + ' iszik — mindenki nyer! Egészségünkre!',
-      'Koccintsunk arra, hogy holnap már senki sem emlékszik erre a köszöntőre. Fenékig!',
-      'Emeljük poharunkat a barátságra, a rossz döntésekre és ' + drunk.name + ' májára!',
-      r1.name + ' nélkül sokkal kevesebb baj lenne ma este — pont ezért, csirió!',
-      'Egy régi mondás szerint aki utoljára áll, az nyert. ' + r2.name + ', neked szurkolunk! Egészségedre!',
-      'Igyunk a mai estére, a holnapi fejfájásra, és arra, hogy ' + leader.name + ' végre veszítsen egyet!',
-    ];
-    return opts[Math.floor(Math.random()*opts.length)];
-  };
-  const fireToast = () => {
-    const tx = genToast();
-    setToastText(tx);
-    try { if (typeof window.bohSpeak === 'function') window.bohSpeak(tx); } catch(e) {}
-  };
-  const [punishment, setPunishment] = useState(null); // {emoji, text}
-  const firePunishment = () => {
-    const pool = PUNISHMENTS.length ? PUNISHMENTS : PUNISHMENTS_DEFAULT;
-    const pick = pool[Math.floor(Math.random() * pool.length)];
-    setPunishment(pick);
+  // Büntetés: korty kiosztása kézzel, játékon kívül. A korty a players
+  // tömbbe kerül, onnan a parti végén magától a statisztikába megy — nem
+  // logolunk külön, mert az duplán számolna.
+  const [penaltyOpen, setPenaltyOpen] = useState(false);
+  const applyPenalty = (assigned) => {
+    setPenaltyOpen(false);
+    const map = assigned || {};
+    const total = Object.values(map).reduce((s, v) => s + v, 0);
+    if (!total) return;
+    const upd = playersRef.current.map(p => (map[p.id] || 0) > 0 ? { ...p, drinks: (p.drinks || 0) + map[p.id] } : p);
+    setPlayers(upd);
+    if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { players: upd, turn, gameIdx, round });
+    const names = upd.filter(p => (map[p.id] || 0) > 0).map(p => `${p.name} ${map[p.id]}`).join(' · ');
+    setWcToast({ name: names, penalty: true });
+    setTimeout(() => setWcToast(null), 2600);
+    try { if (typeof window.bohSound === 'function') window.bohSound('lose'); } catch (e) {}
   };
 
   return (
@@ -60796,15 +60779,16 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
 
       </div>}
       {showInfo && <GameInfoModal game={currentGame} onClose={() => setShowInfo(false)} />}
-      {toastText && (
-        <ActionModal onClose={() => setToastText(null)} kicker="Koccintó 🥂" onSecondary={fireToast} onPrimary={() => setToastText(null)} primaryLabel="Egészségünkre!">
-          {toastText}
-        </ActionModal>
-      )}
-      {punishment && (
-        <ActionModal onClose={() => setPunishment(null)} icon={<div style={{ fontSize:52, lineHeight:1 }}>{punishment.emoji}</div>} kicker="Büntetés 🎲" kickerColor="#7C5CC4" onSecondary={firePunishment} onPrimary={() => setPunishment(null)} primaryLabel="Rendben!" primaryColor="#7C5CC4">
-          {punishment.text}
-        </ActionModal>
+      {penaltyOpen && (
+        <SheetOverlay onClose={() => setPenaltyOpen(false)} title="Büntetés — ki igyon?">
+          <div style={{ padding:'0 16px 20px', display:'flex', flexDirection:'column', gap:12 }}>
+            <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, lineHeight:1.5 }}>
+              Játékon kívüli korty — wildcard megszegése, fogadás, bármi.
+              A kiosztott korty a játékban szerzettel együtt számít.
+            </div>
+            <DrinkDistributor players={players || []} onFinish={applyPenalty} />
+          </div>
+        </SheetOverlay>
       )}
       {groupDrinkOverlay && (
         <div style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.72)', zIndex:60, display:'flex', alignItems:'center', justifyContent:'center', padding:28, animation:'fadeIn .2s' }}>
@@ -60841,7 +60825,11 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         </div>
       )}
       {wcToast && (
-        <Toast>{wcToast.name} iszik 1-et! <BohIcon name="beer" size={16} /></Toast>
+        <Toast>
+          {wcToast.penalty
+            ? <React.Fragment>Büntetés: {wcToast.name} <BohIcon name="beer" size={16} /></React.Fragment>
+            : <React.Fragment>{wcToast.name} iszik 1-et! <BohIcon name="beer" size={16} /></React.Fragment>}
+        </Toast>
       )}
       {drinkLimitWarn && ReactDOM.createPortal((
         <div onClick={() => setDrinkLimitWarn(null)} style={{ position:'fixed', inset:0, zIndex:9991, display:'flex', alignItems:'center', justifyContent:'center', padding:24, background:'rgba(14,14,24,0.45)', animation:'fadeIn .15s' }}>
@@ -61006,14 +60994,11 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                   )}
                 </div>
 
-                {/* Koccintó — köszöntő generátor + TTS felolvasás */}
-                <button onClick={() => { setShowMenu(false); fireToast(); }} style={{ width:'100%', height:50, border:'none', borderRadius:16, background:`linear-gradient(135deg, ${T.yellow}, ${T.coral})`, color:'#1A2A4A', fontFamily:T.font, fontWeight:900, fontSize:14.5, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, boxShadow:`0 4px 14px ${T.coral}44` }}>
-                  <span style={{ fontSize:18, lineHeight:1 }}>🥂</span><span>Koccintó — mondj egy köszöntőt!</span>
-                </button>
-
-                {/* Büntetés — random büntetés a nem teljesített feladatokhoz, admin szerkeszthető lista */}
-                <button onClick={() => { setShowMenu(false); firePunishment(); }} style={{ width:'100%', height:50, border:'none', borderRadius:16, background:`linear-gradient(135deg, #7C5CC4, #A78BFA)`, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14.5, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, boxShadow:'0 4px 14px rgba(124,92,196,0.44)' }}>
-                  <span style={{ fontSize:18, lineHeight:1 }}>🎲</span><span>Büntetés — ki nem teljesített?</span>
+                {/* Büntetés — korty kiosztása játékon kívül (wildcard-szegés,
+                    fogadás, bármi). Az itt kiosztott korty ugyanoda kerül, mint
+                    a játékban szerzett, tehát a parti végén a statisztikába is. */}
+                <button onClick={() => { setShowMenu(false); setPenaltyOpen(true); }} style={{ width:'100%', height:50, border:'none', borderRadius:16, background:`linear-gradient(135deg, #7C5CC4, #A78BFA)`, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14.5, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, boxShadow:'0 4px 14px rgba(124,92,196,0.44)' }}>
+                  <BohIcon name="beer" size={18} /><span>Büntetés — ki igyon?</span>
                 </button>
 
                 {/* Action buttons — A design: inline icon+text, Következő hangsúlyos */}
