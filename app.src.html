@@ -76,16 +76,30 @@
                  (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
         if(st) document.documentElement.classList.add('pwa-standalone');
         else   document.documentElement.classList.remove('pwa-standalone');
-        // Telepitett modban a teljes kepernyos magassag = a FIZIKAI kijelzo
-        // magassaga. Abszolut, mert ertek: nem fugg attol, hogy az iOS mit ert
-        // 100dvh alatt (az verziorol verziora mast adott). Bongeszoben nem
-        // allitjuk be -> a CSS 100dvh tartalek lep eletbe, ott az a helyes.
+        // A felso safe-area tenyleges merete (probaelem, mert JS-bol nem
+        // olvashato kozvetlenul).
+        var envTop = 0;
+        try{
+          var pr = document.createElement('div');
+          pr.style.cssText = 'position:fixed;top:0;left:0;width:0;visibility:hidden;height:env(safe-area-inset-top)';
+          document.documentElement.appendChild(pr);
+          envTop = Math.round(pr.getBoundingClientRect().height);
+          pr.parentNode.removeChild(pr);
+        }catch(e){}
+
+        // ALAIRAS-ELLENORZES. Az iOS black-translucent holt-zona egyedi
+        // ujjlenyomata: a webnezet a kijelzo tetejetol indul, de a
+        // layout-viewport PONTOSAN a statuszsav magassagaval rovidebb, igy
+        // alul ugyanannyi hasznalhato keppont kimarad. Csak ekkor korrigalunk.
+        // Ablakos mod / osztott kepernyo / fekvo tajolas / Android / bongeszo:
+        // az alairas nem all -> nincs korrekcio, marad a 100dvh.
         var sh = (window.screen && window.screen.height) || 0;
-        var ok = st && sh > 0 && sh >= window.innerHeight && sh - window.innerHeight <= 200;
+        var deficit = sh - window.innerHeight;
+        var ok = st && envTop > 0 && deficit > 0 && Math.abs(deficit - envTop) <= 2;
         if(ok) document.documentElement.style.setProperty('--app-h', sh + 'px');
         else   document.documentElement.style.removeProperty('--app-h');
         window.__bohVh = { standalone: !!st, screenH: sh, innerH: window.innerHeight,
-                           appH: ok ? sh : null };
+                           envTop: envTop, deficit: deficit, appH: ok ? sh : null };
       }catch(e){}
     }
     upd();
@@ -35128,7 +35142,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.229';
+const APP_VERSION = 'v10.230';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -43104,7 +43118,8 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
                                 fontFamily:'monospace', fontSize:10.5, color:T.inkMute, lineHeight:1.6 }}>
                     {APP_VERSION} · {v.standalone ? 'PWA' : 'böngésző'}<br/>
                     screen={String(v.screenH)} inner={String(v.innerH)} 100dvh={String(dvh)}<br/>
-                    appH={String(v.appH)} envTop={String(envTop)} envBot={String(envBot)}
+                    hiány={String(v.deficit)} envTop={String(envTop)} envBot={String(envBot)}<br/>
+                    korrekció={v.appH ? 'BE (' + v.appH + 'px)' : 'KI'}
                   </div>
                 );
               })()}
