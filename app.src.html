@@ -35091,7 +35091,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.196';
+const APP_VERSION = 'v10.197';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -55104,35 +55104,56 @@ function TapperGame({ gameIdx, challenger, opponent, onAdvance, onResult, roomCo
         onPointerUp={() => { pressUp(pNum); writeTapperState(player?.name, false); }}
         onPointerCancel={() => { pressUp(pNum); writeTapperState(player?.name, false); }}
         style={{
-          width:'100%', height:110, borderRadius:18,
+          width:'100%', minHeight:118, borderRadius:22, boxSizing:'border-box', padding:'14px 18px',
           background: released ? `${player.color}66` : player.color,
           filter: holding && !released ? 'brightness(1.12)' : 'brightness(1)',
           boxShadow: holding && !released
             ? `0 0 0 10px ${player.color}44, 0 0 0 20px ${player.color}18`
             : `0 0 0 10px rgba(255,255,255,0.85)`,
-          display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4,
+          display:'flex', flexDirection:'row', alignItems:'center', gap:16,
           cursor:'pointer', userSelect:'none', WebkitUserSelect:'none', touchAction:'none',
           transition:'box-shadow 0.15s, background 0.15s',
           transform: holding && !released ? 'scale(0.97)' : 'scale(1)',
         }}
       >
-        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:'#fff', lineHeight:1.1, textAlign:'center', padding:'0 12px', wordBreak:'break-word' }}>
-          {player.name}
+        {/* Avatar + név balra zárva — a saját tábláját mindenki felismeri,
+            anélkül hogy a nevet kellene elolvasnia. */}
+        <div style={{ width:64, height:64, borderRadius:'50%', flexShrink:0, overflow:'hidden',
+                      background:'rgba(255,255,255,0.28)', border:'3px solid rgba(255,255,255,0.9)',
+                      display:'grid', placeItems:'center' }}>
+          {player.img
+            ? <img src={player.img} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+            : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:'#fff' }}>{(player.name||'?').charAt(0).toUpperCase()}</span>}
         </div>
-        {!released && (
-          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.85)', letterSpacing:'0.06em' }}>
-            {phase === 'idle' ? 'TARTSD' : 'TARTSD!'}
+        <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:5 }}>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:21, color:'#fff', lineHeight:1.1,
+                        overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {player.name}
           </div>
-        )}
-        {released && (
-          <div style={{
-            background:'rgba(0,0,0,0.22)', borderRadius:8, padding:'4px 14px',
-            fontFamily:'monospace', fontWeight:900, fontSize:20, color:'#fff',
-            letterSpacing:'0.04em',
-          }}>
-            {timeVal === -1 ? '✗ KÉSŐ' : `${(timeVal * 1000).toFixed(0)}ms`}
-          </div>
-        )}
+          {!released ? (
+            <>
+              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.85)', letterSpacing:'0.08em' }}>
+                {phase === 'idle' ? 'TARTSD' : 'TARTSD!'}
+              </div>
+              {/* A visszaszamlalas allasa a sajat tablan: a kozepso szam a
+                  hüvelykujj alatt van, onnan nem latszik. */}
+              <div style={{ display:'flex', gap:6, marginTop:2 }}>
+                {Array.from({ length: 10 }).map((_, i) => {
+                  const done = phase === 'counting' && i < Math.round((1 - countdown / 5) * 10);
+                  return <span key={i} style={{ width:9, height:9, borderRadius:'50%',
+                    background:'#fff', opacity: done ? 0.95 : 0.32, transition:'opacity .12s' }} />;
+                })}
+              </div>
+            </>
+          ) : (
+            <div style={{
+              alignSelf:'flex-start', background:'rgba(0,0,0,0.22)', borderRadius:9, padding:'5px 14px',
+              fontFamily:'monospace', fontWeight:900, fontSize:19, color:'#fff', letterSpacing:'0.04em',
+            }}>
+              {timeVal === -1 ? '✗ KÉSŐ' : `${(timeVal * 1000).toFixed(0)}ms`}
+            </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -55161,6 +55182,18 @@ function TapperGame({ gameIdx, challenger, opponent, onAdvance, onResult, roomCo
       {phase === 'done' && result === 'draw' && (
         <div style={{ padding:'12px 22px', borderRadius:14, animation:'popIn .3s', textAlign:'center', background:`${T.yellow}18`, border:`2px solid ${T.yellow}` }}>
           <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>🤝 Döntetlen!</div>
+        </div>
+      )}
+
+      {/* Tipp — a szabaly a fejlecben egyszer fut le, ez viszont vegig ott van.
+          Csak jatek elott mutatjuk: kozben a tablakra kell figyelni. */}
+      {phase !== 'done' && (
+        <div style={{ width:'100%', boxSizing:'border-box', display:'flex', alignItems:'flex-start', gap:11,
+                      background:T.surface+'d9', borderRadius:16, padding:'12px 15px' }}>
+          <BohIcon name="bolt" size={16} />
+          <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12.5, color:T.inkSoft, lineHeight:1.45 }}>
+            Tipp: koncentrálj, és engedd el időben! A vesztes iszik.
+          </span>
         </div>
       )}
 
