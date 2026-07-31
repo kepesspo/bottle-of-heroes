@@ -244,6 +244,23 @@ const head = (p) => p.evaluate(() => ({
     ok('minden ikon négyzetes', notSquare.length === 0, notSquare.join(', ') || 'mind az');
     ok('minden ikon legalább 512px', tooSmall.length === 0, tooSmall.join(', ') || 'mind az');
 
+    // A nyito-kepernyo logoja MAS: az a meleg app-hatteren all, arnyekkal —
+    // ha feher hatteru kepet teszunk oda (pl. ugyanazt, mint az app-ikon),
+    // egy feher negyzet jelenik meg a helyen. Ezert alfa-csatorna kell.
+    const splash = ['assets/splash_logo.png', 'assets/splash_events_logo.png']
+      .filter(f => fs.existsSync(path.join(root, f)));
+    const noAlpha = [], notSq = [];
+    splash.forEach(f => {
+      const buf = fs.readFileSync(path.join(root, f));
+      const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20), colorType = buf[25];
+      if (w !== h) notSq.push(f + ' (' + w + '×' + h + ')');
+      if (colorType !== 6 && colorType !== 4) noAlpha.push(f);   // 6=RGBA, 4=szurke+alfa
+    });
+    ok('a splash logók átlátszó hátterűek', noAlpha.length === 0,
+       noAlpha.join(', ') || splash.length + ' logó');
+    // a CSS fixen 200x200-ra teszi, object-fit nelkul — a nem negyzetes torzulna
+    ok('a splash logók négyzetesek', notSq.length === 0, notSq.join(', ') || 'mind az');
+
     // a head-ben kezzel kiirt apple-touch-icon utvonalak is eljenek
     const srcHtml = fs.readFileSync(path.join(root, 'app.src.html'), 'utf8');
     const hrefs = [...srcHtml.matchAll(/rel="(?:apple-touch-icon|icon)"[^>]*href="(assets\/[^"?]+)"/g)].map(x => x[1]);
