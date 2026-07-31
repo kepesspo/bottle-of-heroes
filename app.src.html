@@ -63,6 +63,9 @@
   <!-- iOS full-screen / status bar -->
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <script>(function(){var q=location.search;var bar=q.indexOf('screen=bar')!==-1;document.write('<meta name="apple-mobile-web-app-status-bar-style" content="'+(bar?'default':'black-translucent')+'"/>');})();</script>
+  <!-- Telepitett (standalone) mod jelzese a <html>-en: ettol fugg a --app-vh-fix
+       korrekcio, ami a black-translucent PWA alsó holt-zonajat szunteti meg. -->
+  <script>(function(){try{var s=window.navigator.standalone===true||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches);if(s)document.documentElement.classList.add('pwa-standalone');}catch(e){}})();</script>
   <script>(function(){var q=location.search;var ev=q.indexOf('screen=events')!==-1||q.indexOf('screen=calendar')!==-1;var box=q.indexOf('screen=dnrbox')!==-1;var bar=q.indexOf('screen=bar')!==-1;var bg=q.indexOf('screen=bingo')!==-1;var lg=q.indexOf('screen=liga')!==-1;document.write('<meta name="apple-mobile-web-app-title" content="'+(ev?'DNR Events':box?'DNR BOX':bar?'DNR Pub':bg?'DNR Bingó':lg?'DNR Liga':'DNR Games')+'"/>');})();</script>
   <!-- Theme color (amber) -->
   <meta name="theme-color" content="#F4C57E"/>
@@ -122,6 +125,13 @@
   </style>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    /* iOS black-translucent PWA: a 100dvh ~env-top-tal RÖVIDEBB a fizikai
+       kijelzőnél, alul holt-zóna marad (lásd "Alsó festősáv" komment). Ezzel a
+       korrekcióval a teljes képernyős elemek a kijelző aljáig érnek.
+       Böngészőben / opaque PWA-ban a .pwa-standalone class nincs kitéve,
+       tehát 0px — ott semmi nem változik. */
+    :root { --app-vh-fix: 0px; }
+    html.pwa-standalone { --app-vh-fix: env(safe-area-inset-top); }
     html, body {
       height: 100%; width: 100%;
       min-height: 100dvh;
@@ -35091,7 +35101,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.226';
+const APP_VERSION = 'v10.227';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36250,7 +36260,7 @@ function SheetOverlay({ onClose, children, footer, title, zIndex }) {
 
   return ReactDOM.createPortal(
     <div onClick={dismiss} data-noshot="1" style={{
-      position:'fixed', inset:0, height:'100dvh',
+      position:'fixed', inset:0, height:'calc(100dvh + var(--app-vh-fix))',
       background:'rgba(14,14,24,0.55)',
       backdropFilter:'blur(6px)',
       WebkitBackdropFilter:'blur(6px)',
@@ -66940,7 +66950,7 @@ function BottleApp() {
           a képernyő aljától (top:100dvh) lefelé kitölti az app háttérszínével, MINDEN képernyőn.
           Az opaque fő app PWA-nál a 100dvh a fizikai aljáig ér, így a csík a képernyőn kívülre esik. */}
       {ReactDOM.createPortal(
-        <div style={{ position:'fixed', left:0, right:0, top:'calc(100dvh - 1px)', height:'160px', background:T.bg, zIndex:1, pointerEvents:'none' }} />,
+        <div style={{ position:'fixed', left:0, right:0, top:'calc(100dvh + var(--app-vh-fix) - 1px)', height:'160px', background:T.bg, zIndex:1, pointerEvents:'none' }} />,
         document.body
       )}
       {showOnboarding && <OnboardingOverlay onDone={() => setShowOnboarding(false)} />}
@@ -66948,7 +66958,7 @@ function BottleApp() {
           az iOS a status bar színét a folyamban lévő tartalomból veszi, a fixed
           rétegeket üresnek látja (fehér sávot adna). Így úgy viselkedik, mint a
           játék képernyő, ahol a sáv színe bizonyítottan jó. */}
-      <div key={creatingRoom ? 'creating' : screen} style={{ height:'100dvh', width:'100%', display:'flex', flexDirection:'column', overflow:'hidden', boxSizing:'border-box', paddingTop:'env(safe-area-inset-top)', background: statusBarBg, animation:`slide${dir>0?'In':'Back'} .35s cubic-bezier(.2,.85,.3,1.05)` }}>
+      <div key={creatingRoom ? 'creating' : screen} style={{ height:'calc(100dvh + var(--app-vh-fix))', width:'100%', display:'flex', flexDirection:'column', overflow:'hidden', boxSizing:'border-box', paddingTop:'env(safe-area-inset-top)', background: statusBarBg, animation:`slide${dir>0?'In':'Back'} .35s cubic-bezier(.2,.85,.3,1.05)` }}>
         {creatingRoom ? (
         <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, padding:24 }}>
           {!roomCreateError ? (
