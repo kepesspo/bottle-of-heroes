@@ -99,7 +99,8 @@ const head = (p) => p.evaluate(() => ({
   ok('iOS app-nev: DNR Liga', hl.appleTitle === 'DNR Liga', hl.appleTitle);
   ok('a fejlecben DNR Liga all (nem "Statisztika")', /DNR Liga/.test(hl.text) && !/^Statisztika/m.test(hl.text), hl.text.split('\n').slice(0, 3).join(' | '));
   ok('a ranglista betoltott (Alfa 640)', /Alfa/.test(hl.text) && /640/.test(hl.text));
-  ok('a szezon-kapcsolo is mukodik', /Összes/.test(hl.text) && /Szezon/.test(hl.text));
+  // v10.235: egyetlen idosav-sor — Mind/Ma/7 nap/Egyedi + a szezon-pirula
+  ok('az idosav-sor es a szezon-pirula is ott van', /Mind/.test(hl.text) && /Ma/.test(hl.text) && /Szezon/.test(hl.text));
   ok('NINCS vissza-gomb (onallo app)', hl.backBtns === 0, 'db=' + hl.backBtns);
   ok('sajat nyito-kepernyo (nem "Bottle of Heroes")', pl.__splash.title === 'DNR Liga' && /dnr_liga_icon/.test(pl.__splash.logo || ''), JSON.stringify(pl.__splash));
   // szezon nezet elerheto az onallo appban is

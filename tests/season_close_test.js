@@ -159,7 +159,9 @@ const sheetText = (p) => p.evaluate(() => {
   await p.evaluate(() => { const btn = Array.from(document.querySelectorAll('button')).find(x => /Végeredmény/.test(x.textContent)); if (btn) btn.click(); });
   await p.waitForTimeout(1600);
   const league = await p.evaluate(() => document.body.innerText);
-  ok('a Liga szezon-nezete nyilt meg', /Összes/.test(league) && /Lezárult/.test(league), league.split('\n').slice(0, 6).join(' | '));
+  // v10.235: az "Összes ↔ Szezon" kapcsolo megszunt, a szezont a pirula-sorbol
+  // valasztjuk — a szezon-nezetet a "Lezárult" jelveny + a fulek jelzik.
+  ok('a Liga szezon-nezete nyilt meg', /Profil/.test(league) && /Lezárult/.test(league), league.split('\n').slice(0, 6).join(' | '));
   ok('EPPEN az S2 szezont mutatja (nem az alapertelmezettet)', /S2 · Nyár/.test((league.match(/S2 · Nyár[\s\S]{0,40}/) || [''])[0]) && /Lezárult/.test(league), (league.match(/S2 · Nyár[\s\S]{0,60}/) || ['NINCS'])[0].replace(/\n/g, ' | '));
   ok('a szezonzaro bezarult', (await sheetText(p)) === null);
   await p.screenshot({ path: __dirname + '/season_close_league.png', fullPage: true });
