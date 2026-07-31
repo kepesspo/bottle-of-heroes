@@ -118,13 +118,18 @@
         notify(collPath); notify(collPath + '/' + id);
         return Promise.resolve();
       },
-      onSnapshot: (cb) => {
+      // A masodik parameter a HIBA-visszahivas — a valodi SDK-ban ez dont arrol,
+      // hogy egy elszallt figyelo utan eszrevesz-e barmit a kod. A tesztek a
+      // window.__fbBreakListeners(path) hivassal tudjak elszakitani a figyelot,
+      // ugyanugy, ahogy a Firestore teszi: hibat jelez, majd MEGSZUNTETI.
+      onSnapshot: (cb, errCb) => {
         const key = collPath + '/' + id;
         const fire = () => cb({
           exists: store[collPath][id] !== undefined,
           id,
           data: () => store[collPath][id] ? { ...store[collPath][id] } : undefined,
         });
+        fire.__err = errCb;
         listeners[key] = listeners[key] || [];
         listeners[key].push(fire);
         fire();
@@ -213,4 +218,13 @@
     firestore: firestoreFn,
   };
   window.__fbStore = store; // expose for test inspection
+  // Egy figyelo "elszakitasa": hibat jelzunk es levesszuk — pont ahogy a
+  // Firestore csinalja. Igy tesztelheto, hogy a kod ujraepiti-e a kapcsolatot.
+  window.__fbBreakListeners = (key) => {
+    const arr = listeners[key] || [];
+    listeners[key] = [];
+    let n = 0;
+    arr.forEach(f => { if (f.__err) { n++; f.__err(new Error('unavailable')); } });
+    return n;
+  };
 })();

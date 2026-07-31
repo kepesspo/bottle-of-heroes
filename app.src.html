@@ -34077,8 +34077,38 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   window.checkRoom = function(code) {
     return db.collection('rooms').doc(code).get().then(function(d){ return d.exists ? d.data() : null; });
   };
+  // A Firestore a hibara futott figyelot MEGSZUNTETI. Hibakezelo nelkul a
+  // kepernyo csendben befagy — a host tovabblep, a telefon marad az utolso
+  // allapoton, es magatol soha nem ter magahoz. Ezert: ujracsatlakozas
+  // exponencialis varakozassal, es azonnal, ha visszajott a halo.
   window.subscribeRoom = function(code, cb) {
-    return db.collection('rooms').doc(code).onSnapshot(function(d){ cb(d.exists ? d.data() : null); });
+    var stopped = false, inner = null, tries = 0, timer = null;
+    function attach() {
+      if (stopped) return;
+      timer = null;
+      inner = db.collection('rooms').doc(code).onSnapshot(
+        function(d) { tries = 0; cb(d.exists ? d.data() : null); },
+        function(err) {
+          console.warn('subscribeRoom', err);
+          inner = null;
+          if (stopped) return;
+          var delay = Math.min(30000, 1000 * Math.pow(2, tries++));
+          timer = setTimeout(attach, delay);
+        }
+      );
+    }
+    function onOnline() {
+      if (stopped || inner || !timer) return;
+      clearTimeout(timer); timer = null; tries = 0; attach();
+    }
+    try { window.addEventListener('online', onOnline); } catch (e) {}
+    attach();
+    return function() {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      try { window.removeEventListener('online', onOnline); } catch (e) {}
+      if (inner) inner();
+    };
   };
   window.joinRoom = function(code, observer) {
     return db.collection('rooms').doc(code).update({
@@ -35141,7 +35171,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.239';
+const APP_VERSION = 'v10.240';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -46725,6 +46755,17 @@ const OVFJ_CATS = [
   { key:'targy',  label:'Tárgy',       emoji:'📦' },
   { key:'hires',  label:'Híres ember', emoji:'⭐' },
 ];
+// A szoba-pillanatkepbol jovo rekordok laposak (string/szam/bool), ezert a
+// sekely osszehasonlitas pontos — es kulcssorrend-fuggetlen, ami azert kell,
+// mert a helyben epitett es a Firestore-bol visszaolvasott objektum kulcsainak
+// sorrendje eltérhet.
+const ovfjSameRec = (a, b) => {
+  if (a === b) return true;
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+  const ka = Object.keys(a), kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  return ka.every(k => a[k] === b[k]);
+};
 const ovfjAKey = id => 'ovfjA' + String(id).replace(/[^a-zA-Z0-9]/g,'x');
 const ovfjVKey = id => 'ovfjV' + String(id).replace(/[^a-zA-Z0-9]/g,'x');
 
@@ -56765,8 +56806,30 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
           });
         }
       });
-      if (Object.keys(na).length) setAnswers(prev => ({...prev, ...na}));
-      if (Object.keys(nv).length) setVotes(prev => { const m = {...prev}; Object.entries(nv).forEach(([vk, per]) => { m[vk] = {...(m[vk]||{}), ...per}; }); return m; });
+      // FONTOS: csak akkor allitsunk allapotot, ha TENYLEG valtozott.
+      // A `{...prev, ...na}` mindig UJ objektumot ad, es az `answers` benne van
+      // annak az effektnek a fuggosegeiben, amelyik kiirja az ovfjState-et a
+      // szobaba — igy minden pillanatkep egy ujabb irast szult, az meg egy
+      // ujabb pillanatkepet. Vegtelen hurok, masodpercenkent tobb ezer irassal
+      // ugyanarra a dokumentumra; a Firestore ~1 iras/mp-et bir tartosan, ezert
+      // a host fazisvaltasa nem ert oda a telefonokhoz.
+      if (Object.keys(na).length) setAnswers(prev => {
+        let changed = false;
+        const out = {...prev};
+        Object.keys(na).forEach(pid => {
+          if (!ovfjSameRec(prev[pid], na[pid])) { out[pid] = na[pid]; changed = true; }
+        });
+        return changed ? out : prev;
+      });
+      if (Object.keys(nv).length) setVotes(prev => {
+        let changed = false;
+        const m = {...prev};
+        Object.keys(nv).forEach(vk => {
+          const merged = {...(prev[vk]||{}), ...nv[vk]};
+          if (!ovfjSameRec(prev[vk], merged)) { m[vk] = merged; changed = true; }
+        });
+        return changed ? m : prev;
+      });
     });
   }, [roomCode, round]);
 
