@@ -35181,7 +35181,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.261';
+const APP_VERSION = 'v10.263';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -61453,7 +61453,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           </div>
         );
       })()}
-      {/* ResultBanner — split (winners/losers) with legacy fallback */}
+      {/* ResultBanner — vilagos kartya, felul allapotcsikkal. Lasd patch_10_262.py */}
       {gameResult && (() => {
         const norm = arr => (Array.isArray(arr)?arr:[]).map(x => typeof x === 'string' ? players.find(p=>p.name===x) : (x && x.player ? x.player : x)).filter(Boolean);
         let winners = norm(gameResult.winners);
@@ -61465,72 +61465,172 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           if (gameResult.correct) winners = grp; else losers = grp;
         }
         const hasWin = winners.length > 0, hasLose = losers.length > 0;
-        const split = hasWin && hasLose;
         const drinks = gameResult.drinks || 0;
         const neutral = !hasWin && !hasLose;
         const neutralPos = neutral && drinks === 0 && gameResult.correct !== false;
-        const winNote = gameResult.winNote || (hasWin ? '+1 pont' : '');
-        const loseNote = gameResult.loseNote || '';
-        const WIN_G = 'linear-gradient(160deg,#2ec27e,#178a52)';
-        const LOSE_G = 'linear-gradient(200deg,#ec5545,#c0281f)';
-        // Döntetlen: se nem győzelem, se nem vereség — semleges pala, ne zöld
-        const DRAW_G = 'linear-gradient(160deg,#7d8ba0,#4f5c72)';
         const isDraw = gameResult.draw === true;
-        const glow = isDraw ? '#8a97ab' : ((hasWin && !hasLose) || neutralPos ? '#25b572' : '#e84040');
-        const names = list => list.map(p=>p.name).join(', ');
+
+        // Allapot-szinek — SZANDEKOSAN fuggetlenek a tematol: az "ice" temaban
+        // pl. a T.mint kek, azzal a gyozelem nem lenne olvashato.
+        const WIN_C = '#2E9A70', LOSE_C = '#D0574C', DRAW_C = '#6E7C93';
+        const glow = isDraw ? DRAW_C : ((hasWin && !hasLose) || neutralPos ? WIN_C : LOSE_C);
+        const soloCard = neutral || !(hasWin && hasLose);   // egyetlen kimenet → nagyobb betu/avatar
+
+        // A jegyzetbol kiszedjuk, amit a metrika ugyis kiir.
+        const cleanNote = t => String(t || '').replace(/\+1 pont\s*/g, '')
+          .replace(/^[\s·—–-]+/, '').replace(/[\s·—–-]+$/, '').trim();
+        const note = [cleanNote(gameResult.winNote), cleanNote(gameResult.loseNote),
+                      neutral ? '' : cleanNote(gameResult.subtitle)].filter(Boolean).join(' · ');
+
         // FONTOS: ezek a "komponensek" a renderen BELUL keletkeznek, tehat minden
-        // ujrarajzolaskor uj fuggveny-azonossagot kapnanak. Ha JSX-kent
-        // hasznalnank oket (<Pile />), a React mas tipusnak latna es
-        // ujramountolna a reszfat — a profilkep <img>-je minden korben
-        // ujraepulne es ujra dekodolodna, ami villogasnak/ugralasnak latszik.
-        // Ezert mindenhol SIMA FUGGVENYHIVASSAL agyazzuk be oket.
-        const Pile = ({ list, size, overlap, borderW, emptyEmoji }) => {
-          const shown = list.slice(0,3), extra = Math.max(0, list.length - 3);
+        // ujrarajzolaskor uj fuggveny-azonossagot kapnanak. Ha JSX-kent hasznalnank
+        // oket (<Pile />), a React mas tipusnak latna es ujramountolna a reszfat —
+        // a profilkep <img>-je minden korben ujraepulne. Ezert SIMA FUGGVENYHIVAS.
+        const Pile = ({ list, max, size, overlap, borderW }) => {
+          const shown = list.slice(0, max), extra = Math.max(0, list.length - max);
           return (
             <div style={{ display:'flex', alignItems:'center', flexShrink:0 }}>
-              {shown.map((p,i) => (
-                <div key={p.id||i} style={{ width:size, height:size, borderRadius:'50%', background:p.color||'#888', display:'grid', placeItems:'center', overflow:'hidden', border:`${borderW}px solid rgba(255,255,255,0.75)`, marginLeft: i===0?0:-overlap, zIndex: shown.length-i, flexShrink:0 }}>
-                  {p.img ? <img src={p.img} style={{ width:size, height:size, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:Math.round(size*0.42), color:'#fff' }}>{(p.name||'?').charAt(0).toUpperCase()}</span>}
+              {shown.map((p, i) => (
+                <div key={p.id||i} style={{ width:size, height:size, borderRadius:'50%', background:p.color||'#8894A8', display:'grid', placeItems:'center', overflow:'hidden', border: i ? `${borderW}px solid ${T.surface}` : 'none', marginLeft: i===0?0:-overlap, zIndex: shown.length-i, flexShrink:0, boxShadow: i===0 ? '0 2px 6px rgba(20,30,50,0.16)' : 'none' }}>
+                  {p.img ? <img src={p.img} alt="" style={{ width:size, height:size, objectFit:'cover', display:'block' }} />
+                         : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:Math.round(size*0.42), color:'#fff' }}>{(p.name||'?').charAt(0).toUpperCase()}</span>}
                 </div>
               ))}
-              {extra>0 && <div style={{ width:Math.round(size*0.8), height:Math.round(size*0.8), borderRadius:'50%', background:'rgba(255,255,255,0.28)', display:'grid', placeItems:'center', border:`${borderW}px solid rgba(255,255,255,0.6)`, marginLeft:-overlap, fontFamily:T.font, fontWeight:900, fontSize:Math.round(size*0.3), color:'#fff', flexShrink:0 }}>+{extra}</div>}
-              {list.length===0 && emptyEmoji && (emptyEmoji === '🌟' ? <BohIcon name="star" size={size*0.8} /> : emptyEmoji === '🍺' ? <BohIcon name="beer" size={size*0.8} /> : <span style={{ fontSize:size*0.8, lineHeight:1 }}>{emptyEmoji}</span>)}
+              {extra > 0 && (
+                <div style={{ width:size, height:size, borderRadius:'50%', background:'#8894A8', display:'grid', placeItems:'center', border:`${borderW}px solid ${T.surface}`, marginLeft:-overlap, fontFamily:T.font, fontWeight:900, fontSize:Math.round(size*0.36), color:'#fff', flexShrink:0 }}>+{extra}</div>
+              )}
             </div>
           );
         };
 
+        const Metric = ({ value, unit, color }) => (
+          <div style={{ flexShrink:0, display:'flex', flexDirection:'column', alignItems:'center', gap:3, minWidth:52 }}>
+            <span style={{ fontFamily:T.font, fontWeight:900, fontSize: soloCard ? 32 : 26, lineHeight:1, letterSpacing:'-0.03em', color, fontVariantNumeric:'tabular-nums' }}>{value}</span>
+            <span style={{ fontFamily:T.font, fontWeight:900, fontSize:9, letterSpacing:'0.13em', color:T.inkMute, lineHeight:1 }}>{unit}</span>
+          </div>
+        );
+
+        // EGY fo → a megszokott sor. KETTO vagy tobb → avatarok + felirat,
+        // a nevsor a sor ALATT teli szelessegben (ott sokkal tobb nev fer ki).
+        const Row = ({ list, kind, first }) => {
+          const col = isDraw ? DRAW_C : (kind === 'win' ? WIN_C : LOSE_C);
+          const kicker = isDraw ? 'Döntetlen'
+            : kind === 'win' ? (list.length > 1 ? 'Nyertesek' : 'Nyertes')
+                             : (list.length > 1 ? 'Isznak' : 'Iszik');
+          const value = kind === 'win' ? '+1' : String(drinks);
+          const unit = kind === 'win' ? 'PONT' : 'KORTY';
+          // Ha fejenkent MAS az osszeg (Buntetes, Sohanem, Fingerit), a jatek
+          // drinks:0-t kuld, es a jegyzet sorolja fel nevenkent. Ilyenkor nincs
+          // mit kiirni a szam-oszlopba — a "0 KORTY" hazugsag lenne.
+          const showMetric = kind === 'win' || drinks > 0;
+          const kickerEl = (
+            <span style={{ fontFamily:T.font, fontWeight:900, fontSize: soloCard ? 10.5 : 9.5, letterSpacing:'0.16em', textTransform:'uppercase', lineHeight:1, color:col }}>{kicker}</span>
+          );
+          const rowStyle = { flex:1, minHeight:0, display:'flex', alignItems:'center', gap:12, padding:'12px 16px',
+                             borderTop: first ? 'none' : `1px solid ${T.inkMute}22` };
+          if (list.length === 1) {
+            const av = soloCard ? 64 : 46;
+            return (
+              <div style={rowStyle}>
+                {Pile({ list, max:1, size:av, overlap:0, borderW:3 })}
+                <div style={{ flex:1, minWidth:0 }}>
+                  {kickerEl}
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize: soloCard ? 27 : 20, color:T.ink, lineHeight:1.15, letterSpacing:'-0.02em', marginTop:4, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{list[0].name}</div>
+                </div>
+                {showMetric && Metric({ value, unit, color:col })}
+              </div>
+            );
+          }
+          return (
+            <div style={{ ...rowStyle, flexDirection:'column', alignItems:'stretch', justifyContent:'center', gap:9 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:11 }}>
+                {Pile({ list, max:2, size: soloCard ? 48 : 42, overlap: soloCard ? 14 : 12, borderW:2.5 })}
+                <div style={{ flex:1, minWidth:0 }}>{kickerEl}</div>
+                {showMetric && Metric({ value, unit, color:col })}
+              </div>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize: soloCard ? 15.5 : 14.5, color:T.ink, lineHeight:1.35,
+                            display:'-webkit-box', WebkitLineClamp: soloCard ? 3 : 2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+                {list.map(p => p.name).join(' · ')}
+              </div>
+            </div>
+          );
+        };
+
+        const NeutralRow = () => (
+          <div style={{ flex:1, minHeight:0, display:'flex', alignItems:'center', gap:12, padding:'12px 16px' }}>
+            <div style={{ width:56, height:56, borderRadius:'50%', background: neutralPos ? `${WIN_C}1A` : `${LOSE_C}1A`, display:'grid', placeItems:'center', flexShrink:0 }}>
+              <BohIcon name={neutralPos ? (/(Döntetlen|Draw)/i.test(gameResult.subtitle||'') ? 'draw' : 'star') : 'beer'} size={28} />
+            </div>
+            <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:900, fontSize:19, color:T.ink, lineHeight:1.2, wordBreak:'break-word' }}>
+              {gameResult.subtitle || (neutralPos ? 'Kész!' : 'Inni kell!')}
+            </div>
+            {drinks > 0 && Metric({ value:String(drinks), unit:'KORTY', color: LOSE_C })}
+          </div>
+        );
+
+        // A csik: felig-felig, ha nyertes ES vesztes is van.
+        const Stripe = () => (
+          <div style={{ height:6, flexShrink:0, display:'flex' }}>
+            {hasWin && hasLose ? (
+              <React.Fragment>
+                <span style={{ flex:1, background:WIN_C }} /><span style={{ flex:1, background:LOSE_C }} />
+              </React.Fragment>
+            ) : (
+              <span style={{ flex:1, background: isDraw ? DRAW_C : (hasWin || neutralPos ? WIN_C : LOSE_C) }} />
+            )}
+          </div>
+        );
+
+        // ── A KICSI SAV (S3): csak az marad, ami cselekves — ki iszik es mennyit ──
+        const drinkSide = hasLose ? losers : winners;
+        const miniCol = drinks ? (isDraw ? DRAW_C : LOSE_C) : WIN_C;
+        const miniLabel = drinkSide.length === 0
+          ? (gameResult.subtitle || (neutralPos ? 'Kész!' : 'Inni kell!'))
+          : (drinkSide.length >= 3 ? drinkSide.length + ' fő' : drinkSide.map(p => p.name).join(', '));
+        const MiniBar = ({ onClose }) => (
+          <div style={{ background:T.surface, borderRadius:16, overflow:'hidden', width:'100%',
+                        boxShadow:'0 -2px 10px rgba(20,30,50,0.10), 0 8px 22px rgba(20,30,50,0.22)' }}>
+            <div style={{ height:4, display:'flex' }}>
+              {hasWin && hasLose ? (
+                <React.Fragment><span style={{ flex:1, background:WIN_C }} /><span style={{ flex:1, background:LOSE_C }} /></React.Fragment>
+              ) : (<span style={{ flex:1, background: isDraw ? DRAW_C : (hasWin || neutralPos ? WIN_C : LOSE_C) }} />)}
+            </div>
+            <div style={{ height:52, display:'flex', alignItems:'center', gap:10, padding:'0 12px' }}>
+              {drinkSide.length > 0 && Pile({ list: drinkSide, max:2, size:36, overlap:11, borderW:2 })}
+              <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{miniLabel}</div>
+              {/* 0 kortynal nincs szam: nem esunk vissza "+1 pont"-ra, mert az
+                  mast allitana, mint ami tortent (lasd patch_10_263.py). */}
+              {(drinks > 0 || (hasWin && !hasLose)) && (
+                <div style={{ flexShrink:0, display:'flex', alignItems:'baseline', gap:5 }}>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:24, letterSpacing:'-0.03em', color:miniCol, fontVariantNumeric:'tabular-nums' }}>{drinks ? drinks : '+1'}</span>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:9, letterSpacing:'0.13em', color:T.inkMute }}>{drinks ? 'KORTY' : 'PONT'}</span>
+                </div>
+              )}
+              {onClose && (
+                <button onClick={onClose} aria-label="Bezárás" style={{ width:22, height:22, borderRadius:'50%', border:'none', background:`${T.inkMute}2A`, color:T.inkSoft, fontSize:11, fontWeight:900, lineHeight:1, cursor:'pointer', display:'grid', placeItems:'center', padding:0, flexShrink:0 }}>✕</button>
+              )}
+            </div>
+          </div>
+        );
+        // A kicsi sav UGYANOLYAN SZELES, mint a nagy kartya — a lekicsinyites
+        // igy nem ugrik szelesseget.
+        const CARD_W = { width:'80vw', minWidth:260, maxWidth:340 };
+
         if (resultMinimized === 'shrinking' || resultMinimized === true) {
           const showPill = resultMinimized === true;
-          const MiniHalf = ({ list, kind }) => (
-            <div style={{ flex:1, minWidth:0, background: (isDraw && kind!=='win') ? DRAW_G : (kind==='win'?WIN_G:LOSE_G), padding:'10px 12px', display:'flex', alignItems:'center', gap:8 }}>
-              {Pile({ list, size:28, overlap:9, borderW:2, emptyEmoji: kind==='win'?'🌟':'🍺' })}
-              <div style={{ minWidth:0 }}>
-                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:'rgba(255,255,255,0.7)', lineHeight:1.1 }}>{kind==='win'?'Nyertes':'Iszik'}</div>
-                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{names(list)}{kind==='lose'&&drinks>0?` · ${drinks} korty`:''}</div>
-              </div>
-            </div>
-          );
-          const MiniNeutral = () => (
-            <div style={{ flex:1, minWidth:0, background: isDraw?DRAW_G:(neutralPos?WIN_G:LOSE_G), padding:'10px 14px', display:'flex', alignItems:'center', gap:9 }}>
-              <BohIcon name={neutralPos ? (/(Döntetlen|Draw)/i.test(gameResult.subtitle||'') ? 'draw' : 'star') : 'beer'} size={20} />
-              <div style={{ minWidth:0 }}>
-                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{gameResult.subtitle || (neutralPos?'Kész!':'Inni kell!')}{!neutralPos&&drinks>0?` · ${drinks} korty`:''}</div>
-              </div>
-            </div>
-          );
           return (
             <React.Fragment>
               {resultMinimized === 'shrinking' && (
                 <div style={{ position:'fixed', inset:0, zIndex:250, display:'flex', alignItems:'center', justifyContent:'center', animation:'backdropFadeOut .35s ease forwards', pointerEvents:'none' }}>
-                  <div style={{ borderRadius:24, overflow:'hidden', display:'flex', minWidth:260, maxWidth:340, width:'80vw', animation:'resultShrinkOut .35s cubic-bezier(.4,0,.6,1) forwards', boxShadow:`0 20px 70px ${glow}99` }} onAnimationEnd={() => setResultMinimized(true)}>
-                    {neutral ? MiniNeutral() : <React.Fragment>{hasWin && MiniHalf({ list: winners, kind:'win' })}{hasLose && MiniHalf({ list: losers, kind:'lose' })}</React.Fragment>}
+                  <div style={{ ...CARD_W, animation:'resultShrinkOut .35s cubic-bezier(.4,0,.6,1) forwards' }} onAnimationEnd={() => setResultMinimized(true)}>
+                    {MiniBar({})}
                   </div>
                 </div>
               )}
               {showPill && (
-                <div key={'mini-' + gameResult.ts} onClick={() => setResultMinimized(false)} style={{ position:'fixed', bottom:'calc(96px + env(safe-area-inset-bottom, 0px))', left:16, right:16, zIndex:45, animation:'miniBarIn .25s ease-out', borderRadius:18, overflow:'hidden', display:'flex', boxShadow:`0 -2px 16px ${glow}44, 0 6px 20px rgba(0,0,0,0.35)`, cursor:'pointer' }}>
-                  {neutral ? MiniNeutral() : <React.Fragment>{hasWin && MiniHalf({ list: winners, kind:'win' })}{hasLose && MiniHalf({ list: losers, kind:'lose' })}</React.Fragment>}
-                  <button onClick={e => { e.stopPropagation(); setGameResult(null); setResultMinimized(false); }} aria-label="Bezárás" style={{ position:'absolute', top:'50%', right:8, transform:'translateY(-50%)', width:24, height:24, borderRadius:'50%', border:'none', background:'rgba(0,0,0,0.32)', color:'#fff', fontSize:13, lineHeight:1, cursor:'pointer', display:'grid', placeItems:'center', padding:0, zIndex:2 }}>✕</button>
+                <div key={'mini-' + gameResult.ts} onClick={() => setResultMinimized(false)}
+                     style={{ position:'fixed', bottom:'calc(96px + env(safe-area-inset-bottom, 0px))', left:'50%', transform:'translateX(-50%)', ...CARD_W, zIndex:45, animation:'miniBarIn .25s ease-out', cursor:'pointer' }}>
+                  {MiniBar({ onClose: e => { e.stopPropagation(); setGameResult(null); setResultMinimized(false); } })}
                 </div>
               )}
             </React.Fragment>
@@ -61538,77 +61638,29 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         }
 
         const anim = hasWin && !hasLose ? 'resultCalmIn .3s ease-out forwards' : 'resultLoseIn .5s ease-out forwards';
-        const WinZone = () => (
-          <div style={{ background:WIN_G, padding: split?'26px 12px 34px':'26px 24px 20px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:7, width:'100%', boxSizing:'border-box', flex:'1 1 auto', minHeight:0, position:'relative', overflow:'hidden' }}>
-            {[{l:'12%',s:7,c:'#EDD17A',d:0,t:2.1},{l:'34%',s:6,c:'#fff',d:.5,t:1.7},{l:'58%',s:8,c:'#F09E8C',d:.2,t:2.4},{l:'78%',s:6,c:'#EDD17A',d:.9,t:1.9},{l:'92%',s:7,c:'#fff',d:.35,t:2.2}].map((cf,i)=>(
-              <span key={i} style={{ position:'absolute', top:0, left:cf.l, width:cf.s, height:cf.s, borderRadius:2, background:cf.c, opacity:0, animation:`bhConfFall ${cf.t}s ${cf.d}s linear infinite`, pointerEvents:'none' }} />
-            ))}
-            {Pile({ list: winners, size: split?52:60, overlap:16, borderW:3, emptyEmoji:'🌟' })}
-            {split
-              ? <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, letterSpacing:'0.1em', textTransform:'uppercase', color:'rgba(255,255,255,0.72)', display:'flex', alignItems:'center', gap:4 }}><BohIcon name="star" size={12} /> {winners.length>1?'Helyesek':'Nyertes'}</div>
-              : <div style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:'#fff', textShadow:'0 2px 10px rgba(0,0,0,0.2)', display:'flex', alignItems:'center', gap:8 }}>Helyes! <BohIcon name="star" size={24} /></div>}
-            {winners.length>0 && <div style={{ fontFamily:T.font, fontWeight:900, fontSize: split?20:18, color:'#fff', textAlign:'center', lineHeight:1.1, textShadow:'0 2px 10px rgba(0,0,0,0.2)', wordBreak:'break-word' }}>{names(winners)}</div>}
-            {winNote && <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:'rgba(255,255,255,0.92)', textAlign:'center' }}><BohText text={winNote} size={12} /></div>}
-          </div>
-        );
-        const LoseZone = () => (
-          <div style={{ background: (isDraw && !hasWin) ? DRAW_G : LOSE_G, padding: split?'26px 12px 34px':'20px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:7, width:'100%', boxSizing:'border-box', flex:'1 1 auto', minHeight:0 }}>
-            {Pile({ list: losers, size: split?52:60, overlap:16, borderW:3, emptyEmoji:'🍺' })}
-            {split
-              ? <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, letterSpacing:'0.1em', textTransform:'uppercase', color:'rgba(255,255,255,0.72)', display:'flex', alignItems:'center', gap:4 }}><BohIcon name="beer" size={12} /> {losers.length>1?'Isznak':'Iszik'}</div>
-              : <div style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:'#fff', textShadow:'0 2px 10px rgba(0,0,0,0.2)', display:'flex', alignItems:'center', gap:8 }}>Inni kell! <BohIcon name="beer" size={24} /></div>}
-            {losers.length>0 && <div style={{ fontFamily:T.font, fontWeight:900, fontSize: split?20:18, color:'#fff', textAlign:'center', lineHeight:1.1, textShadow:'0 2px 10px rgba(0,0,0,0.2)', wordBreak:'break-word' }}>{names(losers)}</div>}
-            {drinks>0 && (
-              <div style={{ display:'flex', alignItems:'baseline', gap:5 }}>
-                <span style={{ fontFamily:T.font, fontWeight:900, fontSize: split?34:44, color:'#fff', lineHeight:1, textShadow:'0 4px 20px rgba(0,0,0,0.25)' }}>{drinks}</span>
-                <span style={{ fontFamily:T.font, fontWeight:700, fontSize:15, color:'rgba(255,255,255,0.9)' }}>korty{losers.length>1?'/fő':''}</span>
-              </div>
-            )}
-            {loseNote && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:'rgba(255,255,255,0.85)', textAlign:'center' }}><BohText text={loseNote} size={11} /></div>}
-          </div>
-        );
-        const NeutralZone = () => (
-          <div style={{ background: isDraw?DRAW_G:(neutralPos?WIN_G:LOSE_G), padding:'30px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10, flex:'1 1 auto', minHeight:0 }}>
-            <BohIcon name={neutralPos ? (/(Döntetlen|Draw)/i.test(gameResult.subtitle||'') ? 'draw' : 'star') : 'beer'} size={44} />
-            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:'#fff', textAlign:'center', lineHeight:1.15, textShadow:'0 2px 10px rgba(0,0,0,0.2)', wordBreak:'break-word' }}>{gameResult.subtitle || (neutralPos?'Kész!':'Inni kell!')}</div>
-            {drinks>0 && (
-              <div style={{ display:'flex', alignItems:'baseline', gap:5 }}>
-                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:40, color:'#fff', lineHeight:1, textShadow:'0 4px 20px rgba(0,0,0,0.25)' }}>{drinks}</span>
-                <span style={{ fontFamily:T.font, fontWeight:700, fontSize:15, color:'rgba(255,255,255,0.9)' }}>korty</span>
-              </div>
-            )}
-          </div>
-        );
+        const wcBadge = gameResult.effect && WC_EFFECTS[gameResult.effect] ? WC_EFFECTS[gameResult.effect].badge : null;
         return (
-          <div key={'banner-' + gameResult.ts} onClick={() => setResultMinimized(true)} style={{ position:'fixed', inset:0, zIndex:250, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.35)', backdropFilter:'blur(3px)', WebkitBackdropFilter:'blur(3px)' }}>
-            {/* Fix magasság → a banner mérete mindig ugyanaz, 1 fő / 2 fő / csapat esetén is */}
-            <div style={{ borderRadius:32, overflow:'hidden', animation:anim, boxShadow:`0 20px 70px ${glow}99, 0 0 0 1.5px rgba(255,255,255,0.18)`, minWidth:260, maxWidth:340, width:'80vw', height:340, position:'relative', display:'flex', flexDirection:'column' }}>
-              <button onClick={e => { e.stopPropagation(); setResultMinimized(true); }} aria-label="Kicsinyítés" style={{ position:'absolute', top:10, right:10, width:30, height:30, borderRadius:'50%', border:'none', background:'rgba(255,255,255,0.22)', color:'#fff', fontSize:16, lineHeight:1, cursor:'pointer', display:'grid', placeItems:'center', zIndex:5 }}>✕</button>
-              {gameResult.effect && WC_EFFECTS[gameResult.effect] && (
-                <div style={{ position:'absolute', top:13, left:'50%', transform:'translateX(-50%)', zIndex:5, background:'rgba(0,0,0,0.34)', color:'#fff', borderRadius:999, padding:'4px 12px', fontFamily:T.font, fontWeight:900, fontSize:10.5, letterSpacing:'0.08em', whiteSpace:'nowrap', pointerEvents:'none' }}>{WC_EFFECTS[gameResult.effect].badge}</div>
+          <div key={'banner-' + gameResult.ts} onClick={() => setResultMinimized(true)} style={{ position:'fixed', inset:0, zIndex:250, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12, background:'rgba(0,0,0,0.35)', backdropFilter:'blur(3px)', WebkitBackdropFilter:'blur(3px)' }}>
+            {/* Fix magassag → a kartya merete mindig ugyanaz, 1 fo / 2 fo / csapat eseten is */}
+            <div style={{ ...CARD_W, height:300, position:'relative', background:T.surface, borderRadius:22, overflow:'hidden', display:'flex', flexDirection:'column', animation:anim, boxShadow:`0 20px 70px ${glow}66, 0 5px 0 rgba(20,30,50,0.07)` }}>
+              {Stripe()}
+              {/* A wildcard-jelveny a csikon lovagol, kozepen: bal oldalt avatar,
+                  jobb oldalt a szam, kozepen viszont mindig ures a hely. */}
+              {wcBadge && (
+                <div style={{ position:'absolute', top:0, left:'50%', transform:'translateX(-50%)', zIndex:2, background:T.yellow, color:'#5B4508', borderRadius:'0 0 10px 10px', padding:'4px 11px 4.5px', fontFamily:T.font, fontWeight:900, fontSize:9.5, letterSpacing:'0.1em', textTransform:'uppercase', whiteSpace:'nowrap', boxShadow:'0 2px 6px rgba(20,30,50,0.16)' }}>{wcBadge}</div>
               )}
-              {neutral && NeutralZone()}
-              {split ? (
-                /* Egymás melletti 50/50 oszlopok — éles zöld/piros határral */
-                <div style={{ display:'flex', alignItems:'stretch', flex:'1 1 auto', minHeight:0 }}>
-                  <div style={{ flex:'1 1 0', minWidth:0, display:'flex' }}>{WinZone()}</div>
-                  <div style={{ flex:'1 1 0', minWidth:0, display:'flex' }}>{LoseZone()}</div>
-                </div>
-              ) : (
-                <React.Fragment>
-                  {hasWin && WinZone()}
-                  {hasLose && LoseZone()}
-                </React.Fragment>
-              )}
-              {gameResult.subtitle && !split && !neutral && (
-                <div style={{ background: isDraw?DRAW_G:(hasWin?WIN_G:LOSE_G), padding:'0 22px 6px', marginTop:-2, flexShrink:0 }}>
-                  <div style={{ fontFamily:T.font, fontSize:13, color:'rgba(255,255,255,0.78)', textAlign:'center', lineHeight:1.4 }}><BohText text={gameResult.subtitle} size={12} /></div>
-                </div>
-              )}
-              <div style={{ background: split?'transparent':(isDraw?DRAW_G:(hasWin||neutralPos?WIN_G:LOSE_G)), padding:'2px 0 8px', textAlign:'center', flexShrink:0, ...(split ? { marginTop:-30, position:'relative', zIndex:3 } : {}) }}>
-                <span style={{ fontFamily:T.font, fontSize:11, color:'rgba(255,255,255,0.5)' }}>koppints a kicsinyítéshez</span>
+              <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column' }}>
+                {neutral && NeutralRow()}
+                {hasWin && Row({ list: winners, kind:'win', first:true })}
+                {hasLose && Row({ list: losers, kind:'lose', first: !hasWin })}
               </div>
+              {note && (
+                <div style={{ flexShrink:0, padding:'0 16px 12px', fontFamily:T.font, fontWeight:700, fontSize:11.5, color:T.inkMute, lineHeight:1.4, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+                  <BohText text={note} size={11} />
+                </div>
+              )}
             </div>
+            <span style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.7)' }}>koppints a kicsinyítéshez</span>
           </div>
         );
       })()}

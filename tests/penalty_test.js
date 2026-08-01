@@ -107,7 +107,10 @@ const ok = (cond, name, extra) => {
   ok(state === 'Sere:2,Kecsi:1,Vivi:0', 'a korty rákerült a játékosokra', state);
   ok(await p.evaluate(() => !document.body.innerText.includes('Büntetés — ki igyon?')), 'a lap bezárult');
   const banner = await p.evaluate(() => document.body.innerText);
-  ok(/Inni kell!/.test(banner), 'a nagy result banner feljön');
+  // v10.263: az uj banner nem "Inni kell!"-t ir, hanem az ivok sorat — es
+  // fejenkent mas osszegnel (drinks:0) NEM ir ki szamot, csak a jegyzetet.
+  ok(/ISZNAK|ISZIK/i.test(banner), 'a nagy result banner feljön');
+  ok(!/0 KORTY/i.test(banner), 'és NEM ír ki „0 korty"-ot');
   ok(/Sere 2/.test(banner) && /Kecsi 1/.test(banner), 'a banner megmondja, ki mennyit kapott', (banner.match(/Sere \d[^\n]*Kecsi \d[^\n]*/) || ['nincs'])[0]);
 
   const real = errs.filter(e => !/ServiceWorker/.test(e));
