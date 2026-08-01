@@ -1,15 +1,16 @@
-// v10.257 — korty-számláló a fejlécben
+// v10.257 — korty-számláló a fejlécben · v10.270-től D1 (tét-korong)
 //
 // Amit ellenőriz:
 //   1. minden játék deklarál `stake`-et (különben néma lyuk lenne a fejlécben)
 //   2. a kiírt szám tényleg alap × nehézség × wildcard
 //   3. tartomány, ha a játék alap tétje is tartomány
-//   4. a nehézségi talp a DIFFICULTY_INFO-ból jön (név, szorzó, szín)
-//   5. wildcard „dupla” alatt sárga talp és a TELJES szorzó
-//   6. saját gazdaságú játéknál (stake:null) NINCS kapszula — nem találunk ki számot
-//   7. korty-követés nélkül sincs kapszula
-//   8. a kapszula tényleg kilóg a fejléc alól, és nem lóg ki a képernyőből
+//   4. a GYŰRŰ SZÍNE a DIFFICULTY_INFO-ból jön (v10.270: a színes talp helyett)
+//   5. wildcard „dupla” alatt sárga gyűrű és a TELJES szorzó
+//   6. saját gazdaságú játéknál (stake:null) NINCS korong — a kör-gyűrű marad
+//   7. korty-követés nélkül sincs korong
+//   8. v10.270: SEMMI nem lóg le a fejléc alá, és a korong nem lóg ki oldalt
 //   9. a QR-gomb nem takarja a korty-számot
+//  11. v10.270: a körváltó képernyő megmutatja a limitet — de csak ha van
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const path = require('path');
@@ -22,27 +23,37 @@ const ok = (cond, name, extra) => {
   if (!cond) fail++;
 };
 
-// A kapszula kiolvasasa a fejlecbol: korty-szam + a talp szovege/szine.
+// v10.270 — a TET-KORONG kiolvasasa a fejlecbol. A nehezseg mar nem szoveges
+// talpon jon, hanem a GYURU STROKE-szinebol. A keresest a fejlecre szukitjuk,
+// kulonben a mini result-sav "KORTY" felirata is talalat lenne.
+const headerScope = () => {
+  const root = document.getElementById('__pl') || document.body;
+  const bar = [...root.querySelectorAll('div')].find(d => d.style && d.style.paddingTop === '12px');
+  return bar || root;
+};
 const readCap = p => p.evaluate(() => {
   const root = document.getElementById('__pl') || document.body;
-  const foot = [...root.querySelectorAll('span')].find(s => /×\d+$/.test((s.innerText || '').trim()) &&
-    getComputedStyle(s).textTransform === 'uppercase' && s.previousElementSibling);
-  if (!foot) return null;
-  const cap = foot.parentElement;
-  const spans = [...cap.querySelectorAll(':scope > span')];
-  const num = spans[0], unit = spans[1];
-  const r = cap.getBoundingClientRect();
-  const ring = cap.querySelector('div');
-  const qr = cap.querySelector('button[title*="QR"]');
+  const bar = [...root.querySelectorAll('div')].find(d => d.style && d.style.paddingTop === '12px');
+  const scope = bar || root;
+  const unit = [...scope.querySelectorAll('span')].find(s => (s.innerText || '').trim().toLowerCase() === 'korty' &&
+    getComputedStyle(s).textTransform === 'uppercase');
+  if (!unit) return null;
+  const face = unit.parentElement;
+  const disc = face.parentElement;
+  const num = face.querySelector('span');
+  const circle = disc.querySelector('svg circle');
+  const r = disc.getBoundingClientRect();
+  const qr = disc.querySelector('button[title*="QR"]');
   return {
     num: (num.innerText || '').trim(),
     unit: (unit.innerText || '').trim(),
-    foot: (foot.innerText || '').replace(/\s+/g, ' ').trim(),
-    footBg: getComputedStyle(foot).backgroundColor,
+    ring: circle ? getComputedStyle(circle).stroke : null,
+    title: disc.getAttribute('title') || '',
+    cursor: getComputedStyle(disc).cursor,
     width: Math.round(r.width),
+    height: Math.round(r.height),
     bottom: Math.round(r.bottom),
     right: Math.round(r.right),
-    ringBottom: ring ? Math.round(ring.getBoundingClientRect().bottom) : null,
     qr: qr ? { top: Math.round(qr.getBoundingClientRect().top), numTop: Math.round(num.getBoundingClientRect().top) } : null,
   };
 });
@@ -62,7 +73,8 @@ async function setup(p, gameId, opts) {
     ReactDOM.createRoot(root).render(React.createElement(PlayScreen, {
       players, setPlayers: () => {}, selectedGames: [gid], go: () => {},
       roomCode: o.room || null,
-      gameMeta: { modes: o.noScore ? [] : ['points'], difficulty: o.diff || 'easy', observerAllowed: true },
+      gameMeta: { modes: o.noScore ? [] : ['points'], difficulty: o.diff || 'easy', observerAllowed: true,
+                  ...(o.maxRounds ? { maxRounds: o.maxRounds } : {}) },
       setGameMeta: () => {}, setLastGameRound: () => {}, setScoreHistory: () => {},
     }));
   }, { gid: gameId, o: opts || {} });
@@ -103,7 +115,7 @@ async function setup(p, gameId, opts) {
     await setup(p, 'reakcio', { diff });
     const c = await readCap(p);
     ok(c && c.num === String(1 * mult), `Reakció (alap 1) · ${diff}: ${mult} korty`, c && c.num);
-    ok(c && new RegExp('×' + mult + '$').test(c.foot), `  a talp a szorzót mutatja`, c && c.foot);
+    ok(c && new RegExp('×' + mult + '$').test(c.title), `  a szorzó a koppintás-címkében`, c && c.title);
   }
 
   console.log('\n===== 3. TARTOMÁNY =====');
@@ -112,7 +124,7 @@ async function setup(p, gameId, opts) {
   ok(imp && imp.num === '6–9', 'Imposztor (alap 2–3) · nehéz: 6–9 korty', imp && imp.num);
   ok(imp && imp.unit.toLowerCase() === 'korty', 'a mértékegység ki van írva', imp && imp.unit);
 
-  console.log('\n===== 4. A TALP A DIFFICULTY_INFO-BÓL JÖN =====');
+  console.log('\n===== 4. A GYŰRŰ SZÍNE A DIFFICULTY_INFO-BÓL JÖN =====');
   await setup(p, 'reakcio', { diff: 'hard' });
   const hard = await readCap(p);
   const meta = await p.evaluate(() => DIFFICULTY_INFO.find(d => d.id === 'hard'));
@@ -120,23 +132,24 @@ async function setup(p, gameId, opts) {
     const n = parseInt(h.slice(1), 16);
     return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
   };
-  ok(hard.foot === `${meta.label.toUpperCase()} ×3`, 'a talp felirata a szint neve + szorzó', hard.foot);
-  ok(hard.footBg === rgb(meta.tone), 'a talp színe a szint saját színe', hard.footBg + ' (várt ' + rgb(meta.tone) + ')');
+  ok(hard.ring === rgb(meta.tone), 'a gyűrű színe a szint saját színe', hard.ring + ' (várt ' + rgb(meta.tone) + ')');
+  ok(hard.title === `${meta.label} ×3`, 'a szint neve + szorzó a címkében', hard.title);
+  ok(hard.cursor === 'pointer', 'a korong koppintható', hard.cursor);
 
-  console.log('\n===== 5. GEOMETRIA =====');
-  ok(hard.width === 60, 'a kapszula 60 px széles', hard.width + ' px');
+  console.log('\n===== 5. GEOMETRIA — v10.270: SEMMI NEM LÓG LE =====');
+  ok(hard.width === 54 && hard.height === 54, 'a korong 54×54 px', hard.width + '×' + hard.height);
   ok(hard.right <= 402, 'nem lóg ki a képernyő jobb szélén', 'jobb szél: ' + hard.right);
-  ok(hard.bottom - hard.ringBottom >= 25, 'a korty-rész tényleg lelóg a gyűrű alá',
-     (hard.bottom - hard.ringBottom) + ' px-szel');
   const barBottom = await p.evaluate(() => {
     const root = document.getElementById('__pl');
     const bars = [...root.querySelectorAll('div')].filter(d => d.style && d.style.paddingTop === '12px');
     return bars.length ? Math.round(bars[0].getBoundingClientRect().bottom) : null;
   });
-  // A fejlec helyet FOGLAL a lelogo resznek — igy a kapszula sehol nem takar
-  // tartalmat (v10.258: az Imposztor jatekleirasat vagta el).
-  ok(barBottom !== null && hard.bottom <= barBottom, 'a fejléc helyet foglal neki — nem takar tartalmat',
-     'kapszula alja ' + hard.bottom + ' vs fejléc alja ' + barBottom);
+  // A regi kapszula 48 px-et logott a fejlec ala, ezert a fejlecnek helyet
+  // kellett foglalnia neki. A korong NEM log le — ez a lenyeg.
+  ok(barBottom !== null && hard.bottom <= barBottom, 'a korong a fejlécen BELÜL van',
+     'korong alja ' + hard.bottom + ' vs fejléc alja ' + barBottom);
+  ok(barBottom !== null && barBottom - hard.bottom <= 12,
+     'nincs 48 px-es üres sáv a korong alatt', (barBottom - hard.bottom) + ' px');
   const firstContentTop = await p.evaluate(() => {
     const root = document.getElementById('__pl');
     const sc = [...root.querySelectorAll('div')].find(d => d.style && d.style.overflowY === 'auto');
@@ -144,20 +157,20 @@ async function setup(p, gameId, opts) {
     return el ? Math.round(el.getBoundingClientRect().top) : null;
   });
   ok(firstContentTop !== null && firstContentTop >= hard.bottom,
-     'a játék tartalma a kapszula ALATT kezdődik', 'tartalom teteje ' + firstContentTop);
+     'a játék tartalma a korong ALATT kezdődik', 'tartalom teteje ' + firstContentTop);
 
   console.log('\n===== 6. SAJÁT GAZDASÁGÚ JÁTÉK =====');
   await setup(p, 'loverseny', { diff: 'hard' });
-  ok(await readCap(p) === null, 'Lóverseny (stake:null): nincs kapszula — nem találunk ki számot');
+  ok(await readCap(p) === null, 'Lóverseny (stake:null): nincs korong — nem találunk ki számot');
   const ringOnly = await p.evaluate(() => {
     const root = document.getElementById('__pl');
     return [...root.querySelectorAll('div')].some(d => /KÖR/.test(d.innerText || ''));
   });
-  ok(ringOnly, 'a KÖR gyűrű viszont ugyanúgy ott van');
+  ok(ringOnly, 'a KÖR gyűrű viszont marad — ott az az egyetlen értelmes fejléc-adat');
 
   console.log('\n===== 7. KORTY-KÖVETÉS NÉLKÜL =====');
   await setup(p, 'reakcio', { diff: 'hard', noScore: true });
-  ok(await readCap(p) === null, 'ha nincs pontozás, nincs kapszula sem');
+  ok(await readCap(p) === null, 'ha nincs pontozás, nincs korong sem');
 
   console.log('\n===== 8. ONLINE PARTI: NINCS QR A JELVÉNYEN =====');
   await setup(p, 'reakcio', { diff: 'hard', room: 'ABCD' });
@@ -211,12 +224,12 @@ async function setup(p, gameId, opts) {
   await p.waitForTimeout(1600);
   const wc = await readCap(p);
   ok(wc && wc.num === '6', 'dupla wildcard alatt a szám a TELJES szorzóval megy (1 × 3 × 2)', wc && wc.num);
-  ok(wc && wc.foot === 'NEHÉZ ×6', 'a talp is a teljes szorzót mutatja, nem két külön számot', wc && wc.foot);
+  ok(wc && wc.title === 'Nehéz ×6', 'a címke is a teljes szorzót mutatja, nem két külön számot', wc && wc.title);
   const yellow = await p.evaluate(() => {
     const c = document.createElement('span'); c.style.color = T.yellow; document.body.appendChild(c);
     const v = getComputedStyle(c).color; c.remove(); return v;
   });
-  ok(wc && wc.footBg === yellow, 'és a talp sárgára vált', wc && wc.footBg + ' (várt ' + yellow + ')');
+  ok(wc && wc.ring === yellow, 'és a gyűrű sárgára vált', wc && wc.ring + ' (várt ' + yellow + ')');
   await p.evaluate(() => {
     WILDCARDS.length = 0; window.__WC.forEach(w => WILDCARDS.push(w));
     window.setTimeout = window.__origTimeout;
@@ -226,15 +239,49 @@ async function setup(p, gameId, opts) {
   await setup(p, 'imposztor', { diff: 'mid' });
   await p.evaluate(() => {
     const root = document.getElementById('__pl');
-    const foot = [...root.querySelectorAll('span')].find(s => /×\d+$/.test((s.innerText || '').trim()) &&
+    const bar = [...root.querySelectorAll('div')].find(d => d.style && d.style.paddingTop === '12px');
+    const unit = [...(bar || root).querySelectorAll('span')].find(s => (s.innerText || '').trim().toLowerCase() === 'korty' &&
       getComputedStyle(s).textTransform === 'uppercase');
-    foot.parentElement.click();
+    unit.parentElement.parentElement.click();   // face -> korong
   });
   await p.waitForTimeout(600);
   const sheet = await p.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
   ok(/Nehézségi szintek/.test(sheet), 'megnyílik a nehézség-magyarázó lap');
   ok(/alap 2–3 korty × közepes \(2\) = 4–6 korty/.test(sheet),
      'és kiírja a KONKRÉT bontást', (sheet.match(/alap[^.]{0,60}/) || [''])[0]);
+
+  console.log('\n===== 11. KÖRVÁLTÓ KÉPERNYŐ: A LIMIT (v10.270) =====');
+  // A korszam kikerult a fejlecbol, tehat a haladast a korvalto kepernyo viszi.
+  // Az induló popup a 1. kort mutatja — ott olvassuk ki. (1500 ms utan tunik.)
+  const readPopup = () => p.evaluate(() => {
+    const el = [...document.querySelectorAll('div')].find(d =>
+      d.style && d.style.zIndex === '9998');
+    if (!el) return { nyitva: false };
+    const t = (el.innerText || '').replace(/\s+/g, ' ').trim();
+    const track = [...el.querySelectorAll('div')].find(d =>
+      d.style && d.style.height === '7px' && d.style.borderRadius === '4px');
+    const fill = track && track.firstElementChild;
+    return {
+      nyitva: true, szoveg: t,
+      savSzelesseg: track ? Math.round(track.getBoundingClientRect().width) : null,
+      kitoltesPct: (track && fill) ? Math.round(100 * fill.getBoundingClientRect().width / track.getBoundingClientRect().width) : null,
+    };
+  });
+
+  await setup(p, 'reakcio', { diff: 'easy', maxRounds: 20 });
+  const lim = await readPopup();
+  ok(lim.nyitva, 'a körváltó képernyő megjelenik induláskor');
+  ok(/1\. Kör/i.test(lim.szoveg), 'a nagy szám az aktuális kör', (lim.szoveg || '').slice(0, 40));
+  ok(/20-BÓL/i.test(lim.szoveg), '20 körös limitnél kiírja, hogy „20-ból”', (lim.szoveg.match(/20-BÓL.{0,20}/i) || [''])[0]);
+  ok(/MÉG 19 KÖR/i.test(lim.szoveg), 'és hogy még 19 kör van hátra');
+  ok(lim.savSzelesseg !== null, 'van haladás-csík');
+  ok(lim.kitoltesPct === 5, 'a csík 1/20 = 5%-on áll', lim.kitoltesPct + '%');
+
+  await setup(p, 'reakcio', { diff: 'easy' });   // maxRounds nelkul = vegtelen
+  const inf = await readPopup();
+  ok(inf.nyitva, 'végtelen módban is megjelenik a körváltó képernyő');
+  ok(!/-BÓL/i.test(inf.szoveg), 'de NEM ír limitet — nincs mihez mérni', (inf.szoveg || '').slice(0, 40));
+  ok(inf.savSzelesseg === null, 'és nincs haladás-csík sem');
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
