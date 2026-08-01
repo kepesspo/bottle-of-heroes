@@ -18,6 +18,13 @@ belépő) → `givePenalty(map, opts)` (a közös logika).
 
 ## A felület
 
+> **v10.279 óta a sor közös.** A `PlayerDrinkRow` egyetlen komponens, amit a
+> Büntetés-modal ÉS a játékok korty-osztója (`DrinkDistributor` — Kő-papír,
+> Medúza, Zene, Én még soha) is használ. A jobb oldali vezérlő a különbség:
+> `stepper` (`− [n 🍺] +`) vagy `toggle` (NEM/IGEN, bináris játékhoz).
+> A méretek a közös `DRINK_ROW_H` / `DRINK_ROW_GAP` / `DRINK_ROWS_VISIBLE`
+> konstansokból jönnek — ha ezek változnak, minden felület együtt mozdul.
+
 - **Középre igazított modal**, 340 px széles, nem alsó lap.
 - Soronként: **avatar · név ......... − [n 🍺] +**
 - **Egyszerre 5 sor látszik**, onnantól görgethető. A korlát sor-alapú, nem
