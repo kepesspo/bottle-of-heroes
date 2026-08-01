@@ -35174,7 +35174,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.250';
+const APP_VERSION = 'v10.251';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -51597,31 +51597,51 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
     }, SPIN_MS);
   };
 
-  const SIZE = 288, R = SIZE / 2, rad = R - 6;
+  // A kerek a KONTENERE szelesseget veszi fel — igy kitolti a kepernyot.
+  // Minden belso meret a 288-as alaphoz kepesti aranybol (k) szamolodik, hogy
+  // nagyobb kereken ne maradjanak pottynyi avatarok.
+  const wheelWrapRef = React.useRef(null);
+  const [wheelW, setWheelW] = React.useState(0);
+  React.useLayoutEffect(() => {
+    const el = wheelWrapRef.current;
+    if (!el) return;
+    const upd = () => setWheelW(Math.round(el.getBoundingClientRect().width));
+    upd();
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(upd);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+    window.addEventListener('resize', upd);
+    return () => window.removeEventListener('resize', upd);
+  }, []);
+  const SIZE = Math.max(240, Math.min(wheelW || 288, 520));
+  const k = SIZE / 288;
+  const R = SIZE / 2, rad = R - 6 * k;
   const pt = (angDeg, r) => {
     const a = (angDeg - 90) * Math.PI / 180;
     return [R + r * Math.cos(a), R + r * Math.sin(a)];
   };
   // Egy jatekosnal nincs cikkely-hatar, ott teli kort rajzolunk.
-  const nameSize = n <= 4 ? 13 : n <= 7 ? 11.5 : 10;
-  const avSize = n <= 4 ? 42 : n <= 7 ? 34 : 26;
+  const nameSize = (n <= 4 ? 13 : n <= 7 ? 11.5 : 10) * k;
+  const avSize = Math.round((n <= 4 ? 42 : n <= 7 ? 34 : 26) * k);
   const labelR = rad * (n <= 2 ? 0.45 : 0.62);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, width:'100%' }}>
 
-      <div style={{ position:'relative', width:SIZE, height:SIZE + 26 }}>
+      <div ref={wheelWrapRef} style={{ position:'relative', width:'100%', height:SIZE + 26 * k }}>
         {/* Mutato — a kerek FOLOTT, es a hegye belelog, hogy lassek, melyik
             cikkelyre mutat. Alacsonyabban a fehér gyűrű elnyelte. */}
         <div style={{ position:'absolute', top:0, left:'50%', transform:'translateX(-50%)', zIndex:4 }}>
-          <svg width="34" height="44" viewBox="0 0 26 34">
+          <svg width={Math.round(34 * k)} height={Math.round(44 * k)} viewBox="0 0 26 34">
             <path d="M13 34C13 34 24 20.5 24 13A11 11 0 1 0 2 13c0 7.5 11 21 11 21z"
                   fill={T.coral} stroke="#fff" strokeWidth="2.5" strokeLinejoin="round"/>
             <circle cx="13" cy="13" r="4" fill="#fff"/>
           </svg>
         </div>
 
-        <div style={{ position:'absolute', top:26, left:0, width:SIZE, height:SIZE,
+        <div style={{ position:'absolute', top:26 * k, left:'50%', marginLeft:-R, width:SIZE, height:SIZE,
                       transform:`rotate(${rotation}deg)`,
                       transition: phase === 'spinning' ? `transform ${SPIN_MS}ms cubic-bezier(.16,.84,.28,1)` : 'none' }}>
           <svg width={SIZE} height={SIZE} style={{ display:'block', filter:'drop-shadow(0 6px 16px rgba(20,30,50,0.16))' }}>
@@ -51634,7 +51654,7 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
               const large = seg > 180 ? 1 : 0;
               return (
                 <path key={p.id} d={`M ${R} ${R} L ${x0} ${y0} A ${rad} ${rad} 0 ${large} 1 ${x1} ${y1} Z`}
-                      fill={tone} stroke={T.surface} strokeWidth="2.5" />
+                      fill={tone} stroke={T.surface} strokeWidth={2.5 * k} />
               );
             })}
           </svg>
@@ -51652,7 +51672,7 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
                     : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:avSize*0.42, color:'#fff' }}>{(p.name||'?').charAt(0).toUpperCase()}</span>}
                 </div>
                 <span style={{ fontFamily:T.font, fontWeight:800, fontSize:nameSize, color:T.ink,
-                               maxWidth:76, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
+                               maxWidth:Math.round(76 * k), overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
               </div>
             );
           })}
@@ -51660,17 +51680,17 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
 
         {/* Kozepen a gomb — a kerekkel EGYUTT nem forog, kulonben a felirat fejre allna */}
         <button onClick={spin} disabled={phase === 'spinning'}
-          style={{ position:'absolute', top:26 + R, left:R, transform:'translate(-50%,-50%)', zIndex:2,
-                   width:92, height:92, borderRadius:'50%', border:'none', background:T.surface,
+          style={{ position:'absolute', top:26 * k + R, left:'50%', transform:'translate(-50%,-50%)', zIndex:2,
+                   width:Math.round(92 * k), height:Math.round(92 * k), borderRadius:'50%', border:'none', background:T.surface,
                    boxShadow:T.shadow, cursor: phase === 'spinning' ? 'default' : 'pointer',
                    display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2,
                    WebkitTapHighlightColor:'transparent', padding:0 }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={T.coral} strokeWidth="2.4"
+          <svg width={Math.round(24 * k)} height={Math.round(24 * k)} viewBox="0 0 24 24" fill="none" stroke={T.coral} strokeWidth="2.4"
                strokeLinecap="round" strokeLinejoin="round"
                style={{ animation: phase === 'spinning' ? 'spin 1s linear infinite' : 'none' }}>
             <path d="M20 12a8 8 0 1 1-2.6-5.9" /><path d="M20 4v4.5h-4.5" />
           </svg>
-          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:T.coral, letterSpacing:'0.06em' }}>
+          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:Math.round(11 * k), color:T.coral, letterSpacing:'0.06em' }}>
             {phase === 'spinning' ? 'PÖRÖG…' : 'PÖRGESS!'}
           </span>
         </button>
