@@ -10,6 +10,8 @@
 //      volt egy 874 px-es képernyőn, tehát kicsúszott
 //   4. a banner kiírja a számot, ha mindenki ugyanannyit kap
 //   5. nincs többé duplán feltett kérdés és fűszer-csík
+//   6. v10.281: kiosztás után a gomb eltűnik és a sorok lezárnak, és a sor
+//      SZÉLESSÉGE is azonos a Büntetés-modaléval (296 px)
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const path = require('path');
@@ -215,6 +217,36 @@ const olvas = p => p.evaluate(() => {
     return [...R.querySelectorAll('div')].filter(d => d.style && /rotate/.test(d.style.transform||'')).length;
   });
   ok(forgatott === 0, 'nincs több elforgatott hátsó lap — egy tiszta felület maradt', forgatott + ' db');
+
+  console.log('\n===== 6. v10.281: A GOMB ELTŰNIK, ÉS AZONOS A SZÉLESSÉG =====');
+  await mount(p, 4);
+  const szel = await p.evaluate(() => {
+    const R = document.getElementById('__p');
+    const lista = [...R.querySelectorAll('div')].find(d => d.style && d.style.overflowY === 'auto' && d.style.maxHeight);
+    return Math.round(lista.getBoundingClientRect().width);
+  });
+  // A modal kartyaja 340 px, 22 px oldalpaddinggal -> 296 px tartalom (merve).
+  ok(szel === 296, 'a lista 296 px — pont annyi, mint a Büntetés-modal tartalma', szel + ' px');
+  await plusz('Kecsi', 1); await p.waitForTimeout(300);
+  ok((await olvas(p)).gombSzoveg === '1 iszik · 1 korty', 'a gomb kiosztás előtt ott van');
+  await p.evaluate(() => {
+    const R = document.getElementById('__p');
+    const b2 = [...R.querySelectorAll('button')].find(x => /iszik ·/.test(x.innerText||''));
+    if (b2) b2.click();
+  });
+  await p.waitForTimeout(700);
+  const utana = await p.evaluate(() => {
+    const R = document.getElementById('__p');
+    const b2 = [...R.querySelectorAll('button')].find(x => /iszik ·|korty kiosztva|Senki sem iszik/.test(x.innerText||''));
+    const lista = [...R.querySelectorAll('div')].find(d => d.style && d.style.overflowY === 'auto' && d.style.maxHeight);
+    return { gomb: b2 ? b2.innerText.trim() : null,
+             sorokZarva: lista ? getComputedStyle(lista).pointerEvents === 'none' : null,
+             szoveg: (R.innerText||'').replace(/\s+/g,' ') };
+  });
+  ok(utana.gomb === null, 'kiosztás után a gomb eltűnik', utana.gomb === null ? 'nincs gomb' : utana.gomb);
+  ok(utana.sorokZarva === true, 'és a sorok lezárnak (a módosítás úgyis nem számítana)');
+  ok(/jöhet a Kövi/.test(utana.szoveg), 'helyette egy halk visszaigazolás áll ott',
+     (utana.szoveg.match(/\d+ korty kiosztva — jöhet a Kövi/)||['nincs'])[0]);
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();

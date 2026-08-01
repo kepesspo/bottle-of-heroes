@@ -35185,7 +35185,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.280';
+const APP_VERSION = 'v10.281';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -51776,6 +51776,10 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
 //   * 'toggle'  — NEM / IGEN     (binaris jatek, pl. En meg soha)
 const DRINK_ROW_H = 48, DRINK_ROW_GAP = 8, DRINK_ROWS_VISIBLE = 5;
 const DRINK_LIST_MAX = DRINK_ROWS_VISIBLE * DRINK_ROW_H + (DRINK_ROWS_VISIBLE - 1) * DRINK_ROW_GAP;
+// A modal kartyaja MERVE 340 px szeles, 22 px oldalpaddinggal -> 296 px tartalom.
+// A jatekon beluli lista is ennyi, kulonben a sor ugyanolyan MAGAS lenne, de
+// szelesebb — es pont az egyseges felulet veszne el.
+const DRINK_LIST_W = 296;
 
 // `max`: felso plafon egy jatekosra. Az "En meg soha" igaz/hamis kerdes, ott
 // `max={1}` — a `+` a plafonon ugyanugy letiltott, ahogy a `−` nullan. Igy a
@@ -51814,8 +51818,13 @@ function PlayerDrinkRow({ p, cnt, onAdd, onRemove, max }) {
 // `max`: felso plafon jatekosonkent (pl. En meg soha: 1). A lista legfeljebb
 // 5 sort mutat, onnantol gorget — igy a zaro gomb SOSEM csuszik a lathato resz
 // ala. (Merve: 10 jatekosnal a regi valtozatban 940 px-nel volt, 874-en.)
-function DrinkDistributor({ players, onFinish, title, max }) {
+function DrinkDistributor({ players, onFinish, title, max, resetKey }) {
   const [drinks, setDrinks] = React.useState({});
+  // Kiosztas utan a gomb eltunik es a sorok lezarnak. Biztonsagi kotel: a
+  // tobbkoros jatekoknal a kioszto ket kor kozott lecsatolodik (ellenorizve),
+  // de ha valamelyik egyszer mountolva tartana, a `resetKey` valtasa nullaz.
+  const [kesz, setKesz] = React.useState(false);
+  React.useEffect(() => { setKesz(false); setDrinks({}); }, [resetKey != null ? resetKey : title]);
   // A plafon ITT dol el, nem a renderben: gyors, egymas utani koppintasok egy
   // React-kotegbe esnek, ahol a gomb meg nincs letiltva. A fuggveny-alaku
   // frissitesben viszont `d` mindig a legfrissebb allapot. Lasd patch_10_280b.py
@@ -51831,18 +51840,26 @@ function DrinkDistributor({ players, onFinish, title, max }) {
   const total = Object.values(drinks).reduce((s,v)=>s+v,0);
   const fo = Object.values(drinks).filter(v=>v>0).length;
   return (
-    <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8 }}>
+    <div style={{ width:'100%', maxWidth:DRINK_LIST_W, margin:'0 auto', display:'flex', flexDirection:'column', gap:8 }}>
       {title && (
         <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>{title}</div>
       )}
-      <div style={{ display:'flex', flexDirection:'column', gap:DRINK_ROW_GAP, maxHeight:DRINK_LIST_MAX, overflowY:'auto' }}>
+      <div style={{ display:'flex', flexDirection:'column', gap:DRINK_ROW_GAP, maxHeight:DRINK_LIST_MAX, overflowY:'auto',
+                    opacity: kesz ? 0.55 : 1, pointerEvents: kesz ? 'none' : undefined, transition:'opacity .2s' }}>
         {players.map(p => (
           <PlayerDrinkRow key={p.id} p={p} cnt={drinks[p.id]||0} onAdd={add} onRemove={remove} max={max} />
         ))}
       </div>
-      <button onClick={()=>onFinish(drinks)} style={{ width:'100%', padding:'13px', background: total>0 ? T.mint : T.surfaceMuted, color: total>0 ? '#fff' : T.inkSoft, fontFamily:T.font, fontWeight:900, fontSize:15, borderRadius:16, border:'none', cursor:'pointer', boxShadow: total>0 ? '0 4px 14px -4px rgba(79,194,160,0.6)' : 'none', marginTop:2 }}>
-        {total>0 ? (max === 1 ? `${fo} iszik · ${total} korty` : `${total} korty kiosztva`) : 'Senki sem iszik'}
-      </button>
+      {kesz ? (
+        <div style={{ textAlign:'center', padding:'13px 0 2px', fontFamily:T.font, fontWeight:800, fontSize:13,
+                      color:T.inkMute, animation:'bohFadeIn .18s' }}>
+          {total>0 ? `${total} korty kiosztva` : 'Senki nem ivott'} — jöhet a Kövi
+        </div>
+      ) : (
+        <button onClick={()=>{ setKesz(true); onFinish(drinks); }} style={{ width:'100%', padding:'13px', background: total>0 ? T.mint : T.surfaceMuted, color: total>0 ? '#fff' : T.inkSoft, fontFamily:T.font, fontWeight:900, fontSize:15, borderRadius:16, border:'none', cursor:'pointer', boxShadow: total>0 ? '0 4px 14px -4px rgba(79,194,160,0.6)' : 'none', marginTop:2 }}>
+          {total>0 ? (max === 1 ? `${fo} iszik · ${total} korty` : `${total} korty kiosztva`) : 'Senki sem iszik'}
+        </button>
+      )}
     </div>
   );
 }
