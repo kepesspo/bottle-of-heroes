@@ -59,8 +59,10 @@ const readCard = p => p.evaluate(() => {
 
 const readMini = p => p.evaluate(() => {
   const root = document.getElementById('__pl');
+  // v10.267 ota a sav nem transformmal van kozepen, hanem left/right:16 —
+  // a pozicio + z-index azonositja.
   const bar = [...root.querySelectorAll('div')].find(d =>
-    d.style && d.style.position === 'fixed' && /translateX\(-50%\)/.test(d.style.transform || '') && d.style.zIndex === '45');
+    d.style && d.style.position === 'fixed' && d.style.zIndex === '45');
   if (!bar) return null;
   const inner = bar.firstElementChild;
   const r = inner.getBoundingClientRect();
@@ -234,7 +236,21 @@ const readMini = p => p.evaluate(() => {
   const m = await readMini(p);
   ok(m !== null, 'lekicsinyítve megjelenik a sáv');
   ok(m.h === 56, 'a sáv 56 px magas', m.h + ' px');
-  ok(m.w === cardW, 'és ugyanolyan széles, mint a kártya', m.w + ' vs ' + cardW + ' px');
+  // v10.267: a sav a JATEK-VEZERLO savval azonos szeles (nem a kartyaval),
+  // hogy a kepernyo aljan pontosan egymas ala essenek.
+  const footW = await p.evaluate(() => {
+    const el = document.querySelector('#__pl .play-footer-inner');
+    return el ? Math.round(el.getBoundingClientRect().width) : null;
+  });
+  ok(footW !== null, 'megvan a játék-vezérlő sáv', footW + ' px');
+  ok(m.w === footW, 'a sáv ugyanolyan széles, mint a játék-vezérlő', m.w + ' vs ' + footW + ' px');
+  const lefts = await p.evaluate(() => {
+    const foot = document.querySelector('#__pl .play-footer-inner');
+    const root = document.getElementById('__pl');
+    const bar = [...root.querySelectorAll('div')].find(d => d.style && d.style.position === 'fixed' && d.style.zIndex === '45');
+    return { foot: Math.round(foot.getBoundingClientRect().left), bar: Math.round(bar.getBoundingClientRect().left) };
+  });
+  ok(lefts.foot === lefts.bar, 'és pontosan egy vonalban áll vele', JSON.stringify(lefts));
   ok(/3 fő/.test(m.text) && /3 KORTY/.test(m.text), 'csak az ivó oldal + a korty látszik', m.text);
   ok(!/Sere/.test(m.text), 'a győztes NEM szerepel rajta', m.text);
   ok(m.imgs === 2, 'két avatar látszik a sávon', m.imgs + ' kép');
