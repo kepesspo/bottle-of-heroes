@@ -99,16 +99,21 @@ const mount = (p, gameIdx) => p.evaluate(gi => {
   const rotDone = await rot(p);
   ok(bDone && bDone.disabled, 'a gomb az eredmény után is LETILTVA marad', bDone && JSON.stringify(bDone));
   ok(bDone && /MEGVAN/.test(bDone.label), 'a felirata már nem „PÖRGESS!"', bDone && bDone.label);
-  const winnerShown = await p.evaluate(() =>
-    /A KIVÁLASZTOTT/i.test(document.getElementById('__wh').innerText || ''));
-  ok(winnerShown, 'a kiválasztott kártyája megjelent');
+  // v10.265: a "A KIVÁLASZTOTT" kartya kikerult — a kor vegen a result banner
+  // mondja el ugyanezt. Itt mar csak azt orizzuk, hogy NEM jott vissza.
+  const noCard = await p.evaluate(() =>
+    !/A KIVÁLASZTOTT/i.test(document.getElementById('__wh').innerText || ''));
+  ok(noCard, 'nincs külön „A kiválasztott" kártya (azt a result banner mondja el)');
 
   await press(p, 6);
   await p.waitForTimeout(600);
   ok(await rot(p) === rotDone, 'a gomb nyomkodása NEM forgatja tovább a kereket', rotDone);
-  const stillShown = await p.evaluate(() =>
-    /A KIVÁLASZTOTT/i.test(document.getElementById('__wh').innerText || ''));
-  ok(stillShown, 'és nem tűnik el a kiválasztott sem');
+  const stillDone = await p.evaluate(() => {
+    const root = document.getElementById('__wh');
+    const b = [...root.querySelectorAll('button')].find(x => /PÖR|MEGVAN/i.test(x.innerText || ''));
+    return b ? b.disabled && /MEGVAN/.test(b.innerText) : false;
+  });
+  ok(stillDone, 'és a gomb továbbra is lezárt állapotban marad');
 
   console.log('\n===== 4. A KORTY EGYSZER MEGY KI =====');
   await p.waitForTimeout(4600);   // ha megis indult volna egy por, mostanra beerne
@@ -127,6 +132,19 @@ const mount = (p, gameIdx) => p.evaluate(gi => {
   const fresh = await p.evaluate(() =>
     !/A KIVÁLASZTOTT/i.test(document.getElementById('__wh').innerText || ''));
   ok(fresh, 'és az előző kiválasztott eltűnt');
+
+  console.log('\n===== 6. NEM GÖRGETHETŐ OLDALRA =====');
+  // A kerek NEGYZET dobozat forgatjuk; az elforgatott befoglaloja √2-szer
+  // szelesebb, amitol a tartalom oldalra gorgethetove valt (v10.264).
+  const scroll = await p.evaluate(() => {
+    const root = document.getElementById('__wh');
+    const wrap = [...root.querySelectorAll('div')].find(d => d.style && d.style.overflow === 'hidden' && d.style.width === '100%');
+    return { doc: document.documentElement.scrollWidth, client: document.documentElement.clientWidth,
+             root: root.scrollWidth, rootClient: root.clientWidth, hasWrap: !!wrap };
+  });
+  ok(scroll.hasWrap, 'a kerék konténere levágja a túlnyúlást');
+  ok(scroll.doc <= scroll.client, 'az oldal nem görgethető oldalra', scroll.doc + ' / ' + scroll.client);
+  ok(scroll.root <= scroll.rootClient, 'a játék területe sem', scroll.root + ' / ' + scroll.rootClient);
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();

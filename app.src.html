@@ -35181,7 +35181,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.263';
+const APP_VERSION = 'v10.265';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -51650,7 +51650,10 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, width:'100%' }}>
 
-      <div ref={wheelWrapRef} style={{ position:'relative', width:'100%', height:SIZE + 26 * k }}>
+      {/* overflow:hidden — a kerek NEGYZET dobozat forgatjuk, es az elforgatott
+          befoglaloja √2-szer szelesebb, amitol oldalra lehetett gorgetni. A kor
+          beleirt a negyzetbe, tehat csak az ures sarkok vagodnak le. */}
+      <div ref={wheelWrapRef} style={{ position:'relative', width:'100%', height:SIZE + 26 * k, overflow:'hidden' }}>
         {/* Mutato — a kerek FOLOTT, es a hegye belelog, hogy lassek, melyik
             cikkelyre mutat. Alacsonyabban a fehér gyűrű elnyelte. */}
         <div style={{ position:'absolute', top:0, left:'50%', transform:'translateX(-50%)', zIndex:4 }}>
@@ -51718,30 +51721,9 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
         </button>
       </div>
 
-      {/* A kivalasztott — a kerek megall, de a nev a cikkelyben aprobb, mint
-          amit egy asztal tuloldalarol el lehet olvasni. */}
-      {winner && (
-        <div style={{ width:'100%', boxSizing:'border-box', background:T.surface, borderRadius:18,
-                      padding:'12px 16px', boxShadow:T.shadow, display:'flex', alignItems:'center', gap:13,
-                      animation:'popIn .3s' }}>
-          <div style={{ width:52, height:52, borderRadius:'50%', overflow:'hidden', flexShrink:0,
-                        background:winner.color, display:'grid', placeItems:'center' }}>
-            {winner.img
-              ? <img src={winner.img} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-              : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:'#fff' }}>{(winner.name||'?').charAt(0).toUpperCase()}</span>}
-          </div>
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:9.5, color:T.inkSoft, letterSpacing:1.6 }}>A KIVÁLASZTOTT</div>
-            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, lineHeight:1.2,
-                          overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{winner.name}</div>
-          </div>
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:1, flexShrink:0 }}>
-            <BohIcon name="beer" size={20} />
-            <span style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, lineHeight:1 }}>1</span>
-            <span style={{ fontFamily:T.font, fontWeight:900, fontSize:8.5, color:T.inkSoft, letterSpacing:1.2 }}>KORTY</span>
-          </div>
-        </div>
-      )}
+      {/* A korabbi "A KIVÁLASZTOTT" kartya kikerult: a kor vegen ugyis feljon a
+          result banner ugyanezzel (avatar, nev, korty). A `winner` allapot marad,
+          a kor lezarasahoz kell. Lasd patch_10_265.py */}
     </div>
   );
 }
@@ -61587,9 +61569,12 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         const miniLabel = drinkSide.length === 0
           ? (gameResult.subtitle || (neutralPos ? 'Kész!' : 'Inni kell!'))
           : (drinkSide.length >= 3 ? drinkSide.length + ' fő' : drinkSide.map(p => p.name).join(', '));
+        // Ugyanaz az arnyek, mint az app tobbi kartyajan (T.shadow) — eddig sajat,
+        // felfele is szoro arnyeka volt, az elutott a tobbitol.
+        // FIGYELEM: a komment a JSX-en KIVUL van. Egy {/* ... */} a gyokerelem
+        // ELE ket szomszedos gyereket csinalna, es a build elszall (v10.245).
         const MiniBar = ({ onClose }) => (
-          <div style={{ background:T.surface, borderRadius:16, overflow:'hidden', width:'100%',
-                        boxShadow:'0 -2px 10px rgba(20,30,50,0.10), 0 8px 22px rgba(20,30,50,0.22)' }}>
+          <div style={{ background:T.surface, borderRadius:16, overflow:'hidden', width:'100%', boxShadow:T.shadow }}>
             <div style={{ height:4, display:'flex' }}>
               {hasWin && hasLose ? (
                 <React.Fragment><span style={{ flex:1, background:WIN_C }} /><span style={{ flex:1, background:LOSE_C }} /></React.Fragment>
