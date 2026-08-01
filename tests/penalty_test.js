@@ -186,6 +186,37 @@ const ok = (cond, name, extra) => {
   ok(penH !== null && penH === menuH, 'a Büntetés és a MENÜ lap PONTOSAN egyforma magas',
      `büntetés=${penH} menü=${menuH}`);
 
+  // v10.246: a "valaki iszik" banner belepoje NEM rangathatja oldalra a
+  // kartyat — a profilkepek vele mozogtak, ez volt az "ugralas". A keyframe-et
+  // kozvetlenul merjuk: raakasztjuk egy dobozra, es kepkockankent nezzuk az X-et.
+  const entry = await p2.evaluate(async () => {
+    const d = document.createElement('div');
+    d.style.cssText = 'position:fixed;top:100px;left:100px;width:200px;height:120px;background:#c00';
+    document.body.appendChild(d);
+    d.style.animation = 'resultLoseIn .5s ease-out forwards';
+    const xs = new Set(), ws = new Set();
+    const t0 = performance.now();
+    await new Promise(res => {
+      const tick = () => {
+        const r = d.getBoundingClientRect();
+        xs.add(Math.round(r.x * 100) / 100); ws.add(Math.round(r.width * 100) / 100);
+        if (performance.now() - t0 < 700) requestAnimationFrame(tick); else res();
+      };
+      requestAnimationFrame(tick);
+    });
+    const name = getComputedStyle(d).animationName;
+    d.remove();
+    // A KOZEPPONT nem mozdulhat: a scale a doboz kozeppontja korul nagyit,
+    // ezert az X szelesodik/szukul, de a kozep helyben marad.
+    const centers = [...xs].map((x, i) => x + [...ws][i] / 2);
+    return { animName: name, distinctX: xs.size, distinctW: ws.size,
+             centerSpread: Math.round((Math.max(...centers) - Math.min(...centers)) * 100) / 100 };
+  });
+  ok(entry.animName === 'resultLoseIn', 'a belépő animáció a rángatás nélküli változat', entry.animName);
+  ok(entry.distinctW > 1, 'attól még van "pop" (a méret változik)', `${entry.distinctW} különböző szélesség`);
+  ok(entry.centerSpread <= 0.5, 'a kártya KÖZEPE nem mozdul oldalra (nincs rángatás)',
+     `eltérés: ${entry.centerSpread} px`);
+
   const real2 = errs2.filter(e => !/ServiceWorker/.test(e));
   ok(real2.length === 0, 'nincs JS hiba (sok játékos)', real2.join(' | '));
   await p2.close();
