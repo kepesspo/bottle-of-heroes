@@ -35171,7 +35171,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.244';
+const APP_VERSION = 'v10.245';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -47763,8 +47763,12 @@ function HostPickScreen({ emoji, banner, players, takenIds, onConfirm, onSkip, s
   const pendingPlayer = pendingId ? (players || []).find(p => p.id === pendingId) : null;
   // Portál: a body alá renderelünk, hogy a játéktér animált wrapperének stacking
   // contextje ne engedjen át semmit (QR gomb, footer) — mint a SheetOverlay-nél.
+  // PORTAL a body ala: a position:fixed a VIEWPORT-hoz igazodik, tehat nincs
+  // mit kompenzalni. A korabbi negativ top a kijelzo fizikai teteje FOLE huzta
+  // a reteget, es a banner 34 px-szel a statuszsav ala kerult. A safe area-t a
+  // lenti paddingTop intezi. Lasd docs/safe-area.md.
   return ReactDOM.createPortal(
-    <div style={{ position:'fixed', top:'calc(-1 * env(safe-area-inset-top))', left:0, right:0, bottom:0, zIndex:1400, background:T.bg, display:'flex', flexDirection:'column' }}>
+    <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, zIndex:1400, background:T.bg, display:'flex', flexDirection:'column' }}>
       <div style={{ flexShrink:0, textAlign:'center', padding:'calc(28px + env(safe-area-inset-top)) 18px 10px' }}>
         {banner
           ? <img src={banner} alt="" style={{ width:'78%', maxWidth:300, height:'auto', display:'block', margin:'0 auto' }} />
@@ -61266,6 +61270,12 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         const isDraw = gameResult.draw === true;
         const glow = isDraw ? '#8a97ab' : ((hasWin && !hasLose) || neutralPos ? '#25b572' : '#e84040');
         const names = list => list.map(p=>p.name).join(', ');
+        // FONTOS: ezek a "komponensek" a renderen BELUL keletkeznek, tehat minden
+        // ujrarajzolaskor uj fuggveny-azonossagot kapnanak. Ha JSX-kent
+        // hasznalnank oket (<Pile />), a React mas tipusnak latna es
+        // ujramountolna a reszfat — a profilkep <img>-je minden korben
+        // ujraepulne es ujra dekodolodna, ami villogasnak/ugralasnak latszik.
+        // Ezert mindenhol SIMA FUGGVENYHIVASSAL agyazzuk be oket.
         const Pile = ({ list, size, overlap, borderW, emptyEmoji }) => {
           const shown = list.slice(0,3), extra = Math.max(0, list.length - 3);
           return (
@@ -61285,7 +61295,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           const showPill = resultMinimized === true;
           const MiniHalf = ({ list, kind }) => (
             <div style={{ flex:1, minWidth:0, background: (isDraw && kind!=='win') ? DRAW_G : (kind==='win'?WIN_G:LOSE_G), padding:'10px 12px', display:'flex', alignItems:'center', gap:8 }}>
-              <Pile list={list} size={28} overlap={9} borderW={2} emptyEmoji={kind==='win'?'🌟':'🍺'} />
+              {Pile({ list, size:28, overlap:9, borderW:2, emptyEmoji: kind==='win'?'🌟':'🍺' })}
               <div style={{ minWidth:0 }}>
                 <div style={{ fontFamily:T.font, fontWeight:800, fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:'rgba(255,255,255,0.7)', lineHeight:1.1 }}>{kind==='win'?'Nyertes':'Iszik'}</div>
                 <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{names(list)}{kind==='lose'&&drinks>0?` · ${drinks} korty`:''}</div>
@@ -61305,13 +61315,13 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               {resultMinimized === 'shrinking' && (
                 <div style={{ position:'fixed', inset:0, zIndex:250, display:'flex', alignItems:'center', justifyContent:'center', animation:'backdropFadeOut .35s ease forwards', pointerEvents:'none' }}>
                   <div style={{ borderRadius:24, overflow:'hidden', display:'flex', minWidth:260, maxWidth:340, width:'80vw', animation:'resultShrinkOut .35s cubic-bezier(.4,0,.6,1) forwards', boxShadow:`0 20px 70px ${glow}99` }} onAnimationEnd={() => setResultMinimized(true)}>
-                    {neutral ? <MiniNeutral /> : <React.Fragment>{hasWin && <MiniHalf list={winners} kind="win" />}{hasLose && <MiniHalf list={losers} kind="lose" />}</React.Fragment>}
+                    {neutral ? MiniNeutral() : <React.Fragment>{hasWin && MiniHalf({ list: winners, kind:'win' })}{hasLose && MiniHalf({ list: losers, kind:'lose' })}</React.Fragment>}
                   </div>
                 </div>
               )}
               {showPill && (
                 <div key={'mini-' + gameResult.ts} onClick={() => setResultMinimized(false)} style={{ position:'fixed', bottom:'calc(96px + env(safe-area-inset-bottom, 0px))', left:16, right:16, zIndex:45, animation:'miniBarIn .25s ease-out', borderRadius:18, overflow:'hidden', display:'flex', boxShadow:`0 -2px 16px ${glow}44, 0 6px 20px rgba(0,0,0,0.35)`, cursor:'pointer' }}>
-                  {neutral ? <MiniNeutral /> : <React.Fragment>{hasWin && <MiniHalf list={winners} kind="win" />}{hasLose && <MiniHalf list={losers} kind="lose" />}</React.Fragment>}
+                  {neutral ? MiniNeutral() : <React.Fragment>{hasWin && MiniHalf({ list: winners, kind:'win' })}{hasLose && MiniHalf({ list: losers, kind:'lose' })}</React.Fragment>}
                   <button onClick={e => { e.stopPropagation(); setGameResult(null); setResultMinimized(false); }} aria-label="Bezárás" style={{ position:'absolute', top:'50%', right:8, transform:'translateY(-50%)', width:24, height:24, borderRadius:'50%', border:'none', background:'rgba(0,0,0,0.32)', color:'#fff', fontSize:13, lineHeight:1, cursor:'pointer', display:'grid', placeItems:'center', padding:0, zIndex:2 }}>✕</button>
                 </div>
               )}
@@ -61325,7 +61335,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
             {[{l:'12%',s:7,c:'#EDD17A',d:0,t:2.1},{l:'34%',s:6,c:'#fff',d:.5,t:1.7},{l:'58%',s:8,c:'#F09E8C',d:.2,t:2.4},{l:'78%',s:6,c:'#EDD17A',d:.9,t:1.9},{l:'92%',s:7,c:'#fff',d:.35,t:2.2}].map((cf,i)=>(
               <span key={i} style={{ position:'absolute', top:0, left:cf.l, width:cf.s, height:cf.s, borderRadius:2, background:cf.c, opacity:0, animation:`bhConfFall ${cf.t}s ${cf.d}s linear infinite`, pointerEvents:'none' }} />
             ))}
-            <Pile list={winners} size={split?52:60} overlap={16} borderW={3} emptyEmoji="🌟" />
+            {Pile({ list: winners, size: split?52:60, overlap:16, borderW:3, emptyEmoji:'🌟' })}
             {split
               ? <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, letterSpacing:'0.1em', textTransform:'uppercase', color:'rgba(255,255,255,0.72)', display:'flex', alignItems:'center', gap:4 }}><BohIcon name="star" size={12} /> {winners.length>1?'Helyesek':'Nyertes'}</div>
               : <div style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:'#fff', textShadow:'0 2px 10px rgba(0,0,0,0.2)', display:'flex', alignItems:'center', gap:8 }}>Helyes! <BohIcon name="star" size={24} /></div>}
@@ -61335,7 +61345,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         );
         const LoseZone = () => (
           <div style={{ background: (isDraw && !hasWin) ? DRAW_G : LOSE_G, padding: split?'26px 12px 34px':'20px 24px 24px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:7, width:'100%', boxSizing:'border-box', flex:'1 1 auto', minHeight:0 }}>
-            <Pile list={losers} size={split?52:60} overlap={16} borderW={3} emptyEmoji="🍺" />
+            {Pile({ list: losers, size: split?52:60, overlap:16, borderW:3, emptyEmoji:'🍺' })}
             {split
               ? <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, letterSpacing:'0.1em', textTransform:'uppercase', color:'rgba(255,255,255,0.72)', display:'flex', alignItems:'center', gap:4 }}><BohIcon name="beer" size={12} /> {losers.length>1?'Isznak':'Iszik'}</div>
               : <div style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:'#fff', textShadow:'0 2px 10px rgba(0,0,0,0.2)', display:'flex', alignItems:'center', gap:8 }}>Inni kell! <BohIcon name="beer" size={24} /></div>}
@@ -61369,17 +61379,17 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               {gameResult.effect && WC_EFFECTS[gameResult.effect] && (
                 <div style={{ position:'absolute', top:13, left:'50%', transform:'translateX(-50%)', zIndex:5, background:'rgba(0,0,0,0.34)', color:'#fff', borderRadius:999, padding:'4px 12px', fontFamily:T.font, fontWeight:900, fontSize:10.5, letterSpacing:'0.08em', whiteSpace:'nowrap', pointerEvents:'none' }}>{WC_EFFECTS[gameResult.effect].badge}</div>
               )}
-              {neutral && <NeutralZone />}
+              {neutral && NeutralZone()}
               {split ? (
                 /* Egymás melletti 50/50 oszlopok — éles zöld/piros határral */
                 <div style={{ display:'flex', alignItems:'stretch', flex:'1 1 auto', minHeight:0 }}>
-                  <div style={{ flex:'1 1 0', minWidth:0, display:'flex' }}><WinZone /></div>
-                  <div style={{ flex:'1 1 0', minWidth:0, display:'flex' }}><LoseZone /></div>
+                  <div style={{ flex:'1 1 0', minWidth:0, display:'flex' }}>{WinZone()}</div>
+                  <div style={{ flex:'1 1 0', minWidth:0, display:'flex' }}>{LoseZone()}</div>
                 </div>
               ) : (
                 <React.Fragment>
-                  {hasWin && <WinZone />}
-                  {hasLose && <LoseZone />}
+                  {hasWin && WinZone()}
+                  {hasLose && LoseZone()}
                 </React.Fragment>
               )}
               {gameResult.subtitle && !split && !neutral && (
