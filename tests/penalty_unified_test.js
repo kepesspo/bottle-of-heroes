@@ -1,6 +1,7 @@
 // v10.271 — EGY büntetés-függvény, és a korty-szám átmegy a bannerbe
 // v10.272 — EGY büntetés-FELÜLET is: modal, soronként `− szám +`
 // v10.273 — egyszerre 5 sor, sörös ikon a szám mellett, pipa nélküli záró gomb
+// v10.274 — a büntetés-korty túléli a Kövi gombot (pendingCommit-merge)
 //
 // Amit ellenőriz:
 //   1. AZONOS összeg → a banner KIÍRJA a korty-számot (ez volt a hiba)
@@ -12,6 +13,8 @@
 //   6. „Fordított kör" wildcard alatt a büntetés NEM fordul meg
 //   7. v10.273: pontosan 5 sor látszik (onnantól görgethető), a szám mellett
 //      ott a sörös ikon, és a záró gombon nincs pipa
+//   8. v10.274: a kiosztott korty NEM vész el a Kövi gombnál. A pendingCommit
+//      egy pillanatképet írt vissza, ami eltörölte a közben adott büntetést.
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const path = require('path');
@@ -28,8 +31,8 @@ const ok = (cond, name, extra) => {
 // szukitjuk, es az EGY darab 60 000 ms-os wildcard-idozitot rovidre zarjuk
 // (a konfigbol nem lehet 1 percnel rovidebbre venni). Mas idozito nem hasznal
 // pont ennyit, ezert ez biztonsagos.
-async function mount(p, { diff, wcEffect, nyolcJatekos }) {
-  await p.evaluate(({ diff, wcEffect, nyolcJatekos }) => {
+async function mount(p, { diff, wcEffect, nyolcJatekos, game }) {
+  await p.evaluate(({ diff, wcEffect, nyolcJatekos, game }) => {
     const r = document.getElementById('root'); if (r) r.style.display = 'none';
     const old = document.getElementById('__p'); if (old) old.remove();
     if (window.__restoreWc) { window.__restoreWc(); window.__restoreWc = null; }
@@ -58,14 +61,14 @@ async function mount(p, { diff, wcEffect, nyolcJatekos }) {
       const [players, setPlayers] = React.useState(nyolcJatekos ? nyolc : alap);
       window.__players = players;
       return React.createElement(PlayScreen, {
-        go: () => {}, players, setPlayers, selectedGames: ['kopapir'],
+        go: () => {}, players, setPlayers, selectedGames: [game || 'kopapir', game || 'kopapir'],
         roomCode: null, setGameMeta: () => {}, setScoreHistory: () => {}, setLastGameRound: () => {},
         gameMeta: { modes: wcEffect ? ['points', 'wildcard'] : ['points'], difficulty: diff || 'mid',
                     ...(wcEffect ? { wildcardMin: 1, wildcardMax: 1 } : {}) },
       });
     }
     ReactDOM.createRoot(root).render(React.createElement(H));
-  }, { diff, wcEffect, nyolcJatekos });
+  }, { diff, wcEffect, nyolcJatekos, game });
   await p.waitForTimeout(wcEffect ? 3000 : 2400);
 }
 
@@ -276,6 +279,38 @@ const drinksOf = p => p.evaluate(() => window.__players.map(x => x.name + ':' + 
   ok(await drinksOf(p) === 'Sere:0,Kecsi:0,Vivi:0', 'a Mégse után egy korty sem került ki',
      await drinksOf(p));
   ok(await modalInfo(p) === null, 'és a modal bezárult');
+
+  console.log('\n===== 8. v10.274: A BÜNTETÉS TÚLÉLI A KÖVI GOMBOT =====');
+  // Az advance* fuggvenyek nem commitalnak azonnal: a jatekosok VEGALLAPOTAT
+  // teszik a pendingCommit-be, es a Kovi gomb ezt irja vissza. Ha kozben egy
+  // buntetes is modositotta oket, a visszairas eltorolte. Most a KULONBSEGET
+  // visszuk at, tehat a koztes valtozas megmarad.
+  await mount(p, { diff: 'easy', game: 'szerencse' });
+  await p.evaluate(() => { const pop = [...document.querySelectorAll('div')].find(d => d.style && d.style.zIndex === '9998'); if (pop) pop.click(); });
+  await p.waitForTimeout(500);
+  const elotte = await drinksOf(p);
+  await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /PÖRGESS/i.test(x.innerText || '')); if (b) b.click(); });
+  await p.waitForTimeout(7000);
+  const porgetesUtan = await drinksOf(p);
+  ok(porgetesUtan === elotte, 'pörgetés után a korty még a pendingCommit-ben ül (Kövire vár)',
+     porgetesUtan);
+  await openMenuPenalty(p);
+  ok(await assignInModal(p, { Sere: 2 }) === 'ok', 'büntetés kiosztható a Kövi előtt');
+  await confirmModal(p);
+  const buntetesUtan = await p.evaluate(() => window.__players.map(x => ({ n: x.name, d: x.drinks })));
+  ok(buntetesUtan.find(x => x.n === 'Sere').d === 2, 'a büntetés azonnal rákerül', JSON.stringify(buntetesUtan));
+  await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /Kövi/i.test(x.innerText || '')); if (b) b.click(); });
+  await p.waitForTimeout(2500);
+  const koviUtan = await p.evaluate(() => window.__players.map(x => ({ n: x.name, d: x.drinks })));
+  const nemVeszettEl = buntetesUtan.every(b2 => koviUtan.find(a => a.n === b2.n).d >= b2.d);
+  ok(nemVeszettEl, 'a Kövi után SENKI kortya nem csökkent — a büntetés megmaradt',
+     JSON.stringify(koviUtan));
+  ok(koviUtan.find(x => x.n === 'Sere').d >= 2, 'Sere megtartotta a 2 büntetés-kortyát',
+     'Sere: ' + koviUtan.find(x => x.n === 'Sere').d);
+  const osszSum = a => a.reduce((s2, x) => s2 + x.d, 0);
+  ok(osszSum(koviUtan) > osszSum(buntetesUtan),
+     'és a játék nyereménye is RÁJÖTT (nem helyette)',
+     osszSum(buntetesUtan) + ' → ' + osszSum(koviUtan));
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
