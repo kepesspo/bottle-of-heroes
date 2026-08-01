@@ -35185,7 +35185,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.272';
+const APP_VERSION = 'v10.273';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -51795,6 +51795,11 @@ function PenaltyModal({ players, title, subtitle, emoji, onClose, onFinish }) {
     const n = {...d}; if (cur===1) delete n[pid]; else n[pid]=cur-1; return n;
   });
   const total = Object.values(drinks).reduce((s,v)=>s+v,0);
+  // Egyszerre 5 sor latszik, onnantol gorgetheto. A szamok MERVE: egy sor
+  // 48 px magas (34 px avatar + 2×7 px padding), a res 8 px. Ha a sor merete
+  // valtozik, ITT kell kovetni — igy a lista mindig pont sor-hataron all meg.
+  const ROW_H = 48, ROW_GAP = 8, VISIBLE_ROWS = 5;
+  const listMax = VISIBLE_ROWS * ROW_H + (VISIBLE_ROWS - 1) * ROW_GAP;
   const stepBtn = (extra) => ({ width:30, height:30, borderRadius:9, border:'none', flexShrink:0,
     fontFamily:T.font, fontSize:17, fontWeight:900, lineHeight:1, display:'grid', placeItems:'center', ...extra });
   return (
@@ -51806,7 +51811,7 @@ function PenaltyModal({ players, title, subtitle, emoji, onClose, onFinish }) {
         {emoji && <div style={{ textAlign:'center', fontSize:34, lineHeight:1, marginBottom:8 }}>{emoji}</div>}
         <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, textAlign:'center', marginBottom:4 }}>{title}</div>
         {subtitle && <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, textAlign:'center', marginBottom:14, lineHeight:1.4 }}>{subtitle}</div>}
-        <div style={{ display:'flex', flexDirection:'column', gap:8, maxHeight:'42vh', overflowY:'auto' }}>
+        <div style={{ display:'flex', flexDirection:'column', gap:ROW_GAP, maxHeight:listMax, overflowY:'auto' }}>
           {players.map(p => {
             const cnt = drinks[p.id]||0;
             return (
@@ -51822,8 +51827,13 @@ function PenaltyModal({ players, title, subtitle, emoji, onClose, onFinish }) {
                                      color: cnt>0 ? T.inkSoft : T.inkMute,
                                      boxShadow: cnt>0 ? T.shadowPill : 'none',
                                      cursor: cnt>0 ? 'pointer' : 'default' })}>−</button>
-                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, minWidth:30, textAlign:'center',
-                                 color: cnt>0 ? T.coral : T.inkMute, fontVariantNumeric:'tabular-nums' }}>{cnt>0 ? cnt : '–'}</span>
+                  {/* − [szam 🍺] + — a minWidth egyszerre fogadja be a "–"-t es a
+                      "3 🍺"-t, kulonben a sor szelessege ugralna az elso koppintasnal */}
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, minWidth:44, textAlign:'center',
+                                 color: cnt>0 ? T.coral : T.inkMute, fontVariantNumeric:'tabular-nums',
+                                 display:'inline-flex', alignItems:'center', justifyContent:'center', gap:3 }}>
+                    {cnt>0 ? <React.Fragment>{cnt}<BohIcon name="beer" size={14} /></React.Fragment> : '–'}
+                  </span>
                   <button onClick={(e)=>{ add(p.id); if (window.bohFloat) window.bohFloat(e.currentTarget, `+${(drinks[p.id]||0)+1} 🍺`, T.coral); }}
                     style={stepBtn({ background: T.coral+'22', color:T.coral, cursor:'pointer' })}>+</button>
                 </div>
@@ -51835,7 +51845,7 @@ function PenaltyModal({ players, title, subtitle, emoji, onClose, onFinish }) {
           style={{ width:'100%', marginTop:14, padding:'13px 0', borderRadius:14, border:'none',
                    background: total>0 ? T.mint : T.surfaceMuted, color: total>0 ? '#fff' : T.inkSoft,
                    fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer' }}>
-          {total>0 ? `${total} korty kiosztva ✔` : 'Senki sem iszik ✔'}
+          {total>0 ? `${total} korty kiosztva` : 'Senki sem iszik'}
         </button>
         <button onClick={onClose}
           style={{ width:'100%', marginTop:8, padding:'11px 0', borderRadius:14, border:'none', background:'transparent',

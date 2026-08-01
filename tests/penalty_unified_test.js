@@ -1,5 +1,6 @@
 // v10.271 — EGY büntetés-függvény, és a korty-szám átmegy a bannerbe
 // v10.272 — EGY büntetés-FELÜLET is: modal, soronként `− szám +`
+// v10.273 — egyszerre 5 sor, sörös ikon a szám mellett, pipa nélküli záró gomb
 //
 // Amit ellenőriz:
 //   1. AZONOS összeg → a banner KIÍRJA a korty-számot (ez volt a hiba)
@@ -9,6 +10,8 @@
 //   5. a wildcard-büntetés mostantól 1-nél TÖBB kortyot és TÖBB embert is tud
 //      (korábban fix 1 korty ment egyetlen embernek)
 //   6. „Fordított kör" wildcard alatt a büntetés NEM fordul meg
+//   7. v10.273: pontosan 5 sor látszik (onnantól görgethető), a szám mellett
+//      ott a sörös ikon, és a záró gombon nincs pipa
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const path = require('path');
@@ -25,8 +28,8 @@ const ok = (cond, name, extra) => {
 // szukitjuk, es az EGY darab 60 000 ms-os wildcard-idozitot rovidre zarjuk
 // (a konfigbol nem lehet 1 percnel rovidebbre venni). Mas idozito nem hasznal
 // pont ennyit, ezert ez biztonsagos.
-async function mount(p, { diff, wcEffect }) {
-  await p.evaluate(({ diff, wcEffect }) => {
+async function mount(p, { diff, wcEffect, nyolcJatekos }) {
+  await p.evaluate(({ diff, wcEffect, nyolcJatekos }) => {
     const r = document.getElementById('root'); if (r) r.style.display = 'none';
     const old = document.getElementById('__p'); if (old) old.remove();
     if (window.__restoreWc) { window.__restoreWc(); window.__restoreWc = null; }
@@ -45,11 +48,14 @@ async function mount(p, { diff, wcEffect }) {
     root.style.cssText = 'position:fixed;inset:0;z-index:1;display:flex;flex-direction:column;background:#EAF2FB';
     document.body.appendChild(root);
     function H() {
-      const [players, setPlayers] = React.useState([
+      const alap = [
         { id: 'a', name: 'Sere', color: '#E07A5F', points: 0, drinks: 0 },
         { id: 'b', name: 'Kecsi', color: '#4FC2A0', points: 0, drinks: 0 },
         { id: 'c', name: 'Vivi', color: '#A78BFA', points: 0, drinks: 0 },
-      ]);
+      ];
+      const nyolc = ['Sere','Kecsi','Luca','Tóth','Márk','Dani','Vivi','Bence']
+        .map((n, i) => ({ id: 'p' + i, name: n, color: '#5BA0DB', points: 0, drinks: 0 }));
+      const [players, setPlayers] = React.useState(nyolcJatekos ? nyolc : alap);
       window.__players = players;
       return React.createElement(PlayScreen, {
         go: () => {}, players, setPlayers, selectedGames: ['kopapir'],
@@ -59,7 +65,7 @@ async function mount(p, { diff, wcEffect }) {
       });
     }
     ReactDOM.createRoot(root).render(React.createElement(H));
-  }, { diff, wcEffect });
+  }, { diff, wcEffect, nyolcJatekos });
   await p.waitForTimeout(wcEffect ? 3000 : 2400);
 }
 
@@ -219,7 +225,45 @@ const drinksOf = p => p.evaluate(() => window.__players.map(x => x.name + ':' + 
   ok(/ISZIK|ISZNAK/i.test(b5), 'a bannerben is a vesztes oldalon áll', b5.slice(0, 50));
   ok(!/NYERTES/i.test(b5), 'NEM lett belőle nyertes a fordított kör miatt', b5.slice(0, 60));
 
-  console.log('\n===== 6. MÉGSE — NEM OSZT KI SEMMIT =====');
+  console.log('\n===== 6. v10.273: 5 SOR, SÖRÖS IKON, PIPA NÉLKÜL =====');
+  // 8 jatekos — tehat tobb, mint amennyi kifer. A lista PONT sor-hataron all
+  // meg: nem fel sor latszik, hanem otto.
+  await mount(p, { diff: 'mid', nyolcJatekos: true });
+  await openMenuPenalty(p);
+  await assignInModal(p, { Luca: 3 });
+  const g = await p.evaluate(() => {
+    const card = window.__findCard();
+    const list = [...card.querySelectorAll('div')].find(d => getComputedStyle(d).overflowY === 'auto');
+    const lr = list.getBoundingClientRect();
+    const teljes = [...list.children].filter(r => {
+      const b = r.getBoundingClientRect();
+      return b.top >= lr.top - 0.5 && b.bottom <= lr.bottom + 0.5;
+    }).length;
+    const zaro = [...card.querySelectorAll('button')].find(x => /korty kiosztva|Senki sem iszik/.test(x.innerText || ''));
+    const lbl = [...card.querySelectorAll('div')].find(d => (d.textContent || '').trim() === 'Luca' && d.children.length === 0);
+    const span = [...lbl.parentElement.querySelectorAll('span')].find(s => /^3/.test((s.innerText || '').trim()));
+    const nullas = [...card.querySelectorAll('div')].find(d => (d.textContent || '').trim() === 'Sere' && d.children.length === 0);
+    const nullSpan = [...nullas.parentElement.querySelectorAll('span')].find(s => (s.innerText || '').trim() === '–');
+    return {
+      osszes: list.children.length, teljes,
+      magassag: Math.round(lr.height),
+      gorgetheto: list.scrollHeight > list.clientHeight + 1,
+      zaro: zaro.innerText.trim(),
+      ikon: span ? span.querySelectorAll('svg,img').length : -1,
+      szamSzelesseg: span ? Math.round(span.getBoundingClientRect().width) : -1,
+      nullSzelesseg: nullSpan ? Math.round(nullSpan.getBoundingClientRect().width) : -1,
+    };
+  });
+  ok(g.osszes === 8, '8 játékos van a listában', g.osszes + ' sor');
+  ok(g.teljes === 5, 'ebből PONTOSAN 5 látszik teljesen', g.teljes + ' sor');
+  ok(g.magassag === 272, 'a lista 5 sor + 4 rés magas (5×48 + 4×8)', g.magassag + ' px');
+  ok(g.gorgetheto, 'a többi görgetéssel érhető el');
+  ok(g.ikon === 1, 'a szám mellett ott a sörös ikon', g.ikon + ' db');
+  ok(g.szamSzelesseg === g.nullSzelesseg, 'a sor nem ugrik meg az első koppintásnál',
+     'szám: ' + g.szamSzelesseg + ' px, üres: ' + g.nullSzelesseg + ' px');
+  ok(g.zaro === '3 korty kiosztva', 'a záró gombon NINCS pipa', g.zaro);
+
+  console.log('\n===== 7. MÉGSE — NEM OSZT KI SEMMIT =====');
   await mount(p, { diff: 'mid' });
   await openMenuPenalty(p);
   await assignInModal(p, { Sere: 2 });
