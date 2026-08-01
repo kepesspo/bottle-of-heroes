@@ -1,5 +1,5 @@
 // GENERÁLT FÁJL — forrás: build.js (node build.js)
-const CACHE = 'boh-v10.259';
+const CACHE = 'boh-v10.260';
 
 self.addEventListener('install', (e) => {
   // A betutipus is elore a cache-be: sajat domainrol jon (nem Google Fonts),
