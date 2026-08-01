@@ -1,6 +1,8 @@
 // v10.204 — Büntetés = korty-kiosztó, Koccintó kivezetve
 // v10.212 — fix magassag + gorgetheto nevek + fix gomb, es toast helyett
 //           a szokasos result banner
+// v10.272 — a Buntetes ALSO LAP helyett MODAL (ugyanaz, mint a wildcard
+//           "Szabalyszego?"), soronkent `− szam +`
 //
 // Amit ellenoriz:
 //   1. a MENÜ-ben nincs tobbe Koccinto
@@ -193,8 +195,25 @@ const ok = (cond, name, extra) => {
     };
   }, which);
   const sheetH = async (w) => { const i = await sheetInfo(w || 'penalty'); return i && i.h; };
-  const penInfo = await sheetInfo('penalty');
-  const penH = penInfo && penInfo.h;
+  // v10.272: a Buntetes mar NEM also lap, hanem kozepre igazitott modal, tehat
+  // nincs mit a MENÜ magassagahoz igazitani. Amit viszont tovabbra is elvarunk:
+  // a kartya ne erjen le a kepernyo aljara, es a zaro gomb 12 jatekosnal is
+  // gorgetes nelkul latszodjon (ezt fentebb mar ellenoriztuk).
+  const modalInfo = await p2.evaluate(() => {
+    const ov = [...document.querySelectorAll('div')].filter(d => d.style && d.style.zIndex === '60')
+      .find(d => [...d.querySelectorAll('button')].some(x => /korty kiosztva|Senki sem iszik/.test(x.innerText || '')));
+    if (!ov) return null;
+    const card = ov.firstElementChild;
+    const r = card.getBoundingClientRect();
+    return { also: Math.round(window.innerHeight - r.bottom), teteje: Math.round(r.top),
+             magassag: Math.round(r.height), forced: card.style.height || '(nincs)' };
+  });
+  ok(modalInfo !== null, 'a Büntetés modalként nyílik (v10.272)');
+  ok(modalInfo && modalInfo.also > 20 && modalInfo.teteje > 20,
+     'a modal KÖZÉPEN lebeg — nem ér le az aljára, mint az alsó lap',
+     modalInfo && ('alul ' + modalInfo.also + ' px, felül ' + modalInfo.teteje + ' px'));
+  ok(modalInfo && modalInfo.forced === '(nincs)',
+     'és nincs rákényszerítve magasság — a tartalmához igazodik', modalInfo && modalInfo.forced);
   // zarjuk be a buntetest, es nyissuk meg a MENÜ-t ugyanezzel a 12 jatekossal
   await p2.evaluate(() => {
     const x = [...document.querySelectorAll('button')].find(b3 => /korty kiosztva|Senki sem iszik/.test(b3.innerText || ''));
@@ -204,9 +223,6 @@ const ok = (cond, name, extra) => {
   await p2.evaluate(() => { const x = [...document.querySelectorAll('button')].find(b3 => /MENÜ/i.test(b3.innerText || '')); if (x) x.click(); });
   await p2.waitForTimeout(900);
   const menuInfo = await sheetInfo('menu');
-  const menuH = menuInfo && menuInfo.h;
-  ok(penH !== null && penH === menuH, 'a Büntetés és a MENÜ lap PONTOSAN egyforma magas',
-     `büntetés=${penH} menü=${menuH}`);
 
   // A MENÜ tartalma NEM lehet levagva: a sajat magassagahoz igazodik, tehat a
   // belso gorgeto sav nem hosszabb, mint a lathato resz. (Ez volt a v10.244
@@ -215,8 +231,6 @@ const ok = (cond, name, extra) => {
      'a MENÜ tartalma nincs levágva (nem kell görgetni)', JSON.stringify(menuInfo));
   ok(menuInfo && menuInfo.forced === '(nincs)',
      'a MENÜ-re nincs rákényszerítve magasság', menuInfo && menuInfo.forced);
-  ok(penInfo && penInfo.forced !== '(nincs)',
-     'a Büntetés VISZONT a mért magassághoz igazodik', penInfo && penInfo.forced);
 
   // v10.246: a "valaki iszik" banner belepoje NEM rangathatja oldalra a
   // kartyat — a profilkepek vele mozogtak, ez volt az "ugralas". A keyframe-et

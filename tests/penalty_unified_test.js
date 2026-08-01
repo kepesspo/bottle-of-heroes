@@ -1,14 +1,14 @@
 // v10.271 — EGY büntetés-függvény, és a korty-szám átmegy a bannerbe
+// v10.272 — EGY büntetés-FELÜLET is: modal, soronként `− szám +`
 //
 // Amit ellenőriz:
-//   1. AZONOS összeg → a banner KIÍRJA a korty-számot (ez volt a hiba: nem írta)
+//   1. AZONOS összeg → a banner KIÍRJA a korty-számot (ez volt a hiba)
 //   2. a nehézségi szorzó NEM szorozza fel a büntetést (extrémen is 2 = 2)
 //   3. eltérő összegnél marad a névenkénti felsorolás, szám nélkül
-//      (nincs olyan EGY szám, ami igaz lenne)
-//   4. a wildcard „Szabályszegő?" UGYANAZT az utat járja: result banner
-//      1 kortyval, nem külön Toast
-//   5. „Fordított kör" wildcard alatt a büntetés NEM fordul meg
-//      (a szabályszegő nem lesz nyertes)
+//   4. a wildcard „Szabályszegő?" UGYANAZT a modalt nyitja, `− szám +` sorokkal
+//   5. a wildcard-büntetés mostantól 1-nél TÖBB kortyot és TÖBB embert is tud
+//      (korábban fix 1 korty ment egyetlen embernek)
+//   6. „Fordított kör" wildcard alatt a büntetés NEM fordul meg
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const path = require('path');
@@ -63,33 +63,67 @@ async function mount(p, { diff, wcEffect }) {
   await p.waitForTimeout(wcEffect ? 3000 : 2400);
 }
 
-// A MENÜ -> Büntetés lapon kiosztunk, majd zarunk.
-async function menuPenalty(p, assign) {
+// ── A NYITOTT büntetés-modal vezerlese. v10.272 ota UGYANAZ a modal jon a
+//    MENÜ-bol es a wildcardbol, tehat egyetlen helper eleg mindkettohoz.
+//
+//    FIGYELEM: a hatterben futo jatek IS kirajzolhat korty-kiosztot (a
+//    Ko-papir-ollo "1. kör — kortyok" lapjat), sajat "korty kiosztva" gombbal.
+//    Ezert NEM eleg a gombra keresni — a PenaltyModal sajat overlay-jere
+//    (zIndex 60) szukitunk, kulonben a hatter lapjat vezerelnenk.
+const findCard = () => {
+  const ov = [...document.querySelectorAll('div')].filter(d => d.style && d.style.zIndex === '60')
+    .find(d => [...d.querySelectorAll('button')].some(x => /korty kiosztva|Senki sem iszik/.test(x.innerText || '')));
+  return ov ? ov.firstElementChild : null;
+};
+const modalInfo = p => p.evaluate(() => {
+  const card = window.__findCard();
+  if (!card) return null;
+  const btn = [...card.querySelectorAll('button')].find(x => /korty kiosztva|Senki sem iszik/.test(x.innerText || ''));
+  const rows = [...card.querySelectorAll('div')].filter(d =>
+    [...d.querySelectorAll(':scope > div > button')].length === 2);
+  return {
+    cim: (card.querySelector('div') || {}).innerText || '',
+    // kozepre igazitott MODAL-e (nem also lap): a kartya nem er le a kepernyo aljara
+    modal: Math.abs(card.getBoundingClientRect().bottom - window.innerHeight) > 20,
+    szelesseg: Math.round(card.getBoundingClientRect().width),
+    minusz: [...card.querySelectorAll('button')].filter(x => (x.textContent || '').trim() === '−').length,
+    plusz: [...card.querySelectorAll('button')].filter(x => (x.textContent || '').trim() === '+').length,
+    zaroGomb: btn.innerText.trim(),
+  };
+});
+
+const assignInModal = (p, assign) => p.evaluate((assign) => {
+  const card = window.__findCard();
+  if (!card) return 'nincs modal';
+  for (const [name, n] of Object.entries(assign)) {
+    const lbl = [...card.querySelectorAll('div')].find(d => (d.textContent || '').trim() === name && d.children.length === 0);
+    if (!lbl) return 'nincs cimke: ' + name;
+    const row = lbl.parentElement;
+    const plus = [...row.querySelectorAll('button')].find(x => (x.textContent || '').trim() === '+');
+    if (!plus) return 'nincs + gomb: ' + name;
+    for (let i = 0; i < n; i++) plus.click();
+  }
+  return 'ok';
+}, assign);
+
+const confirmModal = async (p) => {
+  await p.evaluate(() => {
+    const card = window.__findCard();
+    const btn = card && [...card.querySelectorAll('button')].find(x => /korty kiosztva|Senki sem iszik/.test(x.innerText || ''));
+    if (btn) btn.click();
+  });
+  await p.waitForTimeout(1000);
+};
+
+async function openMenuPenalty(p) {
   await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /MENÜ/i.test(x.innerText || '')); if (b) b.click(); });
   await p.waitForTimeout(900);
   await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => (x.innerText || '').trim() === 'Büntetés'); if (b) b.click(); });
-  await p.waitForTimeout(1100);
-  const res = await p.evaluate((assign) => {
-    const titleEl = [...document.querySelectorAll('*')].find(e => (e.textContent || '').trim() === 'Büntetés — ki igyon?');
-    let sheet = titleEl;
-    while (sheet && !/Senki sem iszik|korty kiosztva/.test(sheet.textContent || '')) sheet = sheet.parentElement;
-    if (!sheet) return 'nincs lap';
-    window.__sheet = sheet;
-    for (const [name, n] of Object.entries(assign)) {
-      const lbl = [...sheet.querySelectorAll('div')].find(d => (d.textContent || '').trim() === name && d.children.length === 0);
-      if (!lbl) return 'nincs cimke: ' + name;
-      let row = lbl.parentElement;
-      while (row && row.querySelectorAll('button').length < 2) row = row.parentElement;
-      const btn = [...row.querySelectorAll('button')].find(x => (x.textContent || '').trim() === '+');
-      for (let i = 0; i < n; i++) btn.click();
-    }
-    return 'ok';
-  }, assign);
-  if (res !== 'ok') return res;
-  await p.waitForTimeout(400);
-  await p.evaluate(() => { const b = [...window.__sheet.querySelectorAll('button')].find(x => /korty kiosztva|Senki sem iszik/.test(x.innerText || '')); if (b) b.click(); });
-  await p.waitForTimeout(1000);
-  return 'ok';
+  await p.waitForTimeout(900);
+}
+async function openWcPenalty(p) {
+  await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /Szabályszegő/.test(x.innerText || '')); if (b) b.click(); });
+  await p.waitForTimeout(800);
 }
 
 const bannerText = p => p.evaluate(() => {
@@ -108,12 +142,20 @@ const drinksOf = p => p.evaluate(() => window.__players.map(x => x.name + ':' + 
   await p.addInitScript(`try{localStorage.setItem('boh_onboarded','1');localStorage.setItem('boh_splash','0');}catch(e){}`);
   await p.goto('file://' + path.join(ROOT, 'index.html'), { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(3600);
+  await p.evaluate('window.__findCard = ' + findCard.toString());
 
   console.log('\n===== 1. AZONOS ÖSSZEG → A BANNER KIÍRJA A SZÁMOT =====');
   // EXTRÉM nehezseg (×5) — pont ez a csapda: az onResult minden mas korty-szamot
   // beszoroz, tehat ha a buntetes nem lenne "abszolut", itt 10 KORTY jonne ki.
   await mount(p, { diff: 'extreme' });
-  ok(await menuPenalty(p, { Sere: 2, Kecsi: 2 }) === 'ok', 'a büntetés-lap kiosztható');
+  await openMenuPenalty(p);
+  const m1 = await modalInfo(p);
+  ok(m1 !== null, 'megnyílik a büntetés-modal');
+  ok(m1 && m1.modal, 'KÖZÉPRE igazított modal, nem alsó lap (v10.272)');
+  ok(m1 && m1.minusz === 3 && m1.plusz === 3, 'minden sorban ott a − és a + (3 játékos)',
+     m1 && (m1.minusz + '× − / ' + m1.plusz + '× +'));
+  ok(await assignInModal(p, { Sere: 2, Kecsi: 2 }) === 'ok', 'a léptetővel kiosztható');
+  await confirmModal(p);
   const st1 = await drinksOf(p);
   const b1 = await bannerText(p);
   ok(st1 === 'Sere:2,Kecsi:2,Vivi:0', 'a korty pontosan annyi, amennyit kiosztottunk', st1);
@@ -123,7 +165,9 @@ const drinksOf = p => p.evaluate(() => window.__players.map(x => x.name + ':' + 
 
   console.log('\n===== 2. ELTÉRŐ ÖSSZEG → NÉVENKÉNTI FELSOROLÁS =====');
   await mount(p, { diff: 'mid' });
-  ok(await menuPenalty(p, { Sere: 2, Kecsi: 1 }) === 'ok', 'a büntetés-lap kiosztható');
+  await openMenuPenalty(p);
+  ok(await assignInModal(p, { Sere: 2, Kecsi: 1 }) === 'ok', 'a léptetővel kiosztható');
+  await confirmModal(p);
   const st2 = await drinksOf(p);
   const b2 = await bannerText(p);
   ok(st2 === 'Sere:2,Kecsi:1,Vivi:0', 'a korty fejenként pontos', st2);
@@ -131,44 +175,63 @@ const drinksOf = p => p.evaluate(() => window.__players.map(x => x.name + ':' + 
   ok(!/\d+ KORTY/i.test(b2), 'és NEM ír ki egyetlen számot — egyik sem lenne igaz',
      (b2.match(/\d+ KORTY/i) || ['nincs szám'])[0]);
 
-  console.log('\n===== 3. WILDCARD „SZABÁLYSZEGŐ?" — UGYANAZ AZ ÚT =====');
+  console.log('\n===== 3. WILDCARD „SZABÁLYSZEGŐ?" — UGYANAZ A MODAL =====');
   await mount(p, { diff: 'extreme', wcEffect: 'double' });
-  const wcUp = await p.evaluate(() => /Szabályszegő/.test(document.body.innerText || ''));
-  ok(wcUp, 'aktív wildcard, ott a „Szabályszegő?" gomb');
-  await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /Szabályszegő/.test(x.innerText || '')); if (b) b.click(); });
-  await p.waitForTimeout(700);
-  ok(await p.evaluate(() => /Ki szegte meg a szabályt/.test(document.body.innerText || '')), 'megnyílik a szabályszegő-választó');
-  await p.evaluate(() => {
-    const sheet = [...document.querySelectorAll('div')].find(d => /Ki szegte meg a szabályt/.test(d.innerText || '') && d.style && d.style.maxWidth === '340px');
-    const btn = [...(sheet || document).querySelectorAll('button')].find(x => /Kecsi/.test(x.innerText || ''));
-    if (btn) btn.click();
-  });
-  await p.waitForTimeout(1000);
+  ok(await p.evaluate(() => /Szabályszegő/.test(document.body.innerText || '')), 'aktív wildcard, ott a „Szabályszegő?" gomb');
+  await openWcPenalty(p);
+  const m3 = await modalInfo(p);
+  ok(m3 !== null, 'megnyílik a szabályszegő-modal');
+  ok(await p.evaluate(() => /Ki szegte meg a szabályt/.test(document.body.innerText || '')), 'a címe „Ki szegte meg a szabályt?"');
+  ok(m3 && m3.minusz === 3 && m3.plusz === 3, 'ITT IS ott a − és a + minden soron (korábban csak korsó-ikon volt)',
+     m3 && (m3.minusz + '× − / ' + m3.plusz + '× +'));
+  ok(m3 && m1 && m3.szelesseg === m1.szelesseg, 'a két modal ugyanolyan széles — egy felület',
+     m3 && (m3.szelesseg + ' px vs ' + m1.szelesseg + ' px'));
+  ok(await assignInModal(p, { Kecsi: 1 }) === 'ok', 'a szabályszegő megjelölhető');
+  await confirmModal(p);
   const st3 = await drinksOf(p);
   const b3 = await bannerText(p);
   ok(st3 === 'Sere:0,Kecsi:1,Vivi:0', 'a szabályszegő pontosan 1 kortyot kap', st3);
-  ok(b3.length > 0, 'a result banner feljön (korábban csak egy Toast volt)', b3.slice(0, 50));
-  ok(/1 KORTY/i.test(b3), 'és kiírja az 1 kortyot', (b3.match(/\d+ KORTY/i) || ['nincs'])[0]);
+  ok(/1 KORTY/i.test(b3), 'a result banner kiírja az 1 kortyot', (b3.match(/\d+ KORTY/i) || ['nincs'])[0]);
   ok(!/5 KORTY|10 KORTY/i.test(b3), 'a dupla wildcard + extrém sem szorozza fel', b3.slice(0, 60));
-  ok(/Kecsi/.test(b3), 'a bannerben a szabályszegő neve áll', (b3.match(/Kecsi/) || ['nincs'])[0]);
+  ok(/Kecsi/.test(b3), 'a bannerben a szabályszegő neve áll');
   ok(await p.evaluate(() => !/iszik 1-et!/.test(document.body.innerText || '')), 'nincs többé külön Toast');
 
-  console.log('\n===== 4. „FORDÍTOTT KÖR" ALATT A BÜNTETÉS NEM FORDUL MEG =====');
-  await mount(p, { diff: 'mid', wcEffect: 'reverse' });
-  ok(await p.evaluate(() => /Fordított kör/.test(document.body.innerText || '')), 'aktív a fordított kör wildcard');
-  await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /Szabályszegő/.test(x.innerText || '')); if (b) b.click(); });
-  await p.waitForTimeout(700);
-  await p.evaluate(() => {
-    const sheet = [...document.querySelectorAll('div')].find(d => /Ki szegte meg a szabályt/.test(d.innerText || '') && d.style && d.style.maxWidth === '340px');
-    const btn = [...(sheet || document).querySelectorAll('button')].find(x => /Sere/.test(x.innerText || ''));
-    if (btn) btn.click();
-  });
-  await p.waitForTimeout(1000);
+  console.log('\n===== 4. ÚJ KÉPESSÉG: TÖBB KORTY, TÖBB EMBER =====');
+  // Korabban a wildcard-buntetes FIX 1 korty volt EGYETLEN embernek.
+  await mount(p, { diff: 'mid', wcEffect: 'double' });
+  await openWcPenalty(p);
+  ok(await assignInModal(p, { Sere: 3, Vivi: 2 }) === 'ok', 'a szabályszegésért több korty is adható');
+  await confirmModal(p);
   const st4 = await drinksOf(p);
   const b4 = await bannerText(p);
-  ok(st4 === 'Sere:1,Kecsi:0,Vivi:0', 'a szabályszegő iszik, nem pontot kap', st4);
-  ok(/ISZIK|ISZNAK/i.test(b4), 'a bannerben is a vesztes oldalon áll', b4.slice(0, 50));
-  ok(!/NYERTES/i.test(b4), 'NEM lett belőle nyertes a fordított kör miatt', b4.slice(0, 60));
+  ok(st4 === 'Sere:3,Kecsi:0,Vivi:2', 'két embernek, eltérő összeggel — ez korábban lehetetlen volt', st4);
+  ok(/Sere 3/.test(b4) && /Vivi 2/.test(b4), 'a banner mindkettőt felsorolja', (b4.match(/Sere \d.{0,20}/) || ['nincs'])[0]);
+
+  console.log('\n===== 5. „FORDÍTOTT KÖR" ALATT A BÜNTETÉS NEM FORDUL MEG =====');
+  await mount(p, { diff: 'mid', wcEffect: 'reverse' });
+  ok(await p.evaluate(() => /Fordított kör/.test(document.body.innerText || '')), 'aktív a fordított kör wildcard');
+  await openWcPenalty(p);
+  ok(await assignInModal(p, { Sere: 1 }) === 'ok', 'a szabályszegő megjelölhető');
+  await confirmModal(p);
+  const st5 = await drinksOf(p);
+  const b5 = await bannerText(p);
+  ok(st5 === 'Sere:1,Kecsi:0,Vivi:0', 'a szabályszegő iszik, nem pontot kap', st5);
+  ok(/ISZIK|ISZNAK/i.test(b5), 'a bannerben is a vesztes oldalon áll', b5.slice(0, 50));
+  ok(!/NYERTES/i.test(b5), 'NEM lett belőle nyertes a fordított kör miatt', b5.slice(0, 60));
+
+  console.log('\n===== 6. MÉGSE — NEM OSZT KI SEMMIT =====');
+  await mount(p, { diff: 'mid' });
+  await openMenuPenalty(p);
+  await assignInModal(p, { Sere: 2 });
+  await p.evaluate(() => {
+    const card = window.__findCard();
+    const btn = card && [...card.querySelectorAll('button')].find(x => (x.innerText || '').trim() === 'Mégse');
+    if (btn) btn.click();
+  });
+  await p.waitForTimeout(700);
+  ok(await drinksOf(p) === 'Sere:0,Kecsi:0,Vivi:0', 'a Mégse után egy korty sem került ki',
+     await drinksOf(p));
+  ok(await modalInfo(p) === null, 'és a modal bezárult');
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
