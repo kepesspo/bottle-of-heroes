@@ -35185,7 +35185,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.277';
+const APP_VERSION = 'v10.278';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -57896,13 +57896,25 @@ function CollectBoomGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
 
   const grid = React.useMemo(() => {
     const safeCount = TOTAL - BOMB_COUNT;
-    const drinkCount = Math.floor(safeCount * 0.5);
-    const trueySafeCount = safeCount - drinkCount;
+    // A tablara PONTOSAN MAX_POT osszerteku korty kerul.
+    //
+    // Korabban a mezok SZAMA volt megadva (a szabad mezok fele), az ertekek meg
+    // 3/2/1 — ez 6×6-nal 32 korty osszerteket jelentett, mikozben a pot 12-nel
+    // vag. A tobblet nemán elveszett: felfedtel egy +3-at, es nem tortent semmi.
+    // Most a keret a MAX_POT, es 3-2-1 ciklusban osztjuk szet, hogy ne csupa
+    // +1 legyen. Igy ha minden korty-mezot felfedsz, pont a maximumon allsz.
+    const drinkVals = [];
+    let left = MAX_POT;
+    while (left > 0) {
+      const want = [3, 2, 1][drinkVals.length % 3];
+      const v = Math.min(want, left);
+      drinkVals.push(v);
+      left -= v;
+    }
+    const trueySafeCount = Math.max(0, safeCount - drinkVals.length);
     const cells = [
       ...Array(BOMB_COUNT).fill({type:'bomb'}),
-      ...Array(Math.floor(drinkCount/3)).fill({type:'drink',v:3}),
-      ...Array(Math.floor(drinkCount/3)).fill({type:'drink',v:2}),
-      ...Array(drinkCount - Math.floor(drinkCount/3) - Math.floor(drinkCount/3)).fill({type:'drink',v:1}),
+      ...drinkVals.map(v => ({type:'drink', v})),
       ...Array(trueySafeCount).fill({type:'safe'}),
     ];
     let s = (gameIdx * 1234567891 + 99) >>> 0;
@@ -57911,7 +57923,7 @@ function CollectBoomGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
       const j = rng()%(i+1); [cells[i],cells[j]]=[cells[j],cells[i]];
     }
     return cells;
-  }, [gameIdx, COLS, BOMB_COUNT]);
+  }, [gameIdx, COLS, BOMB_COUNT, MAX_POT]);
 
   const initTurn = gameIdx % Math.max(players.length,1);
   const [revealed, setRevealed] = React.useState(() => new Array(TOTAL).fill(false));
