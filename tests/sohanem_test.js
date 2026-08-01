@@ -12,6 +12,8 @@
 //   5. nincs többé duplán feltett kérdés és fűszer-csík
 //   6. v10.281: kiosztás után a gomb eltűnik és a sorok lezárnak, és a sor
 //      SZÉLESSÉGE is azonos a Büntetés-modaléval (296 px)
+//   7. v10.282: HŐFOK-LAP — a lap színe a fűszerszint (zöld / narancs / vörös),
+//      és a három szín FIX, nem témafüggő; a lista címe „Ki iszik?", középen
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const path = require('path');
@@ -205,6 +207,7 @@ const olvas = p => p.evaluate(() => {
   const r5 = await olvas(p);
   ok(!/igaz rád\?/i.test(r5.szoveg), 'a képernyő teteje nem kérdez ugyanazt, amit a kártya',
      r5.szoveg.slice(0, 60));
+  ok(!/Kire igaz\?/i.test(r5.szoveg), 'a régi „Kire igaz?" címke sincs többé');
   ok(/Olvasd fel/.test(r5.szoveg), 'helyette a kör feladatát mondja');
   const csik = await p.evaluate(() => {
     const R = document.getElementById('__p');
@@ -247,6 +250,48 @@ const olvas = p => p.evaluate(() => {
   ok(utana.sorokZarva === true, 'és a sorok lezárnak (a módosítás úgyis nem számítana)');
   ok(/jöhet a Kövi/.test(utana.szoveg), 'helyette egy halk visszaigazolás áll ott',
      (utana.szoveg.match(/\d+ korty kiosztva — jöhet a Kövi/)||['nincs'])[0]);
+
+  console.log('\n===== 7. v10.282: HŐFOK-LAP =====');
+  // Tobb inditast probalunk, amig mindharom szint elojon (a pakli kevert).
+  const HOFOK = {
+    'ALAP':    'linear-gradient(150deg, rgb(79, 194, 160), rgb(46, 154, 112))',
+    'KÖZEPES': 'linear-gradient(150deg, rgb(240, 169, 60), rgb(217, 119, 6))',
+    'VAD':     'linear-gradient(150deg, rgb(224, 96, 80), rgb(192, 57, 43))',
+  };
+  const hofokLatott = {};
+  for (let i = 0; i < 16 && Object.keys(hofokLatott).length < 3; i++) {
+    await mount(p, 4);
+    const info = await p.evaluate(() => {
+      const R = document.getElementById('__p');
+      const kartya = [...R.querySelectorAll('div')].find(d => d.style && /linear-gradient/.test(d.style.background || ''));
+      if (!kartya) return null;
+      const t = (kartya.innerText || '').replace(/\s+/g, ' ');
+      const lv = (t.match(/ALAP|KÖZEPES|VAD/) || [])[0];
+      const cim = [...R.querySelectorAll('div')].find(d => (d.textContent || '').trim() === 'Ki iszik?');
+      return { lv, hatter: getComputedStyle(kartya).backgroundImage,
+               feher: getComputedStyle(kartya).color,
+               cimVan: !!cim, cimIgazitas: cim ? getComputedStyle(cim).textAlign : null,
+               korok: kartya.querySelectorAll('span[style*="border-radius: 50%"], span').length };
+    });
+    if (info && info.lv && !hofokLatott[info.lv]) hofokLatott[info.lv] = info;
+  }
+  ok(Object.keys(hofokLatott).length === 3, 'mindhárom fűszerszint előjött', Object.keys(hofokLatott).join(', '));
+  for (const [lv, vart] of Object.entries(HOFOK)) {
+    const g = hofokLatott[lv];
+    if (!g) { ok(false, `${lv}: nem jött elő`); continue; }
+    ok(g.hatter === vart, `${lv}: a lap színe a szinthez tartozó`, g.hatter);
+  }
+  const barmi = Object.values(hofokLatott)[0];
+  ok(barmi && barmi.feher === 'rgb(255, 255, 255)', 'a lap szövege fehér', barmi && barmi.feher);
+  ok(barmi && barmi.cimVan, 'a lista címe „Ki iszik?" (nem „Kire igaz?")');
+  ok(barmi && barmi.cimIgazitas === 'center', 'és középre igazított', barmi && barmi.cimIgazitas);
+  // A harom szin FIX: a T.* tokenek temankent valtoznak, ezek nem.
+  const fixSzin = await p.evaluate((HOFOK) => {
+    const ertekek = Object.values(HOFOK).join('|');
+    return ['#4FC2A0','#2E9A70','#F0A93C','#D97706','#E06050','#C0392B']
+      .every(h => document.documentElement.innerHTML.includes(h));
+  }, HOFOK);
+  ok(fixSzin, 'a hat hőfok-szín beégetve áll (nem témafüggő token)');
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
