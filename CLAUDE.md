@@ -87,6 +87,12 @@ Röviden, ami a legtöbb kört elvitte:
   iOS-aláírásra (`screen.height - innerHeight == env(safe-area-inset-top)`)
   aktiválódik.
 
+## Büntetés (játékon kívüli korty)
+Két belépő (MENÜ → Büntetés, Wildcard → „Szabályszegő?"), **egy** felület
+(`PenaltyModal`) és **egy** logika (`givePenalty`). Mielőtt hozzányúlsz:
+`docs/buntetes.md` — három csapda van benne (abszolút szám, fordított kör,
+`pendingCommit`-felülírás). Teszt: `node tests/penalty_unified_test.js`.
+
 ## Fontos szabályok
 1. Minden commitnál verzióbump kötelező (az `app.src.html`-ben!)
 2. Kódot CSAK az `app.src.html`-ben szerkessz, majd `node build.js` (lásd BUILD WORKFLOW fent)
