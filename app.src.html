@@ -35181,7 +35181,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.260';
+const APP_VERSION = 'v10.261';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -51578,9 +51578,13 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
   const [rotation, setRotation] = React.useState(0);
   const [winner, setWinner] = React.useState(null);
   const timerRef = React.useRef(null);
+  // A korty EGYSZER osztodik ki egy korben. A gomb letiltasa mellett ez a
+  // masodik zar — ha barmi megis ujrainditana a port, itt akkor is elakad.
+  const advancedRef = React.useRef(false);
 
   React.useEffect(() => {
     setPhase('ready'); setWinner(null); setRotation(0);
+    advancedRef.current = false;
   }, [gameIdx]);
   React.useEffect(() => () => clearTimeout(timerRef.current), []);
 
@@ -51589,7 +51593,9 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
   const SPIN_MS = 3600;
 
   const spin = () => {
-    if (phase === 'spinning' || players.length === 0) return;
+    // CSAK a 'ready' fazisbol — a 'result'-bol indulo ujrapörgetes masodszor is
+    // kiosztotta volna a kortyot.
+    if (phase !== 'ready' || players.length === 0) return;
     setPhase('spinning'); setWinner(null);
     const winnerIdx = Math.floor(Math.random() * n);
     // A mutato 12 oranal all. Az i. cikkely kozepe a kerek sajat rendszereben
@@ -51602,7 +51608,8 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
       const w = players[winnerIdx];
       setWinner(w); setPhase('result');
       timerRef.current = setTimeout(() => {
-        if (w) {
+        if (w && !advancedRef.current) {
+          advancedRef.current = true;
           onResult && onResult({ correct: false, playerName: w.name, drinks: 1, subtitle: w.name + ' iszik egyet!' });
           onAdvance && onAdvance({ [w.id]: 1 });
         }
@@ -51692,19 +51699,21 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
         </div>
 
         {/* Kozepen a gomb — a kerekkel EGYUTT nem forog, kulonben a felirat fejre allna */}
-        <button onClick={spin} disabled={phase === 'spinning'}
+        <button onClick={spin} disabled={phase !== 'ready'}
           style={{ position:'absolute', top:26 * k + R, left:'50%', transform:'translate(-50%,-50%)', zIndex:2,
                    width:Math.round(92 * k), height:Math.round(92 * k), borderRadius:'50%', border:'none', background:T.surface,
-                   boxShadow:T.shadow, cursor: phase === 'spinning' ? 'default' : 'pointer',
+                   boxShadow:T.shadow, cursor: phase === 'ready' ? 'pointer' : 'default',
                    display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2,
                    WebkitTapHighlightColor:'transparent', padding:0 }}>
-          <svg width={Math.round(24 * k)} height={Math.round(24 * k)} viewBox="0 0 24 24" fill="none" stroke={T.coral} strokeWidth="2.4"
+          <svg width={Math.round(24 * k)} height={Math.round(24 * k)} viewBox="0 0 24 24" fill="none"
+               stroke={phase === 'result' ? T.inkMute : T.coral} strokeWidth="2.4"
                strokeLinecap="round" strokeLinejoin="round"
                style={{ animation: phase === 'spinning' ? 'spin 1s linear infinite' : 'none' }}>
             <path d="M20 12a8 8 0 1 1-2.6-5.9" /><path d="M20 4v4.5h-4.5" />
           </svg>
-          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:Math.round(11 * k), color:T.coral, letterSpacing:'0.06em' }}>
-            {phase === 'spinning' ? 'PÖRÖG…' : 'PÖRGESS!'}
+          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:Math.round(11 * k),
+                         color: phase === 'result' ? T.inkMute : T.coral, letterSpacing:'0.06em' }}>
+            {phase === 'spinning' ? 'PÖRÖG…' : phase === 'result' ? 'MEGVAN' : 'PÖRGESS!'}
           </span>
         </button>
       </div>
