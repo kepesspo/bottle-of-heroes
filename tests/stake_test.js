@@ -122,7 +122,7 @@ async function setup(p, gameId, opts) {
   // A bejelentett hiba: Collect 5×5, Nehez (×3) -> a korong "3–9"-et irt,
   // a jatekos 24 kortyot kapott. A `stake` deklaralt konstans volt; a pot
   // viszont a racsmerettol fuggo MAX_POT-ig no.
-  for (const [grid, max] of [[4, 10], [5, 15], [6, 20]]) {
+  for (const [grid, max] of [[4, 4], [5, 8], [6, 12]]) {
     await setup(p, 'collect', { diff: 'hard', cfg: { collectConfig: { gridSize: grid } } });
     const c = await readCap(p);
     ok(c && c.num === `3–${max * 3}`, `Collect ${grid}×${grid} · nehéz: 3–${max * 3} korty`, c && c.num);
