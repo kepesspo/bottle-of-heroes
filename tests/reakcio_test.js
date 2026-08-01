@@ -45,10 +45,13 @@ async function waitAndTap(p) {
 }
 
 // Egy teljes parbaj lejatszasa a UI-n keresztul, a megadott jatekosokkal.
-async function playDuel(p, challenger, opponent, statsById) {
-  await p.evaluate(({ ch, op, st }) => {
+async function playDuel(p, challenger, opponent, statsById, gameStats) {
+  await p.evaluate(({ ch, op, st, gs }) => {
     window.__inc = []; window.__ginc = []; window.__ev = []; window.__gev = [];
     window.getStats = id => Promise.resolve(JSON.parse(JSON.stringify(st[id] || {})));
+    // gs === false: a jatek-statisztika egyaltalan nem elerheto
+    if (gs === false) delete window.getGameStats;
+    else window.getGameStats = () => Promise.resolve(JSON.parse(JSON.stringify(gs || {})));
     window.incrementStats = (pid, inc, best) => { window.__inc.push({ pid, inc, best }); return Promise.resolve(); };
     window.incrementGameStats = (gid, inc, best) => { window.__ginc.push({ gid, inc, best }); return Promise.resolve(); };
     window.logStatEvent = (pid, d) => { window.__ev.push({ pid, d }); return Promise.resolve(); };
@@ -64,7 +67,7 @@ async function playDuel(p, challenger, opponent, statsById) {
     ReactDOM.createRoot(root).render(React.createElement(ReakcioGame, {
       challenger: ch, opponent: op, onAdvance: () => {}, onResult: () => {},
     }));
-  }, { ch: challenger, op: opponent, st: statsById });
+  }, { ch: challenger, op: opponent, st: statsById, gs: gameStats === false ? false : (gameStats || null) });
   await p.waitForTimeout(400);
 
   await clickText(p, 'Start');
@@ -104,16 +107,19 @@ const readHistCard = p => p.evaluate(() => {
     /REKORD/i.test(d.innerText || '') && /ÁTLAG/i.test(d.innerText || ''));
   if (!grid) return null;
   const cells = [...grid.children];
+  // A fejlec utan 3-asaval jonnek a sorok. Az ures cellak (a fejlec ures
+  // helykitoltoje, es a mindenkori sort elvalaszto vonal) kimaradnak.
+  const body = cells.slice(3).filter(c => (c.innerText || '').trim() !== '');
   const rows = [];
-  for (let i = 3; i + 2 < cells.length + 1; i += 3) {
-    const name = (cells[i].innerText || '').trim();
-    const bestTxt = (cells[i + 1].innerText || '').replace(/\s+/g, ' ');
-    const avgTxt = (cells[i + 2].innerText || '').replace(/\s+/g, ' ');
+  for (let i = 0; i + 2 < body.length; i += 3) {
+    const bestTxt = (body[i + 1].innerText || '').replace(/\s+/g, ' ');
+    const avgTxt = (body[i + 2].innerText || '').replace(/\s+/g, ' ');
     rows.push({
-      name,
+      name: (body[i].innerText || '').trim(),
       best: +(bestTxt.match(/(\d+) ms/) || [])[1] || null,
       avg: +(avgTxt.match(/(\d+) ms/) || [])[1] || null,
       record: /ÚJ REKORD/i.test(bestTxt),
+      bestGreen: getComputedStyle(body[i + 1].querySelector('span') || body[i + 1]).color,
     });
   }
   return {
@@ -152,7 +158,9 @@ const cardCss = p => p.evaluate(() => {
   await playDuel(p,
     { id: 'a', name: 'Sere', profileId: 'pA' },
     { id: 'b', name: 'Luca', profileId: 'pB' },
-    { pA: { bestReactionTime: 300, reactionSum: 2000, reactionCount: 4 }, pB: {} });
+    { pA: { bestReactionTime: 300, reactionSum: 2000, reactionCount: 4 }, pB: {} },
+    // a mindenkori csucs 20 ms — ezt a teszt (kb. 50 ms) nem donti meg
+    { bestReactionTime: 20, reactionSum: 5000, reactionCount: 10 });
 
   const t1 = await txt(p);
   ok(/nyert!/.test(t1), 'a végeredmény-képernyőn vagyunk', t1.slice(0, 60));
@@ -176,7 +184,10 @@ const cardCss = p => p.evaluate(() => {
   const luca = rows.find(r => r.name === 'Luca') || {};
   const hSere = card.rows.find(r => r.name === 'Sere') || {};
   const hLuca = card.rows.find(r => r.name === 'Luca') || {};
-  ok(card.rows.length === 2, 'a kártyán mindkét játékosnak van sora', JSON.stringify(card.rows));
+  const isG = r => /Mindenki/.test(r.name);
+  const gRow = card.rows.find(isG);
+  ok(card.rows.filter(r => !isG(r)).length === 2, 'a kártyán mindkét játékosnak van sora',
+     JSON.stringify(card.rows.filter(r => !isG(r))));
 
   // Sere: volt 300 ms-os rekordja, 4 meres 2000 ms osszeggel.
   ok(sere.ms > 0 && sere.ms < 300, 'Sere ideje gyorsabb a régi rekordnál (a teszt azonnal koppint)', sere.ms + ' ms');
@@ -191,6 +202,17 @@ const cardCss = p => p.evaluate(() => {
      hLuca.best + ' / ' + hLuca.avg + ' ms (idő: ' + luca.ms + ')');
   ok(hLuca.record === false, 'Luca NEM kap "Új rekord" jelvényt (nem volt mit megdöntenie)');
   ok(card.fresh, 'megmondja, hogy az átlag most kezdett gyűlni');
+
+  // Mindenkori sor: a csucs 20 ms volt, azt a teszt (~50 ms) nem donti meg.
+  // Az atlagba MINDKET mostani ido beleszamit: (5000 + t1 + t2) / 12.
+  ok(gRow !== undefined, 'van "Mindenki" sor a mindenkori értékekkel', gRow && JSON.stringify(gRow));
+  ok(/🌍/.test(gRow.name), 'a sor emojival van jelölve', gRow.name);
+  ok(gRow.best === 20, 'a mindenkori csúcs marad, ha ez a kör nem döntötte meg', gRow.best + ' ms');
+  const expG = Math.round((5000 + sere.ms + luca.ms) / 12);
+  ok(gRow.avg === expG, 'a mindenkori átlagba MINDKÉT mostani idő beleszámít',
+     gRow.avg + ' ms (várt: ' + expG + ')');
+  ok(card.rows[card.rows.length - 1] === gRow || isG(card.rows[card.rows.length - 1]),
+     'a mindenkori sor a játékosok ALATT van');
 
   await p.screenshot({ path: path.join(__dirname, 'reakcio_result.png') });
 
@@ -220,27 +242,63 @@ const cardCss = p => p.evaluate(() => {
   await playDuel(p,
     { id: 'a', name: 'Vendeg', profileId: null },
     { id: 'b', name: 'Luca', profileId: 'pB' },
-    { pB: { bestReactionTime: 250, reactionSum: 1000, reactionCount: 2 } });
+    { pB: { bestReactionTime: 250, reactionSum: 1000, reactionCount: 2 } },
+    { bestReactionTime: 20, reactionSum: 5000, reactionCount: 10 });
 
   const rows3 = await readRows(p);
   const card3 = await readHistCard(p);
   const luca3 = rows3.find(r => r.name === 'Luca') || {};
+  const pRows3 = card3.rows.filter(r => !/Mindenki/.test(r.name));
   ok(rows3.length === 2, 'a felső kártyán továbbra is mindkét idő ott van', JSON.stringify(rows3));
-  ok(card3.rows.length === 1 && card3.rows[0].name === 'Luca',
-     'a viszonyítás-kártyán CSAK a profilos játékos szerepel', JSON.stringify(card3.rows));
-  ok(card3.rows[0].avg === Math.round((1000 + luca3.ms) / 3), 'az ő átlaga is a mostani körrel együtt',
-     card3.rows[0].avg + ' ms (' + luca3.ms + ' ms-mal)');
+  ok(pRows3.length === 1 && pRows3[0].name === 'Luca',
+     'a viszonyítás-kártyán CSAK a profilos játékos szerepel', JSON.stringify(pRows3));
+  ok(pRows3[0].avg === Math.round((1000 + luca3.ms) / 3), 'az ő átlaga is a mostani körrel együtt',
+     pRows3[0].avg + ' ms (' + luca3.ms + ' ms-mal)');
+  // A mindenkori sor a profil nelkuli jatekos idejet IS szamolja — az is
+  // beleszamit a jatek statisztikajaba.
+  const g3 = card3.rows.find(r => /Mindenki/.test(r.name)) || {};
+  const guest3 = rows3.find(r => r.name === 'Vendeg') || {};
+  ok(g3.avg === Math.round((5000 + guest3.ms + luca3.ms) / 12),
+     'a mindenkori átlagba a profil nélküli játékos ideje is beleszámít', g3.avg + ' ms');
   const inc3 = await p.evaluate(() => window.__inc);
   ok(inc3.length === 1 && inc3[0].pid === 'pB', 'profil nélküli játékosról nem írunk semmit', JSON.stringify(inc3.map(x => x.pid)));
 
   console.log('\n===== 4. EGYIK JÁTÉKOSNAK SINCS PROFILJA =====');
+  // A mindenkori sor ilyenkor is ervenyes — az nem egy jatekosrol szol.
   await playDuel(p,
     { id: 'a', name: 'Vendeg', profileId: null },
-    { id: 'b', name: 'Masik', profileId: null }, {});
+    { id: 'b', name: 'Masik', profileId: null }, {},
+    { bestReactionTime: 20, reactionSum: 5000, reactionCount: 10 });
   const card4 = await readHistCard(p);
-  const t4 = await txt(p);
-  ok(card4 === null, 'ilyenkor a kártya el is marad (nincs mit viszonyítani)');
-  ok(/nyert!/.test(t4) && /ms/.test(t4), 'a végeredmény viszont ugyanúgy látszik', t4.slice(0, 50));
+  ok(card4 !== null && card4.rows.length === 1 && /Mindenki/.test(card4.rows[0].name),
+     'a kártyán CSAK a mindenkori sor marad', card4 && JSON.stringify(card4.rows));
+  ok(card4.rows[0].best === 20, 'a mindenkori csúcs ilyenkor is látszik', card4.rows[0].best + ' ms');
+
+  console.log('\n===== 5. MEGDŐL A MINDENKORI CSÚCS =====');
+  await playDuel(p,
+    { id: 'a', name: 'Sere', profileId: 'pA' },
+    { id: 'b', name: 'Luca', profileId: 'pB' },
+    { pA: {}, pB: {} },
+    { bestReactionTime: 900, reactionSum: 9000, reactionCount: 10 });
+  const card5 = await readHistCard(p);
+  const rows5 = await readRows(p);
+  const g5 = card5.rows.find(r => /Mindenki/.test(r.name)) || {};
+  const fastest5 = Math.min(...rows5.map(r => r.ms));
+  ok(g5.best === fastest5, 'a mindenkori csúcs a mostani gyorsabb időre javul',
+     g5.best + ' ms (régi: 900)');
+  ok(/rgb\(/.test(g5.bestGreen) && g5.bestGreen !== 'rgb(0, 0, 0)', 'a csúcs kiemelve jelenik meg', g5.bestGreen);
+
+  console.log('\n===== 6. NINCS JÁTÉK-STATISZTIKA =====');
+  await playDuel(p,
+    { id: 'a', name: 'Sere', profileId: 'pA' },
+    { id: 'b', name: 'Luca', profileId: 'pB' },
+    { pA: { bestReactionTime: 300, reactionSum: 2000, reactionCount: 4 }, pB: {} },
+    false);
+  const card6 = await readHistCard(p);
+  const t6 = await txt(p);
+  ok(card6 !== null && !card6.rows.some(r => /Mindenki/.test(r.name)),
+     'ha nincs játék-statisztika, a mindenkori sor kimarad — a többi marad', JSON.stringify(card6.rows));
+  ok(/nyert!/.test(t6), 'és a végeredmény ugyanúgy látszik', t6.slice(0, 40));
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();

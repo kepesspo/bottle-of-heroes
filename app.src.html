@@ -34326,6 +34326,13 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
       return coll('stats').doc(profileId).set({ currentStreak: cur, bestStreak: best }, { merge: true });
     }).catch(function(e) { console.warn('updateStreak', e); });
   };
+  // EGY jatek statisztikaja. Eddig csak a teljes kollekciot lehuzo
+  // getAllGameStats letezett — egyetlen ertek kedveert az pazarlas.
+  window.getGameStats = function(gameId) {
+    return coll('game_stats').doc(gameId).get().then(function(d) {
+      return d.exists ? expandDotKeys(d.data()) : {};
+    }).catch(function() { return {}; });
+  };
   window.getAllGameStats = function() {
     return coll('game_stats').get().then(function(snap) {
       var result = {};
@@ -35174,7 +35181,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.253';
+const APP_VERSION = 'v10.254';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -64982,6 +64989,33 @@ function ReakcioGame({ challenger, opponent, onAdvance, onResult }) {
     return () => { alive = false; };
   }, [challenger?.profileId, opponent?.profileId]);
 
+  // A jatek MINDENKORI allasa (mindenki eredmenyebol), szinten a kor ELOTT.
+  const [preGame, setPreGame] = useState(null);
+  useEffect(() => {
+    if (typeof window.getGameStats !== 'function') return;
+    let alive = true;
+    window.getGameStats('reakcio').catch(() => ({})).then(g => { if (alive) setPreGame(g || {}); });
+    return () => { alive = false; };
+  }, []);
+
+  // A mindenkori csucs es atlag — a mostani kor MINDKET idejevel egyutt,
+  // ugyanugy, mint a jatekos sorainal.
+  const globalHist = () => {
+    if (!preGame) return null;
+    const times = [p1Ms, p2Ms].filter(x => x != null);
+    if (!times.length) return null;
+    const fastest = Math.min(...times);
+    const prevBest = typeof preGame.bestReactionTime === 'number' ? preGame.bestReactionTime : null;
+    const cnt = typeof preGame.reactionCount === 'number' ? preGame.reactionCount : 0;
+    const sum = typeof preGame.reactionSum === 'number' ? preGame.reactionSum : 0;
+    return {
+      best: prevBest == null ? fastest : Math.min(prevBest, fastest),
+      avg: Math.round((sum + times.reduce((a, b) => a + b, 0)) / (cnt + times.length)),
+      isRecord: prevBest != null && fastest < prevBest,
+      fresh: cnt === 0,
+    };
+  };
+
   // Rekord + atlag EGY jatekosra, a mostani meressel egyutt — vagyis pont azt
   // mutatjuk, ami a statisztikaban is lesz. Ha nincs profil (alkalmi jatekos),
   // nincs mit mutatni.
@@ -65185,8 +65219,10 @@ function ReakcioGame({ challenger, opponent, onAdvance, onResult }) {
           egyiknek sincs profilja, a kartya elmarad. */}
       {(() => {
         const hist = players2.map(x => ({ ...x, h: histOf(x.player, x.ms) })).filter(x => x.h);
-        if (!hist.length) return null;
-        const fresh = hist.some(x => x.h.avg === x.h.best && x.h.best === x.ms);
+        const g = globalHist();
+        // A mindenkori sor akkor is ervenyes, ha egyik jatekosnak sincs profilja
+        if (!hist.length && !g) return null;
+        const fresh = hist.some(x => x.h.avg === x.h.best && x.h.best === x.ms) || (g && g.fresh);
         const head = { fontFamily:T.font, fontWeight:900, fontSize:10.5, letterSpacing:0.8, textTransform:'uppercase',
                        color:T.inkMute, textAlign:'right', minWidth:78 };
         const num  = { fontFamily:T.font, fontWeight:900, fontSize:19, fontVariantNumeric:'tabular-nums', textAlign:'right', minWidth:78 };
@@ -65212,6 +65248,22 @@ function ReakcioGame({ challenger, opponent, onAdvance, onResult }) {
                   <span style={{ ...num, color:T.inkSoft }}>{x.h.avg} ms</span>
                 </React.Fragment>
               ))}
+              {/* Mindenkori csucs — mas fajta sor, ezert vekony elvalaszto elozi
+                  meg. Az elvalasztot EGY, harom hasabot atfogo elem adja, mert
+                  cellankenti felso keret nem allna egy vonalba. */}
+              {g && (
+                <React.Fragment>
+                  {!!hist.length && (
+                    <span style={{ gridColumn:'1 / -1', height:1, background:`${T.inkMute}33`, margin:'2px 0' }} />
+                  )}
+                  <span style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft,
+                                 overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    🌍 Mindenki
+                  </span>
+                  <span style={{ ...num, fontSize:17, color: g.isRecord ? T.mint : T.inkSoft }}>{g.best} ms</span>
+                  <span style={{ ...num, fontSize:17, color:T.inkSoft }}>{g.avg} ms</span>
+                </React.Fragment>
+              )}
             </div>
             {/* Az atlag a mostani frissites ota gyulik — a rekord a regi adatbol
                 is megvan. Ezt megmondjuk, hogy ne tunjon hibanak. */}
