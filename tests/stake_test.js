@@ -74,7 +74,8 @@ async function setup(p, gameId, opts) {
       players, setPlayers: () => {}, selectedGames: [gid], go: () => {},
       roomCode: o.room || null,
       gameMeta: { modes: o.noScore ? [] : ['points'], difficulty: o.diff || 'easy', observerAllowed: true,
-                  ...(o.maxRounds ? { maxRounds: o.maxRounds } : {}) },
+                  ...(o.maxRounds ? { maxRounds: o.maxRounds } : {}),
+                  ...(o.cfg || {}) },
       setGameMeta: () => {}, setLastGameRound: () => {}, setScoreHistory: () => {},
     }));
   }, { gid: gameId, o: opts || {} });
@@ -107,8 +108,42 @@ async function setup(p, gameId, opts) {
   ok(decl.total >= 44, 'megvan az összes játék', decl.total + ' db');
   ok(decl.missing.length === 0, 'mindegyiknek van `stake` mezője', decl.missing.join(', ') || 'nincs hiányzó');
   ok(decl.bad.length === 0, 'a tartományok értelmesek (1 ≤ min ≤ max)', decl.bad.join(', ') || 'mind rendben');
-  ok(decl.nulls.length > 0 && decl.nulls.length <= 10,
-     'a saját gazdaságú játékok null-t deklarálnak', decl.nulls.join(', '));
+  // Konkret lista, nem "kevesebb mint N": igy egy uj null TUDATOS dontes lesz,
+  // nem eszrevetlenul becsuszo valtozas. Ket csoport van benne:
+  //   * sajat gazdasagu jatekok (a korty a jatek belso szabalyabol jon)
+  //   * v10.276: hataratlan halmozok — ott inkabb SEMMIT mutatunk, mint
+  //     rossz szamot (lasd patch_10_276.py)
+  const VART_NULL = ['beerpong','blackjack','busz','farkasos','kisebb','loverseny',
+                     'meduza','ovfj','powerhour','ringfire','ritmus','utveszto'].sort();
+  ok(decl.nulls.slice().sort().join(',') === VART_NULL.join(','),
+     'pontosan a várt játékok deklarálnak null tétet', decl.nulls.slice().sort().join(', '));
+
+  console.log('\n===== 1b. KONFIGURÁLHATÓ JÁTÉK: A TÉT A BEÁLLÍTÁSBÓL JÖN (v10.276) =====');
+  // A bejelentett hiba: Collect 5×5, Nehez (×3) -> a korong "3–9"-et irt,
+  // a jatekos 24 kortyot kapott. A `stake` deklaralt konstans volt; a pot
+  // viszont a racsmerettol fuggo MAX_POT-ig no.
+  for (const [grid, max] of [[4, 10], [5, 15], [6, 20]]) {
+    await setup(p, 'collect', { diff: 'hard', cfg: { collectConfig: { gridSize: grid } } });
+    const c = await readCap(p);
+    ok(c && c.num === `3–${max * 3}`, `Collect ${grid}×${grid} · nehéz: 3–${max * 3} korty`, c && c.num);
+  }
+  // a jatek sajat plafonja ES a korong UGYANABBOL a forrasbol dolgozik
+  const egyForras = await p.evaluate(() => {
+    const g = GAMES.find(x => x.id === 'collect');
+    return [4, 5, 6].every(n => g.stakeOf({ collectConfig: { gridSize: n } })[1] === COLLECT_MAX_POT[n]);
+  });
+  ok(egyForras, 'a korong és a játék ugyanazt a COLLECT_MAX_POT-ot használja');
+  // Kartyacsata: a korty a gyozelmi kulonbseg -> legfeljebb a korok szama
+  for (const r of [3, 5, 7]) {
+    await setup(p, 'cardbattle', { diff: 'easy', cfg: { cardbattleConfig: { rounds: r } } });
+    const c = await readCap(p);
+    ok(c && c.num === `1–${r}`, `Kártyacsata ${r} kör: 1–${r} korty`, c && c.num);
+  }
+  // A hataratlan halmozoknal NINCS korong — inkabb semmi, mint rossz szam
+  for (const gid of ['meduza', 'ritmus', 'utveszto', 'kisebb']) {
+    await setup(p, gid, { diff: 'hard' });
+    ok(await readCap(p) === null, `${gid}: nincs korong (nincs valódi felső határ)`);
+  }
 
   console.log('\n===== 2. A KIÍRT SZÁM = ALAP × NEHÉZSÉG =====');
   for (const [diff, mult] of [['easy', 1], ['mid', 2], ['hard', 3], ['extreme', 5]]) {
