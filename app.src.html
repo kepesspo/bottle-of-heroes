@@ -35174,7 +35174,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.247';
+const APP_VERSION = 'v10.248';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -67544,12 +67544,24 @@ function BottleApp() {
   const [roomCreateError, setRoomCreateError] = React.useState(null);
   const pendingRoomCodeRef = React.useRef(null);
   const roomUnsubRef = React.useRef(null);
+  // Lassu halonal a szoba-iras nyugtaja sokaig nem jon meg — 4 mp utan
+  // kiirjuk, es felkinaljuk az offline inditast. Lasd patch_10_248.py
+  const [roomSlow, setRoomSlow] = React.useState(false);
+  const roomSlowTimerRef = React.useRef(null);
+  const roomBusyRef = React.useRef(false);
 
   // A szoba-létrehozás hibáját NEM nyeljük el némán: kiírjuk, és a felhasználó dönt
   // (újrapróbálás vagy offline indítás). Szinkron dobás ellen is védve (pl. érvénytelen payload).
   const attemptRoomCreate = (code) => {
+    // Kettos inditas ellen: amig fut egy letrehozas, a masodik gombnyomas ne
+    // inditson ujabb irast (sajat oraval, sajat idotullepessel).
+    if (roomBusyRef.current) return;
+    roomBusyRef.current = true;
     setRoomCreateError(null);
+    setRoomSlow(false);
     setCreatingRoom(true);
+    clearTimeout(roomSlowTimerRef.current);
+    roomSlowTimerRef.current = setTimeout(() => setRoomSlow(true), 4000);
     // iOS PWA: háttérbe tétel után a Firestore write-stream néha halott marad —
     // írás előtt megpiszkáljuk a hálózatot, hogy biztosan újraépüljön a kapcsolat.
     try { firebase.firestore().enableNetwork().catch(() => {}); } catch (e) {}
@@ -67559,13 +67571,15 @@ function BottleApp() {
         ? createRoom(code, players.map(p=>({...p})), selectedGames, gameMeta)
         : Promise.reject(new Error('createRoom nem elérhető (Firebase nem töltődött be?)'));
     } catch (e) { roomCreatePromise = Promise.reject(e); }
-    const roomCreateTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Időtúllépés (15 mp) — a szerver nem válaszolt')), 15000));
+    const roomCreateTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Időtúllépés (11 mp) — a szerver nem válaszolt')), 11000));
     // Minimum megjelenítési idő: a repülő kabala látsszon akkor is, ha a szoba azonnal létrejön.
     // (Csak a sikeres ágat késlelteti — hibánál azonnal jön a hibaképernyő.)
     const minSplash = new Promise(res => setTimeout(res, 2200));
     Promise.race([roomCreatePromise, roomCreateTimeout])
       .then(() => minSplash)
       .then(() => {
+        roomBusyRef.current = false;
+        clearTimeout(roomSlowTimerRef.current); setRoomSlow(false);
         setRoomCode(code);
         if (roomUnsubRef.current) roomUnsubRef.current();
         if (typeof subscribeRoom === 'function') {
@@ -67576,6 +67590,8 @@ function BottleApp() {
         setCreatingRoom(false); setPrev(screen); setScreen('play');
       })
       .catch((e) => {
+        roomBusyRef.current = false;
+        clearTimeout(roomSlowTimerRef.current); setRoomSlow(false);
         console.error('createRoom failed:', e);
         const msg = e ? ((e.code ? e.code + ' — ' : '') + (e.message || String(e))) : 'ismeretlen hiba';
         setRoomCreateError(msg);
@@ -67746,7 +67762,23 @@ function BottleApp() {
             <>
               <RoomFillArt variant={roomArtVariant} />
               <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay, textAlign:'center', marginTop:6 }}>Töltjük a szobát</div>
-              <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', marginTop:-8 }}>Mindjárt kész</div>
+              <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', marginTop:-8 }}>
+                {roomSlow ? 'Lassú a kapcsolat — még próbálkozunk…' : 'Mindjárt kész'}
+              </div>
+              {/* 4 mp utan kiut: soha ne ragadjon bent a felhasznalo. Az offline
+                  inditas ugyanaz, mint a hibakepernyon — csak nem kell megvarni
+                  az idotullepest hozza. */}
+              {roomSlow && (
+                <button onClick={() => {
+                    roomBusyRef.current = false;
+                    clearTimeout(roomSlowTimerRef.current);
+                    setRoomSlow(false); setCreatingRoom(false); setRoomCreateError(null);
+                    setPrev(screen); setScreen('play');
+                  }}
+                  style={{ marginTop:14, padding:'12px 20px', borderRadius:16, border:`1.5px solid ${T.inkMute}40`, background:T.surface, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft, cursor:'pointer', boxShadow:T.shadowPill }}>
+                  Indítás offline (kód nélkül)
+                </button>
+              )}
             </>
           ) : (
             <>
