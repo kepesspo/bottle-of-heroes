@@ -285,6 +285,10 @@
     @keyframes starPop { 0%{transform:scale(0) rotate(-20deg);opacity:0} 55%{transform:scale(1.25) rotate(12deg);opacity:1} 100%{transform:scale(1) rotate(0deg)} }
     @keyframes resultFadeOut { from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(0.88)} }
     @keyframes miniBarIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    /* Csak megjelenes, SEMMI transform: a kicsi sav kozepre igazitasa maga is
+       transform (translateX(-50%)), amit egy transform-os animacio felulirna —
+       attol csuszott be oldalrol. Lasd patch_10_266.py */
+    @keyframes bohFadeIn { from{opacity:0} to{opacity:1} }
     /* Szoba-töltés: a szint emelkedése. A kezdőérték nem 0 — lásd patch_10_247.py */
     @keyframes bohFill { 0%{transform:translateY(var(--from))} 76%,100%{transform:translateY(var(--to))} }
     @keyframes bohBubble { 0%{transform:translateY(0);opacity:0} 12%{opacity:.85} 85%{opacity:.1} 100%{transform:translateY(-44px);opacity:0} }
@@ -35181,7 +35185,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.265';
+const APP_VERSION = 'v10.266';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -51635,7 +51639,9 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
     window.addEventListener('resize', upd);
     return () => window.removeEventListener('resize', upd);
   }, []);
-  const SIZE = Math.max(240, Math.min(wheelW || 288, 520));
+  // 24 px-szel keskenyebb a konteneral: igy a kerek vetett arnyekanak marad
+  // 12-12 px helye a levagason belul (lasd patch_10_266.py).
+  const SIZE = Math.max(240, Math.min((wheelW || 288) - 24, 520));
   const k = SIZE / 288;
   const R = SIZE / 2, rad = R - 6 * k;
   const pt = (angDeg, r) => {
@@ -51653,7 +51659,7 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
       {/* overflow:hidden — a kerek NEGYZET dobozat forgatjuk, es az elforgatott
           befoglaloja √2-szer szelesebb, amitol oldalra lehetett gorgetni. A kor
           beleirt a negyzetbe, tehat csak az ures sarkok vagodnak le. */}
-      <div ref={wheelWrapRef} style={{ position:'relative', width:'100%', height:SIZE + 26 * k, overflow:'hidden' }}>
+      <div ref={wheelWrapRef} style={{ position:'relative', width:'100%', height:SIZE + 26 * k + 20, overflow:'hidden' }}>
         {/* Mutato — a kerek FOLOTT, es a hegye belelog, hogy lassek, melyik
             cikkelyre mutat. Alacsonyabban a fehér gyűrű elnyelte. */}
         <div style={{ position:'absolute', top:0, left:'50%', transform:'translateX(-50%)', zIndex:4 }}>
@@ -51667,7 +51673,7 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
         <div style={{ position:'absolute', top:26 * k, left:'50%', marginLeft:-R, width:SIZE, height:SIZE,
                       transform:`rotate(${rotation}deg)`,
                       transition: phase === 'spinning' ? `transform ${SPIN_MS}ms cubic-bezier(.16,.84,.28,1)` : 'none' }}>
-          <svg width={SIZE} height={SIZE} style={{ display:'block', filter:'drop-shadow(0 6px 16px rgba(20,30,50,0.16))' }}>
+          <svg width={SIZE} height={SIZE} style={{ display:'block', filter:'drop-shadow(0 5px 12px rgba(20,30,50,0.16))' }}>
             <circle cx={R} cy={R} r={rad + 5} fill={T.surface} />
             {players.map((p, i) => {
               const tone = WHEEL_TONES[i % WHEEL_TONES.length];
@@ -51686,7 +51692,13 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
           {players.map((p, i) => {
             const [cx, cy] = pt(i * seg + seg / 2, labelR);
             return (
-              <div key={p.id} style={{ position:'absolute', left:cx, top:cy, transform:'translate(-50%,-50%)',
+              // A cimke ELLENFORGATJA magat a kerek szogevel, ugyanazzal az
+              // atmenettel — igy porges kozben keringenek, de vegig ALLVA maradnak.
+              // Enelkul pontosan annyival dolnek, amennyivel a kerek all, es a
+              // nyugalmi szog nem 360 tobbszorose → fejjel lefele allnak meg.
+              <div key={p.id} style={{ position:'absolute', left:cx, top:cy,
+                                       transform:`translate(-50%,-50%) rotate(${-rotation}deg)`,
+                                       transition: phase === 'spinning' ? `transform ${SPIN_MS}ms cubic-bezier(.16,.84,.28,1)` : 'none',
                                        display:'flex', flexDirection:'column', alignItems:'center', gap:3, pointerEvents:'none' }}>
                 <div style={{ width:avSize, height:avSize, borderRadius:'50%', overflow:'hidden', flexShrink:0,
                               background:p.color, border:'2.5px solid #fff', display:'grid', placeItems:'center' }}>
@@ -61614,7 +61626,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               )}
               {showPill && (
                 <div key={'mini-' + gameResult.ts} onClick={() => setResultMinimized(false)}
-                     style={{ position:'fixed', bottom:'calc(96px + env(safe-area-inset-bottom, 0px))', left:'50%', transform:'translateX(-50%)', ...CARD_W, zIndex:45, animation:'miniBarIn .25s ease-out', cursor:'pointer' }}>
+                     style={{ position:'fixed', bottom:'calc(96px + env(safe-area-inset-bottom, 0px))', left:'50%', transform:'translateX(-50%)', ...CARD_W, zIndex:45, animation:'bohFadeIn .18s ease-out', cursor:'pointer' }}>
                   {MiniBar({ onClose: e => { e.stopPropagation(); setGameResult(null); setResultMinimized(false); } })}
                 </div>
               )}

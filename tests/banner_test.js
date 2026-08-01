@@ -239,6 +239,37 @@ const readMini = p => p.evaluate(() => {
   ok(!/Sere/.test(m.text), 'a győztes NEM szerepel rajta', m.text);
   ok(m.imgs === 2, 'két avatar látszik a sávon', m.imgs + ' kép');
 
+  // A sav kozepre igazitasa MAGA IS transform (translateX(-50%)). Ha az
+  // animacio is transformot mozgat, felulirja azt, es a sav a fel szelessegevel
+  // odebb indul — ez latszott "oldalrol becsuszasnak" (v10.266).
+  await p.evaluate(() => { window.__setRes = null; });
+  await fire([A, Bp, C, D], { winners:[A], losers:[Bp, C, D], drinks:3 });
+  await p.evaluate(() => {
+    const root = document.getElementById('__pl');
+    [...root.querySelectorAll('div')].find(d => d.style && d.style.zIndex === '250').click();
+  });
+  const track = [];
+  for (let i = 0; i < 14; i++) {
+    const x = await p.evaluate(() => {
+      const root = document.getElementById('__pl');
+      const bar = [...root.querySelectorAll('div')].find(d =>
+        d.style && d.style.position === 'fixed' && d.style.zIndex === '45');
+      return bar ? Math.round(bar.getBoundingClientRect().left) : null;
+    });
+    if (x !== null) track.push(x);
+    await p.waitForTimeout(40);
+  }
+  const uniq = [...new Set(track)];
+  ok(track.length >= 4, 'a sáv megjelenése követhető', track.length + ' minta');
+  ok(uniq.length === 1, 'a sáv NEM csúszik oldalra — végig ugyanott van', JSON.stringify(uniq));
+  const animName = await p.evaluate(() => {
+    const root = document.getElementById('__pl');
+    const bar = [...root.querySelectorAll('div')].find(d =>
+      d.style && d.style.position === 'fixed' && d.style.zIndex === '45');
+    return bar ? bar.style.animation : null;
+  });
+  ok(animName && !/miniBarIn/.test(animName), 'és nem a transformot mozgató animációt használja', animName);
+
   console.log('\n===== 8. NEM UGRÁL A PROFILKÉP =====');
   await fire([A, Bp], { winners:[A], losers:[Bp], drinks:2 });
   const before = await p.evaluate(() => {

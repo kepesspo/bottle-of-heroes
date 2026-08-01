@@ -133,7 +133,37 @@ const mount = (p, gameIdx) => p.evaluate(gi => {
     !/A KIVÁLASZTOTT/i.test(document.getElementById('__wh').innerText || ''));
   ok(fresh, 'és az előző kiválasztott eltűnt');
 
-  console.log('\n===== 6. NEM GÖRGETHETŐ OLDALRA =====');
+  console.log('\n===== 6. A NEVEK NEM ÁLLNAK FEJJEL LEFELÉ =====');
+  // Friss kor + porgetes, hogy a kerek TENYLEG el legyen forgatva.
+  await mount(p, 2);
+  await p.waitForTimeout(500);
+  await press(p, 1);
+  await p.waitForTimeout(4600);
+  // Egy NEM forgatott elem befoglaloja pontosan akkora, mint a layout merete.
+  // Ha a cimke dolne, a befoglaloja megnone — ezt merjuk, nem ranezesre.
+  const labels = await p.evaluate(() => {
+    const root = document.getElementById('__wh');
+    const wheel = [...root.querySelectorAll('div')].find(d => d.style && /rotate\(/.test(d.style.transform || '') && d.style.width);
+    const out = [];
+    [...root.querySelectorAll('span')].forEach(sp => {
+      const t = (sp.innerText || '').trim();
+      if (!/^(Sere|Luca|Kecsi)$/.test(t)) return;
+      const el = sp.parentElement;              // a cimke-doboz (avatar + nev)
+      const r = el.getBoundingClientRect();
+      out.push({ name: t, wDiff: Math.abs(r.width - el.offsetWidth), hDiff: Math.abs(r.height - el.offsetHeight),
+                 tf: el.style.transform });
+    });
+    return { rot: wheel ? wheel.style.transform : '', out };
+  });
+  const deg = +(labels.rot.match(/rotate\(([-\d.]+)deg\)/) || [0, 0])[1];
+  ok(Math.abs(deg % 360) > 5, 'a kerék tényleg el van forgatva', labels.rot);
+  ok(labels.out.length === 3, 'megvan mind a három címke', JSON.stringify(labels.out.map(x => x.name)));
+  ok(labels.out.every(x => /rotate\(/.test(x.tf)), 'a címkék ellenforgatnak', labels.out[0] && labels.out[0].tf);
+  ok(labels.out.every(x => x.wDiff < 1.5 && x.hDiff < 1.5),
+     'és ÁLLVA maradnak (a befoglalójuk nem nőtt meg)',
+     JSON.stringify(labels.out.map(x => x.name + ': ' + x.wDiff.toFixed(1) + '/' + x.hDiff.toFixed(1))));
+
+  console.log('\n===== 7. NEM GÖRGETHETŐ OLDALRA =====');
   // A kerek NEGYZET dobozat forgatjuk; az elforgatott befoglaloja √2-szer
   // szelesebb, amitol a tartalom oldalra gorgethetove valt (v10.264).
   const scroll = await p.evaluate(() => {
