@@ -35174,7 +35174,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.248';
+const APP_VERSION = 'v10.249';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36305,12 +36305,7 @@ function DrinkChip({ sips=1, label, style:sx }) {
   );
 }
 
-// A JATEK KOZBENI lapok (MENÜ, Büntetés) egyforma magasak. A mertek a MENÜ
-// "vezérlés" fulenek tartalma volt — ezt rogzitjuk, hogy a Buntetes ne a
-// jatekosok szamatol fuggjon. Egy szam, egy helyen.
-const PLAY_SHEET_H = 'min(365px, 82vh)';
-
-function SheetOverlay({ onClose, children, footer, title, zIndex, height }) {
+function SheetOverlay({ onClose, children, footer, title, zIndex, height, onHeight }) {
   const [dragY, setDragY] = React.useState(0);
   const [closing, setClosing] = React.useState(false);
   const startYRef = React.useRef(null);
@@ -36332,6 +36327,22 @@ function SheetOverlay({ onClose, children, footer, title, zIndex, height }) {
     else setDragY(0);
     startYRef.current = null;
   };
+
+  // A lap megmeri magat, ha kerik. Igy tud egy MASIK lap ugyanolyan magas
+  // lenni, anelkul hogy barhova beegetnenk egy szamot — kesziteken mas a
+  // betumetrika, ott egy bongeszoben mert ertek levagna a tartalmat.
+  // Ketszer merunk: rogton, es egy kepkockaval kesobb (kesoi betu-layout).
+  React.useLayoutEffect(() => {
+    if (typeof onHeight !== 'function' || height) return;
+    let raf = 0;
+    const report = () => {
+      const el = sheetRef.current;
+      if (el) onHeight(Math.round(el.getBoundingClientRect().height));
+    };
+    report();
+    raf = requestAnimationFrame(report);
+    return () => cancelAnimationFrame(raf);
+  }, [onHeight, height]);
 
   const translateY = closing ? '100%' : `${dragY}px`;
   const opacity = closing ? 0 : Math.max(0, 1 - dragY / 300);
@@ -51730,7 +51741,7 @@ function DrinkDistributor({ players, onFinish, title }) {
 // Büntetés lap — mint a DrinkDistributor, de a zaro gomb a SheetOverlay
 // FIX footer-jebe kerul, a nevek pedig kulon gorgetheto reszben vannak.
 // Igy sok jatekosnal sem kell a lista vegere gorgetni a gombhoz.
-function PenaltySheet({ players, onClose, onFinish }) {
+function PenaltySheet({ players, onClose, onFinish, height }) {
   const [drinks, setDrinks] = React.useState({});
   const add = (pid) => setDrinks(d => ({ ...d, [pid]: (d[pid]||0)+1 }));
   const remove = (pid) => setDrinks(d => {
@@ -51739,7 +51750,7 @@ function PenaltySheet({ players, onClose, onFinish }) {
   });
   const total = Object.values(drinks).reduce((s,v)=>s+v,0);
   return (
-    <SheetOverlay onClose={onClose} title="Büntetés — ki igyon?" height={PLAY_SHEET_H} footer={
+    <SheetOverlay onClose={onClose} title="Büntetés — ki igyon?" height={height} footer={
       <button onClick={()=>onFinish(drinks)} style={{ width:'100%', padding:'12px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:15, borderRadius:14, border:'none', cursor:'pointer', boxShadow:T.shadow }}>
         {total>0 ? `${total} korty kiosztva ✔` : 'Senki sem iszik ✔'}
       </button>
@@ -61013,6 +61024,9 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   // tömbbe kerül, onnan a parti végén magától a statisztikába megy — nem
   // logolunk külön, mert az duplán számolna.
   const [penaltyOpen, setPenaltyOpen] = useState(false);
+  // A MENÜ lap MERT magassaga — ehhez igazodik a Buntetes lap. A Buntetes csak
+  // a MENÜ-bol nyithato, tehat mire kell, mar megvan. Lasd patch_10_249.py
+  const [menuSheetH, setMenuSheetH] = useState(null);
   const applyPenalty = (assigned) => {
     setPenaltyOpen(false);
     const map = assigned || {};
@@ -61611,7 +61625,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       </div>}
       {showInfo && <GameInfoModal game={currentGame} onClose={() => setShowInfo(false)} />}
       {penaltyOpen && (
-        <PenaltySheet players={players || []} onClose={() => setPenaltyOpen(false)} onFinish={applyPenalty} />
+        <PenaltySheet players={players || []} onClose={() => setPenaltyOpen(false)} onFinish={applyPenalty}
+          height={menuSheetH ? menuSheetH + 'px' : undefined} />
       )}
       {groupDrinkOverlay && (
         <div style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.72)', zIndex:60, display:'flex', alignItems:'center', justifyContent:'center', padding:28, animation:'fadeIn .2s' }}>
@@ -61689,7 +61704,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         const mMaxScore = Math.max(1, ...players.map(p=>p.points));
         const PLAYER_COLORS = ['#5BA0DB','#E985B8','#F4C95A','#4FC2A0','#F97316','#A78BFA','#EF4444','#14B8A6','#F59E0B','#EC4899'];
         return (
-          <SheetOverlay onClose={() => setShowMenu(false)} height={PLAY_SHEET_H}>
+          <SheetOverlay onClose={() => setShowMenu(false)} onHeight={setMenuSheetH}>
             {/* Sticky tab bar */}
             <div style={{ position:'sticky', top:0, zIndex:2, background:T.surface, padding:'0 14px 10px' }}>
               <div style={{ display:'flex', background:T.bgSoft, borderRadius:14, padding:5, gap:4 }}>

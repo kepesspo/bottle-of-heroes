@@ -165,15 +165,33 @@ const ok = (cond, name, extra) => {
   ok(geo.btnVisible, 'a záró gomb görgetés nélkül is látszik (fix footer)', JSON.stringify(geo));
   // v10.244: a Buntetes lap PONTOSAN olyan magas, mint a MENÜ lap. Korabban a
   // jatekosok szamaval nott: 3 fonel 347 px, 6-nal 503, 8-nal 607 — a MENÜ
-  // kozben mindig 365. Ezert a magassagot most egy kozos ertek adja.
-  const sheetH = () => p2.evaluate(() => {
-    const el = [...document.querySelectorAll('div')].find(d => {
+  // kozben mindig 365.
+  // v10.249: a kozos ertek NEM beegetett szam tobbe. A v10.244-ben rarakott
+  // min(365px,82vh) keszuleken levagta a MENÜ tartalmat (mas betumetrika →
+  // magasabb tartalom). Most a MENÜ a sajat tartalmahoz igazodik, megmeri
+  // magat, es a Buntetes EHHEZ a mert ertekhez igazodik.
+  // FONTOS: kereses TARTALOM szerint — a ket lap egyszerre is a DOM-ban lehet
+  // (a bezaras animalt), es a puszta "lekerekitett doboz" mindkettore illik.
+  const sheetInfo = (which) => p2.evaluate((w) => {
+    const sheets = [...document.querySelectorAll('div')].filter(d => {
       const cs = getComputedStyle(d);
       return cs.borderTopLeftRadius === '28px' && cs.flexDirection === 'column' && d.getBoundingClientRect().height > 100;
     });
-    return el ? Math.round(el.getBoundingClientRect().height) : null;
-  });
-  const penH = await sheetH();
+    const wanted = sheets.find(el => w === 'menu'
+      ? /Vezérlés/.test(el.innerText || '')
+      : /ki igyon/.test(el.innerText || ''));
+    if (!wanted) return null;
+    const body = [...wanted.querySelectorAll('div')].find(d => getComputedStyle(d).overflowY === 'auto');
+    return {
+      h: Math.round(wanted.getBoundingClientRect().height),
+      forced: wanted.style.height || '(nincs)',
+      scrollH: body ? body.scrollHeight : null,
+      clientH: body ? body.clientHeight : null,
+    };
+  }, which);
+  const sheetH = async (w) => { const i = await sheetInfo(w || 'penalty'); return i && i.h; };
+  const penInfo = await sheetInfo('penalty');
+  const penH = penInfo && penInfo.h;
   // zarjuk be a buntetest, es nyissuk meg a MENÜ-t ugyanezzel a 12 jatekossal
   await p2.evaluate(() => {
     const x = [...document.querySelectorAll('button')].find(b3 => /korty kiosztva|Senki sem iszik/.test(b3.innerText || ''));
@@ -182,9 +200,20 @@ const ok = (cond, name, extra) => {
   await p2.waitForTimeout(900);
   await p2.evaluate(() => { const x = [...document.querySelectorAll('button')].find(b3 => /MENÜ/i.test(b3.innerText || '')); if (x) x.click(); });
   await p2.waitForTimeout(900);
-  const menuH = await sheetH();
+  const menuInfo = await sheetInfo('menu');
+  const menuH = menuInfo && menuInfo.h;
   ok(penH !== null && penH === menuH, 'a Büntetés és a MENÜ lap PONTOSAN egyforma magas',
      `büntetés=${penH} menü=${menuH}`);
+
+  // A MENÜ tartalma NEM lehet levagva: a sajat magassagahoz igazodik, tehat a
+  // belso gorgeto sav nem hosszabb, mint a lathato resz. (Ez volt a v10.244
+  // regresszio: a rakenyszeritett 365 px keszuleken levagta a gombsort.)
+  ok(menuInfo && menuInfo.scrollH !== null && menuInfo.scrollH <= menuInfo.clientH + 1,
+     'a MENÜ tartalma nincs levágva (nem kell görgetni)', JSON.stringify(menuInfo));
+  ok(menuInfo && menuInfo.forced === '(nincs)',
+     'a MENÜ-re nincs rákényszerítve magasság', menuInfo && menuInfo.forced);
+  ok(penInfo && penInfo.forced !== '(nincs)',
+     'a Büntetés VISZONT a mért magassághoz igazodik', penInfo && penInfo.forced);
 
   // v10.246: a "valaki iszik" banner belepoje NEM rangathatja oldalra a
   // kartyat — a profilkepek vele mozogtak, ez volt az "ugralas". A keyframe-et
