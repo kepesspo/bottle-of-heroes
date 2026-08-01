@@ -4,7 +4,8 @@
 //   1. a pakli PARTINKÉNT meg van keverve — eddig `SOHANEM_CARDS[gameIdx % 207]`
 //      volt, tehát minden parti ugyanazzal a lappal indult, és egy 20-40 játékos
 //      buliban a 207-ből csak az első ~40 lap került valaha elő
-//   2. a sorokban KAPCSOLÓ van (igaz/hamis kérdés), egy koppintás jelöl
+//   2. a sorokban a BÜNTETÉSNÉL használt léptető van, de 1-es plafonnal:
+//      a `+` az 1. korty után letiltott (igaz/hamis kérdés)
 //   3. a záró gomb helye NEM függ a játékosszámtól — eddig 10 főnél 940 px-nél
 //      volt egy 874 px-es képernyőn, tehát kicsúszott
 //   4. a banner kiírja a számot, ha mindenki ugyanannyit kap
@@ -21,6 +22,7 @@ const ok = (cond, name, extra) => {
   if (!cond) fail++;
 };
 
+const DRINK_SOR = 48;   // egy korty-oszto sor magassaga
 const NEVEK = ['Sere','Kecsi','Luca','Tóth','Márk','Dani','Vivi','Bence','Zsolt','Anna'];
 
 async function mount(p, n) {
@@ -90,32 +92,63 @@ const olvas = p => p.evaluate(() => {
   // A kijelzo a KEVERT pakliban elfoglalt helyet mutatja, tehat az elso lap 01.
   ok((await olvas(p)).lap === '01', 'a számláló az első lapnál 01/207-et mutat', (await olvas(p)).lap);
 
-  console.log('\n===== 2. KAPCSOLÓ, NEM SZÁMLÁLÓ =====');
+  console.log('\n===== 2. A BÜNTETÉS LÉPTETŐJE, 1-ES PLAFONNAL =====');
   await mount(p, 4);
   const elotte = await olvas(p);
   ok(elotte.sorMagassag === 48, 'a sor 48 px — ugyanaz, mint a Büntetés-modalban', elotte.sorMagassag + ' px');
-  const nincsLepteto = await p.evaluate(() => {
+  const lepteto = await p.evaluate(() => {
     const R = document.getElementById('__p');
     const lista = [...R.querySelectorAll('div')].find(d => d.style && d.style.overflowY === 'auto' && d.style.maxHeight);
     return lista ? [...lista.querySelectorAll('button')].filter(x => /^[−+]$/.test((x.textContent||'').trim())).length : -1;
   });
-  ok(nincsLepteto === 0, 'nincs − / + gomb a sorokban (igaz/hamis kérdés)', nincsLepteto + ' db');
-  const van = await p.evaluate(() => {
-    const R = document.getElementById('__p');
-    return /NEM/.test(R.innerText||'') ? 'igen' : 'nem';
-  });
-  ok(van === 'igen', 'a kapcsoló NEM/IGEN feliratot visel');
-  // egy koppintas jelol, meg egy leveszi
-  const jelol = async (nev) => p.evaluate((nev) => {
+  ok(lepteto === 8, 'minden soron ott a − és a + (4 játékos)', lepteto + ' gomb');
+  ok(!/NEM|IGEN/.test(elotte.szoveg), 'NINCS kapcsoló — a büntetésnél használt felület megy',
+     elotte.szoveg.slice(0, 50));
+
+  // `+` gomb egy soron, n-szer
+  const plusz = async (nev, n) => p.evaluate(({nev, n}) => {
     const R = document.getElementById('__p');
     const lista = [...R.querySelectorAll('div')].find(d => d.style && d.style.overflowY === 'auto' && d.style.maxHeight);
     const sor = [...lista.children].find(s => (s.innerText||'').includes(nev));
-    if (sor) sor.click();
+    const b = sor && [...sor.querySelectorAll('button')].find(x => (x.textContent||'').trim() === '+');
+    for (let i = 0; i < n; i++) if (b) b.click();
+  }, {nev, n});
+  const minusz = async (nev) => p.evaluate((nev) => {
+    const R = document.getElementById('__p');
+    const lista = [...R.querySelectorAll('div')].find(d => d.style && d.style.overflowY === 'auto' && d.style.maxHeight);
+    const sor = [...lista.children].find(s => (s.innerText||'').includes(nev));
+    const b = sor && [...sor.querySelectorAll('button')].find(x => (x.textContent||'').trim() === '−');
+    if (b) b.click();
   }, nev);
-  await jelol('Kecsi'); await p.waitForTimeout(300);
-  ok((await olvas(p)).gombSzoveg === '1 iszik · 1 korty', 'egy koppintás jelöl', (await olvas(p)).gombSzoveg);
-  await jelol('Kecsi'); await p.waitForTimeout(300);
-  ok((await olvas(p)).gombSzoveg === 'Senki sem iszik', 'még egy koppintás leveszi', (await olvas(p)).gombSzoveg);
+
+  await plusz('Kecsi', 1); await p.waitForTimeout(300);
+  ok((await olvas(p)).gombSzoveg === '1 iszik · 1 korty', 'egy koppintás 1 kortyot ad', (await olvas(p)).gombSzoveg);
+  // EZ A LENYEG: tovabbi koppintasok NEM emelik 1 fole
+  await plusz('Kecsi', 4); await p.waitForTimeout(300);
+  ok((await olvas(p)).gombSzoveg === '1 iszik · 1 korty',
+     'további 4 koppintás sem visz 1 fölé — a plafon 1', (await olvas(p)).gombSzoveg);
+  const tiltva = await p.evaluate(() => {
+    const R = document.getElementById('__p');
+    const lista = [...R.querySelectorAll('div')].find(d => d.style && d.style.overflowY === 'auto' && d.style.maxHeight);
+    const sor = [...lista.children].find(s => (s.innerText||'').includes('Kecsi'));
+    const b = [...sor.querySelectorAll('button')].find(x => (x.textContent||'').trim() === '+');
+    return b ? b.disabled : null;
+  });
+  ok(tiltva === true, 'és a + gomb láthatóan letiltott a plafonon');
+  // v10.280b: a plafon GYORS koppintasnal is tart. A `disabled` es a render-beli
+  // orzes ilyenkor nem eleg: harom koppintas egy React-kotegbe esik, ahol a gomb
+  // meg nincs letiltva. Ezert a plafon az allapotfrissitoben dol el.
+  await mount(p, 4);
+  await plusz('Kecsi', 3);   // EGY kotegben, varakozas nelkul
+  await plusz('Tóth', 1);
+  await p.waitForTimeout(400);
+  ok((await olvas(p)).gombSzoveg === '2 iszik · 2 korty',
+     'gyors, egymás utáni koppintás sem lépi túl a plafont', (await olvas(p)).gombSzoveg);
+  // itt Kecsi=1 es Tóth=1 all a fenti kotegelt teszt utan
+  await minusz('Kecsi'); await p.waitForTimeout(300);
+  ok((await olvas(p)).gombSzoveg === '1 iszik · 1 korty', 'a − visszavesz', (await olvas(p)).gombSzoveg);
+  await minusz('Tóth'); await p.waitForTimeout(300);
+  ok((await olvas(p)).gombSzoveg === 'Senki sem iszik', 'nulláról már nem megy lejjebb', (await olvas(p)).gombSzoveg);
 
   console.log('\n===== 3. A ZÁRÓ GOMB HELYE FÜGGETLEN A LÉTSZÁMTÓL =====');
   const poz = {};
@@ -123,14 +156,23 @@ const olvas = p => p.evaluate(() => {
   ok(poz[10].teljesenLatszik === 5, '10 játékosnál is csak 5 sor látszik (a többi görgethető)',
      poz[10].teljesenLatszik + ' sor');
   ok(poz[10].listaMagassag === 272, 'a lista 272 px — ugyanaz a korlát, mint a modalban', poz[10].listaMagassag + ' px');
-  ok(poz[6].gombAlja === poz[10].gombAlja,
-     'a gomb ugyanott van 6 és 10 játékosnál', `${poz[6].gombAlja} vs ${poz[10].gombAlja}`);
+  // 4 fonel a lista MEG NEM eri el a plafont (4 sor = 216 px), tehat ott
+  // jogosan rovidebb — nem paddingoljuk fel uresen. Az osszehasonlithato eset a
+  // 6 es a 10 fo: mindketto a 272-es plafonon ul, tehat a gombnak egy helyen
+  // kell lennie. (Par px elteres maradhat, mert a v10.280 ota a lap a szoveg
+  // hosszahoz igazodik — de az egy sornal jóval kisebb, mig a regi valtozatban
+  // 6 -> 10 fo 208 px-et jelentett.)
+  ok(poz[4].listaMagassag < 272, '4 játékosnál a lista rövidebb — nem tömjük ki üresen',
+     poz[4].listaMagassag + ' px');
+  const elteres = Math.abs(poz[6].gombAlja - poz[10].gombAlja);
+  ok(elteres < DRINK_SOR, 'a gomb helye nem a létszámtól függ (6 vs 10 fő, mindkettő a plafonon)',
+     `${poz[6].gombAlja} vs ${poz[10].gombAlja} — ${elteres} px eltérés, egy sor ${DRINK_SOR} px`);
   ok(poz[10].gombLathato, '10 játékosnál is a képernyőn van (eddig 940 / 874 volt)',
      poz[10].gombAlja + ' / ' + poz[10].ablak);
 
   console.log('\n===== 4. A BANNER KIÍRJA A SZÁMOT AZONOS ÖSSZEGNÉL =====');
   await mount(p, 4);
-  await jelol('Kecsi'); await jelol('Luca'); await p.waitForTimeout(300);
+  await plusz('Kecsi', 1); await plusz('Luca', 1); await p.waitForTimeout(300);
   await p.evaluate(() => {
     const R = document.getElementById('__p');
     const btn = [...R.querySelectorAll('button')].find(x => /iszik ·/.test(x.innerText||''));
@@ -167,6 +209,12 @@ const olvas = p => p.evaluate(() => {
     return [...R.querySelectorAll('div')].filter(d => d.style && d.style.width === '20px' && d.style.height === '6px').length;
   });
   ok(csik === 0, 'a fűszer-csík eltűnt (a jelvény már kiírja a szintet)', csik + ' db');
+  // v10.280: a harom elforgatott hatso lap kikerult — EGY tiszta hos-elem maradt
+  const forgatott = await p.evaluate(() => {
+    const R = document.getElementById('__p');
+    return [...R.querySelectorAll('div')].filter(d => d.style && /rotate/.test(d.style.transform||'')).length;
+  });
+  ok(forgatott === 0, 'nincs több elforgatott hátsó lap — egy tiszta felület maradt', forgatott + ' db');
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
