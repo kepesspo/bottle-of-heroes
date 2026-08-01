@@ -286,7 +286,55 @@ const readMini = p => p.evaluate(() => {
   });
   ok(animName && !/miniBarIn/.test(animName), 'és nem a transformot mozgató animációt használja', animName);
 
-  console.log('\n===== 8. NEM UGRÁL A PROFILKÉP =====');
+  console.log('\n===== 8. EGYETLEN ANIMÁCIÓ KÉZI BEZÁRÁSKOR =====');
+  // A 2600 ms-os automata idozito korabban akkor is elsult, ha a jatekos mar
+  // kezzel bezarta a bannert — igy a sav megjelenese utan MEGINT lejatszott egy
+  // zsugorodo animaciot (v10.268).
+  await fire([A, Bp], { winners:[A], losers:[Bp], drinks:2 });
+  await p.waitForTimeout(700);
+  await p.evaluate(() => {
+    const root = document.getElementById('__pl');
+    [...root.querySelectorAll('div')].find(d => d.style && d.style.zIndex === '250').click();
+  });
+  const seq = [];
+  for (let i = 0; i < 45; i++) {          // ~4,5 mp: atfogja a 2600 ms-os idozitot is
+    const st = await p.evaluate(() => {
+      const root = document.getElementById('__pl');
+      const z250 = [...root.querySelectorAll('div')].find(d => d.style && d.style.position === 'fixed' && d.style.zIndex === '250');
+      const z45 = [...root.querySelectorAll('div')].find(d => d.style && d.style.position === 'fixed' && d.style.zIndex === '45');
+      if (z250) {
+        const big = [...z250.querySelectorAll('div')].some(d => d.style && d.style.height === '300px');
+        return big ? 'nagy' : 'zsugorodik';
+      }
+      return z45 ? 'sáv' : 'semmi';
+    });
+    if (!seq.length || seq[seq.length - 1] !== st) seq.push(st);
+    await p.waitForTimeout(100);
+  }
+  ok(seq[seq.length - 1] === 'sáv', 'a végén a kicsi sáv marad', JSON.stringify(seq));
+  ok(seq.filter(x => x === 'zsugorodik').length === 1,
+     'a zsugorodó animáció PONTOSAN egyszer fut le', JSON.stringify(seq));
+  ok(seq.filter(x => x === 'sáv').length === 1,
+     'és a sáv megjelenése után nem indul újabb animáció', JSON.stringify(seq));
+
+  // Es forditva: ha NEM nyulunk hozza, az automata idozito ugyanugy elsul.
+  await fire([A, Bp], { winners:[A], losers:[Bp], drinks:2 });
+  const seq2 = [];
+  for (let i = 0; i < 45; i++) {
+    const st = await p.evaluate(() => {
+      const root = document.getElementById('__pl');
+      const z250 = [...root.querySelectorAll('div')].find(d => d.style && d.style.position === 'fixed' && d.style.zIndex === '250');
+      const z45 = [...root.querySelectorAll('div')].find(d => d.style && d.style.position === 'fixed' && d.style.zIndex === '45');
+      if (z250) return [...z250.querySelectorAll('div')].some(d => d.style && d.style.height === '300px') ? 'nagy' : 'zsugorodik';
+      return z45 ? 'sáv' : 'semmi';
+    });
+    if (!seq2.length || seq2[seq2.length - 1] !== st) seq2.push(st);
+    await p.waitForTimeout(100);
+  }
+  ok(JSON.stringify(seq2) === '["nagy","zsugorodik","sáv"]',
+     'érintés nélkül is pontosan egyszer kicsinyít, magától', JSON.stringify(seq2));
+
+  console.log('\n===== 9. NEM UGRÁL A PROFILKÉP =====');
   await fire([A, Bp], { winners:[A], losers:[Bp], drinks:2 });
   const before = await p.evaluate(() => {
     const root = document.getElementById('__pl');
