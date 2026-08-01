@@ -159,14 +159,25 @@ async function setup(p, gameId, opts) {
   await setup(p, 'reakcio', { diff: 'hard', noScore: true });
   ok(await readCap(p) === null, 'ha nincs pontozás, nincs kapszula sem');
 
-  console.log('\n===== 8. QR-GOMB (online parti) =====');
+  console.log('\n===== 8. ONLINE PARTI: NINCS QR A JELVÉNYEN =====');
   await setup(p, 'reakcio', { diff: 'hard', room: 'ABCD' });
   const online = await readCap(p);
-  ok(online && online.qr, 'online partinál ott a QR-gomb');
-  ok(online.qr && online.qr.top < online.qr.numTop,
-     'a QR-gomb a korty-szám FÖLÖTT van (nem takarja)',
-     'QR teteje ' + (online.qr && online.qr.top) + ' vs szám teteje ' + (online.qr && online.qr.numTop));
-  ok(online.num === '3', 'és a szám ugyanúgy látszik', online.num);
+  ok(online && !online.qr, 'a jelvényre NEM kerül QR-gomb', online && JSON.stringify(online.qr));
+  ok(online && online.num === '3', 'a korty-szám ugyanúgy látszik', online && online.num);
+  // A csatlakoztatas nem veszhet el: a MENU-ben ott a szobakod + QR + megosztas.
+  await p.evaluate(() => {
+    const root = document.getElementById('__pl');
+    const b = [...root.querySelectorAll('button')].find(x => /MENÜ/i.test(x.innerText || ''));
+    if (b) b.click();
+  });
+  await p.waitForTimeout(700);
+  const menu = await p.evaluate(() => {
+    const t = document.body.innerText.replace(/\s+/g, ' ');
+    const qr = [...document.querySelectorAll('button[title*="QR"]')].length;
+    return { code: /ABCD/.test(t), qr };
+  });
+  ok(menu.code, 'a MENÜ-ben ott a szobakód');
+  ok(menu.qr >= 1, 'és a QR-gomb is — a csatlakoztatás nem veszett el', menu.qr + ' db');
 
   console.log('\n===== 9. WILDCARD „DUPLA" =====');
   // A wildcard idozitve sul el. A konfigbol nem lehet 1 percnel rovidebbre
