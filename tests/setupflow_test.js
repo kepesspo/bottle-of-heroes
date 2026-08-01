@@ -446,8 +446,10 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
   {
     const src = fs.readFileSync('/home/user/bottle-of-heroes/app.src.html', 'utf8');
     const routed = [...src.matchAll(/\{screen===\s*'([a-z]+)'/g)].map(m => m[1]);
-    const om = src.match(/const order = \[([\s\S]*?)\];/);
-    const order = om ? [...om[1].matchAll(/'([a-z]+)'/g)].map(m => m[1]) : [];
+    // A ROUTER sorrendje kell, nem barmilyen 'order' nevu valtozo — ezert
+    // ragaszkodunk hozzo, hogy idezojeles elemmel kezdodjon.
+    const om = src.match(/const order = \[\s*'([\s\S]*?)\];/);
+    const order = om ? [...("'" + om[1]).matchAll(/'([a-z]+)'/g)].map(m => m[1]) : [];
     const missing = [...new Set(routed)].filter(k => !order.includes(k));
     ok('a router minden képernyője szerepel a sorrendben', missing.length === 0,
        missing.length ? 'hiányzik: ' + missing.join(', ') : `${routed.length} képernyő rendben`);

@@ -163,6 +163,29 @@ const ok = (cond, name, extra) => {
   });
   ok(!geo.allNamesVisible, 'nem fér ki mind a 12 játékos egyszerre (a lap nem nő végtelenre)', geo.visibleCount + '/12 látszik');
   ok(geo.btnVisible, 'a záró gomb görgetés nélkül is látszik (fix footer)', JSON.stringify(geo));
+  // v10.244: a Buntetes lap PONTOSAN olyan magas, mint a MENÜ lap. Korabban a
+  // jatekosok szamaval nott: 3 fonel 347 px, 6-nal 503, 8-nal 607 — a MENÜ
+  // kozben mindig 365. Ezert a magassagot most egy kozos ertek adja.
+  const sheetH = () => p2.evaluate(() => {
+    const el = [...document.querySelectorAll('div')].find(d => {
+      const cs = getComputedStyle(d);
+      return cs.borderTopLeftRadius === '28px' && cs.flexDirection === 'column' && d.getBoundingClientRect().height > 100;
+    });
+    return el ? Math.round(el.getBoundingClientRect().height) : null;
+  });
+  const penH = await sheetH();
+  // zarjuk be a buntetest, es nyissuk meg a MENÜ-t ugyanezzel a 12 jatekossal
+  await p2.evaluate(() => {
+    const x = [...document.querySelectorAll('button')].find(b3 => /korty kiosztva|Senki sem iszik/.test(b3.innerText || ''));
+    if (x) x.click();
+  });
+  await p2.waitForTimeout(900);
+  await p2.evaluate(() => { const x = [...document.querySelectorAll('button')].find(b3 => /MENÜ/i.test(b3.innerText || '')); if (x) x.click(); });
+  await p2.waitForTimeout(900);
+  const menuH = await sheetH();
+  ok(penH !== null && penH === menuH, 'a Büntetés és a MENÜ lap PONTOSAN egyforma magas',
+     `büntetés=${penH} menü=${menuH}`);
+
   const real2 = errs2.filter(e => !/ServiceWorker/.test(e));
   ok(real2.length === 0, 'nincs JS hiba (sok játékos)', real2.join(' | '));
   await p2.close();

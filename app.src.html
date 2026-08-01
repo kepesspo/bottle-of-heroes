@@ -35171,7 +35171,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.243';
+const APP_VERSION = 'v10.244';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36302,7 +36302,12 @@ function DrinkChip({ sips=1, label, style:sx }) {
   );
 }
 
-function SheetOverlay({ onClose, children, footer, title, zIndex }) {
+// A JATEK KOZBENI lapok (MENÜ, Büntetés) egyforma magasak. A mertek a MENÜ
+// "vezérlés" fulenek tartalma volt — ezt rogzitjuk, hogy a Buntetes ne a
+// jatekosok szamatol fuggjon. Egy szam, egy helyen.
+const PLAY_SHEET_H = 'min(365px, 82vh)';
+
+function SheetOverlay({ onClose, children, footer, title, zIndex, height }) {
   const [dragY, setDragY] = React.useState(0);
   const [closing, setClosing] = React.useState(false);
   const startYRef = React.useRef(null);
@@ -36348,6 +36353,7 @@ function SheetOverlay({ onClose, children, footer, title, zIndex }) {
           border: 'none',
           boxShadow: '0 -8px 60px rgba(0,0,0,0.28)',
           animation: closing ? 'none' : 'slideUp .3s cubic-bezier(.2,.9,.3,1)',
+          height: height || undefined,
           maxHeight:'82vh',
           display:'flex', flexDirection:'column',
           overflow:'hidden',
@@ -51623,7 +51629,7 @@ function PenaltySheet({ players, onClose, onFinish }) {
   });
   const total = Object.values(drinks).reduce((s,v)=>s+v,0);
   return (
-    <SheetOverlay onClose={onClose} title="Büntetés — ki igyon?" footer={
+    <SheetOverlay onClose={onClose} title="Büntetés — ki igyon?" height={PLAY_SHEET_H} footer={
       <button onClick={()=>onFinish(drinks)} style={{ width:'100%', padding:'12px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:15, borderRadius:14, border:'none', cursor:'pointer', boxShadow:T.shadow }}>
         {total>0 ? `${total} korty kiosztva ✔` : 'Senki sem iszik ✔'}
       </button>
@@ -52520,13 +52526,15 @@ function bjDoSplit(state, hk) {
   const deck = [...state.deck];
   const h1 = [hand[0], bjPop(deck)];
   const h2 = [hand[1], bjPop(deck)];
-  const order = [...keys];
-  order.splice(order.indexOf(hk) + 1, 0, nk);
+  // NE hivjuk 'order'-nek: a router kepernyo-sorrendjet (const order = [...])
+  // egy teszt regexszel olvassa ki a forrasbol, es ez elotte allna.
+  const keyOrder = [...keys];
+  keyOrder.splice(keyOrder.indexOf(hk) + 1, 0, nk);
   const aces = bjIsAceCard(hand[0]);
   let ns = { ...state, deck,
     hands: { ...state.hands, [hk]: h1, [nk]: h2 },
     bets: { ...state.bets, [nk]: (state.bets || {})[hk] || 1 },
-    handKeys: { ...(state.handKeys || {}), [pid]: order },
+    handKeys: { ...(state.handKeys || {}), [pid]: keyOrder },
     fromSplit: { ...(state.fromSplit || {}), [hk]: true, [nk]: true },
     aceSplit: aces ? { ...(state.aceSplit || {}), [hk]: true, [nk]: true } : (state.aceSplit || {}),
   };
@@ -61565,7 +61573,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         const mMaxScore = Math.max(1, ...players.map(p=>p.points));
         const PLAYER_COLORS = ['#5BA0DB','#E985B8','#F4C95A','#4FC2A0','#F97316','#A78BFA','#EF4444','#14B8A6','#F59E0B','#EC4899'];
         return (
-          <SheetOverlay onClose={() => setShowMenu(false)}>
+          <SheetOverlay onClose={() => setShowMenu(false)} height={PLAY_SHEET_H}>
             {/* Sticky tab bar */}
             <div style={{ position:'sticky', top:0, zIndex:2, background:T.surface, padding:'0 14px 10px' }}>
               <div style={{ display:'flex', background:T.bgSoft, borderRadius:14, padding:5, gap:4 }}>
