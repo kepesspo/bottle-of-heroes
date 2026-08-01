@@ -35185,7 +35185,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.274';
+const APP_VERSION = 'v10.275';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -35608,11 +35608,11 @@ const TR = {
     livesLabel: 'Életek',
     livesSub: 'Játékosnak legyen életszáma',
     modePoints: 'Pontgyűjtés',
-    modePointsInfo: 'A játékosok minden győztes körnél csillagot kapnak. A legtöbb csillaggal rendelkező játékos nyeri a meccset.',
+    modePointsInfo: 'Bekapcsolva: a győztes körökért csillag jár, és a vesztesekre rákerül a korty — a parti végén ebből lesz az eredmény. Kikapcsolva „Fun mode”: se pontot, se kortyot nem könyvelünk, a fejlécből is eltűnik a korty-szám. Csak a játékok mennek, tét nélkül.',
     modeGroup: 'Csoportos ivás',
-    modeGroupInfo: 'Vesztes esetén az egész csapat iszik egyet, nem csak a vesztes játékos.',
+    modeGroupInfo: 'Időnként, 5–10 percenként mindenki iszik egyszerre. Nem játék közben szakít félbe: a következő kör kezdete után jön elő. A mennyiség az éppen futó játék nehézségétől függ (könnyű 1, közepes 2, nehéz 3 korty) — ez a játék saját címkéje, nem a partira beállított nehézség.',
     modeWildcard: 'Wildcard körök',
-    modeWildcardInfo: 'Megadott körönként megjelenik egy random különleges szabály (pl. bal kézzel inni, pókerpofa kör). A szabály a következő wildcard körig érvényben marad, és a szabályszegőnek egy koppintással kortyot oszthatsz.',
+    modeWildcardInfo: 'Néhány percenként (lásd „Milyen gyakran?”) megjelenik egy véletlen különleges szabály — pl. bal kézzel inni, pókerpofa kör. A szabály a következő wildcardig érvényben marad, és sávként ott marad a fejléc alatt; a sávra koppintva újra elolvashatod. A „Szabályszegő?” gombbal bárkinek oszthatsz kortyot. Három lapnak tényleges hatása is van: Dupla kör (minden pont és korty ×2), Fordított kör (a vesztes pontoz, a nyertes iszik) és Szerencsekör (+1 pont egy véletlen játékosnak).',
     diffEasy: 'Könnyű',
     diffEasyNote: 'Hosszabb időzítők, megbocsátóbb feltételek. Ajánlott új játékosoknak.',
     diffMid: 'Közepes',
@@ -45000,11 +45000,15 @@ function QuizConfigSheet({ config, setConfig, onClose }) {
 // viselkedest most nem valtoztatjuk meg.
 // A wildcard percalapu: ezekbol a tartomanyokbol sorsol veletlen idopontot.
 // (Korabban korszamolo volt — az a magukban futo jatekokra nem volt rahuzhato.)
+// PERCEK, nem korok: az idozito (lo + random*(hi-lo)) * 60000 ms-ra all.
+// Az alapertelmezes a 6–9 — ha ez valtozik, a HAROM `|| 6` / `|| 9` fallbacket
+// is vinni kell vele (a kivalasztott gomb es a timer lo/hi erteke), kulonben a
+// felulet mast mutatna, mint amit a timer hasznal.
 const WILDCARD_RANGES = [
-  { lo: 4,  hi: 8,  label: '4–8' },
-  { lo: 8,  hi: 15, label: '8–15' },
-  { lo: 15, hi: 25, label: '15–25' },
-  { lo: 25, hi: 40, label: '25–40' },
+  { lo: 3,  hi: 6,  label: '3–6' },
+  { lo: 6,  hi: 9,  label: '6–9' },
+  { lo: 9,  hi: 12, label: '9–12' },
+  { lo: 12, hi: 15, label: '12–15' },
 ];
 
 const SOLO_GAME_IDS = ['busz', 'beerpong', 'powerhour', 'ovfj', 'farkasos', 'blackjack'];
@@ -45874,10 +45878,10 @@ function GameSettingsContent({ meta, setMeta, onDone, go, group }) {
                 <InfoBox id={m.id} text={m.info} />
                 {m.id === 'wildcard' && on && (
                   <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:8, padding:'10px 12px', background:T.surfaceMuted, borderRadius:12 }}>
-                    <span style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkSoft, flex:1 }}>Milyen gyakran?</span>
+                    <span style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkSoft, flex:1 }}>Milyen gyakran?<br /><span style={{ fontWeight:700, fontSize:11, color:T.inkMute }}>percenként</span></span>
                     <div style={{ display:'flex', gap:4 }}>
                       {WILDCARD_RANGES.map(n => {
-                        const sel = (meta.wildcardMin || 8) === n.lo;
+                        const sel = (meta.wildcardMin || 6) === n.lo;
                         return <button key={n.lo} onClick={() => setMeta({...meta, wildcardMin:n.lo, wildcardMax:n.hi})} style={{ width:52, padding:'8px 0', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background: sel?T.mint:T.surface, color: sel?'#fff':T.inkSoft, transition:'all .15s' }}>{n.label}</button>;
                       })}
                     </div>
@@ -60560,8 +60564,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   React.useEffect(() => { activeWcRef.current = activeWildcard; }, [activeWildcard]);
   React.useEffect(() => {
     if (!wildcardOn) return;
-    const lo = Math.max(1, gameMeta?.wildcardMin || 8);
-    const hi = Math.max(lo, gameMeta?.wildcardMax || 15);
+    const lo = Math.max(1, gameMeta?.wildcardMin || 6);
+    const hi = Math.max(lo, gameMeta?.wildcardMax || 9);
     let timer = null;
     const fire = () => {
       const cur = activeWcRef.current;
