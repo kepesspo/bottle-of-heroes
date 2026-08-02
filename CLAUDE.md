@@ -149,6 +149,24 @@ elrontani, és a `tests/szolanc_test.js` őriz:
 - **`chainPool` / `decoyPool`**: a kevert lista kettévágva. Ha egy kalapból
   húznál, a csali megint jövőbeli láncszem lenne, és a játék előre kiadná magát.
 
+## Szoba-töltés animációk (v10.292)
+`RoomFillArt` — négy rajz, szobanyitáskor sorsolva (`BOH_ROOM_ART_COUNT = 4`),
+a „TÖLTJÜK A SZOBÁT" felirat fölött. SVG, nem kép: a kontúr a `T.ink`-ből jön.
+- **0 korsó** · **1 palack** · **2 feles-sor** (hat stampedli, balról jobbra)
+  — mind a három EGY edényt tölt meg, és a töltés maga a folyamatjelző.
+- **3 koccintás** — két korsó lendül össze, a becsapódásnál szikra, csillag és
+  habcseppek. Ez az egyetlen, ami nem tölt: azt mondja, hogy *többen lesztek*.
+
+Amit könnyű elrontani:
+- A koccintásnál a **fülek kifelé néznek** — befelé fordítva a két fül a
+  koccanáskor egymásba érne.
+- A becsapódás **34%-nál** van, és a szikra/csillag/csepp MIND oda van időzítve.
+  Ha az egyiket elcsúsztatod, szétesik a mozdulat.
+- A nyugalmi helyzet ±30 egység és −13° dőlés, ezért a viewBox `-16 0 272 150`
+  — a 16 egységnyi eltartás nélkül levágódik a két szélső korsó.
+Teszt: `node tests/roomart_test.js` (mind a négy rajzol és animál, a koccanásnál
+a rés tényleg nullára zár, és felvillan a csillag).
+
 ## Fontos szabályok
 1. Minden commitnál verzióbump kötelező (az `app.src.html`-ben!)
 2. Kódot CSAK az `app.src.html`-ben szerkessz, majd `node build.js` (lásd BUILD WORKFLOW fent)

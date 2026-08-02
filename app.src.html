@@ -293,6 +293,27 @@
     @keyframes bohFill { 0%{transform:translateY(var(--from))} 76%,100%{transform:translateY(var(--to))} }
     @keyframes bohBubble { 0%{transform:translateY(0);opacity:0} 12%{opacity:.85} 85%{opacity:.1} 100%{transform:translateY(-44px);opacity:0} }
     @keyframes bohShotFill { 0%,4%{transform:translateY(26px)} 16%,100%{transform:translateY(1px)} }
+    /* Koccintás (v10.292) — a 4. szoba-rajz. A masik harom EGY edenyt tolt meg;
+       ez ket korsot koccint ossze, mert a szoba attol szoba, hogy tobben vagytok.
+       A becsapodas 34%-nal van: a szikra, a csillag es a habcseppek MIND oda
+       vannak idozitve, kulonben szetesik a mozdulat. */
+    @keyframes bohClinkL {
+      0%,6%{transform:translateX(-30px) rotate(-13deg)} 30%{transform:translateX(-1px) rotate(15deg)}
+      34%{transform:translateX(2px) rotate(18deg)} 44%{transform:translateX(-11px) rotate(4deg)}
+      58%{transform:translateX(-5px) rotate(9deg)} 76%,100%{transform:translateX(-30px) rotate(-13deg)} }
+    @keyframes bohClinkR {
+      0%,6%{transform:translateX(30px) rotate(13deg)} 30%{transform:translateX(1px) rotate(-15deg)}
+      34%{transform:translateX(-2px) rotate(-18deg)} 44%{transform:translateX(11px) rotate(-4deg)}
+      58%{transform:translateX(5px) rotate(-9deg)} 76%,100%{transform:translateX(30px) rotate(13deg)} }
+    @keyframes bohSpark {
+      0%,30%{opacity:0;transform:scale(.35)} 35%{opacity:1;transform:scale(1.05)}
+      48%,100%{opacity:0;transform:scale(1.5)} }
+    @keyframes bohStar {
+      0%,31%{opacity:0;transform:scale(.2) rotate(-25deg)} 36%{opacity:1;transform:scale(1.15) rotate(0deg)}
+      52%,100%{opacity:0;transform:scale(.7) rotate(18deg)} }
+    @keyframes bohClinkDrop {
+      0%,32%{opacity:0;transform:translateY(0) scale(.6)} 38%{opacity:1;transform:translateY(-16px) scale(1)}
+      56%,100%{opacity:0;transform:translateY(10px) scale(.8)} }
     @keyframes resultShrinkOut { 0%{transform:translateY(0) scale(1);opacity:1} 100%{transform:translateY(42vh) scale(0.15);opacity:0} }
     @keyframes backdropFadeOut { from{opacity:1} to{opacity:0} }
     @keyframes podiumAvatar { from{transform:translateY(24px) scale(0.5);opacity:0} to{transform:translateY(0) scale(1);opacity:1} }
@@ -35185,7 +35206,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.291';
+const APP_VERSION = 'v10.292';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -38156,7 +38177,7 @@ function AdminParties() {
 // Harom rajz, kozos mozdulattal: az edeny megtelik, es EZ a folyamatjelzo.
 // Szobanyitaskor sorsolunk egyet (BOH_ROOM_ART_COUNT), hogy ne kopjon el.
 // SVG, nem kep: eles marad, nincs uj asszet, a kontur az app T.ink-jebol jon.
-const BOH_ROOM_ART_COUNT = 3;
+const BOH_ROOM_ART_COUNT = 4;
 function RoomFillArt({ variant }) {
   const line = T.ink;
   const foam = '#FFFCF3';
@@ -38226,7 +38247,7 @@ function RoomFillArt({ variant }) {
   );
 
   // ── 2 · FELES-SOR — hat stampedli, vastag tömör talppal, balról jobbra ──
-  return (
+  if (variant === 2) return (
     <svg width="min(80vw, 316px)" height="auto" viewBox="0 0 216 74" role="img" aria-label="Töltődő felesek"
          style={{ display:'block', filter:'drop-shadow(0 10px 20px rgba(20,30,50,0.16))' }}>
       <defs>
@@ -38249,6 +38270,58 @@ function RoomFillArt({ variant }) {
           <path d="M4.5 16 L8 45 h14 L25.5 16" fill="none" stroke={line} strokeWidth="3.6" strokeLinejoin="round" strokeLinecap="round" opacity=".92"/>
           <ellipse cx="15" cy="16" rx="10.5" ry="3.2" fill="none" stroke={line} strokeWidth="3.6" opacity=".92"/>
         </g>
+      ))}
+    </svg>
+  );
+
+  // ── 3 · KOCCINTÁS — két korsó összeér, szikra + habcseppek ──
+  // A masik harom EGY edenyt tolt meg; ez a kettosseget mutatja. Ugyanaz a
+  // nyelv (ink kontur, hab, sor-gradiens), csak mas az allitas.
+  const KORSO = "M34 44 L37 118 Q37 124 44 124 L74 124 Q81 124 81 118 L84 44 Z";
+  const KORSO_R = "M156 44 L159 118 Q159 124 166 124 L196 124 Q203 124 203 118 L206 44 Z";
+  return (
+    <svg width="min(88vw, 340px)" height="auto" viewBox="-16 0 272 150" role="img"
+         aria-label="Két korsó összekoccan"
+         style={{ display:'block', overflow:'visible', filter:'drop-shadow(0 10px 20px rgba(20,30,50,0.16))' }}>
+      <defs>
+        <linearGradient id="bohClinkBeer" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#F7CB63"/><stop offset="1" stopColor="#D98A18"/>
+        </linearGradient>
+        <clipPath id="bohClipL"><path d={KORSO}/></clipPath>
+        <clipPath id="bohClipR"><path d={KORSO_R}/></clipPath>
+      </defs>
+
+      {[{ p:KORSO, clip:'bohClipL', anim:'bohClinkL', ful:"M35 62 q-21 4 -21 20 t21 20", x:28, cx:59, csik:44 },
+        { p:KORSO_R, clip:'bohClipR', anim:'bohClinkR', ful:"M205 62 q21 4 21 20 t-21 20", x:150, cx:181, csik:166 }].map((k, i) => (
+        <g key={i} style={{ transformBox:'fill-box', transformOrigin:'50% 88%',
+                            animation:`${k.anim} 2.9s cubic-bezier(.34,.8,.3,1) infinite` }}>
+          <path d={k.ful} fill="none" stroke={line} strokeWidth="7.5" strokeLinecap="round" opacity=".92"/>
+          <g clipPath={`url(#${k.clip})`}>
+            <rect x={k.x} y="34" width="62" height="98" fill="#FFFFFF" opacity=".5"/>
+            <rect x={k.x} y="60" width="62" height="80" fill="url(#bohClinkBeer)"/>
+            <path d={`M${k.x} 60 q9 6 18 0 t18 0 t18 0 t18 0 v10 H${k.x} Z`} fill={foam}/>
+            <path d={`M${k.csik} 66 L${k.csik + 1} 116`} stroke="#FFFFFF" strokeWidth="4.5" strokeLinecap="round" opacity=".5"/>
+          </g>
+          <path d={k.p} fill="none" stroke={line} strokeWidth="4.2" strokeLinejoin="round" opacity=".92"/>
+          <ellipse cx={k.cx} cy="44" rx="25" ry="5.6" fill="none" stroke={line} strokeWidth="4.2" opacity=".92"/>
+        </g>
+      ))}
+
+      {/* becsapódás — mind a 34%-ra időzítve */}
+      <g style={{ transformBox:'fill-box', transformOrigin:'50% 50%', opacity:0,
+                  animation:'bohSpark 2.9s ease-out infinite' }}
+         stroke={line} strokeWidth="3.4" strokeLinecap="round" opacity=".9">
+        <path d="M120 30 v-13"/><path d="M101 36 l-9 -10"/><path d="M139 36 l9 -10"/>
+        <path d="M96 52 l-13 -5"/><path d="M144 52 l13 -5"/>
+      </g>
+      <path d="M120 22 l5.4 11.6 12.6 1.5 -9.3 8.7 2.4 12.5 -11.1 -6.2 -11.1 6.2 2.4 -12.5 -9.3 -8.7 12.6 -1.5 Z"
+            fill="#F4C95A" stroke={line} strokeWidth="3" strokeLinejoin="round"
+            style={{ transformBox:'fill-box', transformOrigin:'50% 50%', opacity:0,
+                     animation:'bohStar 2.9s ease-out infinite' }}/>
+      {[[104,58,4.3,0],[136,56,3.6,0.05],[120,62,3,0.1]].map((d, i) => (
+        <circle key={i} cx={d[0]} cy={d[1]} r={d[2]} fill={foam} stroke={line} strokeWidth="2"
+                style={{ transformBox:'fill-box', transformOrigin:'50% 50%', opacity:0,
+                         animation:`bohClinkDrop 2.9s ${d[3]}s cubic-bezier(.3,.5,.5,1) infinite` }}/>
       ))}
     </svg>
   );
