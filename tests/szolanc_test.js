@@ -13,6 +13,7 @@
 //   7. a lánc partinként kevert — nem a lista első n szava
 //   8. csali sosem lehet jövőbeli láncszem
 //   9. a lánc 12 szónál ér véget, nem zsákutca, és MINDENKI kap +1 pontot
+//  11. v10.287: 23 kategória, mind 20 szavas, és minden szó befér egy chipbe
 //  10. v10.285: EGY SZÍN = EGY TÉT — a lap színe és a kiosztott korty együtt
 //      lép fokozatot (zöld 1 · sárga 2 · rózsa 3)
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
@@ -313,6 +314,49 @@ const koppint = async (p, szavak) => {
     const kapott = await p.evaluate(() => Math.max(0, ...(window.__players || []).map(x => x.drinks)));
     ok(kapott === f.korty, `és a játékos tényleg ${f.korty} kortyot kapott`, kapott);
   }
+
+  console.log('\n===== 11. A SZÓLISTÁK =====');
+  // Statikus ellenorzes a buildelt forrason — nem kell hozza vegigjatszani.
+  // A 20-as hossz KOVETELMENY, nem eszteitka: a chainPool SZ_MAX_LEN (=12)
+  // szot visz el, a maradek a csalie. 20-nal ez 12 + 8, tehat a decoysFor
+  // nyolc kozul forog; rovidebb listanal a 12-es jackpot elerhetetlen lenne.
+  // A build kiszedi a szokozoket (`const LISTS=[{cat:'...',words:[...`), ezert a
+  // mintanak szokoz-toleransnak kell lennie — az elso valtozat szokozoket vart,
+  // `null`-t kapott, es a tobbi allitas ures listan futva HAMISAN zoldult.
+  const listak = await p.evaluate(() => {
+    const h = document.documentElement.innerHTML;
+    const i = h.indexOf('LISTS=['); if (i < 0) return null;
+    const blk = h.slice(i, h.indexOf('];', i));
+    const re = /\{\s*cat:\s*'([^']+)'\s*,\s*words:\s*\[([^\]]+)\]\s*\}/g;
+    const out = []; let m;
+    while ((m = re.exec(blk))) {
+      const w = m[2].split(',').map(x => x.trim().replace(/^'|'$/g, ''));
+      out.push({ cat: m[1], db: w.length, dup: w.length !== new Set(w).size,
+                 leghosszabb: w.reduce((a, b) => b.length > a.length ? b : a, '') });
+    }
+    return out;
+  });
+  ok(listak !== null, 'a szólistákat sikerült kiolvasni a buildből',
+     listak === null ? 'NEM — a minta nem talált' : listak.length + ' lista');
+  ok(listak && listak.length >= 20, 'legalább 20 kategória van', listak ? listak.length : '—');
+  const rosszHossz = (listak || []).filter(l => l.db !== 20);
+  ok(listak !== null && rosszHossz.length === 0, 'mindegyik pontosan 20 szavas (12 lánc + 8 csali)',
+     rosszHossz.map(l => `${l.cat}:${l.db}`).join(', ') || (listak ? 'mind 20' : '—'));
+  const dupok = (listak || []).filter(l => l.dup);
+  ok(listak !== null && dupok.length === 0, 'egyik listában sincs ismétlődő szó',
+     dupok.map(l => l.cat).join(', ') || (listak ? 'nincs' : '—'));
+  // A racs ketoszlopos: (402 - 32 - 10)/2 - 16 = 164 px szoveghely.
+  const beferE = await p.evaluate((szavak) => {
+    const d = document.createElement('div');
+    d.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;font-family:Nunito,system-ui;font-weight:800;font-size:15px';
+    document.body.appendChild(d);
+    const HELY = (402 - 32 - 10) / 2 - 16;
+    const kilog = szavak.filter(w => { d.textContent = w; return d.getBoundingClientRect().width > HELY; });
+    d.remove();
+    return kilog;
+  }, (listak || []).map(l => l.leghosszabb));
+  ok(listak !== null && beferE.length === 0, 'a leghosszabb szó is befér egy chipbe (164 px)',
+     beferE.join(', ') || (listak ? 'mind befér' : '—'));
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();

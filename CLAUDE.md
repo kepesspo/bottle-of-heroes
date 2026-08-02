@@ -101,9 +101,9 @@ A lánc `SZ_MAX_LEN = 12` szónál zárul, és aki odáig elviszi, **mindenkinek
 +1 pontot hoz. Három dolog, ami együtt mozog:
 - a `stake:[1,3]` tartományt kézzel kell utánaigazítani, ha a `korty` értékek
   változnak, különben a korty-korong mást ígér, mint amit a játék kioszt;
-- a szólisták 20 szavasak, mert `SZ_MAX_LEN` láncszó után is kell **legalább
-  3 csali** — 15 szónál minden szinten ugyanaz a három lenne, és két kör után
-  mindenki tudná, hogy azokat nem kell nézni;
+- **23 kategória**, mind pontosan **20 szavas**, mert `SZ_MAX_LEN` láncszó
+  után is kell legalább 3 csali — 15 szónál minden szinten ugyanaz a három
+  lenne, és két kör után mindenki tudná, hogy azokat nem kell nézni;
 - a `chainPool` / `decoyPool` vágás `SZ_MAX_LEN`-hez igazodik, nem felezés. Két invariáns, amit könnyű
 elrontani, és a `tests/szolanc_test.js` őriz:
 - **`SZ_CARD_H` / `SZ_ACT_H`**: az átadás és a villantás UGYANAZT a téglalapot
