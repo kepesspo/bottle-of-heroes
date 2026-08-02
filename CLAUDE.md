@@ -93,6 +93,16 @@ Két belépő (MENÜ → Büntetés, Wildcard → „Szabályszegő?"), **egy** 
 `docs/buntetes.md` — három csapda van benne (abszolút szám, fordított kör,
 `pendingCommit`-felülírás). Teszt: `node tests/penalty_unified_test.js`.
 
+## Szólánc (v10.284)
+Hőfok-lap a Szerencsekerék pasztelljeiből — a szín a **sor hosszát** kódolja
+(`SZ_TONES`, `szTone()`), a tinta FIX `#14202F`. Két invariáns, amit könnyű
+elrontani, és a `tests/szolanc_test.js` őriz:
+- **`SZ_CARD_H` / `SZ_ACT_H`**: az átadás és a villantás UGYANAZT a téglalapot
+  használja (méret *és* pozíció). A villantáson üresen fenn kell tartani a
+  gombsor helyét — enélkül a középre igazítás 31 px-szel feljebb tolja a lapot.
+- **`chainPool` / `decoyPool`**: a kevert lista kettévágva. Ha egy kalapból
+  húznál, a csali megint jövőbeli láncszem lenne, és a játék előre kiadná magát.
+
 ## Fontos szabályok
 1. Minden commitnál verzióbump kötelező (az `app.src.html`-ben!)
 2. Kódot CSAK az `app.src.html`-ben szerkessz, majd `node build.js` (lásd BUILD WORKFLOW fent)
