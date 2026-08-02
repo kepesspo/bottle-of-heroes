@@ -35206,7 +35206,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.292';
+const APP_VERSION = 'v10.293';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -52563,7 +52563,7 @@ const IMPOSZTOR_SZAVAK_SHUFFLED = (() => {
 })();
 
 function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
-  const [impostorIdx, setImpostorIdx] = useState(0);
+  const [impostorIndices, setImpostorIndices] = useState([]);
   const [startIdx, setStartIdx] = useState(0); // körönként random kezdőjátékos
   const [wordIdx, setWordIdx] = useState(0);
   const [phase, setPhase] = useState('reveal');
@@ -52578,12 +52578,22 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
   const resultFiredRef = useRef(false);
 
   useEffect(() => {
-    setImpostorIdx(Math.floor(Math.random() * players.length));
+    // Determine number of impostors based on player count
+    const numImpostors = players.length >= 5 ? 2 : 1;
+    const indices = [];
+    for (let i = 0; i < numImpostors; i++) {
+      let idx;
+      do {
+        idx = Math.floor(Math.random() * players.length);
+      } while (indices.includes(idx));
+      indices.push(idx);
+    }
+    setImpostorIndices(indices);
     setStartIdx(Math.floor(Math.random() * players.length));
     setWordIdx(gameIdx % IMPOSZTOR_SZAVAK_SHUFFLED.length);
     setPhase('reveal'); setRevealStep(0); setHolding(false); setVotes({}); setVoteStep(0);
     setTimerTotal(0); setTimerEnd(0); setTimerLeft(0); setVoteReady(false); resultFiredRef.current = false;
-  }, [gameIdx]);
+  }, [gameIdx, players.length]);
 
   // A felfedés/szavazás sorrendje a random kezdőtől indul körbe
   const ord = players.map((_, i) => players[(startIdx + i) % players.length]);
@@ -52603,7 +52613,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
   if (phase === 'reveal') {
     const pl = ord[revealStep];
     if (!pl) return null;
-    const isImpostor = pl.id === players[impostorIdx]?.id;
+    const isImpostor = impostorIndices.some(idx => pl.id === players[idx]?.id);
     return (
       <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
 
@@ -52677,7 +52687,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
         {!voteReady ? (
           <div style={{ background:T.ink, borderRadius:16, padding:'16px', width:'100%', display:'flex', flexDirection:'column', gap:12, alignItems:'center' }}>
             <div style={{ fontFamily:T.font, fontSize:13, color:'rgba(255,255,255,0.75)', textAlign:'center', lineHeight:1.5 }}>
-              Mindenki mondjon <strong style={{ color:'#fff' }}>egy tippet</strong> a szóra. Az idő lejártakor szavazhattok.
+              Mindenki mondjon <strong style={{ color:'#fff' }}>egy tippet</strong> a szóra. Az idő lejártakor {impostorIndices.length === 2 ? 'szavazhattok az egyik imposztorra' : 'szavazhattok'}.
             </div>
             {timerTotal === 0 && (
               <>
@@ -52750,21 +52760,22 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
                       const vc = {};
                       Object.values(nv).forEach(idx => { vc[idx] = (vc[idx]||0)+1; });
                       const top = Object.entries(vc).sort((a,b)=>b[1]-a[1])[0]?.[0];
-                      const isFound = parseInt(top) === impostorIdx;
-                      const imp = players[impostorIdx];
+                      const topIdx = parseInt(top);
+                      const isFound = impostorIndices.includes(topIdx);
+                      const impostors = impostorIndices.map(idx => players[idx]);
                       const dm = {};
                       const pm = {};
                       if (isFound) {
-                        dm[imp.id] = 3;
-                        players.forEach((p, i) => { if (nv[p.id] === impostorIdx) pm[p.id] = 1; });
+                        impostors.forEach(imp => { dm[imp.id] = 3; });
+                        players.forEach((p, i) => { if (impostorIndices.includes(nv[p.id])) pm[p.id] = 1; });
                       } else {
-                        pm[imp.id] = 1;
-                        players.forEach(p => { if (p.id !== imp.id) dm[p.id] = 2; });
+                        impostors.forEach(imp => { pm[imp.id] = 1; });
+                        players.forEach((p, i) => { if (!impostorIndices.includes(i)) dm[p.id] = 2; });
                       }
-                      const correctVoters = isFound ? players.filter((p,i) => nv[p.id] === impostorIdx) : [];
+                      const correctVoters = isFound ? players.filter((p,i) => impostorIndices.includes(nv[p.id])) : [];
                       setTimeout(() => {
-                        if (isFound) onResult && onResult({ winners: correctVoters, losers:[imp], drinks:3, winNote:'+1 pont', loseNote:'Lebukott 🕵️' });
-                        else onResult && onResult({ winners:[imp], losers: players.filter(p=>p.id!==imp.id), drinks:2, winNote:'Megúszta · +1 pont' });
+                        if (isFound) onResult && onResult({ winners: correctVoters, losers:impostors, drinks:3, winNote:'+1 pont', loseNote:'Lebukott 🕵️' });
+                        else onResult && onResult({ winners:impostors, losers: players.filter((p,i)=>!impostorIndices.includes(i)), drinks:2, winNote:'Megúszta · +1 pont' });
                         onAdvance && onAdvance(dm, pm);
                       }, 900);
                     }
@@ -52782,19 +52793,23 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
   }
 
   if (phase === 'result') {
-    const impostor = players[impostorIdx];
+    const impostors = impostorIndices.map(idx => players[idx]);
     const voteCounts = {};
     Object.values(votes).forEach(idx => { voteCounts[idx] = (voteCounts[idx]||0)+1; });
     const topIdx = Object.entries(voteCounts).sort((a,b)=>b[1]-a[1])[0]?.[0];
-    const found = parseInt(topIdx) === impostorIdx;
+    const found = impostorIndices.includes(parseInt(topIdx));
     return (
       <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
         <div style={{ background:'#1a1a2e', borderRadius:16, padding:'12px 18px', textAlign:'center', boxShadow:T.shadow, animation:'popIn .4s', width:'100%' }}>
-          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Az Imposztor</div>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
-            <div style={{ width:44, height:44, borderRadius:'50%', background:impostor.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:'#fff', overflow:'hidden' }}>{impostor.img ? <img src={impostor.img} style={{width:44,height:44,objectFit:'cover'}} /> : impostor.name.charAt(0).toUpperCase()}</div>
-            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.coral }}>{impostor.name}</div>
-            <div style={{ fontSize:22 }}>🕵️</div>
+          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Az Imposztor{impostors.length === 2 ? 'ok' : ''}</div>
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+            {impostors.map((impostor, imIdx) => (
+              <div key={impostor.id} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+                <div style={{ width:44, height:44, borderRadius:'50%', background:impostor.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:'#fff', overflow:'hidden' }}>{impostor.img ? <img src={impostor.img} style={{width:44,height:44,objectFit:'cover'}} /> : impostor.name.charAt(0).toUpperCase()}</div>
+                <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:22, color:T.coral }}>{impostor.name}</div>
+                <div style={{ fontSize:22 }}>🕵️</div>
+              </div>
+            ))}
           </div>
           <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:4 }}>Szó: <strong style={{ color:'rgba(255,255,255,0.85)' }}>{word}</strong></div>
         </div>
@@ -52804,7 +52819,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
             <div key={p.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 10px', background:T.surface, borderRadius:10 }}>
               <PlayerAvatar player={p} size={26} />
               <div style={{ flex:1, fontFamily:T.font, fontSize:13, fontWeight:600, color:T.ink }}>{p.name}</div>
-              {i===impostorIdx && <div style={{ fontSize:13 }}>🕵️</div>}
+              {impostorIndices.includes(i) && <div style={{ fontSize:13 }}>🕵️</div>}
               <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{voteCounts[i]||0} szavazat</div>
             </div>
           ))}
