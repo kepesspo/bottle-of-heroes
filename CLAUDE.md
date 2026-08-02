@@ -93,13 +93,18 @@ Két belépő (MENÜ → Büntetés, Wildcard → „Szabályszegő?"), **egy** 
 `docs/buntetes.md` — három csapda van benne (abszolút szám, fordított kör,
 `pendingCommit`-felülírás). Teszt: `node tests/penalty_unified_test.js`.
 
-## Szólánc (v10.285)
+## Szólánc (v10.286)
 Hőfok-lap a Szerencsekerék pasztelljeiből — **egy szín = egy tét**
-(`SZ_TONES`, `szTone()`): zöld 2–3 szó / 1 korty, sárga 4–6 / 2, rózsa 7+ / 3,
+(`SZ_TONES`, `szTone()`): zöld 2–4 szó / 1 korty, sárga 5–7 / 2, rózsa 8+ / 3,
 felszorozva a nehézséggel és a wildcarddal. A tinta FIX `#14202F`.
-A `korty` a fokozaton ül, tehát a szín és a tét nem csúszhat szét — de a
-`stake:[1,3]` tartományt kézzel kell utánaigazítani, ha a `korty` értékek
-változnak, különben a korty-korong mást ígér, mint amit a játék kioszt. Két invariáns, amit könnyű
+A lánc `SZ_MAX_LEN = 12` szónál zárul, és aki odáig elviszi, **mindenkinek**
++1 pontot hoz. Három dolog, ami együtt mozog:
+- a `stake:[1,3]` tartományt kézzel kell utánaigazítani, ha a `korty` értékek
+  változnak, különben a korty-korong mást ígér, mint amit a játék kioszt;
+- a szólisták 20 szavasak, mert `SZ_MAX_LEN` láncszó után is kell **legalább
+  3 csali** — 15 szónál minden szinten ugyanaz a három lenne, és két kör után
+  mindenki tudná, hogy azokat nem kell nézni;
+- a `chainPool` / `decoyPool` vágás `SZ_MAX_LEN`-hez igazodik, nem felezés. Két invariáns, amit könnyű
 elrontani, és a `tests/szolanc_test.js` őriz:
 - **`SZ_CARD_H` / `SZ_ACT_H`**: az átadás és a villantás UGYANAZT a téglalapot
   használja (méret *és* pozíció). A villantáson üresen fenn kell tartani a

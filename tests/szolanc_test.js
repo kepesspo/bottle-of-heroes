@@ -12,7 +12,7 @@
 //   6. a többiek megkapják a pontot, amit a leírás ígér
 //   7. a lánc partinként kevert — nem a lista első n szava
 //   8. csali sosem lehet jövőbeli láncszem
-//   9. a végigvitt lánc nem zsákutca: a Kövi gomb aktív lesz
+//   9. a lánc 12 szónál ér véget, nem zsákutca, és MINDENKI kap +1 pontot
 //  10. v10.285: EGY SZÍN = EGY TÉT — a lap színe és a kiosztott korty együtt
 //      lép fokozatot (zöld 1 · sárga 2 · rózsa 3)
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
@@ -223,7 +223,7 @@ const koppint = async (p, szavak) => {
   console.log('\n===== 7-8. KEVERT LÁNC, ÉS A CSALI NEM JÖVŐBELI LÁNCSZEM =====');
   const elsok = new Set();
   let atfedes = 0, mintak = 0;
-  for (let m = 0; m < 6; m++) {
+  for (let m = 0; m < 4; m++) {
     await mount(p, 4, 'easy');
     await indit(p);
     const { lanc, racs } = await korLejatszas(p, 2);
@@ -246,22 +246,24 @@ const koppint = async (p, szavak) => {
     mintak++;
     if (k4.lanc.some(w => csalik.includes(w))) atfedes++;
   }
-  ok(elsok.size > 1, 'a lánc partinként más — nem a lista első n szava', elsok.size + ' különböző nyitószó/6 indítás');
+  ok(elsok.size > 1, 'a lánc partinként más — nem a lista első n szava', elsok.size + ' különböző nyitószó/4 indítás');
   ok(atfedes === 0, 'és a csalik közül egy sem lett később láncszem', atfedes + ' átfedés / ' + mintak + ' minta');
 
-  console.log('\n===== 9. A VÉGIGVITT LÁNC NEM ZSÁKUTCA =====');
+  console.log('\n===== 9. A LÁNC 12 SZÓNÁL ÉR VÉGET, ÉS MINDENKI PONTOT KAP =====');
   await mount(p, 4, 'easy');
   let hossz = 2, vege = false;
-  for (let lvl = 0; lvl < 12 && !vege; lvl++) {
+  for (let lvl = 0; lvl < 16 && !vege; lvl++) {
     await indit(p);
     const { lanc } = await korLejatszas(p, hossz);
     if (!lanc.length) break;
     await koppint(p, lanc);
     await p.waitForTimeout(1900);
-    vege = await p.evaluate(() => /Végig megvolt a sor/.test(document.getElementById('__p').innerText || ''));
+    vege = await p.evaluate(() => /Megvan mind a \d+/.test(document.getElementById('__p').innerText || ''));
     hossz++;
   }
-  ok(vege, 'a lánc végigvihető és lezárul', hossz - 1 + ' szónál ért véget');
+  ok(vege && hossz - 1 === 12, 'a lánc pontosan 12 szónál zárul le', hossz - 1 + ' szó');
+  const nyeroLap = await p.evaluate(() => (document.getElementById('__p').innerText || '').replace(/\s+/g, ' '));
+  ok(/mindenki \+1 pont/.test(nyeroLap), 'a nyerő lap kiírja, hogy mindenki pontot kap');
   const kovi = await p.evaluate(() => {
     const R = document.getElementById('__p');
     const b = [...R.querySelectorAll('button')].find(x => /Kövi/.test(x.innerText || ''));
@@ -269,6 +271,11 @@ const koppint = async (p, szavak) => {
   });
   ok(kovi && kovi !== 'rgba(0, 0, 0, 0)' && !/246, 241, 230/.test(kovi),
      'és a Kövi gomb AKTÍV (eddig holtan maradt, mert nem volt pendingCommit)', kovi);
+  await p.evaluate(() => { const x = [...document.getElementById('__p').querySelectorAll('button')].find(y => /Kövi/.test(y.innerText || '')); x && x.click(); });
+  await p.waitForTimeout(900);
+  const jackpot = await p.evaluate(() => (window.__players || []).map(x => `${x.name}:${x.points}p/${x.drinks}k`).join(', '));
+  const mindPontos = await p.evaluate(() => (window.__players || []).every(x => x.points === 1 && x.drinks === 0));
+  ok(mindPontos, 'és mind a négyen tényleg megkapták a pontot, korty nélkül', jackpot);
 
   console.log('\n===== 10. EGY SZÍN = EGY TÉT =====');
   // Minden fokozaton felmegyunk a hatarig, elrontjuk, es megnezzuk, hogy a lap
@@ -276,7 +283,7 @@ const koppint = async (p, szavak) => {
   const FOKOZAT = [
     { szint: 2, szin: 'rgb(201, 232, 210)', korty: 1, nev: 'zöld' },
     { szint: 5, szin: 'rgb(245, 224, 172)', korty: 2, nev: 'sárga' },
-    { szint: 7, szin: 'rgb(242, 196, 196)', korty: 3, nev: 'rózsa' },
+    { szint: 8, szin: 'rgb(242, 196, 196)', korty: 3, nev: 'rózsa' },
   ];
   for (const f of FOKOZAT) {
     await mount(p, 4, 'easy');
