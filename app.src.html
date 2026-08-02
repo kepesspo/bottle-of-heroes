@@ -35185,7 +35185,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.290';
+const APP_VERSION = 'v10.291';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -47695,6 +47695,19 @@ function BohIcon({ name, size = 20, style }) {
       <circle cx="24" cy="24" r="18" fill={CR} stroke={I} strokeWidth="2.66"/>
       <path d="M15 20 H33 M15 28 H33" stroke={I} strokeWidth="3.22" strokeLinecap="round"/>
     </React.Fragment>); break;
+    // A korty-leptetok sajat ikonja (v10.291). Ugyanaz a geometria, mint a
+    // check/cross paron (r=18, kontur 2.8, belso vonal 3.5), hogy a sorban
+    // egy csaladba tartozzanak: a `−` semleges krem korong ink vonallal,
+    // a `+` korall korong feher kereszttel. Maga a korong A GOMB — a sorban
+    // nincs alatta meg egy szines negyzet, kulonben ket rétegu lenne.
+    case 'minus': inner = (<React.Fragment>
+      <circle cx="24" cy="24" r="18" fill={CR} stroke={I} strokeWidth="2.8"/>
+      <path d="M15 24 H33" stroke={I} strokeWidth="3.5" strokeLinecap="round"/>
+    </React.Fragment>); break;
+    case 'plus': inner = (<React.Fragment>
+      <circle cx="24" cy="24" r="18" fill={C} stroke={I} strokeWidth="2.8"/>
+      <path d="M24 15 V33 M15 24 H33" stroke={W} strokeWidth="3.5" strokeLinecap="round"/>
+    </React.Fragment>); break;
     case 'info': inner = (<React.Fragment>
       <circle cx="24" cy="24" r="18" fill={M} stroke={I} strokeWidth="2.8"/>
       <circle cx="24" cy="16" r="3.2" fill={W}/>
@@ -51804,36 +51817,70 @@ const DRINK_LIST_MAX = DRINK_ROWS_VISIBLE * DRINK_ROW_H + (DRINK_ROWS_VISIBLE - 
 // buntetes-modal merteke maradt, a tesztek hivatkozzak.)
 const DRINK_LIST_W = 296;
 
-// `max`: felso plafon egy jatekosra. Az "En meg soha" igaz/hamis kerdes, ott
-// `max={1}` — a `+` a plafonon ugyanugy letiltott, ahogy a `−` nullan. Igy a
-// felulet SZO SZERINT a buntetesnel hasznalt, csak nem enged 1-nel tobbet.
-function PlayerDrinkRow({ p, cnt, onAdd, onRemove, max }) {
-  const on = cnt > 0;
-  const tele = max != null && cnt >= max;
-  const stepBtn = (extra) => ({ width:30, height:30, borderRadius:9, border:'none', flexShrink:0,
-    fontFamily:T.font, fontSize:17, fontWeight:900, lineHeight:1, display:'grid', placeItems:'center', ...extra });
+// ── A KORTY-SOR: egyetlen forras minden „ki igyon?" feluletnek (v10.291) ──
+// Korabban negy helyen elt ugyanez a sor: az En meg sohaban es a Buntetesben
+// kozosen (ez a komponens), a Kategoriaban kezzel lemasolva, a Loversenyben
+// pedig sajat feher kartyara forkolva. A masolatok elcsusztak — a nulla egyszer
+// `–` volt, egyszer `0`, a `+` egyszer korall, egyszer menta. Most mindegyik
+// INNEN jon, es a kulonbseg prop, nem uj markup:
+//   variant='stepper' (alap)  − szam +      · Buntetes, En meg soha, Loverseny
+//   variant='pick'            pipa a vegen  · Kategoria (egy embert valasztunk)
+//   readOnly                  szam, gomb nelkul · kiosztas utani osszegzes
+//   meta                      jobbra tolt chip · Loverseny tetje (lo + korty)
+// `max`: felso plafon egy jatekosra (En meg soha: 1). `addDisabled`: KOZOS
+// keret fogyott el (Loverseny), tehat nem a jatekos plafonja tiltja a `+`-t.
+function PlayerDrinkRow({ p, cnt, onAdd, onRemove, max, variant = 'stepper',
+                          selected, onPick, meta, readOnly, addDisabled }) {
+  const pick = variant === 'pick';
+  const on = pick ? !!selected : cnt > 0;
+  const tele = (max != null && cnt >= max) || !!addDisabled;
+  // A leptetok maguk az ikonok: a BohIcon korongja A GOMB. Nincs alatta meg
+  // egy szines negyzet — az ket retegu korongot adott volna.
+  const stepBtn = { width:30, height:30, padding:0, border:'none', background:'transparent',
+                    flexShrink:0, display:'grid', placeItems:'center', lineHeight:0 };
   return (
-    <div style={{ flexShrink:0, height:DRINK_ROW_H, display:'flex', alignItems:'center', gap:10, padding:'7px 10px',
+    <div onClick={pick && onPick ? () => onPick(p.id) : undefined}
+         style={{ flexShrink:0, height:DRINK_ROW_H, display:'flex', alignItems:'center', gap:10, padding:'7px 10px',
                   /* coralSoft, nem alfás coral: a ~9%-os coral a meleg temak
                      hatteren eltunt. A token mind a 8 temaban hangolva van. */
-                  background: on ? T.coralSoft : T.surfaceMuted, borderRadius:14, transition:'background .15s' }}>
+                  background: on ? T.coralSoft : T.surfaceMuted, borderRadius:14,
+                  cursor: pick && onPick ? 'pointer' : 'default', transition:'background .15s' }}>
       <PlayerAvatar player={p} size={34} />
       <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink,
                     overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
-      <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
-        <button onClick={()=>onRemove(p.id)} disabled={!on}
-          style={stepBtn({ background: on ? T.surface : 'transparent', color: on ? T.inkSoft : T.inkMute,
-                           boxShadow: on ? T.shadowPill : 'none', cursor: on ? 'pointer' : 'default' })}>−</button>
-        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, minWidth:44, textAlign:'center',
-                       color: on ? T.coral : T.inkMute, fontVariantNumeric:'tabular-nums',
-                       display:'inline-flex', alignItems:'center', justifyContent:'center', gap:3 }}>
-          {on ? <React.Fragment>{cnt}<BohIcon name="beer" size={14} /></React.Fragment> : '–'}
-        </span>
-        <button onClick={(e)=>{ if (tele) return; onAdd(p.id); if (window.bohFloat) window.bohFloat(e.currentTarget, `+${cnt+1} 🍺`, T.coral); }}
-          disabled={tele}
-          style={stepBtn({ background: tele ? 'transparent' : T.coral+'22', color: tele ? T.inkMute : T.coral,
-                           cursor: tele ? 'default' : 'pointer' })}>+</button>
-      </div>
+      {/* Jobbra tolt chip: a sor 48 px marad, a tet nem tor masodik sorba. */}
+      {meta}
+      {pick ? (
+        <div style={{ width:26, height:26, flexShrink:0, display:'grid', placeItems:'center' }}>
+          {selected && <BohIcon name="check" size={21} />}
+        </div>
+      ) : readOnly ? (
+        /* Nulla kortynal nincs jobb oldal — ott vagy a `meta` chip beszel
+           (Loverseny nyertese), vagy nincs mit mondani. Egy „0 🍺" csak zaj. */
+        cnt > 0 ? (
+          <div style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0, fontFamily:T.font,
+                        fontWeight:900, fontSize:15, color:T.ink }}>
+            {cnt}<BohIcon name="beer" size={17} />
+          </div>
+        ) : null
+      ) : (
+        <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+          <button onClick={()=>onRemove(p.id)} disabled={!on} aria-label="Egy korttyal kevesebb"
+            style={{ ...stepBtn, opacity: on ? 1 : 0.32, cursor: on ? 'pointer' : 'default' }}>
+            <BohIcon name="minus" size={24} />
+          </button>
+          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, minWidth:44, textAlign:'center',
+                         color: on ? T.coral : T.inkMute, fontVariantNumeric:'tabular-nums',
+                         display:'inline-flex', alignItems:'center', justifyContent:'center', gap:3 }}>
+            {on ? <React.Fragment>{cnt}<BohIcon name="beer" size={14} /></React.Fragment> : '–'}
+          </span>
+          <button onClick={(e)=>{ if (tele) return; onAdd(p.id); if (window.bohFloat) window.bohFloat(e.currentTarget, `+${cnt+1} 🍺`, T.coral); }}
+            disabled={tele} aria-label="Egy korttyal több"
+            style={{ ...stepBtn, opacity: tele ? 0.32 : 1, cursor: tele ? 'default' : 'pointer' }}>
+            <BohIcon name="plus" size={24} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -51877,16 +51924,7 @@ function DrinkDistributor({ players, onFinish, title, max, resetKey, center }) {
           <div style={{ display:'flex', flexDirection:'column', gap:DRINK_ROW_GAP,
                         maxHeight:DRINK_LIST_MAX, overflowY:'auto', animation:'bohFadeIn .18s' }}>
             {ivok.map(p => (
-              <div key={p.id} style={{ flexShrink:0, height:DRINK_ROW_H, display:'flex', alignItems:'center',
-                                       gap:10, padding:'7px 10px', background:T.coralSoft, borderRadius:14 }}>
-                <PlayerAvatar player={p} size={34} />
-                <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink,
-                              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
-                <div style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0, fontFamily:T.font,
-                              fontWeight:900, fontSize:15, color:T.ink }}>
-                  {drinks[p.id]}<BohIcon name="beer" size={17} />
-                </div>
-              </div>
+              <PlayerDrinkRow key={p.id} p={p} cnt={drinks[p.id]} readOnly />
             ))}
           </div>
         )
@@ -52289,42 +52327,40 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBe
             );
           })}
         </div>
-        {/* Player rows with inline gift +/- */}
-        <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
+        {/* Jatekos-sorok — a KOZOS PlayerDrinkRow-bol (v10.291). A tet nem tor
+            masodik sorba (az 56 px-re novelte volna a sort), hanem jobbra tolt
+            CHIPBE megy: lo-pont + szam + korso, nyeresnel menta kupaval. Igy a
+            sor 48 px marad, ugyanaz, mint a Buntetesben es a Kategoriaban. */}
+        <div style={{ display:'flex', flexDirection:'column', gap:DRINK_ROW_GAP }}>
           {players.map(p => {
             const b = bets[p.id];
             const horse = HORSES.find(h => h.id === b?.horseId);
             const won = b?.horseId === raceWinner;
             const given = gifts[p.id] || 0;
             const bet = b?.amount || 0;
-            return (
-              <div key={p.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:T.surface, borderRadius:14, boxShadow:T.shadowPill }}>
-                {/* Avatar */}
-                <PlayerAvatar player={p} size={32} />
-                {/* Name + horse dot */}
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
-                  <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:2 }}>
-                    {horse && <div style={{ width:10, height:10, borderRadius:'50%', background:horse.color, flexShrink:0, boxShadow:'0 0 0 1.5px rgba(0,0,0,0.15)' }} />}
-                    <div style={{ fontFamily:T.font, fontSize:12, color: won ? T.mint : T.coral, fontWeight:700 }}>
-                      {won
-                        ? <span>🎉 nyert · <b style={{fontSize:14}}>{bet}</b> 🍺 kioszt</span>
-                        : <span><b style={{fontSize:14}}>{bet}</b> 🍺 fogadott{given>0 ? <span> · <b style={{fontSize:14,color:T.coral}}>+{given}</b> kapott</span> : null}</span>
-                      }
-                    </div>
-                  </div>
-                </div>
-                {/* +/- only for non-winners, only if there's pool remaining or they already got some */}
-                {!won && winnerPool > 0 && (
-                  <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0 }}>
-                    <button onClick={() => setGifts(g => ({...g,[p.id]:Math.max(0,(g[p.id]||0)-1)})) } disabled={given<=0}
-                      style={{ width:30, height:30, borderRadius:8, border:'none', background: given>0 ? T.coral+'22' : T.surfaceMuted, color: given>0 ? T.coral : T.inkMute, fontFamily:T.font, fontSize:18, cursor:given>0?'pointer':'default', fontWeight:700 }}>−</button>
-                    <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color: given>0 ? T.coral : T.inkMute, minWidth:18, textAlign:'center' }}>{given}</div>
-                    <button onClick={() => { if(remaining>0) setGifts(g=>({...g,[p.id]:(g[p.id]||0)+1})); }} disabled={remaining<=0}
-                      style={{ width:30, height:30, borderRadius:8, border:'none', background: remaining>0 ? T.mint+'22' : T.surfaceMuted, color: remaining>0 ? T.mint : T.inkMute, fontFamily:T.font, fontSize:18, cursor:remaining>0?'pointer':'default', fontWeight:700 }}>+</button>
-                  </div>
-                )}
+            const chip = (
+              <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0, padding:'3px 8px',
+                            borderRadius:999, background:T.surface, boxShadow:T.shadowPill,
+                            fontFamily:T.font, fontWeight:800, fontSize:12,
+                            color: won ? T.mint : T.inkSoft }}>
+                {horse && <span style={{ width:9, height:9, borderRadius:'50%', background:horse.color,
+                                         flexShrink:0, boxShadow:'0 0 0 1.5px rgba(0,0,0,0.15)' }} />}
+                {won && <BohIcon name="trophy" size={13} />}
+                <span style={{ fontVariantNumeric:'tabular-nums' }}>{bet}</span>
+                <BohIcon name="beer" size={13} />
               </div>
+            );
+            // A nyertes nem kap kortyot — nala a chip az egesz jobb oldal.
+            // A vesztoknel a KOZOS keret (remaining) tiltja a `+`-t, nem a
+            // jatekos sajat plafonja: ezert `addDisabled`, nem `max`.
+            return won ? (
+              <PlayerDrinkRow key={p.id} p={p} cnt={0} readOnly meta={chip} />
+            ) : (
+              <PlayerDrinkRow key={p.id} p={p} cnt={given} meta={chip}
+                readOnly={winnerPool === 0}
+                addDisabled={remaining <= 0}
+                onAdd={(pid) => { if (remaining > 0) setGifts(g => ({...g,[pid]:(g[pid]||0)+1})); }}
+                onRemove={(pid) => setGifts(g => ({...g,[pid]:Math.max(0,(g[pid]||0)-1)}))} />
             );
           })}
         </div>
@@ -58195,57 +58231,51 @@ function KategoriaGame({ gameIdx, players, onAdvance, onResult }) {
           <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em', textAlign:'center' }}>
             Ki nem tudott szót mondani?
           </div>
+          {/* A sor a KOZOS forrasbol jon (v10.291): ugyanaz a PlayerDrinkRow,
+              mint a Buntetesben es az En meg sohaban, csak `pick` valtozatban —
+              leptető helyett pipa, mert itt egy embert valasztunk. */}
           <div style={{ display:'flex', flexDirection:'column', gap:DRINK_ROW_GAP }}>
-            {players.map(p => {
-              const selected = loserPid === p.id;
-              return (
-                <div key={p.id} onClick={() => !advancedRef.current && setLoserPid(selected ? null : p.id)}
-                     style={{ flexShrink:0, height:DRINK_ROW_H, display:'flex', alignItems:'center',
-                              gap:10, padding:'7px 10px', cursor:'pointer',
-                              background: selected ? T.coralSoft : T.surfaceMuted,
-                              borderRadius:14, transition:'background .15s' }}>
-                  <PlayerAvatar player={p} size={34} />
-                  <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink,
-                                overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {p.name}
-                  </div>
-                  {selected && <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink }}>✓</div>}
-                </div>
-              );
-            })}
+            {players.map(p => (
+              <PlayerDrinkRow key={p.id} p={p} variant="pick"
+                selected={loserPid === p.id}
+                onPick={(pid) => { if (!advancedRef.current) setLoserPid(loserPid === pid ? null : pid); }} />
+            ))}
           </div>
         </div>
       ) : loserPid ? (
-        /* After commit: show only the loser */
-        <div style={{ flexShrink:0, height:DRINK_ROW_H, display:'flex', alignItems:'center',
-                      gap:10, padding:'7px 10px', background:T.coralSoft, borderRadius:14, width:'100%' }}>
-          <PlayerAvatar player={players.find(p => p.id === loserPid)} size={34} />
-          <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink,
-                        overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-            {players.find(p => p.id === loserPid)?.name}
-          </div>
-          <div style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0, fontFamily:T.font,
-                        fontWeight:900, fontSize:15, color:T.ink }}>
-            1<BohIcon name="beer" size={17} />
-          </div>
+        /* Kiosztas utan: csak a vesztes marad, ugyanabban a sorban */
+        <div style={{ width:'100%' }}>
+          <PlayerDrinkRow p={players.find(p => p.id === loserPid)} cnt={1} readOnly />
         </div>
       ) : null}
 
-      {/* ── CONFIRM BUTTONS ── */}
+      {/* ── CONFIRM BUTTONS ──
+          Ikon-szabaly (v10.291): a KORONGOS BohIcon (check/cross/plus/minus) a
+          lagy hatteru sorokra valo, ahol a sajat szine hordozza a jelentest. A
+          TOMOR mint/korall gombon ugyanaz a korong beleolvadna a hatterbe, ezert
+          ott a vonalas Icon-keszlet megy feherrel. Unicode-pipa (✓/✕) sehol. */}
       {!committed && (
         <div style={{ display:'flex', gap:10, width:'100%', marginTop:2 }}>
-          <button onClick={() => commit(null)} style={{ flex:1, padding:'13px', background:T.mint, color:'#fff',
-                                                         fontFamily:T.font, fontWeight:900, fontSize:15, borderRadius:16,
+          {/* A ket felirat nem egyforma hosszu: a „Senki nem rontott" harom szo,
+              a masik egy nev. Egyenlo `flex:1`-nel a zold gomb ket sorba tort az
+              ikon melle. A zold kap tobb helyet, a nev pedig ...-tal rovidul. */}
+          <button onClick={() => commit(null)} style={{ flex:1.45, minWidth:0, padding:'13px 10px', background:T.mint, color:'#fff',
+                                                         fontFamily:T.font, fontWeight:900, fontSize:14.5, borderRadius:16,
                                                          border:'none', cursor:'pointer', boxShadow:loserPid ? 'none' : '0 4px 14px -4px rgba(79,194,160,0.6)',
-                                                         animation:'popIn .2s' }}>
-            ✓ Senki nem rontott
+                                                         display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+                                                         whiteSpace:'nowrap', animation:'popIn .2s' }}>
+            {Icon.check('#fff')}Senki nem rontott
           </button>
           {loserPid && (
-            <button onClick={() => commit(loserPid)} style={{ flex:1, padding:'13px', background:T.coral, color:'#fff',
-                                                               fontFamily:T.font, fontWeight:900, fontSize:15, borderRadius:16,
+            <button onClick={() => commit(loserPid)} style={{ flex:1, minWidth:0, padding:'13px 10px', background:T.coral, color:'#fff',
+                                                               fontFamily:T.font, fontWeight:900, fontSize:14.5, borderRadius:16,
                                                                border:'none', cursor:'pointer', boxShadow:'0 4px 14px -4px rgba(242,73,61,0.6)',
+                                                               display:'flex', alignItems:'center', justifyContent:'center', gap:6,
                                                                animation:'popIn .2s' }}>
-              ✕ {players.find(p=>p.id===loserPid)?.name}
+              {Icon.close('#fff')}
+              <span style={{ minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {players.find(p=>p.id===loserPid)?.name}
+              </span>
             </button>
           )}
         </div>

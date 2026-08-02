@@ -103,6 +103,33 @@ Két belépő (MENÜ → Büntetés, Wildcard → „Szabályszegő?"), **egy** 
 `docs/buntetes.md` — három csapda van benne (abszolút szám, fordított kör,
 `pendingCommit`-felülírás). Teszt: `node tests/penalty_unified_test.js`.
 
+## „Ki igyon?" — a KÖZÖS korty-sor (v10.291)
+Minden ilyen felület **egyetlen** `PlayerDrinkRow`-ból épül (`app.src.html`,
+a `DRINK_ROW_H` konstans alatt). Ne írj újat: korábban négy változat élt
+(Büntetés + Én még soha közösen, a Kategória kézzel lemásolva, a Lóverseny
+fehér kártyára forkolva), és a másolatok elcsúsztak — a nulla egyszer `–` volt,
+egyszer `0`, a `+` egyszer korall, egyszer menta.
+
+A különbség **prop, nem új markup**:
+- `variant='stepper'` (alap) — `−  szám  +`. Büntetés, Én még soha, Lóverseny.
+- `variant='pick'` — léptető helyett pipa, egy embert választunk. Kategória.
+- `readOnly` — szám gomb nélkül (kiosztás utáni összegzés). Nullánál nem ír
+  ki `0 🍺`-t: ott vagy a `meta` beszél, vagy semmi.
+- `meta` — jobbra tolt chip. A Lóverseny tétje ide megy (ló-pont + korty),
+  **nem** második sorba: a sor mind a négy helyen pontosan `DRINK_ROW_H` = 48 px.
+- `max` — plafon egy játékosra (Én még soha: 1).
+  `addDisabled` — a **közös** keret fogyott el (Lóverseny nyereménye).
+
+Két dolog, amit könnyen elrontasz:
+- **Ikonok.** A korongos `BohIcon` (`check`/`cross`/`plus`/`minus`) a *lágy*
+  hátterű sorokra való, ahol a saját színe hordozza a jelentést. Tömör
+  mint/korall gombon beleolvadna — ott a vonalas `Icon` megy fehérrel.
+  Unicode `✓ ✕ − +` sehol.
+- **Tesztfogódzó.** A léptetők SVG-k, nincs szöveges `+`/`−`. A tesztek
+  `button[aria-label="Egy korttyal több"]` / `"…kevesebb"` alapján kattintanak
+  (`ledger_test.js`, `sohanem_test.js`, `penalty_unified_test.js`). Ha
+  átnevezed az aria-labelt, négy teszt némán elnémul.
+
 ## Szólánc (v10.286)
 Hőfok-lap a Szerencsekerék pasztelljeiből — **egy szín = egy tét**
 (`SZ_TONES`, `szTone()`): zöld 2–4 szó / 1 korty, sárga 5–7 / 2, rózsa 8+ / 3,

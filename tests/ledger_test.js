@@ -118,7 +118,7 @@ const DRIVERS = {
         const txt = root.innerText;
         const left = (txt.match(/Még (\d+) korty kiosztható/) || [])[1];
         if (left && +left > 0) {
-          const plus = Array.from(root.querySelectorAll('button')).find(x => x.innerText.trim() === '+' && !x.disabled);
+          const plus = Array.from(root.querySelectorAll('button[aria-label="Egy korttyal több"]')).find(x => !x.disabled);
           if (plus) { plus.click(); return; }
         }
         const b = Array.from(root.querySelectorAll('button'))
@@ -294,7 +294,7 @@ const DRIVERS = {
       }
       // az elso jatekosnak adunk egy kortyot, hogy legyen mit konyvelni
       await p.evaluate(() => {
-        const plus = Array.from(document.querySelectorAll('#__g button')).find(x => x.innerText.trim() === '+' && !x.disabled);
+        const plus = Array.from(document.querySelectorAll('#__g button[aria-label="Egy korttyal több"]')).find(x => !x.disabled);
         if (plus) plus.click();
       });
       await p.waitForTimeout(200);

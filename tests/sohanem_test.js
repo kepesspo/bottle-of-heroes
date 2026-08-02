@@ -104,7 +104,7 @@ const olvas = p => p.evaluate(() => {
   const lepteto = await p.evaluate(() => {
     const R = document.getElementById('__p');
     const lista = [...R.querySelectorAll('div')].find(d => d.style && d.style.overflowY === 'auto' && d.style.maxHeight);
-    return lista ? [...lista.querySelectorAll('button')].filter(x => /^[−+]$/.test((x.textContent||'').trim())).length : -1;
+    return lista ? lista.querySelectorAll('button[aria-label="Egy korttyal kevesebb"], button[aria-label="Egy korttyal több"]').length : -1;
   });
   ok(lepteto === 8, 'minden soron ott a − és a + (4 játékos)', lepteto + ' gomb');
   ok(!/NEM|IGEN/.test(elotte.szoveg), 'NINCS kapcsoló — a büntetésnél használt felület megy',
@@ -115,14 +115,14 @@ const olvas = p => p.evaluate(() => {
     const R = document.getElementById('__p');
     const lista = [...R.querySelectorAll('div')].find(d => d.style && d.style.overflowY === 'auto' && d.style.maxHeight);
     const sor = [...lista.children].find(s => (s.innerText||'').includes(nev));
-    const b = sor && [...sor.querySelectorAll('button')].find(x => (x.textContent||'').trim() === '+');
+    const b = sor && sor.querySelector('button[aria-label="Egy korttyal több"]');
     for (let i = 0; i < n; i++) if (b) b.click();
   }, {nev, n});
   const minusz = async (nev) => p.evaluate((nev) => {
     const R = document.getElementById('__p');
     const lista = [...R.querySelectorAll('div')].find(d => d.style && d.style.overflowY === 'auto' && d.style.maxHeight);
     const sor = [...lista.children].find(s => (s.innerText||'').includes(nev));
-    const b = sor && [...sor.querySelectorAll('button')].find(x => (x.textContent||'').trim() === '−');
+    const b = sor && sor.querySelector('button[aria-label="Egy korttyal kevesebb"]');
     if (b) b.click();
   }, nev);
 
@@ -136,7 +136,7 @@ const olvas = p => p.evaluate(() => {
     const R = document.getElementById('__p');
     const lista = [...R.querySelectorAll('div')].find(d => d.style && d.style.overflowY === 'auto' && d.style.maxHeight);
     const sor = [...lista.children].find(s => (s.innerText||'').includes('Kecsi'));
-    const b = [...sor.querySelectorAll('button')].find(x => (x.textContent||'').trim() === '+');
+    const b = sor.querySelector('button[aria-label="Egy korttyal több"]');
     return b ? b.disabled : null;
   });
   ok(tiltva === true, 'és a + gomb láthatóan letiltott a plafonon');

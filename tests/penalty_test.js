@@ -86,7 +86,7 @@ const ok = (cond, name, extra) => {
       let row = lbl.parentElement;
       while (row && row.querySelectorAll('button').length < 2) row = row.parentElement;
       if (!row) return 'nincs sor: ' + name;
-      const btn = [...row.querySelectorAll('button')].find(x => (x.textContent || '').trim() === '+');
+      const btn = row.querySelector('button[aria-label="Egy korttyal több"]');
       if (!btn) return 'nincs + gomb: ' + name;
       for (let i = 0; i < n; i++) btn.click();
       return name + ' OK';

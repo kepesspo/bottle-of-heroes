@@ -95,8 +95,8 @@ const modalInfo = p => p.evaluate(() => {
     // kozepre igazitott MODAL-e (nem also lap): a kartya nem er le a kepernyo aljara
     modal: Math.abs(card.getBoundingClientRect().bottom - window.innerHeight) > 20,
     szelesseg: Math.round(card.getBoundingClientRect().width),
-    minusz: [...card.querySelectorAll('button')].filter(x => (x.textContent || '').trim() === '−').length,
-    plusz: [...card.querySelectorAll('button')].filter(x => (x.textContent || '').trim() === '+').length,
+    minusz: [...card.querySelectorAll('button[aria-label="Egy korttyal kevesebb"]')].length,
+    plusz: [...card.querySelectorAll('button[aria-label="Egy korttyal több"]')].length,
     zaroGomb: btn.innerText.trim(),
   };
 });
@@ -108,7 +108,7 @@ const assignInModal = (p, assign) => p.evaluate((assign) => {
     const lbl = [...card.querySelectorAll('div')].find(d => (d.textContent || '').trim() === name && d.children.length === 0);
     if (!lbl) return 'nincs cimke: ' + name;
     const row = lbl.parentElement;
-    const plus = [...row.querySelectorAll('button')].find(x => (x.textContent || '').trim() === '+');
+    const plus = row.querySelector('button[aria-label="Egy korttyal több"]');
     if (!plus) return 'nincs + gomb: ' + name;
     for (let i = 0; i < n; i++) plus.click();
   }
