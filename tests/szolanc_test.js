@@ -13,6 +13,8 @@
 //   7. a lánc partinként kevert — nem a lista első n szava
 //   8. csali sosem lehet jövőbeli láncszem
 //   9. a végigvitt lánc nem zsákutca: a Kövi gomb aktív lesz
+//  10. v10.285: EGY SZÍN = EGY TÉT — a lap színe és a kiosztott korty együtt
+//      lép fokozatot (zöld 1 · sárga 2 · rózsa 3)
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const path = require('path');
@@ -207,7 +209,7 @@ const koppint = async (p, szavak) => {
   const bukas = await p.evaluate(() => (document.getElementById('__p').innerText || '').replace(/\s+/g, ' '));
   ok(/iszik 3 kortyot/.test(bukas), 'a lap a VALÓS kortyszámot írja (nem bedrótozott 1-et)',
      (bukas.match(/iszik \d+ kortyot/) || ['nincs'])[0]);
-  ok(korong === '3 KORTY', 'és egyezik a korty-koronggal', korong);
+  ok(korong === '3–9 KORTY', 'a korong a valós tartományt mutatja (stake [1,3] × 3)', korong);
   ok(/mindenki más \+1 pont/.test(bukas), 'kiírja a többiek pontját is');
 
   await p.evaluate(() => { const b = [...document.getElementById('__p').querySelectorAll('button')].find(x => /Kövi/.test(x.innerText || '')); b && b.click(); });
@@ -267,6 +269,43 @@ const koppint = async (p, szavak) => {
   });
   ok(kovi && kovi !== 'rgba(0, 0, 0, 0)' && !/246, 241, 230/.test(kovi),
      'és a Kövi gomb AKTÍV (eddig holtan maradt, mert nem volt pendingCommit)', kovi);
+
+  console.log('\n===== 10. EGY SZÍN = EGY TÉT =====');
+  // Minden fokozaton felmegyunk a hatarig, elrontjuk, es megnezzuk, hogy a lap
+  // szine ES a ténylegesen kiosztott korty egyutt lepett-e fokozatot.
+  const FOKOZAT = [
+    { szint: 2, szin: 'rgb(201, 232, 210)', korty: 1, nev: 'zöld' },
+    { szint: 5, szin: 'rgb(245, 224, 172)', korty: 2, nev: 'sárga' },
+    { szint: 7, szin: 'rgb(242, 196, 196)', korty: 3, nev: 'rózsa' },
+  ];
+  for (const f of FOKOZAT) {
+    await mount(p, 4, 'easy');
+    let kor = null;
+    for (let lvl = 2; lvl <= f.szint; lvl++) {
+      await indit(p);
+      kor = await korLejatszas(p, lvl);
+      if (lvl === f.szint) break;
+      await koppint(p, kor.lanc);
+      await p.waitForTimeout(1800);
+    }
+    const lapSzin = await p.evaluate(() => {
+      const R = document.getElementById('__p');
+      const k = [...R.querySelectorAll('div')].find(d => d.style && d.style.borderRadius === '26px' && d.style.padding === '16px');
+      return k ? getComputedStyle(k).backgroundColor : null;
+    });
+    ok(lapSzin === f.szin, `${f.szint} szónál a lap ${f.nev}`, lapSzin);
+    // szandekosan rossz koppintas: olyan racs-szo, ami nem a kovetkezo helyes
+    const rosszSzo = kor.racs.find(w => w !== kor.lanc[0]);
+    await koppint(p, [rosszSzo]);
+    await p.waitForTimeout(1500);
+    const lap = await p.evaluate(() => (document.getElementById('__p').innerText || '').replace(/\s+/g, ' '));
+    ok(new RegExp(`iszik ${f.korty} kortyot`).test(lap),
+       `és a lap ${f.korty} kortyot ír`, (lap.match(/iszik \d+ kortyot/) || ['nincs'])[0]);
+    await p.evaluate(() => { const b = [...document.getElementById('__p').querySelectorAll('button')].find(x => /Kövi/.test(x.innerText || '')); b && b.click(); });
+    await p.waitForTimeout(900);
+    const kapott = await p.evaluate(() => Math.max(0, ...(window.__players || []).map(x => x.drinks)));
+    ok(kapott === f.korty, `és a játékos tényleg ${f.korty} kortyot kapott`, kapott);
+  }
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();

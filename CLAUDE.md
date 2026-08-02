@@ -93,9 +93,13 @@ Két belépő (MENÜ → Büntetés, Wildcard → „Szabályszegő?"), **egy** 
 `docs/buntetes.md` — három csapda van benne (abszolút szám, fordított kör,
 `pendingCommit`-felülírás). Teszt: `node tests/penalty_unified_test.js`.
 
-## Szólánc (v10.284)
-Hőfok-lap a Szerencsekerék pasztelljeiből — a szín a **sor hosszát** kódolja
-(`SZ_TONES`, `szTone()`), a tinta FIX `#14202F`. Két invariáns, amit könnyű
+## Szólánc (v10.285)
+Hőfok-lap a Szerencsekerék pasztelljeiből — **egy szín = egy tét**
+(`SZ_TONES`, `szTone()`): zöld 2–3 szó / 1 korty, sárga 4–6 / 2, rózsa 7+ / 3,
+felszorozva a nehézséggel és a wildcarddal. A tinta FIX `#14202F`.
+A `korty` a fokozaton ül, tehát a szín és a tét nem csúszhat szét — de a
+`stake:[1,3]` tartományt kézzel kell utánaigazítani, ha a `korty` értékek
+változnak, különben a korty-korong mást ígér, mint amit a játék kioszt. Két invariáns, amit könnyű
 elrontani, és a `tests/szolanc_test.js` őriz:
 - **`SZ_CARD_H` / `SZ_ACT_H`**: az átadás és a villantás UGYANAZT a téglalapot
   használja (méret *és* pozíció). A villantáson üresen fenn kell tartani a
