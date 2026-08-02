@@ -35206,7 +35206,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.293';
+const APP_VERSION = 'v10.294';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -52151,6 +52151,7 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBe
   const [raceWinner, setRaceWinner] = useState(null);
   const [finalRanks, setFinalRanks] = useState([]);
   const [gifts, setGifts] = useState({});
+  const [acceptedDistribution, setAcceptedDistribution] = useState(false);
   const ivRef = useRef(null);
   const posRef = useRef([0,0,0,0]);
   const advancedRef = useRef(false);
@@ -52160,6 +52161,7 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBe
   useEffect(() => {
     setPhase('bet'); setBets({}); setBetStep(0); setPositions([0,0,0,0]);
     setRaceWinner(null); setFinalRanks([]); setGifts({});
+    setAcceptedDistribution(false);
     posRef.current = [0,0,0,0];
     advancedRef.current = false;
     if (ivRef.current) { clearInterval(ivRef.current); ivRef.current = null; }
@@ -52273,15 +52275,15 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBe
       if (!advancedRef.current) finishGame({});
       return;
     }
-    // winnerPool > 0 and there are losers: auto-advance when all drinks distributed
-    if (remaining === 0) {
+    // winnerPool > 0 and there are losers: wait for user to click "Ki osztom"
+    if (acceptedDistribution) {
       advancedRef.current = false;
       finishGame(giftsRef.current);
-    } else {
+    } else if (remaining > 0) {
       advancedRef.current = false;
       if (onUnready) onUnready();
     }
-  }, [phase, remaining, winnerPool]);
+  }, [phase, remaining, winnerPool, acceptedDistribution]);
 
   // ── Betting phase ──────────────────────────────────────────────────────────
   if (phase === 'bet') {
@@ -52441,6 +52443,11 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBe
           <div style={{ textAlign:'center', fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft }}>
             Még {remaining} korty kiosztható
           </div>
+        )}
+        {winnerPool > 0 && remaining === 0 && players.filter(p => bets[p.id]?.horseId !== raceWinner).length > 0 && (
+          <button onClick={() => setAcceptedDistribution(true)} style={{ width:'100%', padding:'14px', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:15, borderRadius:14, border:'none', cursor:'pointer', boxShadow:T.shadow, animation:'popIn .4s' }}>
+            Ki osztom ✓
+          </button>
         )}
         {winnerPool === 0 && (
           <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
