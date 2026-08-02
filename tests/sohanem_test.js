@@ -11,7 +11,8 @@
 //   4. a banner kiírja a számot, ha mindenki ugyanannyit kap
 //   5. nincs többé duplán feltett kérdés és fűszer-csík
 //   6. v10.281: kiosztás után a gomb eltűnik és a sorok lezárnak, és a sor
-//      SZÉLESSÉGE is azonos a Büntetés-modaléval (296 px)
+//      SZÉLESSÉGE is azonos a kérdés-lapéval (v10.288 óta — korábban a
+//      Büntetés-modalhoz volt igazítva 296 px-en)
 //   7. v10.282: HŐFOK-LAP — a lap színe a fűszerszint (zöld / narancs / vörös),
 //      és a három szín FIX, nem témafüggő; a lista címe „Ki iszik?", középen
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
@@ -223,13 +224,17 @@ const olvas = p => p.evaluate(() => {
 
   console.log('\n===== 6. v10.281: A GOMB ELTŰNIK, ÉS AZONOS A SZÉLESSÉG =====');
   await mount(p, 4);
-  const szel = await p.evaluate(() => {
+  // v10.288: a sor a KERDES-LAPPAL egyenlo szeles. A kioszto nem szab sajat
+  // maximumot — a szulo dont; a Buntetes-modalban a szulo ugyis 296 px.
+  const szelek = await p.evaluate(() => {
     const R = document.getElementById('__p');
     const lista = [...R.querySelectorAll('div')].find(d => d.style && d.style.overflowY === 'auto' && d.style.maxHeight);
-    return Math.round(lista.getBoundingClientRect().width);
+    const lap = [...R.querySelectorAll('div')].find(d => d.style && d.style.borderRadius === '26px');
+    return { lista: Math.round(lista.getBoundingClientRect().width),
+             lap: lap ? Math.round(lap.getBoundingClientRect().width) : null };
   });
-  // A modal kartyaja 340 px, 22 px oldalpaddinggal -> 296 px tartalom (merve).
-  ok(szel === 296, 'a lista 296 px — pont annyi, mint a Büntetés-modal tartalma', szel + ' px');
+  ok(szelek.lista === szelek.lap, 'a lista pontosan olyan széles, mint a kérdés-lap',
+     szelek.lista + ' px vs ' + szelek.lap + ' px');
   await plusz('Kecsi', 1); await p.waitForTimeout(300);
   ok((await olvas(p)).gombSzoveg === '1 iszik · 1 korty', 'a gomb kiosztás előtt ott van');
   await p.evaluate(() => {
@@ -241,78 +246,96 @@ const olvas = p => p.evaluate(() => {
   const utana = await p.evaluate(() => {
     const R = document.getElementById('__p');
     const b2 = [...R.querySelectorAll('button')].find(x => /iszik ·|korty kiosztva|Senki sem iszik/.test(x.innerText||''));
-    const lista = [...R.querySelectorAll('div')].find(d => d.style && d.style.overflowY === 'auto' && d.style.maxHeight);
-    return { gomb: b2 ? b2.innerText.trim() : null,
-             sorokZarva: lista ? getComputedStyle(lista).pointerEvents === 'none' : null,
+    const lepteto = [...R.querySelectorAll('button')].filter(x => ['+','−','–'].includes((x.innerText||'').trim())).length;
+    const sorok = [...R.querySelectorAll('div')].filter(d => d.style && d.style.borderRadius === '14px' && d.style.height).length;
+    return { gomb: b2 ? b2.innerText.trim() : null, lepteto, sorok,
              szoveg: (R.innerText||'').replace(/\s+/g,' ') };
   });
   ok(utana.gomb === null, 'kiosztás után a gomb eltűnik', utana.gomb === null ? 'nincs gomb' : utana.gomb);
-  ok(utana.sorokZarva === true, 'és a sorok lezárnak (a módosítás úgyis nem számítana)');
+  // v10.288: nem tiltott leptetok sora marad a kepernyon, hanem a lista helyere
+  // egy tomor osszegzes kerul — es CSAK azok, akik tenylegesen kaptak kortyot.
+  ok(utana.lepteto === 0, 'és egyetlen léptető gomb sem marad a képernyőn', utana.lepteto + ' db');
+  ok(utana.sorok === 1, 'a lista helyén csak az iszik — a másik három sor eltűnt',
+     utana.sorok + ' sor (4 játékosból 1 ivott)');
   ok(/jöhet a Kövi/.test(utana.szoveg), 'helyette egy halk visszaigazolás áll ott',
      (utana.szoveg.match(/\d+ korty kiosztva — jöhet a Kövi/)||['nincs'])[0]);
 
-  console.log('\n===== 7. v10.283: HŐFOK-LAP (halvány lap + telített jelvény) =====');
-  // Tobb inditast probalunk, amig mindharom szint elojon (a pakli kevert).
-  // A lap hattere a Szerencsekerek egy-egy pasztellje (WHEEL_TONES), a jelveny
-  // ugyanaz telitve — ezert ket kulon szint ellenorzunk szintenkent.
-  const HOFOK = {
-    'ALAP':    { lap: 'rgb(201, 232, 210)', jelveny: 'rgb(79, 169, 127)' },
-    'KÖZEPES': { lap: 'rgb(245, 224, 172)', jelveny: 'rgb(214, 154, 46)' },
-    'VAD':     { lap: 'rgb(242, 196, 196)', jelveny: 'rgb(212, 106, 106)' },
+  console.log('\n===== 7. v10.288: EGY SZÍNŰ LAP A TÉMÁBÓL, A SZINT A JELVÉNYEN =====');
+  // A lap hattere mar NEM a fuszerszinttol fugg: mindig ugyanaz, es a temabol
+  // jon (`T.bgSoft`). A szintet csak a bal felso jelveny mondja el.
+  const JELVENY = {
+    'ALAP':    'rgb(79, 169, 127)',
+    'KÖZEPES': 'rgb(214, 154, 46)',
+    'VAD':     'rgb(212, 106, 106)',
   };
-  const LAPOK = Object.values(HOFOK).map(x => x.lap);
   const hofokLatott = {};
   for (let i = 0; i < 16 && Object.keys(hofokLatott).length < 3; i++) {
     await mount(p, 4);
-    const info = await p.evaluate((LAPOK) => {
+    const info = await p.evaluate(() => {
       const R = document.getElementById('__p');
-      const kartya = [...R.querySelectorAll('div')]
-        .find(d => d.style && d.style.borderRadius === '26px' && LAPOK.includes(getComputedStyle(d).backgroundColor));
+      const kartya = [...R.querySelectorAll('div')].find(d => d.style && d.style.borderRadius === '26px');
       if (!kartya) return null;
-      const t = (kartya.innerText || '').replace(/\s+/g, ' ');
-      const lv = (t.match(/ALAP|KÖZEPES|VAD/) || [])[0];
+      const lv = ((kartya.innerText || '').match(/ALAP|KÖZEPES|VAD/) || [])[0];
       const jel = [...kartya.querySelectorAll('span')].find(s => /ALAP|KÖZEPES|VAD/.test(s.textContent || ''));
       const cim = [...R.querySelectorAll('div')].find(d => (d.textContent || '').trim() === 'Ki iszik?');
+      const oldal = getComputedStyle(document.body).backgroundColor;
       return { lv, lap: getComputedStyle(kartya).backgroundColor,
                tinta: getComputedStyle(kartya).color,
                perem: getComputedStyle(kartya).boxShadow,
                jelveny: jel ? getComputedStyle(jel).backgroundColor : null,
                jelvenyTinta: jel ? getComputedStyle(jel).color : null,
+               oldal,
                cimVan: !!cim, cimIgazitas: cim ? getComputedStyle(cim).textAlign : null };
-    }, LAPOK);
+    });
     if (info && info.lv && !hofokLatott[info.lv]) hofokLatott[info.lv] = info;
   }
   ok(Object.keys(hofokLatott).length === 3, 'mindhárom fűszerszint előjött', Object.keys(hofokLatott).join(', '));
-  for (const [lv, vart] of Object.entries(HOFOK)) {
+  const lapSzinek = new Set(Object.values(hofokLatott).map(x => x.lap));
+  ok(lapSzinek.size === 1, 'a lap MINDHÁROM szinten ugyanaz az egy szín',
+     [...lapSzinek].join(' | '));
+  for (const [lv, vart] of Object.entries(JELVENY)) {
     const g = hofokLatott[lv];
     if (!g) { ok(false, `${lv}: nem jött elő`); continue; }
-    ok(g.lap === vart.lap, `${lv}: a lap a kerék pasztellje`, g.lap);
-    ok(g.jelveny === vart.jelveny, `${lv}: a jelvény ugyanaz telítve`, g.jelveny);
-    // A KOZEPES lap (#F5E0AC) az alapertelmezett meleg temaban majdnem
-    // pontosan a hatter szine — perem nelkul beleolvad.
-    ok(/inset/.test(g.perem || ''), `${lv}: van hajszálvékony perem (különben beleolvad)`,
-       (g.perem || '').replace(/,\s*rgba\(20, 30, 50[^)]*\)[^,]*$/, '').slice(0, 60));
+    ok(g.jelveny === vart, `${lv}: a szintet a jelvény viszi`, g.jelveny);
   }
   const barmi = Object.values(hofokLatott)[0];
-  // Pasztellen a feher olvashatatlan, a T.ink viszont sotet temaban vilagos —
-  // ezert a tinta is FIX sotet.
-  ok(barmi && barmi.tinta === 'rgb(20, 32, 47)', 'a lap szövege fix sötét (nem T.ink)', barmi && barmi.tinta);
+  ok(barmi && barmi.lap !== barmi.oldal, 'de a lap elválik az oldaltól (más árnyalat)',
+     barmi && `${barmi.lap} vs ${barmi.oldal}`);
+  ok(barmi && /inset/.test(barmi.perem || ''), 'a hajszálvékony perem megmaradt');
   ok(barmi && barmi.jelvenyTinta === 'rgb(255, 255, 255)', 'a jelvény felirata fehér', barmi && barmi.jelvenyTinta);
   ok(barmi && barmi.cimVan, 'a lista címe „Ki iszik?" (nem „Kire igaz?")');
   ok(barmi && barmi.cimIgazitas === 'center', 'és középre igazított', barmi && barmi.cimIgazitas);
-  // A hat szin FIX: a T.* tokenek temankent valtoznak, ezek nem.
-  const fixSzin = await p.evaluate(() =>
-    ['#C9E8D2','#F5E0AC','#F2C4C4','#4FA97F','#D69A2E','#D46A6A','#14202F']
-      .every(h => document.documentElement.innerHTML.includes(h)));
-  ok(fixSzin, 'a hőfok-színek beégetve állnak (nem témafüggő token)');
-  // A lap pasztellje a Szerencsekerek cikkelyeibol jon — ha a kerek palettaja
-  // valtozik, ez a sor bukik, es akkor a lapot is at kell szinezni.
-  const kerekbol = await p.evaluate(() => {
-    const m = document.documentElement.innerHTML.match(/WHEEL_TONES\s*=\s*\[([^\]]*)\]/);
-    return m ? m[1] : '';
+  // A jelveny harom szine FIX marad: 8 tema van, de a kerdes durvasaga nem
+  // valtozhat temarol temara.
+  const fixJelveny = await p.evaluate(() =>
+    ['#4FA97F','#D69A2E','#D46A6A'].every(h => document.documentElement.innerHTML.includes(h)));
+  ok(fixJelveny, 'a jelvény három színe beégetve áll (nem témafüggő token)');
+  const nincsRegi = await p.evaluate(() => !/CARD_INK/.test(document.documentElement.innerHTML));
+  ok(nincsRegi, 'a CARD_INK konstans sincs többé');
+
+  // A LENYEG: a lap szine ES tintaja is TEMAFUGGO. Ezt csak ket temaval lehet
+  // bizonyitani — egy temaban barmelyik fix ertek is "helyesnek" latszana.
+  // (Az elso valtozat a `body` szinehez hasonlitott, de annak nincs beallitott
+  // szine, tehat feketet adott vissza: a teszt volt hibas, nem az app.)
+  await p.evaluate(() => { try { localStorage.setItem('boh_theme', 'midnight'); } catch (e) {} });
+  await p.reload({ waitUntil: 'domcontentloaded' });
+  await p.waitForTimeout(3400);
+  await mount(p, 4);
+  const sotet = await p.evaluate(() => {
+    const R = document.getElementById('__p');
+    const k = [...R.querySelectorAll('div')].find(d => d.style && d.style.borderRadius === '26px');
+    if (!k) return null;
+    const c = getComputedStyle(k);
+    const rgb = c.color.match(/\d+/g).map(Number);
+    return { lap: c.backgroundColor, tinta: c.color,
+             vilagos: (rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114) > 140 };
   });
-  ok(['#C9E8D2','#F5E0AC','#F2C4C4'].every(h => kerekbol.includes(h)),
-     'és mindhárom a Szerencsekerék palettájából való', kerekbol.replace(/\s+/g,' ').trim());
+  ok(sotet && sotet.lap !== barmi.lap, 'sötét témán MÁS a lap színe (tehát a témából jön)',
+     sotet && `${barmi.lap} → ${sotet.lap}`);
+  ok(sotet && sotet.tinta !== barmi.tinta, 'és más a tintája is', sotet && `${barmi.tinta} → ${sotet.tinta}`);
+  ok(sotet && sotet.vilagos, 'a sötét lapon VILÁGOS a szöveg — a fix #14202F itt olvashatatlan lenne',
+     sotet && sotet.tinta);
+  await p.evaluate(() => { try { localStorage.setItem('boh_theme', 'warm'); } catch (e) {} });
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();

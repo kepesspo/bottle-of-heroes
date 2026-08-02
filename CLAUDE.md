@@ -87,6 +87,16 @@ Röviden, ami a legtöbb kört elvitte:
   iOS-aláírásra (`screen.height - innerHeight == env(safe-area-inset-top)`)
   aktiválódik.
 
+## Én még soha (v10.288)
+A kérdés-lap **egy színű**, és a szín a témából jön (`T.bgSoft`) — a fűszerszintet
+csak a bal felső jelvény viszi (`SPICE[].badge`, fix szín, fehér felirattal).
+Amit könnyű elrontani: mivel a lap színe témafüggő, a **tinta is `T.ink`** kell
+legyen. A régi fix `CARD_INK = '#14202F'` sötét témán sötét szöveget hagyna
+sötét lapon. Ugyanezért származik a perem és a két halvány kör is `T.ink`-ből.
+A `DrinkDistributor` nem szab saját szélességet — a szülő dönt (játékon belül
+a kérdés-lappal egyenlő, a Büntetés-modalban 296 px). Kiosztás után a léptetők
+eltűnnek, és csak azok maradnak a listában, akik ténylegesen kaptak kortyot.
+
 ## Büntetés (játékon kívüli korty)
 Két belépő (MENÜ → Büntetés, Wildcard → „Szabályszegő?"), **egy** felület
 (`PenaltyModal`) és **egy** logika (`givePenalty`). Mielőtt hozzányúlsz:
