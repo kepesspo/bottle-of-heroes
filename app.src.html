@@ -35206,7 +35206,14 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.294';
+const APP_VERSION = 'v10.295';
+
+// Helper: difficulty szintből korty-szorzó (könnyű=1, közepes=2, nehéz=3)
+const getDrinkMultiplier = (difficulty) => {
+  if (difficulty === 'nehéz') return 3;
+  if (difficulty === 'közepes') return 2;
+  return 1;
+};
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -50187,7 +50194,8 @@ function MindenkiGame({ gameIdx, players, onAdvance, onResult }) {
   );
 }
 
-function FingeritGame({ gameIdx, players, onAdvance, onResult }) {
+function FingeritGame({ gameIdx, players, onAdvance, onResult, difficulty = 'könnyű' }) {
+  const drinkMult = getDrinkMultiplier(difficulty);
   const TOTAL_ROUNDS = 5;
   const [phase, setPhase] = React.useState('intro'); // intro | playing | result | distribute
   const [round, setRound] = React.useState(1);
@@ -50363,6 +50371,7 @@ function FingeritGame({ gameIdx, players, onAdvance, onResult }) {
           players={players}
           onFinish={confirmRound}
           title={round >= TOTAL_ROUNDS ? 'Utolsó kör — ki iszik?' : `${round}. kör — ki iszik?`}
+          drinkMult={drinkMult}
         />
       </div>
     );
@@ -50371,7 +50380,8 @@ function FingeritGame({ gameIdx, players, onAdvance, onResult }) {
   return null;
 }
 
-function SohanemGame({ gameIdx, players, onAdvance, onResult }) {
+function SohanemGame({ gameIdx, players, onAdvance, onResult, difficulty = 'könnyű' }) {
+  const drinkMult = getDrinkMultiplier(difficulty);
   // A PAKLI PARTINKENT MEG VAN KEVERVE.
   // Eddig `SOHANEM_CARDS[gameIdx % 207]` volt: a lap tisztan abbol kovetkezett,
   // hogy hanyadik jatek jon. Ket kovetkezmenye volt — minden parti ugyanazzal a
@@ -50456,7 +50466,7 @@ function SohanemGame({ gameIdx, players, onAdvance, onResult }) {
 
       {/* Drink Distributor — a nagy result banner az onResult hívás után jön fel a szokásos módon */}
       <div style={{ width:'100%' }}>
-        <DrinkDistributor players={players||[]} onFinish={handleFinish} max={1} title="Ki iszik?" center />
+        <DrinkDistributor players={players||[]} onFinish={handleFinish} max={1} title="Ki iszik?" center drinkMult={drinkMult} />
       </div>
     </div>
   );
@@ -51903,10 +51913,11 @@ const DRINK_LIST_W = 296;
 // `max`: felso plafon egy jatekosra (En meg soha: 1). `addDisabled`: KOZOS
 // keret fogyott el (Loverseny), tehat nem a jatekos plafonja tiltja a `+`-t.
 function PlayerDrinkRow({ p, cnt, onAdd, onRemove, max, variant = 'stepper',
-                          selected, onPick, meta, readOnly, addDisabled }) {
+                          selected, onPick, meta, readOnly, addDisabled, drinkMult = 1 }) {
   const pick = variant === 'pick';
   const on = pick ? !!selected : cnt > 0;
   const tele = (max != null && cnt >= max) || !!addDisabled;
+  const displayCnt = cnt * drinkMult;
   // A leptetok maguk az ikonok: a BohIcon korongja A GOMB. Nincs alatta meg
   // egy szines negyzet — az ket retegu korongot adott volna.
   const stepBtn = { width:30, height:30, padding:0, border:'none', background:'transparent',
@@ -51933,7 +51944,7 @@ function PlayerDrinkRow({ p, cnt, onAdd, onRemove, max, variant = 'stepper',
         cnt > 0 ? (
           <div style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0, fontFamily:T.font,
                         fontWeight:900, fontSize:15, color:T.ink }}>
-            {cnt}<BohIcon name="beer" size={17} />
+            {displayCnt}<BohIcon name="beer" size={17} />
           </div>
         ) : null
       ) : (
@@ -51945,9 +51956,9 @@ function PlayerDrinkRow({ p, cnt, onAdd, onRemove, max, variant = 'stepper',
           <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, minWidth:44, textAlign:'center',
                          color: on ? T.coral : T.inkMute, fontVariantNumeric:'tabular-nums',
                          display:'inline-flex', alignItems:'center', justifyContent:'center', gap:3 }}>
-            {on ? <React.Fragment>{cnt}<BohIcon name="beer" size={14} /></React.Fragment> : '–'}
+            {on ? <React.Fragment>{displayCnt}<BohIcon name="beer" size={14} /></React.Fragment> : '–'}
           </span>
-          <button onClick={(e)=>{ if (tele) return; onAdd(p.id); if (window.bohFloat) window.bohFloat(e.currentTarget, `+${cnt+1} 🍺`, T.coral); }}
+          <button onClick={(e)=>{ if (tele) return; onAdd(p.id); if (window.bohFloat) window.bohFloat(e.currentTarget, `+${(cnt+1)*drinkMult} 🍺`, T.coral); }}
             disabled={tele} aria-label="Egy korttyal több"
             style={{ ...stepBtn, opacity: tele ? 0.32 : 1, cursor: tele ? 'default' : 'pointer' }}>
             <BohIcon name="plus" size={24} />
@@ -51961,7 +51972,7 @@ function PlayerDrinkRow({ p, cnt, onAdd, onRemove, max, variant = 'stepper',
 // `max`: felso plafon jatekosonkent (pl. En meg soha: 1). A lista legfeljebb
 // 5 sort mutat, onnantol gorget — igy a zaro gomb SOSEM csuszik a lathato resz
 // ala. (Merve: 10 jatekosnal a regi valtozatban 940 px-nel volt, 874-en.)
-function DrinkDistributor({ players, onFinish, title, max, resetKey, center }) {
+function DrinkDistributor({ players, onFinish, title, max, resetKey, center, drinkMult = 1 }) {
   const [drinks, setDrinks] = React.useState({});
   // Kiosztas utan a gomb eltunik es a sorok lezarnak. Biztonsagi kotel: a
   // tobbkoros jatekoknal a kioszto ket kor kozott lecsatolodik (ellenorizve),
@@ -51981,6 +51992,7 @@ function DrinkDistributor({ players, onFinish, title, max, resetKey, center }) {
     const n = {...d}; if (cur===1) delete n[pid]; else n[pid]=cur-1; return n;
   });
   const total = Object.values(drinks).reduce((s,v)=>s+v,0);
+  const totalScaled = total * drinkMult;
   const fo = Object.values(drinks).filter(v=>v>0).length;
   const ivok = players.filter(p => (drinks[p.id]||0) > 0);
   return (
@@ -51997,25 +52009,25 @@ function DrinkDistributor({ players, onFinish, title, max, resetKey, center }) {
           <div style={{ display:'flex', flexDirection:'column', gap:DRINK_ROW_GAP,
                         maxHeight:DRINK_LIST_MAX, overflowY:'auto', animation:'bohFadeIn .18s' }}>
             {ivok.map(p => (
-              <PlayerDrinkRow key={p.id} p={p} cnt={drinks[p.id]} readOnly />
+              <PlayerDrinkRow key={p.id} p={p} cnt={drinks[p.id]} readOnly drinkMult={drinkMult} />
             ))}
           </div>
         )
       ) : (
       <div style={{ display:'flex', flexDirection:'column', gap:DRINK_ROW_GAP, maxHeight:DRINK_LIST_MAX, overflowY:'auto' }}>
         {players.map(p => (
-          <PlayerDrinkRow key={p.id} p={p} cnt={drinks[p.id]||0} onAdd={add} onRemove={remove} max={max} />
+          <PlayerDrinkRow key={p.id} p={p} cnt={drinks[p.id]||0} onAdd={add} onRemove={remove} max={max} drinkMult={drinkMult} />
         ))}
       </div>
       )}
       {kesz ? (
         <div style={{ textAlign:'center', padding:'13px 0 2px', fontFamily:T.font, fontWeight:800, fontSize:13,
                       color:T.inkMute, animation:'bohFadeIn .18s' }}>
-          {total>0 ? `${total} korty kiosztva` : 'Senki nem ivott'} — jöhet a Kövi
+          {totalScaled>0 ? `${totalScaled} korty kiosztva` : 'Senki nem ivott'} — jöhet a Kövi
         </div>
       ) : (
         <button onClick={()=>{ setKesz(true); onFinish(drinks); }} style={{ width:'100%', padding:'13px', background: total>0 ? T.mint : T.surfaceMuted, color: total>0 ? '#fff' : T.inkSoft, fontFamily:T.font, fontWeight:900, fontSize:15, borderRadius:16, border:'none', cursor:'pointer', boxShadow: total>0 ? '0 4px 14px -4px rgba(79,194,160,0.6)' : 'none', marginTop:2 }}>
-          {total>0 ? (max === 1 ? `${fo} iszik · ${total} korty` : `${total} korty kiosztva`) : 'Senki sem iszik'}
+          {total>0 ? (max === 1 ? `${fo} iszik · ${totalScaled} korty` : `${totalScaled} korty kiosztva`) : 'Senki sem iszik'}
         </button>
       )}
     </div>
@@ -52030,7 +52042,7 @@ function DrinkDistributor({ players, onFinish, title, max, resetKey, center }) {
 // ahol egy koppintas fix 1 kortyot adott EGY embernek. Most mindketto modal,
 // es mindkettoben `− szam +` all a nev mellett — tehat a szabalyszegesert is
 // lehet 2-3 kortyot adni, vagy tobb embert megjelolni.
-function PenaltyModal({ players, title, subtitle, emoji, onClose, onFinish }) {
+function PenaltyModal({ players, title, subtitle, emoji, onClose, onFinish, drinkMult = 1 }) {
   const [drinks, setDrinks] = React.useState({});
   const add = (pid) => setDrinks(d => ({ ...d, [pid]: (d[pid]||0)+1 }));
   const remove = (pid) => setDrinks(d => {
@@ -52038,6 +52050,7 @@ function PenaltyModal({ players, title, subtitle, emoji, onClose, onFinish }) {
     const n = {...d}; if (cur===1) delete n[pid]; else n[pid]=cur-1; return n;
   });
   const total = Object.values(drinks).reduce((s,v)=>s+v,0);
+  const totalScaled = total * drinkMult;
   // A sor es a lista-korlat a KOZOS forrasbol jon (v10.279): ugyanaz a
   // `PlayerDrinkRow` es ugyanaz az 5 soros hatar, mint a jatekokban.
   return (
@@ -52051,14 +52064,14 @@ function PenaltyModal({ players, title, subtitle, emoji, onClose, onFinish }) {
         {subtitle && <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, textAlign:'center', marginBottom:14, lineHeight:1.4 }}>{subtitle}</div>}
         <div style={{ display:'flex', flexDirection:'column', gap:DRINK_ROW_GAP, maxHeight:DRINK_LIST_MAX, overflowY:'auto' }}>
           {players.map(p => (
-            <PlayerDrinkRow key={p.id} p={p} cnt={drinks[p.id]||0} onAdd={add} onRemove={remove} />
+            <PlayerDrinkRow key={p.id} p={p} cnt={drinks[p.id]||0} onAdd={add} onRemove={remove} drinkMult={drinkMult} />
           ))}
         </div>
         <button onClick={()=>onFinish(drinks)}
           style={{ width:'100%', marginTop:14, padding:'13px 0', borderRadius:14, border:'none',
                    background: total>0 ? T.mint : T.surfaceMuted, color: total>0 ? '#fff' : T.inkSoft,
                    fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer' }}>
-          {total>0 ? `${total} korty kiosztva` : 'Senki sem iszik'}
+          {total>0 ? `${totalScaled} korty kiosztva` : 'Senki sem iszik'}
         </button>
         <button onClick={onClose}
           style={{ width:'100%', marginTop:8, padding:'11px 0', borderRadius:14, border:'none', background:'transparent',
@@ -52141,7 +52154,8 @@ function LoversenyOval({ HORSES, positions, FINISH }) {
   );
 }
 
-function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBetUpdate }) {
+function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBetUpdate, difficulty = 'könnyű' }) {
+  const drinkMult = getDrinkMultiplier(difficulty);
   const FINISH = 12;
   const HORSES = React.useMemo(() => pickHorses(gameIdx), [gameIdx]);
   const [phase, setPhase] = useState('bet');
@@ -52429,13 +52443,14 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBe
             // A vesztoknel a KOZOS keret (remaining) tiltja a `+`-t, nem a
             // jatekos sajat plafonja: ezert `addDisabled`, nem `max`.
             return won ? (
-              <PlayerDrinkRow key={p.id} p={p} cnt={0} readOnly meta={chip} />
+              <PlayerDrinkRow key={p.id} p={p} cnt={0} readOnly meta={chip} drinkMult={drinkMult} />
             ) : (
               <PlayerDrinkRow key={p.id} p={p} cnt={given} meta={chip}
                 readOnly={winnerPool === 0}
                 addDisabled={remaining <= 0}
                 onAdd={(pid) => { if (remaining > 0) setGifts(g => ({...g,[pid]:(g[pid]||0)+1})); }}
-                onRemove={(pid) => setGifts(g => ({...g,[pid]:Math.max(0,(g[pid]||0)-1)}))} />
+                onRemove={(pid) => setGifts(g => ({...g,[pid]:Math.max(0,(g[pid]||0)-1)}))}
+                drinkMult={drinkMult} />
             );
           })}
         </div>
@@ -56697,7 +56712,8 @@ function RingFireGame({ gameIdx, players, onAdvance }) {
   );
 }
 
-function KoPapirGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
+function KoPapirGame({ gameIdx, challenger, opponent, onAdvance, onResult, difficulty = 'könnyű' }) {
+  const drinkMult = getDrinkMultiplier(difficulty);
   const TOTAL_ROUNDS = 5;
   const [round, setRound] = React.useState(1);
   const [totalDrinks, setTotalDrinks] = React.useState({});
@@ -56802,6 +56818,7 @@ function KoPapirGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
         players={roundPlayers}
         title={`${round}. kör — kortyok`}
         onFinish={confirmRound}
+        drinkMult={drinkMult}
       />
     </div>
   );
@@ -58271,7 +58288,8 @@ function CollectBoomGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   );
 }
 
-function KategoriaGame({ gameIdx, players, onAdvance, onResult }) {
+function KategoriaGame({ gameIdx, players, onAdvance, onResult, difficulty = 'könnyű' }) {
+  const drinkMult = getDrinkMultiplier(difficulty);
   const CATS_HU = [
     'Fővárosok','Gyümölcsök','Sportágak','Filmek','Állatok',
     'Autómárkák','Zenekarok','Ételek','Országok','TV-sorozatok',
@@ -58333,14 +58351,15 @@ function KategoriaGame({ gameIdx, players, onAdvance, onResult }) {
             {players.map(p => (
               <PlayerDrinkRow key={p.id} p={p} variant="pick"
                 selected={loserPid === p.id}
-                onPick={(pid) => { if (!advancedRef.current) setLoserPid(loserPid === pid ? null : pid); }} />
+                onPick={(pid) => { if (!advancedRef.current) setLoserPid(loserPid === pid ? null : pid); }}
+                drinkMult={drinkMult} />
             ))}
           </div>
         </div>
       ) : loserPid ? (
         /* Kiosztas utan: csak a vesztes marad, ugyanabban a sorban */
         <div style={{ width:'100%' }}>
-          <PlayerDrinkRow p={players.find(p => p.id === loserPid)} cnt={1} readOnly />
+          <PlayerDrinkRow p={players.find(p => p.id === loserPid)} cnt={1} readOnly drinkMult={drinkMult} />
         </div>
       ) : null}
 
@@ -59189,13 +59208,13 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'kopapir') return <KoPapirGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'collect') return <CollectBoomGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
   if (gameId === 'powerhour') return <PowerHourGame key={gameIdx} players={players||[]} onAdvance={onAdvance} />;
-  if (gameId === 'kategoria') return <KategoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'kategoria') return <KategoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
   if (gameId === 'memoria') return <MemoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
   if (gameId === 'kezcsere') return <KezCsereGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'hajime') return <HajimeGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'otdolog') return <OtdologGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
-  if (gameId === 'sohanem') return <SohanemGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'fingerit') return <FingeritGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'sohanem') return <SohanemGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
+  if (gameId === 'fingerit') return <FingeritGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
   if (gameId === 'cardbattle') return <CardBattleGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} gameMeta={gameMeta} />;
   if (gameId === 'quiz') return <QuizGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} gameMeta={gameMeta} />;
   if (gameId === 'utveszto') return <UtvesztoGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} gameMeta={gameMeta} />;
@@ -59206,7 +59225,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} gameMeta={gameMeta} roomCode={roomCode} />;
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
-  if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onUnready={onUnready} onResult={onResult} onBetUpdate={gameMeta?.onBetUpdate} />;
+  if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onUnready={onUnready} onResult={onResult} onBetUpdate={gameMeta?.onBetUpdate} difficulty={gameMeta?.difficulty} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
@@ -61184,6 +61203,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     : games.map((_,i)=>i);
   const currentGameId = games[effectiveOrder[gameIdx % games.length]];
   const currentGame = GAMES.find(g=>g.id===currentGameId) || GAMES[0];
+  const drinkMult = getDrinkMultiplier(currentGame.difficulty);
   const activePlayers = players.filter(p => !p.disabled);
   const currentPlayer = activePlayers[turn % Math.max(activePlayers.length, 1)];
   // Páros ellenfél a megjelenítéshez/pontozáshoz: a kisorsolt (selectedOpponent),
@@ -62269,7 +62289,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         <PenaltyModal players={(players || []).filter(p => p.active !== false)}
           title="Büntetés — ki igyon?"
           subtitle="Játékon kívüli korty — wildcard megszegése, fogadás, bármi. A kiosztott korty a játékban szerzettel együtt számít."
-          onClose={() => setPenaltyOpen(false)} onFinish={applyPenalty} />
+          onClose={() => setPenaltyOpen(false)} onFinish={applyPenalty} drinkMult={drinkMult} />
       )}
       {groupDrinkOverlay && (
         <div style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.72)', zIndex:60, display:'flex', alignItems:'center', justifyContent:'center', padding:28, animation:'fadeIn .2s' }}>
@@ -62291,7 +62311,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           emoji={activeWildcard.emoji}
           title="Ki szegte meg a szabályt?"
           subtitle={activeWildcard.text}
-          onClose={() => setWcPunishOpen(false)} onFinish={applyWcPunish} />
+          onClose={() => setWcPunishOpen(false)} onFinish={applyWcPunish} drinkMult={drinkMult} />
       )}
       {drinkLimitWarn && ReactDOM.createPortal((
         <div onClick={() => setDrinkLimitWarn(null)} style={{ position:'fixed', inset:0, zIndex:9991, display:'flex', alignItems:'center', justifyContent:'center', padding:24, background:'rgba(14,14,24,0.45)', animation:'fadeIn .15s' }}>
@@ -64870,6 +64890,7 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult, difficul
 
 // ── Medúza ─────────────────────────────────────────────────────────────────────
 function MeduzaGame({ players, onAdvance, onResult, gameMeta }) {
+  const drinkMult = getDrinkMultiplier(gameMeta?.difficulty || 'könnyű');
   const TOTAL_ROUNDS = gameMeta?.meduzaConfig?.rounds || 5;
   const [phase, setPhase] = useState('intro');
   const [count, setCount] = useState(3);
@@ -64958,6 +64979,7 @@ function MeduzaGame({ players, onAdvance, onResult, gameMeta }) {
         players={players}
         onFinish={confirmRound}
         title={round >= TOTAL_ROUNDS ? 'Utolsó kör — ki iszik?' : `${round}. kör — ki nézett össze?`}
+        drinkMult={drinkMult}
       />
     </div>
   );
