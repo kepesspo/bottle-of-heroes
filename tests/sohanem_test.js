@@ -251,47 +251,68 @@ const olvas = p => p.evaluate(() => {
   ok(/jöhet a Kövi/.test(utana.szoveg), 'helyette egy halk visszaigazolás áll ott',
      (utana.szoveg.match(/\d+ korty kiosztva — jöhet a Kövi/)||['nincs'])[0]);
 
-  console.log('\n===== 7. v10.282: HŐFOK-LAP =====');
+  console.log('\n===== 7. v10.283: HŐFOK-LAP (halvány lap + telített jelvény) =====');
   // Tobb inditast probalunk, amig mindharom szint elojon (a pakli kevert).
+  // A lap hattere a Szerencsekerek egy-egy pasztellje (WHEEL_TONES), a jelveny
+  // ugyanaz telitve — ezert ket kulon szint ellenorzunk szintenkent.
   const HOFOK = {
-    'ALAP':    'linear-gradient(150deg, rgb(79, 194, 160), rgb(46, 154, 112))',
-    'KÖZEPES': 'linear-gradient(150deg, rgb(240, 169, 60), rgb(217, 119, 6))',
-    'VAD':     'linear-gradient(150deg, rgb(224, 96, 80), rgb(192, 57, 43))',
+    'ALAP':    { lap: 'rgb(201, 232, 210)', jelveny: 'rgb(79, 169, 127)' },
+    'KÖZEPES': { lap: 'rgb(245, 224, 172)', jelveny: 'rgb(214, 154, 46)' },
+    'VAD':     { lap: 'rgb(242, 196, 196)', jelveny: 'rgb(212, 106, 106)' },
   };
+  const LAPOK = Object.values(HOFOK).map(x => x.lap);
   const hofokLatott = {};
   for (let i = 0; i < 16 && Object.keys(hofokLatott).length < 3; i++) {
     await mount(p, 4);
-    const info = await p.evaluate(() => {
+    const info = await p.evaluate((LAPOK) => {
       const R = document.getElementById('__p');
-      const kartya = [...R.querySelectorAll('div')].find(d => d.style && /linear-gradient/.test(d.style.background || ''));
+      const kartya = [...R.querySelectorAll('div')]
+        .find(d => d.style && d.style.borderRadius === '26px' && LAPOK.includes(getComputedStyle(d).backgroundColor));
       if (!kartya) return null;
       const t = (kartya.innerText || '').replace(/\s+/g, ' ');
       const lv = (t.match(/ALAP|KÖZEPES|VAD/) || [])[0];
+      const jel = [...kartya.querySelectorAll('span')].find(s => /ALAP|KÖZEPES|VAD/.test(s.textContent || ''));
       const cim = [...R.querySelectorAll('div')].find(d => (d.textContent || '').trim() === 'Ki iszik?');
-      return { lv, hatter: getComputedStyle(kartya).backgroundImage,
-               feher: getComputedStyle(kartya).color,
-               cimVan: !!cim, cimIgazitas: cim ? getComputedStyle(cim).textAlign : null,
-               korok: kartya.querySelectorAll('span[style*="border-radius: 50%"], span').length };
-    });
+      return { lv, lap: getComputedStyle(kartya).backgroundColor,
+               tinta: getComputedStyle(kartya).color,
+               perem: getComputedStyle(kartya).boxShadow,
+               jelveny: jel ? getComputedStyle(jel).backgroundColor : null,
+               jelvenyTinta: jel ? getComputedStyle(jel).color : null,
+               cimVan: !!cim, cimIgazitas: cim ? getComputedStyle(cim).textAlign : null };
+    }, LAPOK);
     if (info && info.lv && !hofokLatott[info.lv]) hofokLatott[info.lv] = info;
   }
   ok(Object.keys(hofokLatott).length === 3, 'mindhárom fűszerszint előjött', Object.keys(hofokLatott).join(', '));
   for (const [lv, vart] of Object.entries(HOFOK)) {
     const g = hofokLatott[lv];
     if (!g) { ok(false, `${lv}: nem jött elő`); continue; }
-    ok(g.hatter === vart, `${lv}: a lap színe a szinthez tartozó`, g.hatter);
+    ok(g.lap === vart.lap, `${lv}: a lap a kerék pasztellje`, g.lap);
+    ok(g.jelveny === vart.jelveny, `${lv}: a jelvény ugyanaz telítve`, g.jelveny);
+    // A KOZEPES lap (#F5E0AC) az alapertelmezett meleg temaban majdnem
+    // pontosan a hatter szine — perem nelkul beleolvad.
+    ok(/inset/.test(g.perem || ''), `${lv}: van hajszálvékony perem (különben beleolvad)`,
+       (g.perem || '').replace(/,\s*rgba\(20, 30, 50[^)]*\)[^,]*$/, '').slice(0, 60));
   }
   const barmi = Object.values(hofokLatott)[0];
-  ok(barmi && barmi.feher === 'rgb(255, 255, 255)', 'a lap szövege fehér', barmi && barmi.feher);
+  // Pasztellen a feher olvashatatlan, a T.ink viszont sotet temaban vilagos —
+  // ezert a tinta is FIX sotet.
+  ok(barmi && barmi.tinta === 'rgb(20, 32, 47)', 'a lap szövege fix sötét (nem T.ink)', barmi && barmi.tinta);
+  ok(barmi && barmi.jelvenyTinta === 'rgb(255, 255, 255)', 'a jelvény felirata fehér', barmi && barmi.jelvenyTinta);
   ok(barmi && barmi.cimVan, 'a lista címe „Ki iszik?" (nem „Kire igaz?")');
   ok(barmi && barmi.cimIgazitas === 'center', 'és középre igazított', barmi && barmi.cimIgazitas);
-  // A harom szin FIX: a T.* tokenek temankent valtoznak, ezek nem.
-  const fixSzin = await p.evaluate((HOFOK) => {
-    const ertekek = Object.values(HOFOK).join('|');
-    return ['#4FC2A0','#2E9A70','#F0A93C','#D97706','#E06050','#C0392B']
-      .every(h => document.documentElement.innerHTML.includes(h));
-  }, HOFOK);
-  ok(fixSzin, 'a hat hőfok-szín beégetve áll (nem témafüggő token)');
+  // A hat szin FIX: a T.* tokenek temankent valtoznak, ezek nem.
+  const fixSzin = await p.evaluate(() =>
+    ['#C9E8D2','#F5E0AC','#F2C4C4','#4FA97F','#D69A2E','#D46A6A','#14202F']
+      .every(h => document.documentElement.innerHTML.includes(h)));
+  ok(fixSzin, 'a hőfok-színek beégetve állnak (nem témafüggő token)');
+  // A lap pasztellje a Szerencsekerek cikkelyeibol jon — ha a kerek palettaja
+  // valtozik, ez a sor bukik, es akkor a lapot is at kell szinezni.
+  const kerekbol = await p.evaluate(() => {
+    const m = document.documentElement.innerHTML.match(/WHEEL_TONES\s*=\s*\[([^\]]*)\]/);
+    return m ? m[1] : '';
+  });
+  ok(['#C9E8D2','#F5E0AC','#F2C4C4'].every(h => kerekbol.includes(h)),
+     'és mindhárom a Szerencsekerék palettájából való', kerekbol.replace(/\s+/g,' ').trim());
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();

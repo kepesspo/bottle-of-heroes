@@ -35185,7 +35185,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.282';
+const APP_VERSION = 'v10.283';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -50303,15 +50303,20 @@ function SohanemGame({ gameIdx, players, onAdvance, onResult }) {
   const card = SOHANEM_CARDS[order[pos]];
   const cardNum = pos + 1;
   const total = SOHANEM_CARDS.length;
-  // HOFOK-PALETTA — szandekosan FIX, nem a T.* tokenekbol.
-  // 8 tema van, de az, hogy mennyire durva a kerdes, nem valtozhat temarol
-  // temara. A feher szoveg mindharom hattéren olvashato.
+  // HOFOK-PALETTA — a Szerencsekerek pasztelljeibol (lasd WHEEL_TONES).
+  // Szandekosan FIX, nem a T.* tokenekbol: 8 tema van, de az, hogy mennyire
+  // durva a kerdes, nem valtozhat temarol temara.
+  //   `bg`    — a lap halvany hattere (a kerek egy-egy cikkelyszine)
+  //   `badge` — ugyanaz telitve, a jelvenynek, feher felirattal
   const SPICE = {
-    alap:    { label:'ALAP',    emoji:'🌶', from:'#4FC2A0', to:'#2E9A70' },
-    kozepes: { label:'KÖZEPES', emoji:'🔥', from:'#F0A93C', to:'#D97706' },
-    vad:     { label:'VAD',     emoji:'🔥', from:'#E06050', to:'#C0392B' },
+    alap:    { label:'ALAP',    emoji:'🌶', bg:'#C9E8D2', badge:'#4FA97F' },
+    kozepes: { label:'KÖZEPES', emoji:'🔥', bg:'#F5E0AC', badge:'#D69A2E' },
+    vad:     { label:'VAD',     emoji:'🔥', bg:'#F2C4C4', badge:'#D46A6A' },
   };
   const lv = SPICE[card.l] || SPICE.alap;
+  // A lap szine temafuggetlen, tehat a tintanak is annak kell lennie: pasztellen
+  // a feher olvashatatlan, a `T.ink` viszont a SOTET temakban vilagos.
+  const CARD_INK = '#14202F';
   // A "vad" lapok kozott van 70+ karakteres — ott a 24 px szetesne.
   const hossz = (card.t || '').length;
   const allitasFs = hossz > 62 ? 19 : hossz > 42 ? 21.5 : 24;
@@ -50339,25 +50344,29 @@ function SohanemGame({ gameIdx, players, onAdvance, onResult }) {
           A lap SZINE a fuszerszint. Igy a tet lathato, mielott elolvasnad: egy
           voros lap felfordulasa onmagaban esemeny. A jelveny nem plusz info,
           hanem megerosites. A halvany korok adnak melyseget a lapos szinnek. */}
-      <div style={{ width:'100%', borderRadius:26, padding:'20px 20px 22px', color:'#fff',
-                    position:'relative', overflow:'hidden',
-                    background:`linear-gradient(150deg, ${lv.from}, ${lv.to})`,
-                    boxShadow:'0 8px 22px -6px rgba(20,30,50,0.35)' }}>
+      <div style={{ width:'100%', borderRadius:26, padding:'20px 20px 22px', color:CARD_INK,
+                    position:'relative', overflow:'hidden', background:lv.bg,
+                    /* A hajszalvekony perem a lap SAJAT telitett szinebol jon.
+                       Nelkule a KOZEPES lap (#F5E0AC) beleolvad az alapertelmezett
+                       meleg tema hattérebe — csak az arnyek valasztana el. */
+                    boxShadow:`inset 0 0 0 1.5px ${lv.badge}33, 0 6px 18px -8px rgba(20,30,50,0.30)` }}>
         <span style={{ position:'absolute', width:190, height:190, right:-70, top:-60,
-                       borderRadius:'50%', border:'2px solid rgba(255,255,255,0.16)' }} />
+                       borderRadius:'50%', border:'2px solid rgba(20,32,47,0.07)' }} />
         <span style={{ position:'absolute', width:120, height:120, left:-45, bottom:-45,
-                       borderRadius:'50%', border:'2px solid rgba(255,255,255,0.16)' }} />
+                       borderRadius:'50%', border:'2px solid rgba(20,32,47,0.07)' }} />
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', position:'relative' }}>
-          <span style={{ display:'inline-flex', alignItems:'center', gap:5, background:'rgba(255,255,255,0.22)',
+          {/* a jelveny a szin TELITETT valtozata: a lap csendes marad, de a
+              szint egy pillanat alatt kimondja */}
+          <span style={{ display:'inline-flex', alignItems:'center', gap:5, background:lv.badge, color:'#fff',
                          borderRadius:999, padding:'4px 10px', fontFamily:T.font, fontWeight:900, fontSize:10,
                          letterSpacing:'0.1em' }}>
             <span style={{ fontSize:11 }}>{lv.emoji}</span>{lv.label}
           </span>
-          <span style={{ fontFamily:T.font, fontSize:11, fontWeight:700, opacity:0.85, fontVariantNumeric:'tabular-nums' }}>
+          <span style={{ fontFamily:T.font, fontSize:11, fontWeight:700, opacity:0.6, fontVariantNumeric:'tabular-nums' }}>
             <span style={{ fontWeight:900, opacity:1 }}>{String(cardNum).padStart(2,'0')}</span>/{total}
           </span>
         </div>
-        <div style={{ fontFamily:T.font, fontSize:12.5, fontWeight:600, opacity:0.85, margin:'14px 0 5px', position:'relative' }}>{t('sohanemPrefix')}</div>
+        <div style={{ fontFamily:T.font, fontSize:12.5, fontWeight:600, opacity:0.7, margin:'14px 0 5px', position:'relative' }}>{t('sohanemPrefix')}</div>
         <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:allitasFs, lineHeight:1.2,
                       letterSpacing:'-0.02em', position:'relative' }}>{card.t}.</div>
       </div>
