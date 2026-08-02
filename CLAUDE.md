@@ -167,6 +167,30 @@ Amit könnyű elrontani:
 Teszt: `node tests/roomart_test.js` (mind a négy rajzol és animál, a koccanásnál
 a rés tényleg nullára zár, és felvillan a csillag).
 
+## Nehézségi korty-szorzó (v10.296) — EGY forrás
+A szorzó a `DIFFICULTY_INFO` `mult` mezőjéből jön, és a szintek azonosítója
+**`easy` / `mid` / `hard` / `extreme`** (1 / 2 / 3 / 5) — a `gameMeta.difficulty`
+ezt tárolja. A `GAMES[].difficulty` (`könnyű`/`közepes`/`nehéz`) ettől FÜGGETLEN:
+az a játék saját, statikus címkéje a kártyán, nem a partira beállított szint.
+A kettőt összekeverni néma hiba: a magyar címkére illesztő szorzó mindig 1-et ad.
+
+Hol számolódik és hogyan jut le:
+- `PlayScreen`: `diffDrinks = diffMeta.mult`, a wildcarddal `diffDrinks * wcMult`
+- ez megy le a `GameContent`-nek **`drinkMult` propként** — új játéknál ezt add
+  tovább, ne számolj újat
+- a könyvelés (`advanceLoverseny`) és a banner (`onResult`) **már szoroz**, tehát
+  a korty-osztó sor csak KIJELZ: `PlayerDrinkRow`/`DrinkDistributor` `drinkMult`-ja
+  kizárólag a megjelenített számot skálázza, a `onFinish` nyers marad
+
+Két felület, ami KIMARAD, és nem véletlenül:
+- **Büntetés** (`PenaltyModal`) — abszolút, se nehézség, se wildcard nem szorozza
+  (`docs/buntetes.md` 1. csapda, `penalty` jelző az `onResult`-ban)
+- **Lóverseny** — a tét maga korty, az `advanceLoverseny` `scale=1`-gyel könyveli
+
+Teszt: `node tests/diffmult_test.js` — mind a négy szinten összeveti a léptetőre
+írt számot azzal, amennyi ténylegesen a játékosra kerül, és őrzi a büntetés
+abszolút voltát.
+
 ## Fontos szabályok
 1. Minden commitnál verzióbump kötelező (az `app.src.html`-ben!)
 2. Kódot CSAK az `app.src.html`-ben szerkessz, majd `node build.js` (lásd BUILD WORKFLOW fent)

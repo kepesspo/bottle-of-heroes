@@ -121,8 +121,11 @@ const DRIVERS = {
           const plus = Array.from(root.querySelectorAll('button[aria-label="Egy korttyal több"]')).find(x => !x.disabled);
           if (plus) { plus.click(); return; }
         }
+        // „Ki osztom" (v10.294): a teljes kiosztas utan EZ zarja a jatekot —
+        // enelkul a driver a keretet elkolti, aztan megall, es a Loverseny
+        // „nem jatszhato"-kent bukik ki. A szokoz miatt a `Kioszt` nem fogja.
         const b = Array.from(root.querySelectorAll('button'))
-          .find(x => /Tovább|Következő|Rendben|Kész|OK|Vége|Mehet|Kioszt/.test(x.innerText) && !x.disabled);
+          .find(x => /Tovább|Következő|Rendben|Kész|OK|Vége|Mehet|Kioszt|Ki osztom/.test(x.innerText) && !x.disabled);
         if (b) b.click();
       });
       await p.waitForTimeout(600);
