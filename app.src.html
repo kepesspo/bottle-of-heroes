@@ -34081,13 +34081,21 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   // Firestore nem fogad el undefined értéket (szinkron hibát dob rá) — rekurzívan null-ra cseréljük.
   // A FieldValue sentinel-eket (serverTimestamp, arrayUnion, increment, ...) érintetlenül hagyjuk,
   // különben elveszítik az osztály-azonosságukat és a Firestore SDK elutasítja őket.
+  // Fuggvenyeket KIHAGYUNK: a Firestore ezekre is szinkron hibat dob, es egy React
+  // callback konnyen bekerul egy allapot-objektumba (v10.296: gameMeta.onBetUpdate
+  // megette az egesz szobanyitast). A kulcs eltunik, nem null lesz — egy elveszett
+  // callback nem baj, egy null-lal felulirt mezo viszont adatot rontana.
   function sanitizeForFirestore(obj) {
     if (obj === undefined) return null;
     if (obj === null || typeof obj !== 'object') return obj;
     if (obj instanceof firebase.firestore.FieldValue) return obj;
-    if (Array.isArray(obj)) return obj.map(sanitizeForFirestore);
+    // tombben az index szamit, ott nem lehet kihagyni — null megy a fuggveny helyere
+    if (Array.isArray(obj)) return obj.map(function(v){ return typeof v === 'function' ? null : sanitizeForFirestore(v); });
     var r = {};
-    Object.keys(obj).forEach(function(k) { r[k] = sanitizeForFirestore(obj[k]); });
+    Object.keys(obj).forEach(function(k) {
+      if (typeof obj[k] === 'function') return;
+      r[k] = sanitizeForFirestore(obj[k]);
+    });
     return r;
   }
   window.createRoom = function(code, players, games, meta) {
@@ -35206,7 +35214,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.296';
+const APP_VERSION = 'v10.297';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -59188,7 +59196,7 @@ class GameErrorBoundary extends React.Component {
   }
 }
 
-function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, roomCode, gameMeta, challenger, opponent, onSetHideFooter, onSetBuszSwitch, onSetBpEnded, onCommit, drinkMult }) {
+function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, onBetUpdate, roomCode, gameMeta, challenger, opponent, onSetHideFooter, onSetBuszSwitch, onSetBpEnded, onCommit, drinkMult }) {
   if (gameId === 'szolánc') return <SzolancGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} drinkMult={drinkMult} />;
   if (gameId === 'idopárbaj') return <IdoparbajGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'csakegyszó') return <CsakEgySzoGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
@@ -59218,7 +59226,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} gameMeta={gameMeta} roomCode={roomCode} />;
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
-  if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onUnready={onUnready} onResult={onResult} onBetUpdate={gameMeta?.onBetUpdate} />;
+  if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onUnready={onUnready} onResult={onResult} onBetUpdate={onBetUpdate} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
@@ -61172,11 +61180,6 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     setLoversenyBet(null);
   }, [gameIdx]);
 
-  // Set up Lóverseny bet update callback in gameMeta
-  useEffect(() => {
-    setGameMeta(m => ({ ...m, onBetUpdate: (betAmount) => setLoversenyBet(betAmount) }));
-  }, [setGameMeta]);
-
   // Polling fallback: pull latest player state from Firestore every 2s
   useEffect(() => {
     if (!roomCode) return;
@@ -61742,7 +61745,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               </div>
             </div>
           )}>
-            <GameContent key={currentGameId + gameIdx + '_' + gameRestartKey} gameId={currentGameId} gameIdx={gameIdx} players={activePlayers} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={pairedOpponent} onSetHideFooter={setHideFooter} onSetBuszSwitch={(obj) => setBuszSwitchFn(obj || null)} onSetBpEnded={setBpEnded} onCommit={commitPending} drinkMult={diffDrinks * wcMult} />
+            <GameContent key={currentGameId + gameIdx + '_' + gameRestartKey} gameId={currentGameId} gameIdx={gameIdx} players={activePlayers} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} onBetUpdate={setLoversenyBet} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={pairedOpponent} onSetHideFooter={setHideFooter} onSetBuszSwitch={(obj) => setBuszSwitchFn(obj || null)} onSetBpEnded={setBpEnded} onCommit={commitPending} drinkMult={diffDrinks * wcMult} />
           </GameErrorBoundary>
         </div>
       </div>

@@ -191,6 +191,32 @@ Teszt: `node tests/diffmult_test.js` — mind a négy szinten összeveti a lépt
 írt számot azzal, amennyi ténylegesen a játékosra kerül, és őrzi a büntetés
 abszolút voltát.
 
+## ⚠️ A `gameMeta` MENTETT config — nem callback-csatorna (v10.297)
+A `gameMeta` egészében lemegy a Firestore-ba (`createRoom` → `rooms/<kód>`).
+Csak **szerializálható** érték kerülhet bele: szám, string, tömb, sima objektum.
+Egy React callback beletétele az EGÉSZ szobanyitást megöli:
+
+> `invalid-argument — Unsupported field value: a function (found in field
+> gameMeta.onBetUpdate)`
+
+A csapda alattomos, mert **időben eltolva üt**: a callbacket a `PlayScreen`
+teszi bele játék közben, a hiba viszont a KÖVETKEZŐ szobanyitáskor jön — így
+véletlenszerűnek látszik, és az első parti még hibátlanul lefut.
+
+Ha egy játéknak fel kell szólnia a `PlayScreen`-hez, az **prop**, nem `gameMeta`:
+a `GameContent` már így adja tovább a `drinkMult`, `onLiveDrinkUpdate`,
+`onBetUpdate`, `onSetHideFooter` mezőket. Új visszahívásnál ezt a sort bővítsd.
+
+Két védőháló, ami ezt őrzi:
+- `sanitizeForFirestore` kidobja a függvény-mezőket (a kulcs eltűnik, nem `null`
+  lesz — egy `null` felülírna egy valódi mezőt)
+- a `tests/fbstub.js` a valódi Firestore-ral azonosan **dob** függvényre is, nem
+  csak `undefined`-ra. Amíg ez hiányzott, a hiba MINDEN teszten átment, és csak
+  éles eszközön bukott ki.
+
+Teszt: `node tests/roomcreate_fn_test.js` — a sanitizer viselkedése, és a valódi
+repró: egy végigjátszott meccs UTÁN is nyitható új szoba.
+
 ## Fontos szabályok
 1. Minden commitnál verzióbump kötelező (az `app.src.html`-ben!)
 2. Kódot CSAK az `app.src.html`-ben szerkessz, majd `node build.js` (lásd BUILD WORKFLOW fent)

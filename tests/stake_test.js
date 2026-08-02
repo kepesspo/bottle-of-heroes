@@ -194,14 +194,32 @@ async function setup(p, gameId, opts) {
   ok(firstContentTop !== null && firstContentTop >= hard.bottom,
      'a játék tartalma a korong ALATT kezdődik', 'tartalom teteje ' + firstContentTop);
 
-  console.log('\n===== 6. SAJÁT GAZDASÁGÚ JÁTÉK =====');
+  console.log('\n===== 6. SAJÁT GAZDASÁGÚ JÁTÉK: A LÓVERSENY ÉLŐ TÉTET MUTAT =====');
+  // A Loverseny `stake` DEKLARACIOJA null marad (elore nem joslunk tartomanyt —
+  // lasd az 1. blokk VART_NULL listajat), a fejlec viszont nem ures: a korong az
+  // EPPEN beallitott tetet mutatja, a KOR gyuru helyen, mentazold gyuruvel.
+  //
+  // Miert csak v10.297 ota all ez a teszt: a tet-visszajelzo callbackje eredetileg
+  // a gameMeta-n keresztul ment (setGameMeta(m => ({...m, onBetUpdate}))). Itt a
+  // setGameMeta NO-OP, tehat a callback sosem ert celba — a korong nem jelent meg,
+  // es a teszt a funkcio ELOTTI allapotot rogzitette. Amikor a callback rendes
+  // proppa valt (mert a gameMeta Firestore-ba mentett config, nem callback-csatorna),
+  // a jelzo mindenhol mukodni kezdett. Ha ez megint null-ra valt, a jelzo tort el.
   await setup(p, 'loverseny', { diff: 'hard' });
-  ok(await readCap(p) === null, 'Lóverseny (stake:null): nincs korong — nem találunk ki számot');
-  const ringOnly = await p.evaluate(() => {
+  const lov = await readCap(p);
+  ok(lov !== null, 'Lóverseny: VAN korong — az élő tétet mutatja', lov && lov.num);
+  ok(lov && lov.num === '1', 'induláskor az alap tét (1 korty) áll benne', lov && lov.num);
+  ok(lov && lov.ring === 'rgb(79, 194, 160)',
+     'mentazöld a gyűrű (nem a nehézség tónusa — ez nem deklarált tét)', lov && lov.ring);
+  // a nehezseg NEM szorozza: a tet maga korty (lasd CLAUDE.md, diffmult_test)
+  await setup(p, 'loverseny', { diff: 'extreme' });
+  const lovX = await readCap(p);
+  ok(lovX && lovX.num === '1', 'extrém szinten is 1 — a tétet a nehézség nem szorozza', lovX && lovX.num);
+  const ringGone = await p.evaluate(() => {
     const root = document.getElementById('__pl');
-    return [...root.querySelectorAll('div')].some(d => /KÖR/.test(d.innerText || ''));
+    return ![...root.querySelectorAll('div')].some(d => /KÖR/.test(d.innerText || ''));
   });
-  ok(ringOnly, 'a KÖR gyűrű viszont marad — ott az az egyetlen értelmes fejléc-adat');
+  ok(ringGone, 'a KÖR gyűrű átadja a helyét (v10.270 óta a fejlécben egy adat fér el)');
 
   console.log('\n===== 7. KORTY-KÖVETÉS NÉLKÜL =====');
   await setup(p, 'reakcio', { diff: 'hard', noScore: true });

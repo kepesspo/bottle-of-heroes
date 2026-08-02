@@ -75,12 +75,18 @@
     }
     return out;
   }
-  function assertNoUndefined(obj, path) {
+  // A valodi Firestore KETFELE ertekre dob szinkron hibat: undefined es fuggveny.
+  // Sokaig csak az elsot utanoztuk, ezert a v10.296-os gameMeta.onBetUpdate
+  // (egy React callback a szoba-configban) minden teszten atment, es csak eles
+  // eszkozon bukott ki: "Unsupported field value: a function".
+  function assertWritable(obj, path) {
     if (obj === undefined) throw new Error('FIRESTORE_UNDEFINED_VALUE at ' + (path || 'root'));
+    if (typeof obj === 'function') throw new Error('FIRESTORE_UNSUPPORTED_VALUE: a function (found in field ' + (path || 'root') + ')');
     if (obj === null || typeof obj !== 'object' || obj instanceof FieldValue) return;
-    if (Array.isArray(obj)) { obj.forEach((v, i) => assertNoUndefined(v, (path||'') + '[' + i + ']')); return; }
-    Object.keys(obj).forEach(k => assertNoUndefined(obj[k], (path?path+'.':'')+k));
+    if (Array.isArray(obj)) { obj.forEach((v, i) => assertWritable(v, (path||'') + '[' + i + ']')); return; }
+    Object.keys(obj).forEach(k => assertWritable(obj[k], (path?path+'.':'')+k));
   }
+  const assertNoUndefined = assertWritable; // regi nev, hogy a hivasi helyek maradjanak
 
   const store = {}; // collectionPath -> { docId -> data }
   const listeners = {}; // collectionPath -> [cb] , and 'coll/doc' -> [cb]

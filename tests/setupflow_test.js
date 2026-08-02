@@ -257,12 +257,21 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
        ['1× korty','2× korty','3× korty','5× korty'].every(x => sheet.includes(x)),
        (sheet.match(/\d× korty/g) || []).join(' '));
     {
+      // v10.296 ota a szorzo EGY forrasbol jon: DIFFICULTY_INFO[].mult. Korabban
+      // itt egy inline harmasoperator allt a diffDrinks-ben, es a teszt annak a
+      // szovegere illesztett — a refaktor utan az a horgony elavult volna.
+      // Most futasidoben nezzuk a tenyleges forrast, es csak azt kotjuk ki a
+      // kodrol, hogy a diffDrinks TOLE szarmazzon (ne szulessen masodik forras).
+      const mults = await p.evaluate(() =>
+        Object.fromEntries(DIFFICULTY_INFO.map(d => [d.id, d.mult])));
+      ok('a szorzók a DIFFICULTY_INFO-ból valók (easy 1, mid 2, hard 3, extreme 5)',
+         mults.easy === 1 && mults.mid === 2 && mults.hard === 3 && mults.extreme === 5,
+         JSON.stringify(mults));
       const src = fs.readFileSync('/home/user/bottle-of-heroes/app.src.html', 'utf8');
       const m = src.match(/const diffDrinks = [^;]+;/);
       const code = m ? m[0] : '';
-      ok('a szorzók a diffDrinks-ből valók (extreme 5, hard 3, mid 2, egyébként 1)',
-         /'extreme' \? 5/.test(code) && /'hard' \? 3/.test(code) && /'mid' \? 2/.test(code) && /: 1/.test(code),
-         code.slice(0, 100));
+      ok('a diffDrinks nem számol újat, hanem a DIFFICULTY_INFO mult-ját veszi',
+         /diffMeta\.mult/.test(code), code.slice(0, 100));
     }
     ok('a jelenlegi szint meg van jelölve', /MOST EZ/i.test(sheet));
     await p.evaluate(() => {
