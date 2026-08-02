@@ -52030,7 +52030,7 @@ function LoversenyOval({ HORSES, positions, FINISH }) {
   );
 }
 
-function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult }) {
+function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBetUpdate }) {
   const FINISH = 12;
   const HORSES = React.useMemo(() => pickHorses(gameIdx), [gameIdx]);
   const [phase, setPhase] = useState('bet');
@@ -52053,6 +52053,16 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult }) {
     advancedRef.current = false;
     if (ivRef.current) { clearInterval(ivRef.current); ivRef.current = null; }
   }, [gameIdx]);
+
+  // Call onBetUpdate callback when the current player's bet changes
+  useEffect(() => {
+    if (!onBetUpdate) return;
+    const cp = players[betStep];
+    if (!cp) return;
+    const currentBet = bets[cp.id];
+    const amount = currentBet?.amount || 1;
+    onBetUpdate(amount);
+  }, [bets, betStep, players, onBetUpdate]);
 
   // A futam hangja MP3 (nem tomoritetlen WAV): ugyanaz a 2,5 mp, 287 KB
   // helyett 27 KB. Szandekosan MP3 es nem AAC: az AAC szabadalmas kodek,
@@ -59071,7 +59081,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} gameMeta={gameMeta} roomCode={roomCode} />;
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
-  if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onUnready={onUnready} onResult={onResult} />;
+  if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onUnready={onUnready} onResult={onResult} onBetUpdate={gameMeta?.onBetUpdate} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
@@ -60795,6 +60805,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const [starAnim, setStarAnim] = useState(false);
   const [roundPopup, setRoundPopup] = useState(null); // {round, wildcard, leaving}
   const [activeWildcard, setActiveWildcard] = useState(null); // {emoji, text, round} — a kör alatt végig látható szabály
+  const [loversenyBet, setLoversenyBet] = useState(null); // Lóverseny current bet amount for top-right circle
 
   // ── Wildcard idozito ──────────────────────────────────────────────
   // Korabban a korszam hozta (newRound % freq). Az nem volt rahuzhato a
@@ -61018,6 +61029,16 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     _oppKeyRef.current = key;
     setSelectedOpponent(pick);
   }, [turn, gameIdx, players.length, selectedOpponent]);
+
+  // Reset Lóverseny bet when game changes
+  useEffect(() => {
+    setLoversenyBet(null);
+  }, [gameIdx]);
+
+  // Set up Lóverseny bet update callback in gameMeta
+  useEffect(() => {
+    setGameMeta(m => ({ ...m, onBetUpdate: (betAmount) => setLoversenyBet(betAmount) }));
+  }, [setGameMeta]);
 
   // Polling fallback: pull latest player state from Firestore every 2s
   useEffect(() => {
@@ -61473,15 +61494,17 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           // es a nehezseget a gyuru szine hordozza. Ha nincs (stake: null — a
           // korty ott dinamikus), visszaesunk a regi kor-gyurure: annal a 8
           // jateknal a kor az egyetlen ertelmes fejlec-adat.
-          if (stakeText) {
-            const toneStake = wcMult > 1 ? T.yellow : diffMeta.tone;
+          // Loverseny: dinamikus tet a bet fazisban mutatja a jelenlegi tetmennyiseget
+          if (stakeText || (currentGameId === 'loverseny' && loversenyBet !== null)) {
+            const displayValue = stakeText !== null ? stakeText : loversenyBet;
+            const toneStake = wcMult > 1 ? T.yellow : (stakeText !== null ? diffMeta.tone : T.mint);
             // Hosszabb tartomanynal ("10–12") kisebb szamot hasznalunk, hogy
             // ne feszuljon neki a 44 px-es belso koronak.
-            const stakeFs = String(stakeText).length > 3 ? 14 : String(stakeText).length > 2 ? 16 : 19;
+            const stakeFs = String(displayValue).length > 3 ? 14 : String(displayValue).length > 2 ? 16 : 19;
             return (
-              <div onClick={() => setStakeInfo(true)}
-                   title={`${diffMeta.label} ×${stakeMult}`}
-                   style={{ position:'relative', width:54, height:54, flexShrink:0, cursor:'pointer',
+              <div onClick={() => stakeText && setStakeInfo(true)}
+                   title={stakeText ? `${diffMeta.label} ×${stakeMult}` : ''}
+                   style={{ position:'relative', width:54, height:54, flexShrink:0, cursor: stakeText ? 'pointer' : 'default',
                             filter:'drop-shadow(0 2px 0 rgba(20,30,50,0.10)) drop-shadow(0 2px 6px rgba(20,30,50,0.14))' }}>
                 <svg viewBox="0 0 54 54" style={{ position:'absolute', inset:0, width:'100%', height:'100%' }}>
                   <circle cx="27" cy="27" r="25" fill="none" stroke={toneStake} strokeWidth="4" />
@@ -61489,8 +61512,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                 <div style={{ position:'absolute', inset:5, background:T.surface, borderRadius:'50%',
                               display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:1 }}>
                   <span style={{ fontFamily:T.font, fontWeight:900, fontSize:stakeFs, lineHeight:1,
-                                 letterSpacing:'-0.03em', color: wcMult > 1 ? '#8A6A08' : T.ink,
-                                 fontVariantNumeric:'tabular-nums' }}>{stakeText}</span>
+                                 letterSpacing:'-0.03em', color: wcMult > 1 && stakeText ? '#8A6A08' : T.ink,
+                                 fontVariantNumeric:'tabular-nums' }}>{displayValue}</span>
                   <span style={{ fontFamily:T.font, fontWeight:800, fontSize:7, letterSpacing:'0.1em',
                                  textTransform:'uppercase', color:T.inkMute, lineHeight:1 }}>korty</span>
                 </div>
