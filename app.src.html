@@ -35214,7 +35214,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.303';
+const APP_VERSION = 'v10.304';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -46989,17 +46989,33 @@ const OVFJ_DIGRAPHS = ['dzs','dz','cs','gy','ly','ny','sz','ty','zs'];
 // Forditva NEM all, es ez szandekos: egyjegyu betu huzasakor a digraf tovabbra
 // SEM ervenyes (N alatt a "nyar" nem er, S alatt a "szek" sem) — kulonben az
 // egyjegyu kor beleolvadna a ketjegyube, es a ket kor ugyanaz lenne.
+// HOSSZU (ekezetes) huzott betunel a ROVID par is jo — ugyanaz az elv, mint a
+// digrafoknal: a ritkabb betu elfogadja a gyakoribbat. Ó-nal az "ora" ES az
+// "orszag" is er, Ő-nel az "otlet" is. A par mindig a hosszu -> rovid irany.
+// (Az Ö es az Ü NEM hosszu betu, ezert azok szigoruak maradnak; a hosszu
+// parjuk az Ő es az Ű.)
+const OVFJ_SHORT = { 'á':'a', 'é':'e', 'í':'i', 'ó':'o', 'ő':'ö', 'ú':'u', 'ű':'ü' };
 function ovfjLetterOk(value, letter) {
   const s = String(value||'').trim().toLowerCase();
   const l = String(letter||'').toLowerCase();
   if (!s || !l) return false;
   if (l.length > 1) return s.startsWith(l) || s.startsWith(l[0]);
+  // Forditva NEM all: O alatt az "ora" nem er, kulonben a rovid kor
+  // beleolvadna a hosszuba — pontosan ugy, ahogy az N nem fogadja el a NY-t.
+  if (OVFJ_SHORT[l] && s.startsWith(OVFJ_SHORT[l])) return true;
   if (!s.startsWith(l)) return false;
   if (OVFJ_DIGRAPHS.some(d => d[0] === l && s.startsWith(d))) return false;
   return true;
 }
-// A felulet ugyanazt mondja, amit a szabaly: ketjegyu betunel MINDKETTO kiirva.
-const ovfjLetterPair = l => { const L = String(l||''); return L.length > 1 ? L[0] + ' / ' + L : L; };
+// A felulet ugyanazt mondja, amit a szabaly: ahol ket kezdet is jo, MINDKETTO
+// kiirva — "N / NY" a digrafoknal, "O / Ó" a hosszu maganhangzoknal.
+const ovfjLetterPair = l => {
+  const L = String(l||'');
+  if (L.length > 1) return L[0] + ' / ' + L;
+  const sh = OVFJ_SHORT[L.toLowerCase()];
+  if (!sh) return L;
+  return (L === L.toUpperCase() ? sh.toUpperCase() : sh) + ' / ' + L;
+};
 const OVFJ_ICONS = {
   orszag: (c,s=20)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 3 2.6 15 0 18M12 3c-2.6 3-2.6 15 0 18"/></svg>,
   varos: (c,s=20)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 21V8.5l6-3v15.5"/><path d="M10 21V3.5l10 4V21"/><path d="M3.2 21h17.6"/><path d="M14 10h.01M14 13.5h.01M14 17h.01"/></svg>,
@@ -57932,6 +57948,13 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
           </div>
         )}
         <OVFJStandings players={pl} roundScores={roundScores} cumScores={cumScores} myPid={hostPid} final={false} />
+        {round < totalRounds && (
+          // A szoszam KORONKENT allithato: a lobbyban felvett ertek csak az elso
+          // kort kotötte, pedig a tarsasag menet kozben szokta eldonteni, hogy
+          // nehezitenek-e. Az `answerLimit` lemegy az `ovfjState`-be, tehat a
+          // telefonok a kovetkezo kortol ezzel dolgoznak.
+          <OVFJLimitPicker value={answerLimit} onChange={setAnswerLimit} />
+        )}
         <button onClick={()=>setReviewOpen(v=>!v)} style={{width:'100%',padding:'11px',borderRadius:14,border:`1.5px solid ${T.surfaceMuted}`,background:T.surface,color:T.inkSoft,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:13.5,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:7}}>
           {OVFJ_UI.search(T.inkSoft,16)}{reviewOpen ? 'Elrejtem, mit írtak' : 'Mit írtak?'}
         </button>

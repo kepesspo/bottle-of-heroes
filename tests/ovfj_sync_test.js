@@ -104,6 +104,38 @@ const bodyTxt = p => p.evaluate(() => document.body.innerText.replace(/\s+/g, ' 
      ((await bodyTxt(p)).match(/\d\/\d játékos kész/) || ['—'])[0]);
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
 
+  // ══ 1b. A HOST KÖR VÉGI KÉPERNYŐJE (v10.303-304) ══
+  // Vegigvisszuk az elso kort, es megnezzuk, mi all a host eredmeny-lapjan:
+  // harom csempe, "Mit irtak?" visszanezes, es a KOVETKEZO kor szoszama.
+  console.log('\n===== 1b. HOST KÖR VÉGE =====');
+  await click(p, /Kész vagyok/); await p.waitForTimeout(1200);
+  ok(/Szavazás/.test(await bodyTxt(p)), 'a host is beküldött → szavazás',
+     (await bodyTxt(p)).slice(0, 60));
+  await click(p, /Befejezés/); await p.waitForTimeout(1400);
+  const veg = await bodyTxt(p);
+  ok(/kör vége/.test(veg), 'eljutottunk a kör végi képernyőre', veg.slice(0, 60));
+
+  // A csempe-feliratok `textTransform:uppercase`-szel jelennek meg, es az
+  // innerText a RENDERELT szoveget adja vissza — ezert kis/nagybetu-fuggetlen.
+  ok(/ebben a körben/i.test(veg) && /összesen/i.test(veg) && /helyezés/i.test(veg),
+     'kint a három csempe (körös pont / összesen / helyezés)',
+     (veg.match(/EBBEN A KÖRBEN|ÖSSZESEN|HELYEZÉS/gi) || []).join(', '));
+
+  // A KOVETKEZO kor szoszama: eddig csak a lobbyban lehetett allitani.
+  ok(/Hány szó egy kategóriához/.test(veg),
+     'a következő kör szószáma is beállítható', /Hány szó/.test(veg) ? 'ott a választó' : 'NINCS');
+
+  // Visszanezes: a gomb kinyitja, es tenyleg latszik, amit a telefon irt.
+  ok(/Mit írtak\?/.test(veg), 'ott a „Mit írtak?" gomb');
+  await click(p, /Mit írtak/); await p.waitForTimeout(700);
+  const nyitva = await bodyTxt(p);
+  ok(/Anglia/.test(nyitva), 'a panel kiírja a beküldött szavakat', /Anglia/.test(nyitva) ? 'Anglia látszik' : 'NEM látszik');
+  // readOnly: a visszanezesben NINCS ertekelo gomb
+  const ertekelok = await p.evaluate(() =>
+    document.querySelectorAll('#__p button[aria-label="Elfogadom"], #__p button[aria-label="Nem fogadom el"]').length);
+  ok(ertekelok === 0, 'a visszanézésben nincsenek értékelő gombok (readOnly)', ertekelok + ' db');
+  ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
+
   // ══ 2. A SZOBA-FIGYELŐ ÚJRAÉPÜL ══
   console.log('\n===== 2. A SZOBA-FIGYELŐ ÚJRAÉPÜL HIBA UTÁN =====');
   const rec = await p.evaluate(async () => {

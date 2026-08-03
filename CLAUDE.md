@@ -338,12 +338,19 @@ kulcsára írt, a 2.+ szavakra pedig „senki nem szavazott" állt — és a
 **automatikusan pontot értek**. Az `ai` indexnek végig kell mennie az
 `onVote(pid, cat, yes, ai)` láncon.
 
-**Kétjegyű húzott betűnél az egyjegyű kezdet is jó** (`NY` → „nap" és „nyár"),
-mert magyarul a digráfokra önmagukban nagyon kevés szó van. Fordítva NEM áll, és
-ez szándékos: egyjegyű betűnél a digráf továbbra sem érvényes (`N` alatt a
-„nyár" nem ér) — különben az egyjegyű kör beleolvadna a kétjegyűbe. A felület
-ugyanazt mondja, amit a szabály: `ovfjLetterPair()` mindkettőt kiírja („N / NY”),
-és a sorsoló animáció ilyenkor kisebb betűmérettel rajzol, hogy beférjen.
+**Ahol két kezdet is jó, a szabály EGY IRÁNYÚ: a ritkább betű elfogadja a
+gyakoribbat, fordítva soha.** Két esete van:
+- **kétjegyű** (`OVFJ_DIGRAPHS`): `NY` → „nap" és „nyár" is jó;
+- **hosszú magánhangzó** (`OVFJ_SHORT`, v10.304): `Ó` → „óra" és „ország" is jó,
+  `Ő` → „őz" és „ötlet". A pár mindig hosszú → rövid (`á→a é→e í→i ó→o ő→ö
+  ú→u ű→ü`) — az `Ö` és az `Ü` NEM hosszú betű, ezért azok szigorúak maradnak.
+
+Visszafelé egyik sem áll, és ez szándékos: `N` alatt a „nyár", `O` alatt az
+„óra" nem ér — különben a szűkebb kör beleolvadna a tágabba, és a kettő
+ugyanaz lenne. A felület
+ugyanazt mondja, amit a szabály: `ovfjLetterPair()` mindkettőt kiírja („N / NY”,
+„O / Ó”), és a sorsoló animáció ilyenkor kisebb betűmérettel rajzol, hogy
+beférjen.
 Az `X` és az `Y` eleve nincs az `OVFJ_LETTERS`-ben.
 
 **Egy szavazó-nézet, három hívási hely.** Az `OVFJVotingView`-t a host, a
@@ -355,3 +362,12 @@ ugyanabban a szoba-pillanatképben ül (`ovfjV<pid>` mezők).
 Teszt: `node tests/ovfj_vote_test.js` — a „TÖBB SZÓ" blokk a szavazat-indexet
 őrzi (a javítás nélkül a 0. szó kulcsára megy és az ELSŐ szó gombja jelölődik),
 az „EGY FORRÁS" blokk pedig azt, hogy egyetlen komponens-definíció van.
+
+**A szószám körönként állítható** (v10.304): az `OVFJLimitPicker` a lobby mellett
+a host kör végi lapján is kint van (`round < totalRounds`). Az `answerLimit`
+lemegy az `ovfjState`-be, tehát a telefonok a következő körtől azzal dolgoznak.
+
+Teszt: `ovfj_vote_test.js` „BETŰPÁROK" blokkja (22 eset, mindkét irány) és
+`ovfj_sync_test.js` 1b. blokkja — az végigviszi az első kört, és a host kör végi
+lapján ellenőrzi a három csempét, a szószám-választót és a „Mit írtak?" panelt
+(utóbbiban NINCS értékelő gomb — `readOnly`).

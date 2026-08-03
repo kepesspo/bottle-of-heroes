@@ -219,6 +219,39 @@ const ANSWERS = {
        JSON.stringify(jelolt));
   }
 
+  // ─── 4c) BETUPAROK: ahol ket kezdet is jo (v10.303 digraf, v10.304 ekezet) ───
+  // A szabaly EGY iranyu: a RITKABB betu fogadja el a gyakoribbat, forditva nem.
+  // Enelkul az egyjegyu/rovid kor beleolvadna a ketjegyube/hosszuba, es a ket
+  // kor ugyanaz lenne. A cimke ugyanezt mondja ki ("N / NY", "O / Ó").
+  console.log('\n===== BETŰPÁROK =====');
+  {
+    const eset = await p.evaluate(() => {
+      const t = [
+        // ketjegyu huzott betu: az egyjegyu kezdet is jo
+        ['nyár','NY',true],  ['nap','NY',true],   ['sas','NY',false],
+        ['szék','SZ',true],  ['sas','SZ',true],
+        // ...de egyjegyunel a digraf NEM
+        ['nyár','N',false],  ['nap','N',true],
+        ['szék','S',false],  ['sas','S',true],
+        // hosszu maganhangzo: a rovid par is jo
+        ['óra','Ó',true],    ['ország','Ó',true], ['alma','Ó',false],
+        ['őz','Ő',true],     ['ötlet','Ő',true],
+        ['ágy','Á',true],    ['alma','Á',true],
+        // ...de rovidnel a hosszu NEM
+        ['óra','O',false],   ['orr','O',true],
+        ['őz','Ö',false],    ['ötlet','Ö',true],
+        ['ágy','A',false],   ['alma','A',true],
+      ];
+      return t.filter(([w,l,exp]) => ovfjLetterOk(w,l) !== exp).map(([w,l,exp]) => l+'+'+w+' várt:'+exp);
+    });
+    ok('minden betűpár-eset stimmel', eset.length === 0, eset.join(' | ') || '22 eset rendben');
+    const cimke = await p.evaluate(() =>
+      ['NY','LY','Ó','Ő','Á','Ű','A','O','Ö'].map(l => l+'→'+ovfjLetterPair(l)).join(' '));
+    ok('a címke mindkét kezdetet kiírja, ahol kettő is jó',
+       /NY→N \/ NY/.test(cimke) && /Ó→O \/ Ó/.test(cimke) && /Ő→Ö \/ Ő/.test(cimke)
+       && /A→A /.test(cimke) && /O→O$|O→O /.test(cimke), cimke);
+  }
+
   // ─── 5) EGY forras ───
   // A hoszt es a vendeg ugyanazt a komponenst rendereli — ha ez ketté válna,
   // az egyik oldalon a regi soron maradna.
