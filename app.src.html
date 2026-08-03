@@ -35214,7 +35214,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.306';
+const APP_VERSION = 'v10.307';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -46989,16 +46989,19 @@ const OVFJ_DIGRAPHS = ['dzs','dz','cs','gy','ly','ny','sz','ty','zs'];
 // Forditva NEM all, es ez szandekos: egyjegyu betu huzasakor a digraf tovabbra
 // SEM ervenyes (N alatt a "nyar" nem er, S alatt a "szek" sem) — kulonben az
 // egyjegyu kor beleolvadna a ketjegyube, es a ket kor ugyanaz lenne.
-// EKEZETES huzott betunel az EGGYEL EGYSZERUBB alak is jo — ugyanaz az elv,
-// mint a digrafoknal: a ritkabb betu elfogadja a gyakoribbat. A lepes mindig
-// az EKEZET levetele:
-//   á->a  é->e  í->i  ó->o  ú->u      (ekezet le)
-//   ő->ö  ű->ü                        (hosszu ekezet -> ket pont)
+// EKEZETES PAROK — a par KET tagja KOLCSONOSEN elfogadja egymast (v10.307):
+// O alatt az "ora" is er, es Ó alatt az "orr" is; Ö alatt az "oz", Ő alatt az
+// "otlet". A par mindig ugyanannak a hangnak a rovid/hosszu valtozata.
 //
-// A "ket pont levetele" (ö->o, ü->u) SZANDEKOSAN NINCS benne: az Ö es az U
-// kore MAS betu, nem ugyanannak a hangnak a hosszu/rovid valtozata — Ö alatt
-// az "orr" nem er. (v10.305-ben egy korig bent volt, v10.306-ban kikerult.)
-const OVFJ_SHORT = { 'á':'a', 'é':'e', 'í':'i', 'ó':'o', 'ő':'ö', 'ú':'u', 'ű':'ü' };
+// Az `o` es az `ö` NEM par (ahogy az `u` es az `ü` sem): kulon betuk, nem
+// hosszu/rovid valtozatok — Ö alatt az "orr" tovabbra sem er.
+//
+// FIGYELEM: ez az ekezetes iranynal KETIRANYU, a DIGRAFOKNAL viszont marad az
+// egyiranyu szabaly (NY alatt a "nap" er, N alatt a "nyar" NEM). A ketto
+// szandekosan kulonbozik.
+const OVFJ_PAIRS = [['a','á'], ['e','é'], ['i','í'], ['o','ó'], ['ö','ő'], ['u','ú'], ['ü','ű']];
+const OVFJ_PAIR_OF = {};
+OVFJ_PAIRS.forEach(([x, y]) => { OVFJ_PAIR_OF[x] = y; OVFJ_PAIR_OF[y] = x; });
 function ovfjLetterOk(value, letter) {
   const s = String(value||'').trim().toLowerCase();
   const l = String(letter||'').toLowerCase();
@@ -47006,7 +47009,7 @@ function ovfjLetterOk(value, letter) {
   if (l.length > 1) return s.startsWith(l) || s.startsWith(l[0]);
   // Forditva NEM all: O alatt az "ora" nem er, kulonben a rovid kor
   // beleolvadna a hosszuba — pontosan ugy, ahogy az N nem fogadja el a NY-t.
-  if (OVFJ_SHORT[l] && s.startsWith(OVFJ_SHORT[l])) return true;
+  if (OVFJ_PAIR_OF[l] && s.startsWith(OVFJ_PAIR_OF[l])) return true;
   if (!s.startsWith(l)) return false;
   if (OVFJ_DIGRAPHS.some(d => d[0] === l && s.startsWith(d))) return false;
   return true;
@@ -47016,9 +47019,11 @@ function ovfjLetterOk(value, letter) {
 const ovfjLetterPair = l => {
   const L = String(l||'');
   if (L.length > 1) return L[0] + ' / ' + L;
-  const sh = OVFJ_SHORT[L.toLowerCase()];
-  if (!sh) return L;
-  return (L === L.toUpperCase() ? sh.toUpperCase() : sh) + ' / ' + L;
+  const pr = OVFJ_PAIRS.find(([x, y]) => x === L.toLowerCase() || y === L.toLowerCase());
+  if (!pr) return L;
+  // A par MINDKET tagjanal ugyanaz a cimke, rovid-hosszu sorrendben: "O / Ó".
+  const up = c => (L === L.toUpperCase() ? c.toUpperCase() : c);
+  return up(pr[0]) + ' / ' + up(pr[1]);
 };
 const OVFJ_ICONS = {
   orszag: (c,s=20)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 3 2.6 15 0 18M12 3c-2.6 3-2.6 15 0 18"/></svg>,

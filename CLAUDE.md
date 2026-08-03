@@ -338,19 +338,18 @@ kulcsára írt, a 2.+ szavakra pedig „senki nem szavazott" állt — és a
 **automatikusan pontot értek**. Az `ai` indexnek végig kell mennie az
 `onVote(pid, cat, yes, ai)` láncon.
 
-**Ahol két kezdet is jó, a szabály EGY IRÁNYÚ: a ritkább betű elfogadja a
-gyakoribbat, fordítva soha.** Két esete van:
+**Ahol két kezdet is jó, két különböző szabály él — ne keverd össze őket:**
 - **kétjegyű** (`OVFJ_DIGRAPHS`): `NY` → „nap" és „nyár" is jó;
-- **ékezetes betű** (`OVFJ_SHORT`, v10.304, pontosítva v10.306): a lépés az
-  ÉKEZET levétele — `á→a é→e í→i ó→o ú→u` és `ő→ö ű→ü`. Tehát `Ó` → „óra" és
-  „ország", `Ő` → „őz" és „ötlet".
-  A **két pont levétele NINCS benne** (`ö→o`, `ü→u`): az `Ö` és az `Ü` külön
-  betű, nem ugyanannak a hangnak a hosszú/rövid változata — `Ö` alatt az „orr"
-  nem ér. (v10.305-ben egy körig bent volt, v10.306-ban kikerült.)
+- **ékezetes pár** (`OVFJ_PAIRS`, v10.307): `a↔á e↔é i↔í o↔ó ö↔ő u↔ú ü↔ű`.
+  Itt a szabály **KÉTIRÁNYÚ**: `O` alatt az „óra" is ér, és `Ó` alatt az „orr"
+  is. A címke a pár mindkét tagjánál ugyanaz („O / Ó").
+  Az `o` és az `ö` **nem pár** (ahogy az `u` és az `ü` sem): külön betűk, nem
+  hosszú/rövid változatok — `Ö` alatt az „orr" nem ér.
 
-Visszafelé egyik sem áll, és ez szándékos: `N` alatt a „nyár", `O` alatt az
-„óra" nem ér — különben a szűkebb kör beleolvadna a tágabba, és a kettő
-ugyanaz lenne. A felület
+A **digráf egyirányú, az ékezetes pár kétirányú** — ez szándékos különbség.
+`N` alatt a „nyár" nem ér (a szűkebb kör nem olvadhat bele a tágabba), `O`
+alatt viszont az „óra" igen: az `o` és az `ó` ugyanaz a hang, a játékos nem
+azon bukjon, hogy melyik ékezetes alakra gondolt. A felület
 ugyanazt mondja, amit a szabály: `ovfjLetterPair()` mindkettőt kiírja („N / NY”,
 „O / Ó”), és a sorsoló animáció ilyenkor kisebb betűmérettel rajzol, hogy
 beférjen.

@@ -233,33 +233,34 @@ const ANSWERS = {
         // ...de egyjegyunel a digraf NEM
         ['nyár','N',false],  ['nap','N',true],
         ['szék','S',false],  ['sas','S',true],
-        // ekezetes betu: az EKEZET levetele jo (v10.304, pontositva v10.306)
-        ['óra','Ó',true],    ['ország','Ó',true], ['alma','Ó',false],
-        ['ágy','Á',true],    ['alma','Á',true],
-        ['őz','Ő',true],     ['ötlet','Ő',true],  // ő -> ö
-        ['űr','Ű',true],     ['üveg','Ű',true],   // ű -> ü
-        // ...de a KET PONT levetele NEM jo: az Ö/Ü mas betu, nem hosszu/rovid par
-        ['orr','Ö',false],   ['ötlet','Ö',true],
-        ['utca','Ü',false],  ['üveg','Ü',true],
-        ['orr','Ő',false],   ['utca','Ű',false],
-        // ...es visszafele semmi nem all
-        ['óra','O',false],   ['orr','O',true],
-        ['ötlet','O',false], ['őz','Ö',false],
-        ['üveg','U',false],  ['utca','U',true],
-        ['űr','Ü',false],
-        ['ágy','A',false],   ['alma','A',true],
+        // EKEZETES PAR: a par ket tagja KOLCSONOSEN elfogadja egymast (v10.307)
+        ['óra','O',true],    ['orr','O',true],    // O alatt a hosszu is jo
+        ['óra','Ó',true],    ['orr','Ó',true],    // ...es forditva is
+        ['ötlet','Ö',true],  ['őz','Ö',true],
+        ['őz','Ő',true],     ['ötlet','Ő',true],
+        ['utca','U',true],   ['út','U',true],
+        ['üveg','Ü',true],   ['űr','Ü',true],
+        ['űr','Ű',true],     ['üveg','Ű',true],
+        ['alma','A',true],   ['ágy','A',true],
+        ['alma','Á',true],   ['ágy','Á',true],
+        // ...de az `o` es az `ö` NEM par (ahogy az `u` es az `ü` sem):
+        ['ötlet','O',false], ['őz','O',false],    ['ötlet','Ó',false],
+        ['orr','Ö',false],   ['óra','Ö',false],   ['orr','Ő',false],
+        ['üveg','U',false],  ['űr','U',false],
+        ['utca','Ü',false],  ['utca','Ű',false],
       ];
       return t.filter(([w,l,exp]) => ovfjLetterOk(w,l) !== exp).map(([w,l,exp]) => l+'+'+w+' várt:'+exp);
     });
-    ok('minden betűpár-eset stimmel', eset.length === 0, eset.join(' | ') || '29 eset rendben');
+    ok('minden betűpár-eset stimmel', eset.length === 0, eset.join(' | ') || '32 eset rendben');
     const cimke = await p.evaluate(() =>
-      ['NY','LY','Ó','Ö','Ő','Ú','Ü','Ű','Á','A','O','U'].map(l => l+'→'+ovfjLetterPair(l)).join(' '));
-    ok('a címke mindkét kezdetet kiírja, ahol kettő is jó',
-       /NY→N \/ NY/.test(cimke) && /Ó→O \/ Ó/.test(cimke) && /Ő→Ö \/ Ő/.test(cimke)
-       && /Ű→Ü \/ Ű/.test(cimke)
-       // az Ö es az Ü NEM par-betu: onmagukban allnak a cimkeben is
-       && /Ö→Ö /.test(cimke) && /Ü→Ü /.test(cimke)
-       && /A→A /.test(cimke) && /O→O /.test(cimke) && /U→U$/.test(cimke), cimke);
+      ['NY','LY','O','Ó','Ö','Ő','U','Ú','Ü','Ű','A','Á'].map(l => l+'→'+ovfjLetterPair(l)).join(' '));
+    ok('a címke a PÁR mindkét tagjánál ugyanaz, rövid-hosszú sorrendben',
+       /NY→N \/ NY/.test(cimke)
+       && /O→O \/ Ó/.test(cimke) && /Ó→O \/ Ó/.test(cimke)
+       && /Ö→Ö \/ Ő/.test(cimke) && /Ő→Ö \/ Ő/.test(cimke)
+       && /U→U \/ Ú/.test(cimke) && /Ú→U \/ Ú/.test(cimke)
+       && /Ü→Ü \/ Ű/.test(cimke) && /Ű→Ü \/ Ű/.test(cimke)
+       && /A→A \/ Á/.test(cimke) && /Á→A \/ Á$/.test(cimke), cimke);
   }
 
   // ─── 5) EGY forras ───
