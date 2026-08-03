@@ -35214,7 +35214,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.302';
+const APP_VERSION = 'v10.303';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -46982,16 +46982,24 @@ try {
 
 const OVFJ_LETTERS = ['A','Á','B','C','CS','D','E','É','F','G','GY','H','I','Í','J','K','L','LY','M','N','NY','O','Ó','Ö','Ő','P','R','S','SZ','T','TY','U','Ú','Ü','Ű','V','Z','ZS'];
 const OVFJ_DIGRAPHS = ['dzs','dz','cs','gy','ly','ny','sz','ty','zs'];
+// Ketjegyu huzott betunel (CS GY LY NY SZ TY ZS) az EGYJEGYU kezdet IS jo:
+// magyarul ezekre onmagukban nagyon keves szo van, es a "NY" kor gyakorlatilag
+// jatszhatatlan volt. NY-nal tehat a "nap" es a "nyar" is er.
+//
+// Forditva NEM all, es ez szandekos: egyjegyu betu huzasakor a digraf tovabbra
+// SEM ervenyes (N alatt a "nyar" nem er, S alatt a "szek" sem) — kulonben az
+// egyjegyu kor beleolvadna a ketjegyube, es a ket kor ugyanaz lenne.
 function ovfjLetterOk(value, letter) {
   const s = String(value||'').trim().toLowerCase();
   const l = String(letter||'').toLowerCase();
   if (!s || !l) return false;
+  if (l.length > 1) return s.startsWith(l) || s.startsWith(l[0]);
   if (!s.startsWith(l)) return false;
-  // Egybetűs húzott betűnél a hosszabb digráf nem érvényes (S ≠ Sz, C ≠ Cs, G ≠ Gy…)
-  if (l.length === 1 && OVFJ_DIGRAPHS.some(d => d[0] === l && s.startsWith(d))) return false;
-  if (l === 'dz' && s.startsWith('dzs')) return false;
+  if (OVFJ_DIGRAPHS.some(d => d[0] === l && s.startsWith(d))) return false;
   return true;
 }
+// A felulet ugyanazt mondja, amit a szabaly: ketjegyu betunel MINDKETTO kiirva.
+const ovfjLetterPair = l => { const L = String(l||''); return L.length > 1 ? L[0] + ' / ' + L : L; };
 const OVFJ_ICONS = {
   orszag: (c,s=20)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 3 2.6 15 0 18M12 3c-2.6 3-2.6 15 0 18"/></svg>,
   varos: (c,s=20)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 21V8.5l6-3v15.5"/><path d="M10 21V3.5l10 4V21"/><path d="M3.2 21h17.6"/><path d="M14 10h.01M14 13.5h.01M14 17h.01"/></svg>,
@@ -57270,7 +57278,14 @@ function OVFJDrawAnim({ letter, drawTs, size }) {
   return (
     <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16,padding:'26px 0'}}>
       <div style={{width:s,height:s,borderRadius:Math.round(s*0.22),background:done?`linear-gradient(135deg,${T.yellow},${T.coral})`:T.surface,display:'grid',placeItems:'center',boxShadow:done?T.shadowLift:T.shadow,transform:done?'scale(1.08)':'scale(1)',transition:'background .35s, transform .35s'}}>
-        <span style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:Math.round(s*0.5),color:done?'#fff':T.inkSoft,lineHeight:1}}>{disp}</span>
+        {(() => {
+          // Porges kozben a nyers betu villog; a VEGSO betunel a par all ki
+          // ("N / NY"), es ilyenkor kisebb a betumeret, kulonben kilogna a
+          // 170 px-es dobozbol.
+          const shown = done ? ovfjLetterPair(letter) : disp;
+          const fs = shown.length > 2 ? Math.round(s*0.24) : Math.round(s*0.5);
+          return <span style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:fs,color:done?'#fff':T.inkSoft,lineHeight:1,whiteSpace:'nowrap'}}>{shown}</span>;
+        })()}
       </div>
       <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:14,color:done?T.mint:T.inkSoft,letterSpacing:'0.06em',textTransform:'uppercase'}}>{done ? 'Ez a betűd!' : 'Betűsorsolás…'}</div>
     </div>
@@ -57299,7 +57314,7 @@ function OVFJWritingForm({ letter, remaining, localAns, setLocalAns, submitted, 
       {/* Top bar: letter chip + progress + stopwatch — sticky, stays visible while scrolling */}
       <div style={{position:'sticky',top:0,zIndex:20,display:'flex',alignItems:'center',gap:10,background:T.bg,paddingTop:6,paddingBottom:10,marginLeft:-24,marginRight:-24,paddingLeft:24,paddingRight:24,boxShadow:`0 8px 10px -8px ${T.ink}22`}}>
         <div style={{flexShrink:0,width:40,height:40,borderRadius:12,background:`linear-gradient(135deg,${T.mint},${T.mintDeep||T.mint})`,display:'grid',placeItems:'center',boxShadow:`0 3px 10px ${T.mint}55`}}>
-          <span style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:20,color:'#fff',lineHeight:1}}>{letter}</span>
+          <span style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:ovfjLetterPair(letter).length>2?12:20,color:'#fff',lineHeight:1,whiteSpace:'nowrap'}}>{ovfjLetterPair(letter)}</span>
         </div>
         <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',gap:6}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
@@ -57446,14 +57461,17 @@ function OVFJWritingForm({ letter, remaining, localAns, setLocalAns, submitted, 
   );
 }
 // Szavazó UI — saját válaszok + mások értékelése
-function OVFJVotingView({ letter, round, players, answers, myPid, myVotes, onVote, tallies, limit }) {
+// A `readOnly` a VISSZANEZES: ugyanez a lista, csak ertekelo gombok nelkul —
+// megmarad az ervenyesseg-jeloles (athuzas, indok) es a szavazat-szamlalo.
+// Szandekosan NEM kulon komponens: a ket nezet igy nem tud elcsuszni egymastol.
+function OVFJVotingView({ letter, round, players, answers, myPid, myVotes, onVote, tallies, limit, readOnly }) {
   const validity = ovfjBuildValidity(answers, letter, round, limit);
   const participants = players.filter(p => answers[p.id] && answers[p.id].round === round);
   return (
     <div style={{display:'flex',flexDirection:'column',gap:8,width:'100%'}}>
       <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:16,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay,display:'flex',alignItems:'center',justifyContent:'center',gap:7}}>
-        <span>„{letter}" — Szavazás</span>
-        <span style={{display:'flex',alignItems:'center',gap:3}}>{OVFJ_UI.check(T.mint,15)}{OVFJ_UI.cross(T.coral,15)}</span>
+        <span>„{ovfjLetterPair(letter)}" — {readOnly ? 'Mit írtak?' : 'Szavazás'}</span>
+        {!readOnly && <span style={{display:'flex',alignItems:'center',gap:3}}>{OVFJ_UI.check(T.mint,15)}{OVFJ_UI.cross(T.coral,15)}</span>}
       </div>
       {participants.length === 0 && <div style={{fontFamily:T.font,fontSize:13,color:T.inkSoft,textAlign:'center',padding:'12px 0'}}>Nincs kire szavazni…</div>}
       {participants.length > 0 && OVFJ_CATS.map(cat => (
@@ -57475,8 +57493,12 @@ function OVFJVotingView({ letter, round, players, answers, myPid, myVotes, onVot
               // kulonben a szavak nem egy oszlopban allnanak, pedig fentrol
               // lefele olvasva hasonlitja ossze oket az ember.
               const canSearch = !!(vi.val && vi.valid);
+              // Az `ai` (szo-index) AT KELL menjen: enelkul minden szo gombja a
+              // 0. szo kulcsara irt, tehat tobb szonal csak az elsore lehetett
+              // ertekelni — a tobbi pedig "senki nem szavazott" cimen
+              // automatikusan elfogadott lett (lasd `finishVoting`).
               const voteBtn = (yes) => (
-                <button onClick={()=>onVote(p.id,cat.key,yes)}
+                <button onClick={()=>onVote(p.id,cat.key,yes,ai)}
                   aria-label={yes?'Elfogadom':'Nem fogadom el'}
                   style={{width:32,height:30,borderRadius:9,flexShrink:0,cursor:'pointer',display:'grid',placeItems:'center',
                           border:`1.5px solid ${mv===yes?(yes?T.mint:T.coral):T.surfaceMuted}`,
@@ -57498,7 +57520,11 @@ function OVFJVotingView({ letter, round, players, answers, myPid, myVotes, onVot
                   )}
                 </div>
                 <span style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:14,flex:1,minWidth:0,color:!vi.val?T.inkMute:vi.valid?T.ink:T.coral,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:vi.val&&!vi.valid?'line-through':'none',opacity:vi.val&&!vi.valid?0.7:1}}>{vi.val||'—'}</span>
-                {vi.valid && !isMe ? (
+                {vi.valid && readOnly ? (
+                  <div style={{display:'flex',gap:4,flexShrink:0,alignItems:'center'}}>
+                    {tl && <span style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.inkSoft,display:'flex',alignItems:'center',gap:2}}>{OVFJ_UI.check(T.inkSoft,12)}{tl.yes}</span>}
+                  </div>
+                ) : vi.valid && !isMe ? (
                   <div style={{display:'flex',gap:4,flexShrink:0,alignItems:'center'}}>
                     {tl && <span style={{fontFamily:T.font,fontSize:10,fontWeight:T.weightTitle,color:T.inkSoft,display:'flex',alignItems:'center',gap:1}}>{OVFJ_UI.check(T.inkSoft,11)}{tl.yes}</span>}
                     {voteBtn(true)}
@@ -57572,6 +57598,9 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
   const [submitted, setSubmitted] = React.useState(false);
   const [showQR, setShowQR] = React.useState(false);
   const [answerLimit, setAnswerLimit] = React.useState(() => ovfjLimit(gameMeta?.ovfjConfig?.answerLimit));
+  // A kor vegi "Mit irtak?" panel nyitva van-e. Korvaltaskor becsukjuk, mert a
+  // valaszok es a szavazatok is nullazodnak — nyitva hagyva ures lapot mutatna.
+  const [reviewOpen, setReviewOpen] = React.useState(false);
   const [, setTick] = React.useState(0);
   const calcRef = React.useRef(false);
   const localAnsRef = React.useRef({});
@@ -57688,9 +57717,9 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
   });
 
   // Szavazás: host is szavaz
-  const hostVote = (targetPid, catKey, v) => {
+  const hostVote = (targetPid, catKey, v, idx) => {
     if (!hostPid) return;
-    const vk = ovfjVoteKey(round, targetPid, catKey);
+    const vk = ovfjVoteKey(round, targetPid, catKey, idx || 0);
     const nv = {...myVotes, [vk]: v};
     setMyVotes(nv);
     setVotes(prev => ({...prev, [vk]: {...(prev[vk]||{}), [hostPid]: v}}));
@@ -57769,7 +57798,7 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
     calcRef.current = false;
     submittedRef.current = false;
     setSubmitted(false); setLocalAns({}); setMyVotes({});
-    setAnswers({}); setVotes({}); setRoundScores({}); setDoneAt(null);
+    setAnswers({}); setVotes({}); setRoundScores({}); setDoneAt(null); setReviewOpen(false);
     setRound(r => r + 1);
     const nl = drawLetter();
     setLetter(nl); setDrawTs(Date.now()); setPhase('draw');
@@ -57880,15 +57909,43 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
   );
 
   // ── HOST: kör eredménye ──
-  if (phase === 'results') return (
-    <div style={{display:'flex',flexDirection:'column',gap:10,width:'100%'}}>
-      <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:18,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay}}>{round}. kör vége — „{letter}"</div>
-      <OVFJStandings players={pl} roundScores={roundScores} cumScores={cumScores} myPid={hostPid} final={false} />
-      <PrimaryButton onClick={nextRound} style={{marginTop:4}}>
-        {round >= totalRounds ? <React.Fragment><BohIcon name="flag" size={15} style={{ marginRight:5 }} />Végeredmény</React.Fragment> : '🎰 Következő betű'}
-      </PrimaryButton>
-    </div>
-  );
+  if (phase === 'results') {
+    // Ugyanaz a harom csempe, amit a telefonos nezet mutat (kores pont / ossz /
+    // helyezes), a host SAJAT jatekosara. Ha a host nem vett fel jatekost
+    // (nincs `hostPid`), a csempek kimaradnak — nem lenne kirol beszelni.
+    const srtd = [...pl].sort((a,b)=>(cumScores[b.id]||0)-(cumScores[a.id]||0));
+    const rank = hostPid ? srtd.findIndex(p => p.id === hostPid) + 1 : 0;
+    const tile = (cim, ertek, szin, bg, shadow) => (
+      <div style={{flex:1,minWidth:0,background:bg,borderRadius:18,padding:'14px',textAlign:'center',boxShadow:shadow?T.shadow:'none'}}>
+        <div style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:szin,textTransform:'uppercase',letterSpacing:'0.08em'}}>{cim}</div>
+        <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:30,color:szin,lineHeight:1.2}}>{ertek}</div>
+      </div>
+    );
+    return (
+      <div style={{display:'flex',flexDirection:'column',gap:10,width:'100%'}}>
+        <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:18,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay}}>{round}. kör vége — „{ovfjLetterPair(letter)}"</div>
+        {rank > 0 && (
+          <div style={{display:'flex',gap:8}}>
+            {tile('Ebben a körben', '+' + (roundScores[hostPid]||0), T.mint, T.mintSoft, false)}
+            {tile('Összesen', (cumScores[hostPid]||0) + ' pt', T.ink, T.surface, true)}
+            {tile('Helyezés', rank + '. hely', rank===1?T.coral:T.ink, T.surface, true)}
+          </div>
+        )}
+        <OVFJStandings players={pl} roundScores={roundScores} cumScores={cumScores} myPid={hostPid} final={false} />
+        <button onClick={()=>setReviewOpen(v=>!v)} style={{width:'100%',padding:'11px',borderRadius:14,border:`1.5px solid ${T.surfaceMuted}`,background:T.surface,color:T.inkSoft,fontFamily:T.font,fontWeight:T.weightTitle,fontSize:13.5,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:7}}>
+          {OVFJ_UI.search(T.inkSoft,16)}{reviewOpen ? 'Elrejtem, mit írtak' : 'Mit írtak?'}
+        </button>
+        {reviewOpen && (
+          <OVFJVotingView letter={letter} round={round} players={pl} answers={answers}
+                          myPid={hostPid} myVotes={myVotes} onVote={()=>{}} tallies={tallies}
+                          limit={answerLimit} readOnly />
+        )}
+        <PrimaryButton onClick={nextRound} style={{marginTop:4}}>
+          {round >= totalRounds ? <React.Fragment><BohIcon name="flag" size={15} style={{ marginRight:5 }} />Végeredmény</React.Fragment> : '🎰 Következő betű'}
+        </PrimaryButton>
+      </div>
+    );
+  }
 
   // ── HOST: végeredmény ──
   return (
@@ -57998,8 +58055,27 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
     if (ovfj.phase === 'writing' && remaining === 0 && myPid && !submittedRef.current) submitAnswers(false);
   });
 
-  const submitVote = (targetPid, catKey, v) => {
-    const vk = ovfjVoteKey(ovfj.round, targetPid, catKey);
+  // A pozitiv ertekelesek szama a TELEFONON is latszik. Az adat mar itt van: a
+  // szavazatok jatekosonkent kulon `ovfjV<pid>` mezoben ulnek a szobaban,
+  // ugyanabban a pillanatkepben, amibol a tobbi allapot is jon — a host
+  // ugyanezt szamolja ki maganak. Egy jatekos egy sorra egyszer szamit, mert
+  // rekordonkent iteralunk.
+  const tallies = React.useMemo(() => {
+    const t = {};
+    Object.entries(room || {}).forEach(([key, val]) => {
+      if (!val || typeof val !== 'object') return;
+      if (!key.startsWith('ovfjV') || !val.pid || val.sess !== ovfj.sess) return;
+      Object.entries(val.votes || {}).forEach(([vk, v]) => {
+        if (!vk.startsWith('r' + ovfj.round + '_')) return;
+        if (!t[vk]) t[vk] = { yes:0, no:0 };
+        if (v) t[vk].yes += 1; else t[vk].no += 1;
+      });
+    });
+    return t;
+  }, [room, ovfj.sess, ovfj.round]);
+
+  const submitVote = (targetPid, catKey, v, idx) => {
+    const vk = ovfjVoteKey(ovfj.round, targetPid, catKey, idx || 0);
     const nv = {...myVotes, [vk]: v};
     setMyVotes(nv);
     doSync({ [ovfjVKey(myPid)]: { pid: myPid, sess: ovfj.sess, round: ovfj.round, votes: nv } });
@@ -58126,7 +58202,7 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
   if (phase === 'voting') return (
     <div style={pageOuter}><div style={pageInner}>
       <Hdr />
-      <OVFJVotingView letter={letter} round={ovfj.round} players={players} answers={answers} myPid={myPid} myVotes={myVotes} onVote={submitVote} tallies={null} limit={ovfj.answerLimit} />
+      <OVFJVotingView letter={letter} round={ovfj.round} players={players} answers={answers} myPid={myPid} myVotes={myVotes} onVote={submitVote} tallies={tallies} limit={ovfj.answerLimit} />
     </div></div>
   );
 
@@ -58138,7 +58214,7 @@ function OVFJObserverView({ room, code, myName, onLeave }) {
     return (
       <div style={pageOuter}><div style={pageInner}>
         <Hdr />
-        <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:17,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay}}>{ovfj.round}. kör vége — „{letter}"</div>
+        <div style={{fontFamily:T.font,fontWeight:T.weightDisplay,fontSize:17,color:T.ink,textAlign:'center',letterSpacing:T.letterDisplay}}>{ovfj.round}. kör vége — „{ovfjLetterPair(letter)}"</div>
         <div style={{display:'flex',gap:8}}>
           <div style={{flex:1,background:T.mintSoft,borderRadius:18,padding:'14px',textAlign:'center'}}>
             <div style={{fontFamily:T.font,fontSize:11,fontWeight:T.weightTitle,color:T.mint,textTransform:'uppercase',letterSpacing:'0.08em'}}>Ebben a körben</div>

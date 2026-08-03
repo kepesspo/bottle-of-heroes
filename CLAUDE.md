@@ -328,3 +328,30 @@ fért ki, ezért 22 / 28, és `whiteSpace:'nowrap'` tiltja a tördelést — en�
 
 Teszt: `node tests/stake_test.js` 6b. blokkja — 1 pakli / 2 pakli / nehéz / ×2,
 és a két gomb egy sorban, 100 px-en, törés nélkül.
+
+## Ország-Város: szavazat-index és a kétjegyű betűk (v10.303)
+**Minden szó KÜLÖN értékelhető.** A `hostVote` / `submitVote` sokáig index
+nélkül képezte a kulcsot (`ovfjVoteKey(round, pid, cat)`), miközben a sorok és a
+pontszámítás index-szel olvasnak. Következmény: bármelyik szó gombja a 0. szó
+kulcsára írt, a 2.+ szavakra pedig „senki nem szavazott" állt — és a
+`finishVoting` szabálya szerint (`vals.length === 0 || yes > no`) azok
+**automatikusan pontot értek**. Az `ai` indexnek végig kell mennie az
+`onVote(pid, cat, yes, ai)` láncon.
+
+**Kétjegyű húzott betűnél az egyjegyű kezdet is jó** (`NY` → „nap" és „nyár"),
+mert magyarul a digráfokra önmagukban nagyon kevés szó van. Fordítva NEM áll, és
+ez szándékos: egyjegyű betűnél a digráf továbbra sem érvényes (`N` alatt a
+„nyár" nem ér) — különben az egyjegyű kör beleolvadna a kétjegyűbe. A felület
+ugyanazt mondja, amit a szabály: `ovfjLetterPair()` mindkettőt kiírja („N / NY”),
+és a sorsoló animáció ilyenkor kisebb betűmérettel rajzol, hogy beférjen.
+Az `X` és az `Y` eleve nincs az `OVFJ_LETTERS`-ben.
+
+**Egy szavazó-nézet, három hívási hely.** Az `OVFJVotingView`-t a host, a
+telefon és (v10.303 óta) a host kör végi „Mit írtak?" panelje is rendereli — az
+utóbbi `readOnly`-val, ami az értékelő gombokat rejti, de a szavazat-számlálót
+és az érvényesség-jelölést meghagyja. A `tallies` a telefonon is megy: az adat
+ugyanabban a szoba-pillanatképben ül (`ovfjV<pid>` mezők).
+
+Teszt: `node tests/ovfj_vote_test.js` — a „TÖBB SZÓ" blokk a szavazat-indexet
+őrzi (a javítás nélkül a 0. szó kulcsára megy és az ELSŐ szó gombja jelölődik),
+az „EGY FORRÁS" blokk pedig azt, hogy egyetlen komponens-definíció van.

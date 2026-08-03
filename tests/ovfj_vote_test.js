@@ -53,7 +53,7 @@ const ANSWERS = {
       return React.createElement(OVFJVotingView, {
         letter: 'A', round: 1, players, answers, myPid: 'a', myVotes: votes,
         tallies: { [ovfjVoteKey(1, 'c', 'orszag')]: { yes: 2, no: 0 } },
-        onVote: (pid, cat, yes) => setVotes(v => Object.assign({}, v, { [ovfjVoteKey(1, pid, cat)]: yes })),
+        onVote: (pid, cat, yes, idx) => setVotes(v => Object.assign({}, v, { [ovfjVoteKey(1, pid, cat, idx || 0)]: yes })),
       });
     }
     ReactDOM.createRoot(root).render(React.createElement(H));
@@ -147,14 +147,92 @@ const ANSWERS = {
     ok('az X elutasításra szavaz', Object.values(v2)[0] === false, JSON.stringify(v2));
   }
 
+  // ─── 4b) TOBB SZO: mindegyik KULON ertekelheto (v10.303) ───
+  // A hiba: a `hostVote`/`submitVote` index NELKUL kepezte a kulcsot, ezert
+  // barmelyik szo gombja a 0. szo kulcsara irt. A pontszamitas viszont
+  // index-szerint olvas, tehat a 2.+ szavakra "senki nem szavazott" allt, es
+  // azok automatikusan elfogadottak lettek.
+  console.log('\n===== TÖBB SZÓ: MINDEGYIK KÜLÖN ÉRTÉKELHETŐ =====');
+  {
+    await p.evaluate(() => {
+      const old = document.getElementById('__v'); if (old) old.remove();
+      const root = document.createElement('div'); root.id = '__v';
+      root.style.cssText = 'position:fixed;inset:0;z-index:1;background:var(--app-bg);overflow:auto;padding:12px';
+      document.body.appendChild(root);
+      const players = [{ id:'a', name:'Anna', color:'#5BA0DB' }, { id:'c', name:'Cili', color:'#A78BFA' }];
+      const answers = { a:{ round:1, orszag:'Ausztria' },
+                        c:{ round:1, orszag:'Albánia, Ausztrália, Andorra' } };
+      function H() {
+        const [votes, setVotes] = React.useState({});
+        window.__votes2 = votes;
+        return React.createElement(OVFJVotingView, {
+          letter:'A', round:1, players, answers, myPid:'a', myVotes:votes, limit:3, tallies:null,
+          onVote: (pid, cat, yes, idx) => setVotes(v => Object.assign({}, v, { [ovfjVoteKey(1, pid, cat, idx || 0)]: yes })),
+        });
+      }
+      ReactDOM.createRoot(root).render(React.createElement(H));
+    });
+    await p.waitForTimeout(900);
+
+    const sorok = await p.evaluate(() => {
+      const out = [];
+      [...document.querySelectorAll('#__v div')].forEach(d => {
+        const sp = [...d.children].filter(x => x.tagName === 'SPAN');
+        const w = sp.map(x => (x.innerText || '').trim());
+        const hit = ['Albánia','Ausztrália','Andorra'].find(x => w.includes(x));
+        if (hit && d.querySelectorAll('button').length === 2) out.push(hit);
+      });
+      return out;
+    });
+    ok('mindhárom szónak SAJÁT értékelő gombpárja van',
+       sorok.length === 3, sorok.join(', ') || 'egy sem');
+
+    // a MASODIK szo pipajara kattintunk
+    const klikk = await p.evaluate(() => {
+      const sor = [...document.querySelectorAll('#__v div')].find(d =>
+        [...d.children].some(x => x.tagName === 'SPAN' && (x.innerText || '').trim() === 'Ausztrália')
+        && d.querySelectorAll('button').length === 2);
+      if (!sor) return false;
+      sor.querySelector('button[aria-label="Elfogadom"]').click();
+      return true;
+    });
+    await p.waitForTimeout(400);
+    const v = await p.evaluate(() => window.__votes2);
+    ok('megtaláltuk a második szó sorát', klikk);
+    ok('a szavazat a MÁSODIK szó kulcsára ment (nem az elsőére)',
+       JSON.stringify(v) === JSON.stringify({ 'r1_c_orszag_1': true }), JSON.stringify(v));
+
+    // es a masodik szo gombja jelolve is van, az elsoe nem
+    const jelolt = await p.evaluate(() => {
+      const out = {};
+      ['Albánia','Ausztrália','Andorra'].forEach(w => {
+        const sor = [...document.querySelectorAll('#__v div')].find(d =>
+          [...d.children].some(x => x.tagName === 'SPAN' && (x.innerText || '').trim() === w)
+          && d.querySelectorAll('button').length === 2);
+        const btn = sor && sor.querySelector('button[aria-label="Elfogadom"]');
+        out[w] = btn ? getComputedStyle(btn).backgroundColor : null;
+      });
+      return out;
+    });
+    ok('csak a második szó gombja jelölt — az elsőé érintetlen',
+       jelolt['Ausztrália'] === 'rgb(79, 194, 160)' && jelolt['Albánia'] === 'rgba(0, 0, 0, 0)',
+       JSON.stringify(jelolt));
+  }
+
   // ─── 5) EGY forras ───
   // A hoszt es a vendeg ugyanazt a komponenst rendereli — ha ez ketté válna,
   // az egyik oldalon a regi soron maradna.
   console.log('\n===== EGY FORRÁS =====');
   {
     const src = fs.readFileSync(SRC, 'utf8');
-    ok('a host és a vendég ugyanazt a nézetet használja',
-       (src.match(/<OVFJVotingView/g) || []).length === 2,
+    // A lenyeg, hogy EGY definicio legyen — a hivatkozasok szama nott (v10.303
+    // ota a host kor vegi "Mit irtak?" panelje is ezt rendereli `readOnly`-val),
+    // de attol meg ugyanaz a komponens szolgalja ki mindharom helyet.
+    ok('egyetlen szavazó-nézet komponens létezik',
+       (src.match(/function OVFJVotingView/g) || []).length === 1,
+       (src.match(/function OVFJVotingView/g) || []).length + ' definíció');
+    ok('és a host, a vendég ÉS a visszanézés is azt rendereli (nincs másolat)',
+       (src.match(/<OVFJVotingView/g) || []).length === 3,
        (src.match(/<OVFJVotingView/g) || []).length + ' hivatkozás');
     ok('a szavazó nézetben nincs több emoji a forrásban sem',
        !/Szavazás 👍👎/.test(src));
