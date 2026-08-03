@@ -233,23 +233,31 @@ const ANSWERS = {
         // ...de egyjegyunel a digraf NEM
         ['nyár','N',false],  ['nap','N',true],
         ['szék','S',false],  ['sas','S',true],
-        // hosszu maganhangzo: a rovid par is jo
+        // ekezetes betu: az EGGYEL egyszerubb alak is jo (v10.304-305)
         ['óra','Ó',true],    ['ország','Ó',true], ['alma','Ó',false],
-        ['őz','Ő',true],     ['ötlet','Ő',true],
         ['ágy','Á',true],    ['alma','Á',true],
-        // ...de rovidnel a hosszu NEM
+        ['ötlet','Ö',true],  ['orr','Ö',true],    // ö -> o
+        ['üveg','Ü',true],   ['utca','Ü',true],   // ü -> u
+        ['őz','Ő',true],     ['ötlet','Ő',true],  // ő -> ö
+        ['űr','Ű',true],     ['üveg','Ű',true],   // ű -> ü
+        // ...de a lanc EGY lepeses: Ő alatt az "orr" NEM er
+        ['orr','Ő',false],   ['utca','Ű',false],
+        // ...es visszafele semmi nem all
         ['óra','O',false],   ['orr','O',true],
-        ['őz','Ö',false],    ['ötlet','Ö',true],
+        ['ötlet','O',false], ['őz','Ö',false],
+        ['üveg','U',false],  ['utca','U',true],
+        ['űr','Ü',false],
         ['ágy','A',false],   ['alma','A',true],
       ];
       return t.filter(([w,l,exp]) => ovfjLetterOk(w,l) !== exp).map(([w,l,exp]) => l+'+'+w+' várt:'+exp);
     });
-    ok('minden betűpár-eset stimmel', eset.length === 0, eset.join(' | ') || '22 eset rendben');
+    ok('minden betűpár-eset stimmel', eset.length === 0, eset.join(' | ') || '29 eset rendben');
     const cimke = await p.evaluate(() =>
-      ['NY','LY','Ó','Ő','Á','Ű','A','O','Ö'].map(l => l+'→'+ovfjLetterPair(l)).join(' '));
+      ['NY','LY','Ó','Ö','Ő','Ú','Ü','Ű','Á','A','O','U'].map(l => l+'→'+ovfjLetterPair(l)).join(' '));
     ok('a címke mindkét kezdetet kiírja, ahol kettő is jó',
-       /NY→N \/ NY/.test(cimke) && /Ó→O \/ Ó/.test(cimke) && /Ő→Ö \/ Ő/.test(cimke)
-       && /A→A /.test(cimke) && /O→O$|O→O /.test(cimke), cimke);
+       /NY→N \/ NY/.test(cimke) && /Ó→O \/ Ó/.test(cimke) && /Ö→O \/ Ö/.test(cimke)
+       && /Ő→Ö \/ Ő/.test(cimke) && /Ü→U \/ Ü/.test(cimke) && /Ű→Ü \/ Ű/.test(cimke)
+       && /A→A /.test(cimke) && /O→O /.test(cimke) && /U→U$/.test(cimke), cimke);
   }
 
   // ─── 5) EGY forras ───
