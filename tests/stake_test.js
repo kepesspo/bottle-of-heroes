@@ -6,7 +6,7 @@
 //   3. tartomány, ha a játék alap tétje is tartomány
 //   4. a GYŰRŰ SZÍNE a DIFFICULTY_INFO-ból jön (v10.270: a színes talp helyett)
 //   5. wildcard „dupla” alatt sárga gyűrű és a TELJES szorzó
-//   6. saját gazdaságú játéknál (stake:null) NINCS korong — a kör-gyűrű marad
+//   6. a Lóverseny tartományt mutat, és a felső határa a létszámmal nő
 //   7. korty-követés nélkül sincs korong
 //   8. v10.270: SEMMI nem lóg le a fejléc alá, és a korong nem lóg ki oldalt
 //   9. a QR-gomb nem takarja a korty-számot
@@ -101,19 +101,21 @@ async function setup(p, gameId, opts) {
       if (!('stake' in g)) { out.missing.push(g.id); return; }
       if (g.stake === null) { out.nulls.push(g.id); return; }
       const s = g.stake;
-      if (!Array.isArray(s) || s.length !== 2 || !(s[0] >= 1) || !(s[1] >= s[0])) out.bad.push(g.id + ':' + JSON.stringify(s));
+      if (!Array.isArray(s) || s.length !== 2 || !(s[0] >= 0) || !(s[1] >= s[0])) out.bad.push(g.id + ':' + JSON.stringify(s));
     });
     return out;
   });
   ok(decl.total >= 44, 'megvan az összes játék', decl.total + ' db');
   ok(decl.missing.length === 0, 'mindegyiknek van `stake` mezője', decl.missing.join(', ') || 'nincs hiányzó');
-  ok(decl.bad.length === 0, 'a tartományok értelmesek (1 ≤ min ≤ max)', decl.bad.join(', ') || 'mind rendben');
+  ok(decl.bad.length === 0, 'a tartományok értelmesek (0 ≤ min ≤ max)', decl.bad.join(', ') || 'mind rendben');
   // Konkret lista, nem "kevesebb mint N": igy egy uj null TUDATOS dontes lesz,
   // nem eszrevetlenul becsuszo valtozas. Ket csoport van benne:
   //   * sajat gazdasagu jatekok (a korty a jatek belso szabalyabol jon)
   //   * v10.276: hataratlan halmozok — ott inkabb SEMMIT mutatunk, mint
   //     rossz szamot (lasd patch_10_276.py)
-  const VART_NULL = ['beerpong','blackjack','busz','farkasos','kisebb','loverseny',
+  // v10.299: a loverseny KIKERULT innen — a felso hatara kiszamolhato
+  // (6 x letszam), tehat nem kell talalgatni.
+  const VART_NULL = ['beerpong','blackjack','busz','farkasos','kisebb',
                      'meduza','ovfj','powerhour','ringfire','ritmus','utveszto'].sort();
   ok(decl.nulls.slice().sort().join(',') === VART_NULL.join(','),
      'pontosan a várt játékok deklarálnak null tétet', decl.nulls.slice().sort().join(', '));
@@ -194,32 +196,35 @@ async function setup(p, gameId, opts) {
   ok(firstContentTop !== null && firstContentTop >= hard.bottom,
      'a játék tartalma a korong ALATT kezdődik', 'tartalom teteje ' + firstContentTop);
 
-  console.log('\n===== 6. SAJÁT GAZDASÁGÚ JÁTÉK: A LÓVERSENY ÉLŐ TÉTET MUTAT =====');
-  // A Loverseny `stake` DEKLARACIOJA null marad (elore nem joslunk tartomanyt —
-  // lasd az 1. blokk VART_NULL listajat), a fejlec viszont nem ures: a korong az
-  // EPPEN beallitott tetet mutatja, a KOR gyuru helyen, mentazold gyuruvel.
-  //
-  // Miert csak v10.297 ota all ez a teszt: a tet-visszajelzo callbackje eredetileg
-  // a gameMeta-n keresztul ment (setGameMeta(m => ({...m, onBetUpdate}))). Itt a
-  // setGameMeta NO-OP, tehat a callback sosem ert celba — a korong nem jelent meg,
-  // es a teszt a funkcio ELOTTI allapotot rogzitette. Amikor a callback rendes
-  // proppa valt (mert a gameMeta Firestore-ba mentett config, nem callback-csatorna),
-  // a jelzo mindenhol mukodni kezdett. Ha ez megint null-ra valt, a jelzo tort el.
-  await setup(p, 'loverseny', { diff: 'hard' });
+  console.log('\n===== 6. LÓVERSENY: TARTOMÁNY, ÉS A LÉTSZÁM EMELI (v10.299) =====');
+  // A Loverseny sokaig `stake:null` volt ("nem talalunk ki szamot"), majd egy
+  // ideig az EPPEN beallitott tetet mutatta. Egyik sem volt igaz:
+  //   * a nyertes 0-t iszik  -> az also hatar 0
+  //   * a vesztes a SAJAT tetjen felul a nyertesek kalapjabol is kap, tehat
+  //     szelso esetben 6 x letszam korty  -> ez a felso hatar
+  // A `setup` KET jatekossal indit, tehat az alap 0-12.
+  await setup(p, 'loverseny', { diff: 'easy' });
   const lov = await readCap(p);
-  ok(lov !== null, 'Lóverseny: VAN korong — az élő tétet mutatja', lov && lov.num);
-  ok(lov && lov.num === '1', 'induláskor az alap tét (1 korty) áll benne', lov && lov.num);
-  ok(lov && lov.ring === 'rgb(79, 194, 160)',
-     'mentazöld a gyűrű (nem a nehézség tónusa — ez nem deklarált tét)', lov && lov.ring);
-  // a nehezseg NEM szorozza: a tet maga korty (lasd CLAUDE.md, diffmult_test)
-  await setup(p, 'loverseny', { diff: 'extreme' });
-  const lovX = await readCap(p);
-  ok(lovX && lovX.num === '1', 'extrém szinten is 1 — a tétet a nehézség nem szorozza', lovX && lovX.num);
-  const ringGone = await p.evaluate(() => {
-    const root = document.getElementById('__pl');
-    return ![...root.querySelectorAll('div')].some(d => /KÖR/.test(d.innerText || ''));
+  ok(lov !== null, 'Lóverseny: VAN korong (nem esik vissza a KÖR gyűrűre)');
+  ok(lov && lov.num === '0–12', 'két játékos · könnyű: 0–12 korty', lov && lov.num);
+  await setup(p, 'loverseny', { diff: 'hard' });
+  const lovH = await readCap(p);
+  ok(lovH && lovH.num === '0–36', 'két játékos · nehéz: 0–36 (a nehézség SZOROZ)', lovH && lovH.num);
+  // a felso hatar a letszammal no — ezt a stakeOf masodik parametere adja
+  const skalaz = await p.evaluate(() => {
+    const g = GAMES.find(x => x.id === 'loverseny');
+    return [2, 3, 5, 6].map(n => g.stakeOf({}, n)[1]).join(',');
   });
-  ok(ringGone, 'a KÖR gyűrű átadja a helyét (v10.270 óta a fejlécben egy adat fér el)');
+  ok(skalaz === '12,18,30,36', 'a felső határ 6 × létszám (2/3/5/6 fő)', skalaz);
+  // a korong a nyers tetet NEM mutatja: a leptetot megnyomva sem valtozik
+  const elotte = (await readCap(p)).num;
+  await p.evaluate(() => {
+    const btn = [...document.querySelectorAll('button')].find(x => (x.innerText || '').trim() === '+');
+    if (btn) btn.click();
+  });
+  await p.waitForTimeout(500);
+  const utana = (await readCap(p)).num;
+  ok(elotte === utana, 'a tét léptetése NEM írja át a korongot — az tartomány', elotte + ' → ' + utana);
 
   console.log('\n===== 7. KORTY-KÖVETÉS NÉLKÜL =====');
   await setup(p, 'reakcio', { diff: 'hard', noScore: true });

@@ -12,7 +12,7 @@
 // Amit ellenőriz:
 //   1. a sanitizeForFirestore kiszedi a függvényt, a többi mezőt meghagyja
 //   2. egy végigjátszott meccs UTÁN is nyitható új szoba (ez a valódi repró)
-//   3. a Lóverseny tét-korongja a prop-csatornán továbbra is működik
+//   3. a Lóverseny fejléc-korongja rendben van (v10.299 óta tartomány)
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const path = require('path');
@@ -131,23 +131,21 @@ const loadPlayers = async (p) => {
   const inGame = await txt(p);
   ok(/MENÜ|Kövi/.test(inGame), 'elindult a játék', inGame.slice(0, 70));
 
-  // A tet-korong a prop-csatornan el-e: a "+" a fejlec korongjat is emelje.
-  // (Ez a tet-beallito leptetoje, nem a kozos PlayerDrinkRow — sima −/+ gombok.)
-  const circleOf = () => p.evaluate(() => {
-    const m = document.body.innerText.replace(/\s+/g, ' ').match(/(\d+)\s*KORTY/);
-    return m ? m[1] : null;
-  });
-  const before = await circleOf();
+  // v10.299 ota a fejlec TARTOMANYT mutat (0 - 6 x letszam), nem az elo tetet,
+  // ezert az `onBetUpdate` csatorna megszunt. Ami ebbol a teszt szempontjabol
+  // szamit: a tet-leptetot meg lehet nyomni, es a jatek nem szall el tole.
   const bumped = await p.evaluate(() => {
     const btn = [...document.querySelectorAll('button')].find(x => (x.innerText || '').trim() === '+');
     if (!btn) return false;
     btn.click(); return true;
   });
   await p.waitForTimeout(700);
-  const after = await circleOf();
   ok(bumped, 'a Lóverseny tét-léptetője elérhető');
-  ok(before === '1' && after === '2',
-     'a "+" a jobb felső korongot is emeli (prop-csatorna él)', before + ' → ' + after);
+  const korong = await p.evaluate(() => {
+    const m = document.body.innerText.replace(/\s+/g, ' ').match(/(\d+–\d+)\s*KORTY/);
+    return m ? m[1] : null;
+  });
+  ok(korong !== null, 'a fejléc tét-tartományt mutat', korong);
 
   // Vissza a fooldalra, es UJ szoba — ez halt meg elesben
   await p.evaluate(() => {

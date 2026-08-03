@@ -35214,7 +35214,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.298';
+const APP_VERSION = 'v10.299';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -35996,7 +35996,12 @@ const GAMES = [
   { id:'fingerit', stake:[1,3],  roundTime:'fast',  name:'Finger It',             difficulty:'könnyű',  category:'Csapat', emoji:'👆', symbol:IMGS['fingerit_symbol.png'], img:IMGS['fingerit_icon.png'], banner:IMGS['fingerit_banner.png'], color:'#06B6D4', desc:'Minden játékos az asztalra rakja a mutató ujját. Aztán számolni kezd az első ember akit a játék választ ki: 1, 2, 3 — ekkor hirtelen mindenkinek el kell vennie az ujját az asztalról, vagy rajta hagyja. A lényeg hogy pontosan annyi ujj maradjon az asztalon ahány szám be lett mondva. Ha eltalálod akkor mindenki más iszik. Ha nem találod el akkor te iszol.' },
   { id:'uveg', stake:[1,1],      roundTime:'fast',  name:'Az üveg',               difficulty:'könnyű', category:'Csapat', emoji:'🍾', symbol:IMGS['uveg_symbol.png'], img:IMGS['uveg_icon.png'], banner:IMGS['uveg_banner.png'], color:'#F59E0B', desc:'Az app kisorsol egy játékost akinek meg kell pörgetnie az üveget. Akire az üveg az asztalnál mutat annak kell innia.' },
   { id:'zene', stake:[1,1],      roundTime:'fast',  name:'Zene Felismerés',       difficulty:'közepes', category:'Egyéni', emoji:'🎵', symbol:IMGS['zene_symbol.png'], img:IMGS['zene_icon.png'], banner:IMGS['zene_banner.png'], color:'#8B5CF6', desc:'A játékban egy zenét fog a játékos hallani 5 másodpercig. Ez után ki kell találni hogy ki az előadó és mi a szám címe. Ha a kettőből az egyik sikerül akkor nem kell innia. Ha mind a kettőt sikeresen kitalálja akkor kioszthat egy piát. Ha egyiket sem tudja akkor neki kell innia.' },
-  { id:'loverseny', stake:null, roundTime:'mid',  name:'Lóverseny',             difficulty:'közepes', category:'Csapat', emoji:'🐎', symbol:IMGS['loverseny_symbol.png'], img:IMGS['loverseny_icon.png'], banner:IMGS['loverseny_banner.png'], color:'#84CC16', desc:'Minden játékos 1–3 egységben fogadhat a négy ló egyikére. A versenylovak a Sárga, a Zöld, a Kék és a Piros. Ha az a ló ér be először akire fogadott, akkor annyi piát kioszthat. Ha nem az nyer akire fogadott, akkor a megtett mennyiséget kell elfogyasztania.' },
+  // A tet 1-6 korty, de a vesztes a SAJAT tetjen felul a nyertesek kalapjabol is
+  // kap: szelso esetben rajta kivul mindenki nyer 6-tal, es mind ra ontik.
+  // Ezert a felso hatar 6 x letszam, es a `stakeOf` masodik parametere a
+  // jatekosszam (a tobbi jateknal csak a gameMeta kell). Also hatar 0: a
+  // nyertes nem iszik.
+  { id:'loverseny', stake:[0,6], stakeOf:(m,n)=>[0, 6 * Math.max(1, n || 1)], roundTime:'mid',  name:'Lóverseny',             difficulty:'közepes', category:'Csapat', emoji:'🐎', symbol:IMGS['loverseny_symbol.png'], img:IMGS['loverseny_icon.png'], banner:IMGS['loverseny_banner.png'], color:'#84CC16', desc:'Minden játékos 1–3 egységben fogadhat a négy ló egyikére. A versenylovak a Sárga, a Zöld, a Kék és a Piros. Ha az a ló ér be először akire fogadott, akkor annyi piát kioszthat. Ha nem az nyer akire fogadott, akkor a megtett mennyiséget kell elfogyasztania.' },
   { id:'otdolog', stake:[1,1],   roundTime:'fast',  name:'5 dolog',               difficulty:'könnyű',  category:'Egyéni', emoji:'5️⃣', symbol:IMGS['otdolog_symbol.png'], img:IMGS['otdolog_icon.png'], banner:IMGS['otdolog_banner.png'], color:'#EC4899', desc:'Az app kisorsol egy játékost aki játszani fog. Meg fog jelenni a képernyőn egy kategória. Ebben a kategóriában kell a játékosnak 5 mp alatt 5 odatartozó szót mondania. Amennyiben ez nem sikerül innia kell.' },
   { id:'szerencse', stake:[1,1], roundTime:'fast',  name:'Szerencsekerék',        difficulty:'könnyű', category:'Csapat', emoji:'🎡', symbol:IMGS['szerencse_symbol.png'], img:IMGS['szerencse_icon.png'], banner:IMGS['szerencse_banner.png'], color:'#14B8A6', desc:'A játék kiválaszt egy játékost akinek meg kell pörgetnie a szerencsekereket. Akit a szerencsekerék kisorsol annak innia kell.' },
   { id:'sohanem', stake:[1,1],   roundTime:'mid',  name:'Én még soha',           difficulty:'közepes', category:'Csapat', emoji:'🙅', symbol:IMGS['sohanem_symbol.png'], img:IMGS['sohanem_icon.png'], banner:IMGS['sohanem_banner.png'], color:'#D946EF', desc:'Jön egy állítás és ha az igaz rád akkor innod kell, ha nem igaz rád akkor nem kell.' },
@@ -52159,8 +52164,14 @@ function LoversenyOval({ HORSES, positions, FINISH }) {
 // A tet ITT kortyban ertendo, es az `advanceLoverseny` kifejezetten `scale=1`-gyel
 // konyveli el (a jatek maga adja a szamot). Ezert NINCS `drinkMult` a sorokon —
 // beszorozva a kiosztott es a konyvelt korty elcsuszna egymastol.
-function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBetUpdate }) {
+function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, drinkMult }) {
   const FINISH = 12;
+  // A jatek MINDENT nyers kortyban tart (tet 1-6, ajandek a kalapbol) — a
+  // nehezseg/wildcard szorzoja csak a KIJELZESRE hat itt, a konyveles az
+  // `advanceLoverseny`-ben szoroz egyszer. Ha itt is szoroznank az onAdvance
+  // szamaiba, duplan menne fel.
+  const dMult = drinkMult || 1;
+  const shown = (n) => (n || 0) * dMult;
   const HORSES = React.useMemo(() => pickHorses(gameIdx), [gameIdx]);
   const [phase, setPhase] = useState('bet');
   const [bets, setBets] = useState({});
@@ -52184,16 +52195,6 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBe
     advancedRef.current = false;
     if (ivRef.current) { clearInterval(ivRef.current); ivRef.current = null; }
   }, [gameIdx]);
-
-  // Call onBetUpdate callback when the current player's bet changes
-  useEffect(() => {
-    if (!onBetUpdate) return;
-    const cp = players[betStep];
-    if (!cp) return;
-    const currentBet = bets[cp.id];
-    const amount = currentBet?.amount || 1;
-    onBetUpdate(amount);
-  }, [bets, betStep, players, onBetUpdate]);
 
   // A futam hangja MP3 (nem tomoritetlen WAV): ugyanaz a 2,5 mp, 287 KB
   // helyett 27 KB. Szandekosan MP3 es nem AAC: az AAC szabadalmas kodek,
@@ -52261,7 +52262,7 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBe
           winners: winnersArr,
           losers: drinkersArr,
           winNote: winnersArr.length ? '+1 pont' : '',
-          loseNote: drinkersArr.map(p => `${p.name} ${drinkMap[p.id]}🍺`).join(', '),
+          loseNote: drinkersArr.map(p => `${p.name} ${shown(drinkMap[p.id])}🍺`).join(', '),
         });
       }
     }
@@ -52363,7 +52364,10 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBe
               <span style={{ width:8, height:8, borderRadius:'50%', background:selectedHorse?.color, display:'inline-block' }} />
               <b style={{ color:selectedHorse?.color }}>{selectedHorse?.name}</b>
             </span>
-            {' '}lóra tesz <b style={{ color:T.ink }}>{amount} kortyot</b>
+            {' '}lóra tesz <b style={{ color:T.ink }}>{shown(amount)} kortyot</b>
+            {dMult > 1 && (
+              <span style={{ color:T.inkMute }}>{' '}({amount} × {dMult})</span>
+            )}
           </div>
         )}
         <PrimaryButton disabled={!myBet.horseId || amount === 0} onClick={() => {
@@ -52439,7 +52443,7 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBe
                 {horse && <span style={{ width:9, height:9, borderRadius:'50%', background:horse.color,
                                          flexShrink:0, boxShadow:'0 0 0 1.5px rgba(0,0,0,0.15)' }} />}
                 {won && <BohIcon name="trophy" size={13} />}
-                <span style={{ fontVariantNumeric:'tabular-nums' }}>{bet}</span>
+                <span style={{ fontVariantNumeric:'tabular-nums' }}>{shown(bet)}</span>
                 <BohIcon name="beer" size={13} />
               </div>
             );
@@ -52449,7 +52453,7 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBe
             return won ? (
               <PlayerDrinkRow key={p.id} p={p} cnt={0} readOnly meta={chip} />
             ) : (
-              <PlayerDrinkRow key={p.id} p={p} cnt={given} meta={chip}
+              <PlayerDrinkRow key={p.id} p={p} cnt={given} meta={chip} drinkMult={dMult}
                 readOnly={winnerPool === 0}
                 addDisabled={remaining <= 0}
                 onAdd={(pid) => { if (remaining > 0) setGifts(g => ({...g,[pid]:(g[pid]||0)+1})); }}
@@ -52459,7 +52463,7 @@ function LóversenyGame({ gameIdx, players, onAdvance, onUnready, onResult, onBe
         </div>
         {winnerPool > 0 && remaining > 0 && (
           <div style={{ textAlign:'center', fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft }}>
-            Még {remaining} korty kiosztható
+            Még {shown(remaining)} korty kiosztható
           </div>
         )}
         {winnerPool > 0 && remaining === 0 && players.filter(p => bets[p.id]?.horseId !== raceWinner).length > 0 && (
@@ -59195,7 +59199,7 @@ class GameErrorBoundary extends React.Component {
   }
 }
 
-function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, onBetUpdate, roomCode, gameMeta, challenger, opponent, onSetHideFooter, onSetBuszSwitch, onSetBpEnded, onCommit, drinkMult }) {
+function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult, onLiveDrinkUpdate, roomCode, gameMeta, challenger, opponent, onSetHideFooter, onSetBuszSwitch, onSetBpEnded, onCommit, drinkMult }) {
   if (gameId === 'szolánc') return <SzolancGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} drinkMult={drinkMult} />;
   if (gameId === 'idopárbaj') return <IdoparbajGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'csakegyszó') return <CsakEgySzoGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
@@ -59225,7 +59229,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} gameMeta={gameMeta} roomCode={roomCode} />;
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
-  if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onUnready={onUnready} onResult={onResult} onBetUpdate={onBetUpdate} />;
+  if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onUnready={onUnready} onResult={onResult} drinkMult={drinkMult} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
@@ -60949,7 +60953,6 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const [starAnim, setStarAnim] = useState(false);
   const [roundPopup, setRoundPopup] = useState(null); // {round, wildcard, leaving}
   const [activeWildcard, setActiveWildcard] = useState(null); // {emoji, text, round} — a kör alatt végig látható szabály
-  const [loversenyBet, setLoversenyBet] = useState(null); // Lóverseny current bet amount for top-right circle
 
   // ── Wildcard idozito ──────────────────────────────────────────────
   // Korabban a korszam hozta (newRound % freq). Az nem volt rahuzhato a
@@ -61173,11 +61176,6 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     _oppKeyRef.current = key;
     setSelectedOpponent(pick);
   }, [turn, gameIdx, players.length, selectedOpponent]);
-
-  // Reset Lóverseny bet when game changes
-  useEffect(() => {
-    setLoversenyBet(null);
-  }, [gameIdx]);
 
   // Polling fallback: pull latest player state from Firestore every 2s
   useEffect(() => {
@@ -61432,9 +61430,11 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   // A `stake` lehet fix par VAGY fuggveny (`stakeOf`). A konfiguralhato,
   // halmozo jatekoknal a fix szam hazudik: a Collect potja a racsmerettol
   // fuggo MAX_POT-ig no, a Kartyacsatae a korok szamaig. Lasd patch_10_276.py
+  // A masodik parameter a JATEKOSSZAM — a Loversenynel a felso hatar ettol fugg
+  // (6 x letszam), a tobbi stakeOf figyelmen kivul hagyja.
   const stakeBase = !trackScores ? null
     : (typeof currentGame?.stakeOf === 'function'
-        ? (currentGame.stakeOf(gameMeta || {}) || null)
+        ? (currentGame.stakeOf(gameMeta || {}, activePlayers.length) || null)
         : (currentGame?.stake || null));
   const stakeLo = stakeBase ? stakeBase[0] * stakeMult : 0;
   const stakeHi = stakeBase ? stakeBase[1] * stakeMult : 0;
@@ -61521,8 +61521,10 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     if (transitioning) return;
     const dm = drinkMap || {};
     const pm = pointsMap || {};
-    // Lóverseny manages its own drink amounts (bets), so skip diffDrinks scaling for it
-    const scale = (opts?.raw || currentGameId === 'loverseny') ? 1 : diffDrinks;
+    // v10.299: a Loverseny is szorzodik. A jatek RAW szamokat ad (tet 1-6 es a
+    // kalapbol kapott ajandek), a nehezseg itt hat ra egyszer — a jatekon beluli
+    // kijelzes ugyanezt a `drinkMult`-tal mutatja, hogy a ketto ne csusszon szet.
+    const scale = opts?.raw ? 1 : diffDrinks;
     const latestPlayers = playersRef.current;
     const newPlayers = trackScores
       ? (wcEffect === 'reverse'
@@ -61633,10 +61635,13 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           // es a nehezseget a gyuru szine hordozza. Ha nincs (stake: null — a
           // korty ott dinamikus), visszaesunk a regi kor-gyurure: annal a 8
           // jateknal a kor az egyetlen ertelmes fejlec-adat.
-          // Loverseny: dinamikus tet a bet fazisban mutatja a jelenlegi tetmennyiseget
-          if (stakeText || (currentGameId === 'loverseny' && loversenyBet !== null)) {
-            const displayValue = stakeText !== null ? stakeText : loversenyBet;
-            const toneStake = wcMult > 1 ? T.yellow : (stakeText !== null ? diffMeta.tone : T.mint);
+          // v10.299: a Loverseny is TARTOMANYT mutat (0 - 6 x letszam), nem az
+          // eppen beallitott tetet. Az elo ertek azert bukott, mert a fejlecben
+          // mast igert, mint amennyit a jatekos vegul ivott: a vesztes a sajat
+          // tetjen felul a nyertesek kalapjabol is kap.
+          if (stakeText) {
+            const displayValue = stakeText;
+            const toneStake = wcMult > 1 ? T.yellow : diffMeta.tone;
             // Hosszabb tartomanynal ("10–12") kisebb szamot hasznalunk, hogy
             // ne feszuljon neki a 44 px-es belso koronak.
             const stakeFs = String(displayValue).length > 3 ? 14 : String(displayValue).length > 2 ? 16 : 19;
@@ -61744,7 +61749,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
               </div>
             </div>
           )}>
-            <GameContent key={currentGameId + gameIdx + '_' + gameRestartKey} gameId={currentGameId} gameIdx={gameIdx} players={activePlayers} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} onBetUpdate={setLoversenyBet} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={pairedOpponent} onSetHideFooter={setHideFooter} onSetBuszSwitch={(obj) => setBuszSwitchFn(obj || null)} onSetBpEnded={setBpEnded} onCommit={commitPending} drinkMult={diffDrinks * wcMult} />
+            <GameContent key={currentGameId + gameIdx + '_' + gameRestartKey} gameId={currentGameId} gameIdx={gameIdx} players={activePlayers} onAdvance={advanceLoverseny} onUnready={() => setPendingCommit(null)} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} roomCode={roomCode} gameMeta={gameMeta} challenger={currentPlayer} opponent={pairedOpponent} onSetHideFooter={setHideFooter} onSetBuszSwitch={(obj) => setBuszSwitchFn(obj || null)} onSetBpEnded={setBpEnded} onCommit={commitPending} drinkMult={diffDrinks * wcMult} />
           </GameErrorBoundary>
         </div>
       </div>

@@ -11,6 +11,8 @@
 //   1. JATEK (En meg soha): a leptetore irt szam = amennyit a jatekos KAP
 //      — konnyu 1x, kozepes 2x, nehez 3x, extrem 5x
 //   2. BUNTETES: abszolut marad minden szinten (a modal szama = a kapott korty)
+//   3. LOVERSENY (v10.299): a tet 1-6 NYERS marad a leptetön, de a jatekosra
+//      tet x szorzo kerul. Korabban a Loverseny KI volt veve a szorzobol.
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const path = require('path');
@@ -140,6 +142,95 @@ const kortyok = p => p.evaluate(() => (window.__players || []).map(x => x.drinks
     await p.waitForTimeout(800);
     const d = await kortyok(p);
     ok(d[0] === 2, `${nev}: és pontosan 2 korty került rá`, JSON.stringify(d));
+  }
+
+  console.log('\n===== 3. LÓVERSENY: A TÉT SZORZÓDIK (v10.299) =====');
+  // Mind a harom jatekos UGYANARRA a lora tesz, 1 / 2 / 3 kortyot. Igy nincs
+  // nyertes-kalap es nincs ajandekozas, tehat a vesztes pontosan a SAJAT tetjet
+  // issza — felszorozva. A futam kimenetele veletlen (1/4 esellyel mindenki
+  // nyer, olyankor 0 korty jar), ezert a VESZTES agra jatszunk ra: addig
+  // ujraprobaljuk, amig megkapjuk. Ha 6 probabol sem jon, az HIBA — kulonben a
+  // teszt nemman uresen futna at, ahogy az elso valtozata tette.
+  const RACE_TRIES = 6;
+  for (const [diff, mult, nev] of [['easy', 1, 'Könnyű'], ['hard', 3, 'Nehéz'], ['extreme', 5, 'Extrém']]) {
+    let veszitett = null, d = null, mondat = null, probak = 0;
+    for (let attempt = 0; attempt < RACE_TRIES && veszitett !== true; attempt++) {
+      probak++;
+      await p.reload({ waitUntil: 'domcontentloaded' });
+      await p.waitForTimeout(2200);
+      await mount(p, diff, 'loverseny');
+
+      for (let i = 0; i < 3; i++) {
+        await p.evaluate(() => {
+          const R = document.getElementById('__p');
+          const b = [...R.querySelectorAll('button')].find(x => /Gyorslábú|Csülök|Remegő|Pálinka/.test(x.innerText || ''));
+          if (b) b.click();
+        });
+        await p.waitForTimeout(250);
+        for (let k = 0; k < i; k++) {
+          await p.evaluate(() => {
+            const R = document.getElementById('__p');
+            const b = [...R.querySelectorAll('button')].find(x => (x.innerText || '').trim() === '+');
+            if (b) b.click();
+          });
+          await p.waitForTimeout(200);
+        }
+        if (i === 0 && mondat === null) {
+          mondat = await p.evaluate(() => {
+            const t = document.getElementById('__p').innerText.replace(/\s+/g, ' ');
+            const m = t.match(/lóra tesz (\d+) kortyot/);
+            return m ? m[1] : null;
+          });
+        }
+        await p.evaluate(() => {
+          const R = document.getElementById('__p');
+          const b = [...R.querySelectorAll('button')].find(x => /Következő →|Rajt!/.test(x.innerText || ''));
+          if (b) b.click();
+        });
+        await p.waitForTimeout(400);
+      }
+
+      // A futam vegen KIZAROLAG a ket zaro-uzenet egyike jelenik meg — a "Kövi"
+      // NEM hasznalhato jelzesnek, az vegig ott van a footerben.
+      veszitett = null;
+      for (let t = 0; t < 40; t++) {
+        await p.waitForTimeout(500);
+        veszitett = await p.evaluate(() => {
+          const R = document.getElementById('__p');
+          if (!R) return null;
+          const t = (R.innerText || '');
+          if (/Mindenki veszített/.test(t)) return true;
+          if (/Mindenki nyert/.test(t)) return false;
+          return null;
+        });
+        if (veszitett !== null) break;
+      }
+      if (veszitett !== true) continue;
+
+      await p.evaluate(() => {
+        const R = document.getElementById('__p');
+        const b = [...R.querySelectorAll('button')].find(x => /Tovább →/.test(x.innerText || ''));
+        if (b) b.click();
+      });
+      await p.waitForTimeout(700);
+      await p.evaluate(() => {
+        const R = document.getElementById('__p');
+        const b = [...R.querySelectorAll('button')].find(x => /Kövi/.test(x.innerText || ''));
+        if (b) b.click();
+      });
+      await p.waitForTimeout(1000);
+      d = await kortyok(p);
+    }
+
+    ok(mondat === String(1 * mult),
+       `${nev}: 1-es tétnél a mondat ${1 * mult} kortyot ígér`, mondat);
+    ok(veszitett === true,
+       `${nev}: sikerült vesztes futamot kifogni (${probak} próba)`, String(veszitett));
+    if (veszitett !== true) continue;
+    const vart = [1 * mult, 2 * mult, 3 * mult];
+    ok(JSON.stringify(d) === JSON.stringify(vart),
+       `${nev}: az 1/2/3 tét ×${mult}-ként került fel`,
+       JSON.stringify(d) + ' (várt: ' + JSON.stringify(vart) + ')');
   }
 
   ok(errs.length === 0, 'nincs JS hiba', errs.slice(0, 3).join(' | '));

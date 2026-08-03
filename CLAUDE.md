@@ -182,10 +182,11 @@ Hol számolódik és hogyan jut le:
   a korty-osztó sor csak KIJELZ: `PlayerDrinkRow`/`DrinkDistributor` `drinkMult`-ja
   kizárólag a megjelenített számot skálázza, a `onFinish` nyers marad
 
-Két felület, ami KIMARAD, és nem véletlenül:
+Egy felület, ami KIMARAD, és nem véletlenül:
 - **Büntetés** (`PenaltyModal`) — abszolút, se nehézség, se wildcard nem szorozza
   (`docs/buntetes.md` 1. csapda, `penalty` jelző az `onResult`-ban)
-- **Lóverseny** — a tét maga korty, az `advanceLoverseny` `scale=1`-gyel könyveli
+
+A **Lóverseny v10.299-ig szintén kivétel volt** (`scale=1`) — már nem az, lásd lent.
 
 Teszt: `node tests/diffmult_test.js` — mind a négy szinten összeveti a léptetőre
 írt számot azzal, amennyi ténylegesen a játékosra kerül, és őrzi a büntetés
@@ -205,7 +206,7 @@ véletlenszerűnek látszik, és az első parti még hibátlanul lefut.
 
 Ha egy játéknak fel kell szólnia a `PlayScreen`-hez, az **prop**, nem `gameMeta`:
 a `GameContent` már így adja tovább a `drinkMult`, `onLiveDrinkUpdate`,
-`onBetUpdate`, `onSetHideFooter` mezőket. Új visszahívásnál ezt a sort bővítsd.
+`onSetHideFooter` mezőket. Új visszahívásnál ezt a sort bővítsd.
 
 Két védőháló, ami ezt őrzi:
 - `sanitizeForFirestore` kidobja a függvény-mezőket (a kulcs eltűnik, nem `null`
@@ -224,3 +225,32 @@ repró: egy végigjátszott meccs UTÁN is nyitható új szoba.
 4. Assert-ekkel ellenőrizni a string replacement-et
 5. `align-items:stretch` a footer rowon → egyforma magasság
 6. Pill variánsok stabil `flex:1, minWidth:0, overflow:hidden` wrapperben
+
+## Lóverseny: tartomány a fejlécben, és a tét is szorzódik (v10.299)
+Két dolog változott együtt, és csak együtt van értelmük.
+
+**A fejléc-korong TARTOMÁNYT mutat**, nem az éppen beállított tétet:
+`stakeOf(meta, létszám) → [0, 6 × létszám]`, felszorozva a nehézséggel és a
+wildcarddal. Az alsó határ 0, mert a **nyertes nem iszik**; a felső azért `6 ×
+létszám` és nem 6, mert a vesztes a **saját tétjén felül a nyertesek kalapjából
+is kap** — szélső esetben rajta kívül mindenki nyer 6-tal, és mind rá öntik.
+A `stakeOf` **második paramétere a játékosszám** — ez az egyetlen ilyen a
+mezőnyben, a többi csak a `gameMeta`-t nézi.
+
+Korábban az élő tétet mutatta (`onBetUpdate` → `loversenyBet`). Az azért bukott,
+mert a fejléc mást ígért, mint amennyit a játékos végül ivott. **A csatorna
+megszűnt** — ha visszahoznád, előbb a kalapot is oldd meg.
+
+**A tét szorzódik**: 2 korty nehéz szinten 6. A `scale=1` kivétel megszűnt az
+`advanceLoverseny`-ben. Ami könnyen elromlik: a játék MINDENT nyers kortyban
+tart (tét 1–6, ajándék a kalapból), a `drinkMult` csak a KIJELZÉST skálázza
+(`shown()`, a `PlayerDrinkRow` `drinkMult`-ja), a könyvelés pedig egyszer szoroz
+az `advanceLoverseny`-ben. **Ha itt is szoroznál az `onAdvance` számaiba,
+duplán menne fel.** A léptető szándékosan nyers marad (1–6): a szorzót a
+léptető alatti mondat írja ki (`6 kortyot (2 × 3)`).
+
+Teszt: `node tests/diffmult_test.js` 3. blokkja — mindenki ugyanarra a lóra tesz
+1/2/3-at, és a **vesztes ágra játszik rá** (addig újrapróbálja a futamot, amíg
+megkapja): nehéz szinten `[3,6,9]` kerül fel. Ha ez a retry kikerül, a teszt
+némán üresen fut át — az első változata pontosan így csúszott át.
+A tartományt a `stake_test.js` 6. blokkja őrzi (2/3/5/6 fő → 12/18/30/36).
