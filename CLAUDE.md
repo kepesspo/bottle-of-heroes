@@ -254,3 +254,34 @@ Teszt: `node tests/diffmult_test.js` 3. blokkja — mindenki ugyanarra a lóra t
 megkapja): nehéz szinten `[3,6,9]` kerül fel. Ha ez a retry kikerül, a teszt
 némán üresen fut át — az első változata pontosan így csúszott át.
 A tartományt a `stake_test.js` 6. blokkja őrzi (2/3/5/6 fő → 12/18/30/36).
+
+## Gombfeliraton NINCS pipa (v10.300)
+Díszítő pipa (`✓` / `✔`) **egyetlen gomb feliratára sem** kerül — se elé, se
+mögé. Ez húsz helyen élt („Ki osztom ✓", „Tét megerősítése ✓", „✓ Kitalálták",
+„Senki nem rontott ✔", „N ember iszik ✔"…), és mind kikerült: a gomb szövege
+önmagában mondja meg, mi történik.
+
+Ami MARAD, és nem tévesztendő össze ezzel — ott a pipa nem dísz, hanem **maga az
+állapot**:
+- bevásárlólista-elem négyzete (`toggleCartItem`) — a pipa a „kipipálva"
+- kvíz bónusz-tipp gombjai — a pipa a *saját választásod* és a *helyes válasz*
+  jelölése; nélküle nem látszana, mit tippeltél
+
+Szintén maradnak a `✅` **emoji** felületek (RSVP „✅ Jövök", „✅ Élő" állapot) —
+az másik vizuális nyelv, nem ez a gombtípus.
+
+## Lóverseny: kiosztás után (v10.300)
+A „Ki osztom" megnyomása három dolgot csinál egyszerre, és ezek együtt járnak:
+1. **a gomb eltűnik** (`!acceptedDistribution` a feltételében),
+2. **a nyertesek kiesnek a listából** — csak az marad, akinek innia kell,
+3. **a léptetők eltűnnek** (`readOnly`), mert már nincs mit osztani.
+
+A megmaradt sor a **teljes** mennyiséget mutatja: `bet + given`, nem csak az
+ajándékot. Ez a lényeg, amit könnyű elrontani — kiosztás előtt a sor szándékosan
+csak az ajándékot lépteti (`cnt={given}`, a tét a jobb oldali chipben van), de
+utána az a vesztes, aki nem kapott ajándékot, `0`-val szerepelne, holott a saját
+tétjét meg kell innia.
+
+Teszt: `node tests/drinkrow_unified_test.js` utolsó blokkja — kiosztja a teljes
+kalapot, megnyomja a gombot, és mind a négyet ellenőrzi (sorszám csökken, gomb
+eltűnt, léptetők eltűntek, egyetlen gomb feliratán sincs pipa).

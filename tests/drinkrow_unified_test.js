@@ -132,6 +132,51 @@ const sorMeret = p => p.evaluate(() => {
   ok(tul.length === 0, 'egyik sor tartalma sem lóg ki vízszintesen', tul.join(', ') || 'nincs túlnyúlás');
   await p.screenshot({ path: path.join(OUT, 'row_loverseny.png') });
 
+  console.log('\n===== LÓVERSENY: KIOSZTÁS UTÁN (v10.300) =====');
+  // A teljes kalapot kiosztjuk: addig nyomjuk a +-t, amig van engedelyezett.
+  // A "Ki osztom" csak `remaining === 0`-nal jelenik meg.
+  for (let i = 0; i < 60; i++) {
+    const kesz = await p.evaluate(() => {
+      const R = document.getElementById('__p');
+      const b = [...R.querySelectorAll('button[aria-label="Egy korttyal több"]')].find(x => !x.disabled);
+      if (!b) return true;
+      b.click(); return false;
+    });
+    if (kesz) break;
+    await p.waitForTimeout(120);
+  }
+  await p.waitForTimeout(500);
+
+  const gombSzoveg = p => p.evaluate(() =>
+    [...document.getElementById('__p').querySelectorAll('button')].map(x => (x.innerText || '').trim()));
+  const elottiek = await sorMeret(p);
+  const gombokElotte = await gombSzoveg(p);
+  ok(gombokElotte.some(t => /Ki osztom/.test(t)), 'a kalap kiosztása után megjelenik a „Ki osztom”',
+     gombokElotte.filter(Boolean).join(' | ').slice(0, 80));
+  // A pipa-ellenorzes ITT a legerosebb: ez a kepernyo hordozta a "Ki osztom ✓"-t.
+  const pipas = gombokElotte.filter(t => t.includes('✓'));
+  ok(pipas.length === 0, 'egyetlen gomb feliratán sincs ✓', pipas.join(' | ') || 'nincs pipás gomb');
+
+  await p.evaluate(() => {
+    const b = [...document.getElementById('__p').querySelectorAll('button')].find(x => /Ki osztom/.test(x.innerText || ''));
+    if (b) b.click();
+  });
+  await p.waitForTimeout(900);
+
+  const utaniak = await sorMeret(p);
+  ok(utaniak.length < elottiek.length,
+     'kiosztás után csak az marad a listán, akinek innia kell',
+     elottiek.length + ' → ' + utaniak.length + ' sor');
+  ok(utaniak.length > 0, 'de a vesztesek ott maradnak', utaniak.map(r => r.nev).join(', '));
+  ok(utaniak.every(r => r.h === 48), 'a megmaradt sorok is 48 px-esek',
+     [...new Set(utaniak.map(r => r.h))].join('/') + ' px');
+  const gombokUtana = await gombSzoveg(p);
+  ok(!gombokUtana.some(t => /Ki osztom/.test(t)), 'a „Ki osztom” gomb eltűnt',
+     gombokUtana.filter(Boolean).join(' | ').slice(0, 60) || 'nincs gomb');
+  const leptetok = await p.evaluate(() =>
+    document.querySelectorAll('#__p button[aria-label="Egy korttyal több"]').length);
+  ok(leptetok === 0, 'és a léptetők is eltűntek', leptetok + ' db');
+
   ok(errs.length === 0, 'nincs JS hiba', errs.slice(0,3).join(' | '));
   console.log(fail ? `\n❌ ${fail} HIBA` : '\n✅ MINDEN ELLENORZES RENDBEN');
   await browser.close();
