@@ -130,17 +130,18 @@ Két dolog, amit könnyen elrontasz:
   (`ledger_test.js`, `sohanem_test.js`, `penalty_unified_test.js`). Ha
   átnevezed az aria-labelt, négy teszt némán elnémul.
 
-## Szólánc (v10.286)
+## Szólánc (v10.286, számok v10.289 óta)
 Hőfok-lap a Szerencsekerék pasztelljeiből — **egy szín = egy tét**
-(`SZ_TONES`, `szTone()`): zöld 2–4 szó / 1 korty, sárga 5–7 / 2, rózsa 8+ / 3,
+(`SZ_TONES`, `szTone()`): zöld 1–4 szó / 1 korty, sárga 5–7 / 2, rózsa 8+ / 3,
 felszorozva a nehézséggel és a wildcarddal. A tinta FIX `#14202F`.
-A lánc `SZ_MAX_LEN = 12` szónál zárul, és aki odáig elviszi, **mindenkinek**
-+1 pontot hoz. Három dolog, ami együtt mozog:
+A lánc **1 szóval indul** (`fresh(1, 0, true)`) és `SZ_MAX_LEN = 10` szónál
+zárul; aki odáig elviszi, **mindenkinek** +1 pontot hoz. Három dolog, ami együtt mozog:
 - a `stake:[1,3]` tartományt kézzel kell utánaigazítani, ha a `korty` értékek
   változnak, különben a korty-korong mást ígér, mint amit a játék kioszt;
-- **23 kategória**, mind pontosan **20 szavas**, mert `SZ_MAX_LEN` láncszó
-  után is kell legalább 3 csali — 15 szónál minden szinten ugyanaz a három
-  lenne, és két kör után mindenki tudná, hogy azokat nem kell nézni;
+- **23 kategória**, mind pontosan **20 szavas** (10 lánc + 10 csali), mert
+  `SZ_MAX_LEN` láncszó után is kell legalább 3 csali — 13 szónál minden
+  szinten ugyanaz a három lenne, és két kör után mindenki tudná, hogy azokat
+  nem kell nézni;
 - a `chainPool` / `decoyPool` vágás `SZ_MAX_LEN`-hez igazodik, nem felezés. Két invariáns, amit könnyű
 elrontani, és a `tests/szolanc_test.js` őriz:
 - **`SZ_CARD_H` / `SZ_ACT_H`**: az átadás és a villantás UGYANAZT a téglalapot
@@ -285,3 +286,23 @@ tétjét meg kell innia.
 Teszt: `node tests/drinkrow_unified_test.js` utolsó blokkja — kiosztja a teljes
 kalapot, megnyomja a gombot, és mind a négyet ellenőrzi (sorszám csökken, gomb
 eltűnt, léptetők eltűntek, egyetlen gomb feliratán sincs pipa).
+
+## Szólánc létra: egy csip = egy szó (v10.301)
+Az átadó-lap csíkja **`SZ_MAX_LEN` (=10) csipből** áll, és a beteltek száma
+PONTOSAN a jelenlegi szószám — ugyanaz, ami a jelvényen áll (`4 SZÓ` → 4 csip).
+Mind a betelt csip **a fokozat színét** viszi (`tone.badge`), egyetlen színnel.
+
+Amit ez javított, és amit könnyű visszacsinálni: a létra korábban a SZINTEKET
+mutatta (`i + 2`, tehát `MAX_LEN - 1` = 9 szakasz, 2-től indexelve), a már
+teljesített szakaszok pedig a TÉMA színét vitték (`T.mint` — ez nem minden
+témában zöld, világos témán kék), a jelenlegi meg a fokozatét. Így 4 szónál
+**„2 kék + 1 zöld"** állt: se a csipek száma nem egyezett a jelvénnyel, se a
+színük egymással.
+
+A gyökér-ok az volt, hogy **v10.289** a kezdést 2→1 szóra és a maximumot
+12→10-re vitte, de a létrát (és a tesztet, és ezt a doksit) nem igazította
+utána. Ha a kezdő szószám megint változik, a létra `i + 1`-es indexelését
+ellenőrizd.
+
+Teszt: `node tests/szolanc_test.js` 4. blokkja — csipszám, betelt szám ÉS az
+egyetlen szín. A régi létrával mind a három bukik.

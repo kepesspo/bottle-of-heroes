@@ -6,13 +6,14 @@
 //   2. nincs többé bedrótozott sárga tábla (#F6C842) és nincs lakat
 //   3. a lánc-sor TÖRDEL, nem csonkol — a régi tálca a 7. szinten 27 px-et adott
 //      a szónak, miközben a „Debrecen" 58-at kért
-//   4. a létra a valós szintszámot mutatja, nem fix 5 pöttyöt
+//   4. a létra EGY CSIP = EGY SZÓ (v10.301): annyi csip, ahány szó a max, és
+//      a beteltek száma pontosan a jelenlegi szószám, egyetlen színnel
 //   5. nehéz fokozaton a lap a VALÓS kortyszámot írja ki, és egyezik a bannerrel
 //      (eddig „iszik 1 kortyot" állt, miközben 3 ment el)
 //   6. a többiek megkapják a pontot, amit a leírás ígér
 //   7. a lánc partinként kevert — nem a lista első n szava
 //   8. csali sosem lehet jövőbeli láncszem
-//   9. a lánc 12 szónál ér véget, nem zsákutca, és MINDENKI kap +1 pontot
+//   9. a lánc SZ_MAX_LEN (=10) szónál ér véget, nem zsákutca, és MINDENKI kap +1 pontot
 //  11. v10.287: 23 kategória, mind 20 szavas, és minden szó befér egy chipbe
 //  10. v10.285: EGY SZÍN = EGY TÉT — a lap színe és a kiosztott korty együtt
 //      lép fokozatot (zöld 1 · sárga 2 · rózsa 3)
@@ -154,7 +155,8 @@ const koppint = async (p, szavak) => {
   // Felmegyunk a 6. szintig, ahol a regi talca 47 px-es dobozokat adott.
   await mount(p, 4, 'easy');
   let utolsoRacs = null;
-  for (let szint = 2; szint <= 6; szint++) {
+  // v10.289 ota az elso kor EGY szo, nem ketto — a seta 1-tol indul.
+  for (let szint = 1; szint <= 6; szint++) {
     await indit(p);
     utolsoRacs = await korLejatszas(p, szint);
     if (szint === 6) break;
@@ -191,8 +193,18 @@ const koppint = async (p, szavak) => {
     const kesz = sav.filter(d => getComputedStyle(d).backgroundColor !== 'rgba(26, 42, 74, 0.13)').length;
     return { db: sav.length, kesz };
   });
-  ok(letra.db > 5, 'a létra nem fix 5 szakaszból áll', letra.db + ' szakasz');
-  ok(letra.kesz === 6, 'és a 7. szinten hat szakasz aktív (nem fagy be ötnél)', letra.kesz);
+  ok(letra.db === 10, 'a létra pontosan SZ_MAX_LEN csipből áll (egy csip = egy szó)', letra.db + ' szakasz');
+  ok(letra.kesz === 7, 'és a 7. szinten HÉT csip aktív — annyi, ahány szó', letra.kesz);
+  // A csipek szine EGYFORMA: korabban a kesz szakaszok a tema szinet vittek
+  // (T.mint — nem minden temaban zold), a jelenlegi meg a fokozatet, ezert
+  // 4 szonal "2 kek + 1 zold" allt.
+  const letraSzin = await p.evaluate(() => {
+    const R = document.getElementById('__p');
+    const sav = [...R.querySelectorAll('div')].filter(d => d.style && d.style.height === '7px' && d.style.borderRadius === '4px');
+    const kesz = sav.map(d => getComputedStyle(d).backgroundColor).filter(c => c !== 'rgba(26, 42, 74, 0.13)');
+    return [...new Set(kesz)];
+  });
+  ok(letraSzin.length === 1, 'és mind EGYFORMA színű (nem kék+zöld vegyesen)', letraSzin.join(' | '));
 
   console.log('\n===== 5-6. VALÓS KORTYSZÁM + A TÖBBIEK PONTJA (nehéz, ×3) =====');
   await mount(p, 4, 'hard');
@@ -202,8 +214,8 @@ const koppint = async (p, szavak) => {
     return d ? (d.innerText || '').replace(/\s+/g, ' ').trim() : null;
   });
   await indit(p);
-  const k2 = await korLejatszas(p, 2);
-  ok(k2.lanc.length === 2, 'két szó villant fel a 2. szinten', k2.lanc.join(' → '));
+  const k2 = await korLejatszas(p, 1);
+  ok(k2.lanc.length === 1, 'egy szó villan fel az 1. szinten (v10.289)', k2.lanc.join(' → '));
   const rossz = k2.racs.find(w => w !== k2.lanc[0]);
   await koppint(p, [rossz]);
   await p.waitForTimeout(1400);
@@ -227,11 +239,11 @@ const koppint = async (p, szavak) => {
   for (let m = 0; m < 4; m++) {
     await mount(p, 4, 'easy');
     await indit(p);
-    const { lanc, racs } = await korLejatszas(p, 2);
+    const { lanc, racs } = await korLejatszas(p, 1);
     if (lanc[0]) elsok.add(lanc[0]);
     const csalik = racs.filter(w => !lanc.includes(w));
     if (m === 0) {
-      ok(racs.length === 5, 'a rács 2 láncszó + 3 csali', racs.length + ' gomb');
+      ok(racs.length === 4, 'a rács 1 láncszó + 3 csali', racs.length + ' gomb');
       ok(csalik.length === 3, 'három csali kerül a rácsba', csalik.length);
     }
     // Vigyuk fel a lancot ket szinttel, es nezzuk meg, hogy a korabbi csalik
@@ -252,7 +264,7 @@ const koppint = async (p, szavak) => {
 
   console.log('\n===== 9. A LÁNC 12 SZÓNÁL ÉR VÉGET, ÉS MINDENKI PONTOT KAP =====');
   await mount(p, 4, 'easy');
-  let hossz = 2, vege = false;
+  let hossz = 1, vege = false;
   for (let lvl = 0; lvl < 16 && !vege; lvl++) {
     await indit(p);
     const { lanc } = await korLejatszas(p, hossz);
@@ -262,7 +274,7 @@ const koppint = async (p, szavak) => {
     vege = await p.evaluate(() => /Megvan mind a \d+/.test(document.getElementById('__p').innerText || ''));
     hossz++;
   }
-  ok(vege && hossz - 1 === 12, 'a lánc pontosan 12 szónál zárul le', hossz - 1 + ' szó');
+  ok(vege && hossz - 1 === 10, 'a lánc pontosan 10 szónál zárul le (SZ_MAX_LEN)', hossz - 1 + ' szó');
   const nyeroLap = await p.evaluate(() => (document.getElementById('__p').innerText || '').replace(/\s+/g, ' '));
   ok(/mindenki \+1 pont/.test(nyeroLap), 'a nyerő lap kiírja, hogy mindenki pontot kap');
   const kovi = await p.evaluate(() => {
@@ -289,7 +301,7 @@ const koppint = async (p, szavak) => {
   for (const f of FOKOZAT) {
     await mount(p, 4, 'easy');
     let kor = null;
-    for (let lvl = 2; lvl <= f.szint; lvl++) {
+    for (let lvl = 1; lvl <= f.szint; lvl++) {
       await indit(p);
       kor = await korLejatszas(p, lvl);
       if (lvl === f.szint) break;
@@ -317,9 +329,9 @@ const koppint = async (p, szavak) => {
 
   console.log('\n===== 11. A SZÓLISTÁK =====');
   // Statikus ellenorzes a buildelt forrason — nem kell hozza vegigjatszani.
-  // A 20-as hossz KOVETELMENY, nem eszteitka: a chainPool SZ_MAX_LEN (=12)
-  // szot visz el, a maradek a csalie. 20-nal ez 12 + 8, tehat a decoysFor
-  // nyolc kozul forog; rovidebb listanal a 12-es jackpot elerhetetlen lenne.
+  // A 20-as hossz KOVETELMENY, nem esztetika: a chainPool SZ_MAX_LEN (=10)
+  // szot visz el, a maradek a csalie. 20-nal ez 10 + 10, tehat a decoysFor
+  // tiz kozul forog; rovidebb listanal a 10-es jackpot elerhetetlen lenne.
   // A build kiszedi a szokozoket (`const LISTS=[{cat:'...',words:[...`), ezert a
   // mintanak szokoz-toleransnak kell lennie — az elso valtozat szokozoket vart,
   // `null`-t kapott, es a tobbi allitas ures listan futva HAMISAN zoldult.
@@ -340,7 +352,7 @@ const koppint = async (p, szavak) => {
      listak === null ? 'NEM — a minta nem talált' : listak.length + ' lista');
   ok(listak && listak.length >= 20, 'legalább 20 kategória van', listak ? listak.length : '—');
   const rosszHossz = (listak || []).filter(l => l.db !== 20);
-  ok(listak !== null && rosszHossz.length === 0, 'mindegyik pontosan 20 szavas (12 lánc + 8 csali)',
+  ok(listak !== null && rosszHossz.length === 0, 'mindegyik pontosan 20 szavas (10 lánc + 10 csali)',
      rosszHossz.map(l => `${l.cat}:${l.db}`).join(', ') || (listak ? 'mind 20' : '—'));
   const dupok = (listak || []).filter(l => l.dup);
   ok(listak !== null && dupok.length === 0, 'egyik listában sincs ismétlődő szó',
