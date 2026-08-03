@@ -341,12 +341,12 @@ kulcsára írt, a 2.+ szavakra pedig „senki nem szavazott" állt — és a
 **Ahol két kezdet is jó, a szabály EGY IRÁNYÚ: a ritkább betű elfogadja a
 gyakoribbat, fordítva soha.** Két esete van:
 - **kétjegyű** (`OVFJ_DIGRAPHS`): `NY` → „nap" és „nyár" is jó;
-- **ékezetes betű** (`OVFJ_SHORT`, v10.304–305): minden betű PONTOSAN EGY
-  lépést lép vissza — `á→a é→e í→i ó→o ú→u` (ékezet le), `ö→o ü→u` (két pont
-  le), `ő→ö ű→ü` (hosszú ékezet → két pont). Tehát `Ó` → „óra" és „ország",
-  `Ö` → „ötlet" és „orr", `Ő` → „őz" és „ötlet".
-  A lánc **nem tranzitív**, és ez szándékos: `Ő` alatt az „orr" NEM ér —
-  különben az `Ő` két lépést lépne, a többi meg egyet.
+- **ékezetes betű** (`OVFJ_SHORT`, v10.304, pontosítva v10.306): a lépés az
+  ÉKEZET levétele — `á→a é→e í→i ó→o ú→u` és `ő→ö ű→ü`. Tehát `Ó` → „óra" és
+  „ország", `Ő` → „őz" és „ötlet".
+  A **két pont levétele NINCS benne** (`ö→o`, `ü→u`): az `Ö` és az `Ü` külön
+  betű, nem ugyanannak a hangnak a hosszú/rövid változata — `Ö` alatt az „orr"
+  nem ér. (v10.305-ben egy körig bent volt, v10.306-ban kikerült.)
 
 Visszafelé egyik sem áll, és ez szándékos: `N` alatt a „nyár", `O` alatt az
 „óra" nem ér — különben a szűkebb kör beleolvadna a tágabba, és a kettő

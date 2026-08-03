@@ -233,14 +233,14 @@ const ANSWERS = {
         // ...de egyjegyunel a digraf NEM
         ['nyár','N',false],  ['nap','N',true],
         ['szék','S',false],  ['sas','S',true],
-        // ekezetes betu: az EGGYEL egyszerubb alak is jo (v10.304-305)
+        // ekezetes betu: az EKEZET levetele jo (v10.304, pontositva v10.306)
         ['óra','Ó',true],    ['ország','Ó',true], ['alma','Ó',false],
         ['ágy','Á',true],    ['alma','Á',true],
-        ['ötlet','Ö',true],  ['orr','Ö',true],    // ö -> o
-        ['üveg','Ü',true],   ['utca','Ü',true],   // ü -> u
         ['őz','Ő',true],     ['ötlet','Ő',true],  // ő -> ö
         ['űr','Ű',true],     ['üveg','Ű',true],   // ű -> ü
-        // ...de a lanc EGY lepeses: Ő alatt az "orr" NEM er
+        // ...de a KET PONT levetele NEM jo: az Ö/Ü mas betu, nem hosszu/rovid par
+        ['orr','Ö',false],   ['ötlet','Ö',true],
+        ['utca','Ü',false],  ['üveg','Ü',true],
         ['orr','Ő',false],   ['utca','Ű',false],
         // ...es visszafele semmi nem all
         ['óra','O',false],   ['orr','O',true],
@@ -255,8 +255,10 @@ const ANSWERS = {
     const cimke = await p.evaluate(() =>
       ['NY','LY','Ó','Ö','Ő','Ú','Ü','Ű','Á','A','O','U'].map(l => l+'→'+ovfjLetterPair(l)).join(' '));
     ok('a címke mindkét kezdetet kiírja, ahol kettő is jó',
-       /NY→N \/ NY/.test(cimke) && /Ó→O \/ Ó/.test(cimke) && /Ö→O \/ Ö/.test(cimke)
-       && /Ő→Ö \/ Ő/.test(cimke) && /Ü→U \/ Ü/.test(cimke) && /Ű→Ü \/ Ű/.test(cimke)
+       /NY→N \/ NY/.test(cimke) && /Ó→O \/ Ó/.test(cimke) && /Ő→Ö \/ Ő/.test(cimke)
+       && /Ű→Ü \/ Ű/.test(cimke)
+       // az Ö es az Ü NEM par-betu: onmagukban allnak a cimkeben is
+       && /Ö→Ö /.test(cimke) && /Ü→Ü /.test(cimke)
        && /A→A /.test(cimke) && /O→O /.test(cimke) && /U→U$/.test(cimke), cimke);
   }
 
