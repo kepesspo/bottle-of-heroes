@@ -115,7 +115,8 @@ async function setup(p, gameId, opts) {
   //     rossz szamot (lasd patch_10_276.py)
   // v10.299: a loverseny KIKERULT innen — a felso hatara kiszamolhato
   // (6 x letszam), tehat nem kell talalgatni.
-  const VART_NULL = ['beerpong','blackjack','busz','farkasos','kisebb',
+  // v10.302: a kisebb is KIKERULT — a tet felso hatarat a pakli szabja meg.
+  const VART_NULL = ['beerpong','blackjack','busz','farkasos',
                      'meduza','ovfj','powerhour','ringfire','ritmus','utveszto'].sort();
   ok(decl.nulls.slice().sort().join(',') === VART_NULL.join(','),
      'pontosan a várt játékok deklarálnak null tétet', decl.nulls.slice().sort().join(', '));
@@ -142,7 +143,7 @@ async function setup(p, gameId, opts) {
     ok(c && c.num === `1–${r}`, `Kártyacsata ${r} kör: 1–${r} korty`, c && c.num);
   }
   // A hataratlan halmozoknal NINCS korong — inkabb semmi, mint rossz szam
-  for (const gid of ['meduza', 'ritmus', 'utveszto', 'kisebb']) {
+  for (const gid of ['meduza', 'ritmus', 'utveszto']) {
     await setup(p, gid, { diff: 'hard' });
     ok(await readCap(p) === null, `${gid}: nincs korong (nincs valódi felső határ)`);
   }
@@ -225,6 +226,35 @@ async function setup(p, gameId, opts) {
   await p.waitForTimeout(500);
   const utana = (await readCap(p)).num;
   ok(elotte === utana, 'a tét léptetése NEM írja át a korongot — az tartomány', elotte + ' → ' + utana);
+
+  console.log('\n===== 6b. KISEBB/NAGYOBB: A PAKLI SZABJA A FELSŐ HATÁRT (v10.302) =====');
+  // A tet 1-rol indul es minden jo tipp utan +1 (alap) vagy ×2; bukasnal a
+  // jatekos a pillanatnyi tetet issza. +1-es modban tehat a lapok szama a
+  // plafon (52 × pakli), ×2-ben a KISEBB_X2_DOUBLINGS gyakorlati plafon.
+  await setup(p, 'kisebb', { diff: 'easy' });
+  const ki1 = await readCap(p);
+  ok(ki1 !== null, 'Kisebb/Nagyobb: VAN korong (nem a KÖR gyűrű)', ki1 && ki1.num);
+  ok(ki1 && ki1.num === '1–52', 'egy pakli · könnyű: 1–52 korty', ki1 && ki1.num);
+  await setup(p, 'kisebb', { diff: 'easy', cfg: { kisebbConfig: { decks: 2 } } });
+  const ki2 = await readCap(p);
+  ok(ki2 && ki2.num === '1–104', 'két pakli: 1–104 — a felső határ a lapokkal nő', ki2 && ki2.num);
+  await setup(p, 'kisebb', { diff: 'hard', cfg: { kisebbConfig: { decks: 1 } } });
+  const ki3 = await readCap(p);
+  ok(ki3 && ki3.num === '3–156', 'nehéz szinten a nehézség SZOROZ (1–52 × 3)', ki3 && ki3.num);
+  await setup(p, 'kisebb', { diff: 'easy', cfg: { kisebbConfig: { stackMode: 'times2' } } });
+  const ki4 = await readCap(p);
+  ok(ki4 && ki4.num === '1–256', '×2-es tétmódban a duplázás-plafon (2^8)', ki4 && ki4.num);
+  // a ket fo gomb EGY SORBAN van, es egyik felirata sem torik
+  const gombok = await p.evaluate(() => {
+    const root = document.getElementById('__pl');
+    const g = [...root.querySelectorAll('button')].filter(x => /Nagyobb|Kisebb/.test(x.innerText || ''));
+    return g.map(x => { const r = x.getBoundingClientRect();
+      return { y: Math.round(r.top), h: Math.round(r.height), tul: x.scrollWidth > x.clientWidth + 1 }; });
+  });
+  ok(gombok.length === 2 && gombok[0].y === gombok[1].y,
+     'a Nagyobb és a Kisebb EGY sorban van', gombok.map(g => 'y=' + g.y).join(' '));
+  ok(gombok.every(g => g.h === 100), 'és a magasságuk marad 100 px', gombok.map(g => g.h).join('/'));
+  ok(gombok.every(g => !g.tul), 'a feliratuk nem lóg ki');
 
   console.log('\n===== 7. KORTY-KÖVETÉS NÉLKÜL =====');
   await setup(p, 'reakcio', { diff: 'hard', noScore: true });

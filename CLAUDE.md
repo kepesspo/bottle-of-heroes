@@ -306,3 +306,25 @@ ellenőrizd.
 
 Teszt: `node tests/szolanc_test.js` 4. blokkja — csipszám, betelt szám ÉS az
 egyetlen szín. A régi létrával mind a három bukik.
+
+## Kisebb/Nagyobb: fejléc-korong és a két fő gomb (v10.302)
+**A korong tartományt mutat**, nem a KÖR gyűrűt. A játék korábban `stake:null`
+volt (v10.276 „határtalan halmozók" csoportja), ezért a fejlécben a körszámláló
+állt — pedig a felső határ kiszámolható.
+
+A tét 1-ről indul, minden jó tipp után **+1** (alap) vagy **×2** (`stackMode`),
+bukásnál a játékos a *pillanatnyi* tétet issza, majd a tét nullázódik. Ebből:
+- **+1 mód** — a pakli szab határt: `[1, 52 × decks]`. Ez PONTOS.
+- **×2 mód** — a valódi plafon `2^(lapok−1)`, ami sem kiírható, sem értelmes
+  ígéret. Ezért a kijelzés a `KISEBB_X2_DOUBLINGS = 8` **gyakorlati plafonon**
+  áll meg (256). Ez tudatosan választott szám, nincs játékbeli megfelelője —
+  nyolcnál hosszabb hibátlan sorozatnál a korong ALULMOND. Ha valaha pontos
+  akar lenni, a játékban kell tétplafont bevezetni, nem a korongon szépíteni.
+
+**A két fő gomb EGY sorban van** (`flexDirection:'row'`, `flex:1`), magasságuk
+marad 100 px. Fél szélességen a régi 26 px-es felirat + 38 px-es háromszög nem
+fért ki, ezért 22 / 28, és `whiteSpace:'nowrap'` tiltja a tördelést — enélkül a
+„Nagyobb" két sorba törne 360 px-es kijelzőn.
+
+Teszt: `node tests/stake_test.js` 6b. blokkja — 1 pakli / 2 pakli / nehéz / ×2,
+és a két gomb egy sorban, 100 px-en, törés nélkül.
