@@ -373,3 +373,27 @@ Teszt: `ovfj_vote_test.js` „BETŰPÁROK" blokkja (22 eset, mindkét irány) é
 `ovfj_sync_test.js` 1b. blokkja — az végigviszi az első kört, és a host kör végi
 lapján ellenőrzi a három csempét, a szószám-választót és a „Mit írtak?" panelt
 (utóbbiban NINCS értékelő gomb — `readOnly`).
+
+## MENÜ → Vezérlés panel (v10.308)
+Fentről lefelé: **vezető-fejléc → szobakód-kártya → NÉGY gomb EGY sorban →
+„Játékos hozzáadása" (teljes szélesség) → Kilépés**.
+
+Amit könnyű visszacsinálni, mert korábban másképp volt:
+- a négy gomb **egy sorban** áll, nem 2×2 rácsban;
+- a szobakód sorában **nincs apró „+"** — a játékos-hozzáadás lent, teljes
+  szélességben, ONLINE és OFFLINE partiban ugyanúgy (korábban online szobában
+  csak a pici „+" volt, offline csak a széles gomb — két hely, egy funkció);
+- a **Kilépés szöveges gomb** (átlátszó háttér), nem tömör menta sáv;
+- a **vezető-fejléc** nem sárga kártya: a lap saját háttere viszi, és a
+  pontszám függőleges elválasztó után, csillaggal áll.
+
+**A színek témából jönnek** (`T.mint`, `T.bgSoft`) — a küldött design kék
+felületei ugyanezek egy kék témában. Egyetlen kivétel az „Újra" gomb fix zöld
+árnyalata (`#2E9E76`): enélkül a semleges háttértől nem vált el a letiltott
+„Vissza"-tól. Zöld akcentusú témában emiatt az „Újra" és a „Következő" közel
+kerül egymáshoz — ott az ikon és a felirat különbözteti meg őket.
+
+Teszt: `node tests/gamectrl_test.js` — online ÉS offline partiban méri az
+elrendezést (egy sor, négy külön háttér, nincs apró „+", sorrend, Kilépés).
+A menü PORTÁLBA renderel, ezért a teszt esetenként újratölti az oldalt —
+enélkül a második eset mindkét panel gombjait látná.
