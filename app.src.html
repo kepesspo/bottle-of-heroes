@@ -198,24 +198,16 @@
       transition: opacity 0.25s ease; overflow: hidden;
     }
     #splash.hidden { opacity:0; pointer-events:none; }
-    #splash-flash {
-      position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none;
-    }
-    .splash-shock {
-      position:absolute; top:50%; left:50%; width:10px; height:10px; margin:-5px 0 0 -5px;
-      border-radius:50%; opacity:0; pointer-events:none;
-    }
-    .splash-shock:nth-child(3) { border:3px solid rgba(0,0,0,0.40); }
-    .splash-shock:nth-child(4) { border:2px solid rgba(0,0,0,0.25); }
-    .splash-shock:nth-child(5) { border:2px solid rgba(0,0,0,0.15); }
-    .splash-shock:nth-child(6) { border:1.5px solid rgba(0,0,0,0.08); }
+    /* v10.313: a logó MÖGÖTT nincs semmi — se fehér villanás, se lökéshullám-
+       gyűrűk, se lüktető fény. A becsapódás-effektek kikerültek; a logó
+       egyszerűen leérkezik (impactDrop + impactSettle), és megáll. A drop-shadow
+       fix, nem animált: ez árnyék, nem fényjáték. */
     #splash-logo-wrap {
       position:relative; z-index:2;
     }
     #splash-logo {
       width:346px; height:346px; display:block;
-      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.25));
-      animation: impactGlow 0.6s ease-out 0.72s forwards;
+      filter: drop-shadow(0 8px 24px rgba(0,0,0,0.25));
     }
     #splash-title-wrap {
       position:relative; z-index:2; margin-top:4px;
@@ -245,12 +237,6 @@
       60% { transform:scaleX(0.97) scaleY(1.03); }
       100%{ transform:scaleX(1) scaleY(1); }
     }
-    @keyframes impactGlow {
-      0%  { filter:drop-shadow(0 0 40px rgba(255,255,255,0.7)) drop-shadow(0 8px 24px rgba(0,0,0,0.3)); }
-      100%{ filter:drop-shadow(0 0 28px var(--splash-glow,rgba(140,60,255,0.7))) drop-shadow(0 8px 24px rgba(0,0,0,0.25)); }
-    }
-    @keyframes splashFlash { 0%{opacity:0} 12%{opacity:0.88} 100%{opacity:0} }
-    @keyframes splashShock { 0%{transform:scale(1);opacity:0} 8%{opacity:0.9} 100%{transform:scale(30);opacity:0} }
     @keyframes splashLetterSlam {
       0%  { transform:translateY(60px) scaleY(1.6) scaleX(0.8); opacity:0; }
       50% { transform:translateY(-6px) scaleY(0.88) scaleX(1.05); opacity:1; }
@@ -258,10 +244,6 @@
       100%{ transform:translateY(0) scaleY(1) scaleX(1); opacity:1; }
     }
     @keyframes splashTagline { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
-    @keyframes splashLogoIdle {
-      0%,100%{ filter:drop-shadow(0 0 28px var(--splash-glow,rgba(140,60,255,0.7))) drop-shadow(0 8px 24px rgba(0,0,0,0.3)); }
-      50%    { filter:drop-shadow(0 0 48px var(--splash-glow,rgba(140,60,255,0.9))) drop-shadow(0 8px 32px rgba(0,0,0,0.2)); }
-    }
 
 
     /* ── Animations ── */
@@ -33790,11 +33772,6 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
 <body>
 <!-- Splash screen -->
 <div id="splash" style="display:none">
-  <div id="splash-flash"></div>
-  <div class="splash-shock"></div>
-  <div class="splash-shock"></div>
-  <div class="splash-shock"></div>
-  <div class="splash-shock"></div>
   <div id="splash-events-logo-wrap" style="display:none; justify-content:center; align-items:center; width:200px; height:200px; margin:0 auto 8px">
     <img id="splash-events-logo" src="assets/splash_events_logo.png" style="width:200px;height:200px;object-fit:contain" />
   </div>
@@ -33888,9 +33865,11 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
 
   // Apply theme colors after potential deep-link override
   splash.style.background = t.bg;
+  // A `glow` es a `ring` v10.313-ban kikerult: a fenyudvar es a lokeshullam
+  // megszunt, es velük az egyetlen helyük is. A temabol csak a ket TINTA-szin
+  // marad, azt a felirat es a tagline hasznalja.
   var s = document.createElement('style');
-  s.textContent = ':root{--splash-glow:' + t.glow + ';--splash-ring:' + t.ring + ';--splash-ink:' + t.ink + ';--splash-ink-soft:' + t.inkSoft + ';}' +
-    '@keyframes splashLogoIdle{0%,100%{filter:drop-shadow(0 0 28px ' + t.glow + ') drop-shadow(0 8px 24px rgba(0,0,0,0.3));}50%{filter:drop-shadow(0 0 48px ' + t.glow + ') drop-shadow(0 8px 32px rgba(0,0,0,0.2));}}';
+  s.textContent = ':root{--splash-ink:' + t.ink + ';--splash-ink-soft:' + t.inkSoft + ';}';
   document.head.appendChild(s);
 
   if (localStorage.getItem('boh_splash') !== '0') {
@@ -33899,23 +33878,13 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
     window._startSplashAnim = function() {
       var logo    = _isEventsDeepLink ? document.getElementById('splash-events-logo') : document.getElementById('splash-logo');
       var logoW   = _isEventsDeepLink ? document.getElementById('splash-events-logo-wrap') : document.getElementById('splash-logo-wrap');
-      var flash   = document.getElementById('splash-flash');
-      var shocks  = document.querySelectorAll('.splash-shock');
       var letters = document.querySelectorAll('.splash-letter');
       if (!logo) return;
 
-      // Logo zuhan
+      // Logo zuhan — es ennyi. A becsapodas-effektek (feher villanas,
+      // lokeshullam-gyuruk, lukteto fenyudvar) v10.313-ban kikerultek: a logo
+      // mogott nincs semmi.
       logoW.style.animation = 'impactDrop 0.55s cubic-bezier(0.3,0,0.4,1) 0s both, impactSettle 0.2s ease-out 0.55s both';
-
-      // Impact: flash + shockwave
-      setTimeout(function() {
-        if (flash) flash.style.animation = 'splashFlash 0.6s ease-out forwards';
-        shocks.forEach(function(el, i) {
-          setTimeout(function() {
-            el.style.animation = 'splashShock ' + (0.75 + i * 0.18) + 's cubic-bezier(0.1,0.5,0.2,1) forwards';
-          }, i * 40);
-        });
-      }, 520);
 
       // Betűk slam
       setTimeout(function() {
@@ -33933,11 +33902,6 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
         var sub = document.getElementById('splash-events-subtagline');
         if (sub) sub.style.animation = 'splashTagline 0.5s ease-out 0.2s forwards';
       }, 1900);
-
-      // Idle glow
-      setTimeout(function() {
-        if (logo) logo.style.animation = 'splashLogoIdle 3s ease-in-out infinite';
-      }, 2300);
     };
   }
 })();
@@ -35218,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.312';
+const APP_VERSION = 'v10.313';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja

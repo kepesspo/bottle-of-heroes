@@ -490,3 +490,22 @@ a jelölés így is megfogható géppel és teszttel.
 Teszt: `node tests/setupflow_test.js` (három külön doboz, a két kompakt kártya
 egy sorban, a választó kiírja mind a négy szintet a szorzóval, és pontosan egy
 sor van bejelölve).
+
+## Splash: a logó mögött nincs semmi (v10.313)
+A nyitóképernyőn a logó **leérkezik, és megáll** — `impactDrop` + `impactSettle`,
+más nem. A becsapódás-effektek kikerültek:
+- **fehér villanás** (`#splash-flash` + `splashFlash`) — teljes képernyős
+  felvillanás a becsapódás pillanatában,
+- **lökéshullám-gyűrűk** (négy `.splash-shock` + `splashShock`) — a logó mögül
+  kifutó körök,
+- **fényudvar** (`impactGlow` indulásnál, `splashLogoIdle` 2,3 mp után
+  végtelenítve) — a logó körüli lüktető glow.
+
+A logón most **fix** `drop-shadow` van, nem animált filter: ez árnyék, nem
+fényjáték. Aki visszaállítaná, ne csak a keyframe-eket hozza vissza — a
+`_startSplashAnim` időzítései és a témából jövő `glow`/`ring` színek is
+kikerültek. A `--splash-ring` amúgy is halott volt: beállítottuk, de sehol nem
+használtuk.
+
+A felirat (`splashLetterSlam`) és a tagline (`splashTagline`) **marad** — azok
+nem a logó mögött vannak, hanem alatta, és a szöveg érkezését jelzik.
