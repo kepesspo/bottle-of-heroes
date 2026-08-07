@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.316';
+const APP_VERSION = 'v10.317';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -55714,11 +55714,40 @@ function RulettGame({ gameIdx, challenger, onAdvance, onResult }) {
   );
 }
 
-function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, gameMeta, roomCode }) {
+// A Kisebb/Nagyobb lapja. Modul-szinten van, mert KETTEN hasznaljak: a host
+// jatek es az observer telefon-nezet — igy a ket kepernyo nem tud elcsuszni
+// egymastol. (Es nem a komponens torzseben: ott minden ujrarendereles
+// ujramountolna, lasd az Idoparbaj avatar-hibajat.)
+function KisebbCard({ card, faceDown, remaining }) {
+  const cm = Math.min(Math.max(window.innerWidth / 390, 1), 1.5);
+  const cw = Math.round(128*cm), ch = Math.round(178*cm);
+  if (faceDown || !card) return (
+    <div style={{ width:cw, height:ch, borderRadius:Math.round(14*cm), background:T.ink, boxShadow:'0 6px 22px rgba(0,0,0,0.22)', display:'flex', alignItems:'center', justifyContent:'center', position:'relative', flexShrink:0 }}>
+      {remaining != null && (
+        <div style={{ position:'absolute', top:8, right:8, background:'rgba(255,255,255,0.13)', borderRadius:8, padding:'2px 8px', display:'flex', alignItems:'center', gap:3 }}>
+          <span style={{ fontSize:Math.round(10*cm), color:'rgba(255,255,255,0.5)' }}>⊞</span>
+          <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:Math.round(11*cm), color:'rgba(255,255,255,0.65)' }}>{remaining}</span>
+        </div>
+      )}
+      <span style={{ fontFamily:T.font, fontWeight:900, fontSize:Math.round(54*cm), color:'rgba(255,255,255,0.35)' }}>?</span>
+    </div>
+  );
+  const col = SUIT_RED.has(card.suit) ? T.coral : T.ink;
+  return (
+    <div style={{ width:cw, height:ch, borderRadius:Math.round(14*cm), background:T.surface, boxShadow:'0 6px 22px rgba(0,0,0,0.14)', border:`1px solid ${T.inkMute}22`, display:'flex', flexDirection:'column', padding:Math.round(10*cm)+'px '+Math.round(12*cm)+'px', position:'relative', flexShrink:0 }}>
+      <div style={{ fontFamily:'Georgia,serif', fontWeight:700, fontSize:Math.round(30*cm), color:col, lineHeight:1 }}>{card.value}</div>
+      <div style={{ fontFamily:'Georgia,serif', fontSize:Math.round(22*cm), color:col, lineHeight:1.1 }}>{card.suit}</div>
+      <div style={{ position:'absolute', bottom:Math.round(12*cm), left:'50%', transform:'translateX(-50%)', fontFamily:'Georgia,serif', fontSize:Math.round(44*cm), color:col, lineHeight:1 }}>{card.suit}</div>
+    </div>
+  );
+}
+
+function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, gameMeta, roomCode, drinkMult = 1 }) {
   const [gs, setGs] = React.useState(null);
   const gsRef = React.useRef(null);
   const pendRef = React.useRef(false);
   const handleGuessRef = React.useRef(null);
+  const lastGuessTsRef = React.useRef(null);   // a mar feldolgozott observer-tipp azonositoja
   const [guessRes, setGuessRes] = React.useState(null);
   const [gameOver, setGameOver] = React.useState(false);
   const advancedRef = React.useRef(false);
@@ -55753,7 +55782,16 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
     if (!roomCode || typeof syncRoom !== 'function' || !gs) return;
     const st = gs;
     const pid = st.activePids[st.turnPos % Math.max(st.activePids.length, 1)];
-    syncRoom(roomCode, { kisebbTurn: { pid, pot: st.pot, deckPos: st.deckPos, gameIdx } });
+    // Az observernek a soron kivul kell az ELET es az AKTUALIS LAP is — enelkul
+    // a telefon-nezet nem tudja megmutatni, mire tippel az ember.
+    syncRoom(roomCode, { kisebbTurn: {
+      pid, pot: st.pot, deckPos: st.deckPos, gameIdx,
+      card: st.deck[st.deckPos] || null,
+      lives: st.playerLives || {},
+      livesOn: (gameMeta?.kisebbConfig?.lives) === true,
+      activePids: st.activePids || [],
+      remaining: Math.max(0, st.deck.length - st.deckPos - 1),
+    } });
   }, [gs?.turnPos, gs?.deckPos, gs?.pot, gameIdx, roomCode]);
 
   // Egy rontás könyvelése: hiba +1, a tét visszaáll 1-re.
@@ -55783,15 +55821,12 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
     // Winner = fewest failures; tie → earliest in players list
     const sorted = [...players].sort((a,b) => (st.failCount[a.id]||0) - (st.failCount[b.id]||0));
     const winner = sorted[0];
+    // A kortyok mar MENET KOZBEN felkerultek (lasd `onLiveDrinkUpdate` a
+    // rontas againal), ezert itt CSAK a gyoztes pontja megy at. Ha itt is
+    // osztananank kortyot, minden rontas ketszer szamitana.
     const dm = {};
     const pm = {};
     pm[winner.id] = 1;
-    players.forEach(p => {
-      if (p.id === winner.id) return;
-      const maxPot = st.maxFailPot[p.id] || 0;
-      dm[p.id] = maxPot > 1 ? maxPot : 1;
-    });
-    const otherPlayers = players.filter(p=>p.id!==winner.id);
     // A banner csak rontáskor jön elő — a végeredményt a játék saját
     // képernyője mutatja, banner nélkül (különben duplán jelenne meg).
     onAdvance && onAdvance(dm, pm);
@@ -55802,11 +55837,16 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
     if (!roomCode || typeof subscribeRoom !== 'function') return;
     const unsub = subscribeRoom(roomCode, data => {
       if (!data?.kisebbGuess || pendRef.current) return;
-      const { pid, guess } = data.kisebbGuess;
+      const { pid, guess, ts } = data.kisebbGuess;
+      // Minden tipp sajat azonositot visz. Ket egyforma tipp kulonben ugyanaz
+      // a mezo-ertek lenne, a Firestore nem kuldene ujabb snapshotot, es a
+      // gomb „nem mukodne". Az mar feldolgozottat sosem jatsszuk ujra.
+      if (ts && lastGuessTsRef.current === ts) return;
       const st = gsRef.current;
       if (!st) return;
       const curPid = st.activePids[st.turnPos % Math.max(st.activePids.length, 1)];
       if (pid !== curPid) return;
+      lastGuessTsRef.current = ts || null;
       if (typeof db !== 'undefined') db.collection('rooms').doc(roomCode).update({ kisebbGuess: null }).catch(() => {});
       if (handleGuessRef.current) handleGuessRef.current(guess);
     });
@@ -55848,8 +55888,15 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
       } else if (!ok) {
         const failedPot = st.pot || 1;
         const failP = players.find(x => x.id === pid);
+        // A korty AZONNAL a statisztikaba kerul, nem a jatek vegen. Korabban
+        // csak a `finishGame` konyvelt, tehat ha a parti a pakli kifogyasa
+        // elott lepett tovabb, a rontasok NYOM NELKUL elvesztek.
+        // Az `onLiveDrinkUpdate` NYERS szamot var (nem szoroz), ezert itt
+        // szorzunk a `drinkMult`-tal; az `onResult` viszont maga szoroz,
+        // oda a nyers `failedPot` megy — kulonben duplan jelenne meg.
+        if (failP && onLiveDrinkUpdate) onLiveDrinkUpdate({ [pid]: failedPot * (drinkMult || 1) });
         if (failP && onResult) onResult({ correct:false, playerName: failP.name, drinks: failedPot,
-          subtitle: `${failP.name} mellélőtt — ${failedPot} korty a téten` });
+          subtitle: `${failP.name} mellélőtt` });
         // Rontáskor nem fogy mentőöv-lap és nem fogy élet — csak a hiba és a
         // korty könyvelődik, a tét visszaáll 1-re, és rögtön jöhet a köv. tipp.
         nst = applyMiss(nst, pid, failedPot, !livesOn);
@@ -55935,28 +55982,7 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
     </div>
   );}
 
-  const LargeCard = ({ card, faceDown }) => {
-    const cm = Math.min(Math.max(window.innerWidth / 390, 1), 1.5);
-    const cw = Math.round(128*cm), ch = Math.round(178*cm);
-    if (faceDown || !card) return (
-      <div style={{ width:cw, height:ch, borderRadius:Math.round(14*cm), background:T.ink, boxShadow:'0 6px 22px rgba(0,0,0,0.22)', display:'flex', alignItems:'center', justifyContent:'center', position:'relative', flexShrink:0 }}>
-        <div style={{ position:'absolute', top:8, right:8, background:'rgba(255,255,255,0.13)', borderRadius:8, padding:'2px 8px', display:'flex', alignItems:'center', gap:3 }}>
-          <span style={{ fontSize:Math.round(10*cm), color:'rgba(255,255,255,0.5)' }}>⊞</span>
-          <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:Math.round(11*cm), color:'rgba(255,255,255,0.65)' }}>{remaining}</span>
-        </div>
-        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:Math.round(54*cm), color:'rgba(255,255,255,0.35)' }}>?</span>
-      </div>
-    );
-    const red = SUIT_RED.has(card.suit);
-    const col = red ? T.coral : T.ink;
-    return (
-      <div style={{ width:cw, height:ch, borderRadius:Math.round(14*cm), background:T.surface, boxShadow:'0 6px 22px rgba(0,0,0,0.14)', border:`1px solid ${T.inkMute}22`, display:'flex', flexDirection:'column', padding:Math.round(10*cm)+'px '+Math.round(12*cm)+'px', position:'relative', flexShrink:0, animation:'none' }}>
-        <div style={{ fontFamily:'Georgia,serif', fontWeight:700, fontSize:Math.round(30*cm), color:col, lineHeight:1 }}>{card.value}</div>
-        <div style={{ fontFamily:'Georgia,serif', fontSize:Math.round(22*cm), color:col, lineHeight:1.1 }}>{card.suit}</div>
-        <div style={{ position:'absolute', bottom:Math.round(12*cm), left:'50%', transform:'translateX(-50%)', fontFamily:'Georgia,serif', fontSize:Math.round(44*cm), color:col, lineHeight:1 }}>{card.suit}</div>
-      </div>
-    );
-  };
+  const LargeCard = ({ card, faceDown }) => <KisebbCard card={card} faceDown={faceDown} remaining={remaining} />;
 
   const shownCard = guessRes ? guessRes.card : null;
 
@@ -59831,7 +59857,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onSetBuszSwitch={onSetBuszSwitch} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} gameMeta={gameMeta} roomCode={roomCode} />;
+  if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} gameMeta={gameMeta} roomCode={roomCode} drinkMult={drinkMult} />;
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
   if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onUnready={onUnready} onResult={onResult} drinkMult={drinkMult} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
@@ -67704,60 +67730,131 @@ function ObserverStatus({ icon, title, sub, spinning, actionLabel, onAction }) {
 
 function KisebbObserverView({ code, room, observerName }) {
   const players = room.players || [];
-  const [selectedName, setSelectedName] = React.useState(() =>
-    players.find(p => p.name === observerName)?.name || null
+  const [selectedId, setSelectedId] = React.useState(() =>
+    (players.find(p => p.name === observerName) || {}).id || null
   );
-  const myPlayer = players.find(p => p.name === selectedName) || null;
-  const kisebbTurn = room.kisebbTurn || null;
-  const isMyTurn = myPlayer && kisebbTurn && kisebbTurn.pid === myPlayer.id;
-  const pot = kisebbTurn?.pot || 1;
-  const [voted, setVoted] = React.useState(false);
-
-  React.useEffect(() => { setVoted(false); }, [kisebbTurn?.deckPos]);
+  const myPlayer = players.find(p => p.id === selectedId) || null;
+  const kt = room.kisebbTurn || null;
+  const isMyTurn = myPlayer && kt && kt.pid === myPlayer.id;
+  const pot = (kt && kt.pot) || 1;
+  const livesOn = !!(kt && kt.livesOn);
+  const myLives = (kt && kt.lives && myPlayer) ? (kt.lives[myPlayer.id] ?? 0) : null;
+  const isOut = !!(kt && kt.activePids && myPlayer && kt.activePids.length && kt.activePids.indexOf(myPlayer.id) === -1);
+  const [sentTs, setSentTs] = React.useState(null);
+  // A „mar tippeltem" allapot a KOR valtozasara all vissza. A deckPos minden
+  // lapnal no, tehat pontosan egy tippet enged korönkent.
+  React.useEffect(() => { setSentTs(null); }, [kt && kt.deckPos]);
+  const voted = sentTs !== null;
 
   const sendGuess = (guess) => {
-    if (!myPlayer || typeof db === 'undefined' || voted) return;
-    setVoted(true);
-    db.collection('rooms').doc(code).update({ kisebbGuess: { pid: myPlayer.id, guess } }).catch(() => {});
+    if (!myPlayer || typeof db === 'undefined' || voted || !isMyTurn) return;
+    // Minden tipp sajat azonositot visz: ket egyforma tipp kulonben ugyanaz a
+    // mezo-ertek lenne, es a host nem kapna ujabb snapshotot.
+    const ts = Date.now();
+    setSentTs(ts);
+    db.collection('rooms').doc(code).update({ kisebbGuess: { pid: myPlayer.id, guess, ts } }).catch(() => {});
   };
 
+  // ── „Ki vagy?" — ugyanaz az avataros valaszto, mint a tobbi kepernyon ──
   if (!myPlayer) {
     return (
-      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, padding:24 }}>
-        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:18, color:T.ink }}>Ki vagy te?</div>
-        <div style={{ display:'flex', flexDirection:'column', gap:10, width:'100%', maxWidth:300 }}>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:20, padding:'24px 20px' }}>
+        <div style={{ width:76, height:76, borderRadius:999, background:T.surface, display:'grid', placeItems:'center', boxShadow:T.shadowLift || T.shadow }}>
+          <div style={{ transform:'scale(1.5)', display:'grid', placeItems:'center' }}>{Icon.users(T.mint)}</div>
+        </div>
+        <div style={{ textAlign:'center' }}>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:21, color:T.ink, marginBottom:4 }}>Ki vagy?</div>
+          <div style={{ fontFamily:T.font, fontSize:13.5, color:T.inkSoft }}>Válaszd ki magad, hogy tippelni tudj.</div>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:8, width:'100%', maxWidth:320 }}>
           {players.map(p => (
-            <button key={p.id} onClick={() => setSelectedName(p.name)}
-              style={{ width:'100%', padding:'14px 0', borderRadius:16, border:'none', background:p.color, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:18, cursor:'pointer' }}>
-              {p.name}
+            <button key={p.id} onClick={() => setSelectedId(p.id)}
+              style={{ width:'100%', display:'flex', alignItems:'center', gap:12, padding:'10px 14px', borderRadius:16,
+                       border:'none', background:T.surface, boxShadow:T.shadow, cursor:'pointer', textAlign:'left' }}>
+              <PlayerAvatar player={p} size={40} />
+              <span style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:16, color:T.ink,
+                             overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
+              <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.inkMute }}>›</span>
             </button>
           ))}
+          {players.length === 0 && (
+            <div style={{ textAlign:'center', fontFamily:T.font, fontSize:13, color:T.inkMute }}>Még nincs játékos a szobában.</div>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:20, padding:24 }}>
-      <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.inkSoft }}>{myPlayer.name}</div>
-      {isMyTurn && !voted ? (
-        <>
-          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:20, color:T.ink, textAlign:'center' }}>Te jössz!</div>
-          <div style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(255,255,255,0.65)', borderRadius:14, padding:'8px 18px' }}>
-            <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Tét:</div>
-            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color: pot>=3 ? '#D05040' : pot>=2 ? '#E0A030' : T.ink }}>{pot}</div>
+    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:14, padding:'18px 20px 24px', overflowY:'auto' }}>
+      {/* Ki vagyok — fejlec-kartya, elettel */}
+      <div style={{ width:'100%', maxWidth:340, display:'flex', alignItems:'center', gap:11, background:T.surface,
+                    borderRadius:18, padding:'11px 14px', boxShadow:T.shadow, boxSizing:'border-box' }}>
+        <PlayerAvatar player={myPlayer} size={38} />
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{myPlayer.name}</div>
+          {/* ELET — a host oldalan latszott, a telefonon eddig nem. Pontokkal,
+              mert a szam onmagaban nem mondja meg, mennyi volt eredetileg. */}
+          {livesOn && myLives != null && (
+            <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:3 }}>
+              {Array.from({ length: Math.max(myLives, 0) }).map((_, i) => (
+                <span key={i} style={{ width:9, height:9, borderRadius:999, background:T.coral, display:'block' }} />
+              ))}
+              <span style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft, marginLeft:3 }}>
+                {myLives > 0 ? `${myLives} élet` : 'nincs több élet'}
+              </span>
+            </div>
+          )}
+        </div>
+        <button onClick={() => setSelectedId(null)}
+          style={{ flexShrink:0, padding:'6px 12px', borderRadius:999, border:'none', background:T.surfaceMuted,
+                   color:T.inkSoft, fontFamily:T.font, fontWeight:700, fontSize:11.5, cursor:'pointer' }}>Névcsere</button>
+      </div>
+
+      {/* Az AKTUALIS lap — ugyanaz a komponens, amit a host mutat */}
+      {kt && kt.card && <KisebbCard card={kt.card} faceDown={false} />}
+
+      {/* Tet-pirula */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, background:T.surface, borderRadius:999, padding:'7px 16px', boxShadow:T.shadowPill }}>
+        <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.09em' }}>Tét</span>
+        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color: pot>=3 ? T.coral : pot>=2 ? (T.yellowText||T.yellow) : T.ink, lineHeight:1 }}>{pot}</span>
+        <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.inkSoft }}>korty</span>
+      </div>
+
+      {isOut ? (
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.inkSoft, textAlign:'center', padding:'12px 0' }}>Kiestél — nézd végig a többieket!</div>
+      ) : isMyTurn && !voted ? (
+        <React.Fragment>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:19, color:T.ink, textAlign:'center' }}>Te jössz!</div>
+          {/* A ket fo gomb EGY sorban, ugyanazzal a nyelvvel, mint a host
+              kepernyoje: korall = kisebb, menta = nagyobb. */}
+          <div style={{ display:'flex', flexDirection:'row', gap:10, width:'100%', maxWidth:340 }}>
+            <button onClick={() => sendGuess('K')}
+              style={{ flex:1, height:100, border:'none', borderRadius:20, background:T.coral, color:'#fff', cursor:'pointer',
+                       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2,
+                       fontFamily:T.font, boxShadow:T.shadowLift, WebkitTapHighlightColor:'transparent' }}>
+              <span style={{ fontSize:28, lineHeight:1 }}>▼</span>
+              <span style={{ fontWeight:900, fontSize:22, whiteSpace:'nowrap' }}>Kisebb</span>
+            </button>
+            <button onClick={() => sendGuess('N')}
+              style={{ flex:1, height:100, border:'none', borderRadius:20, background:T.mint, color:'#fff', cursor:'pointer',
+                       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2,
+                       fontFamily:T.font, boxShadow:T.shadowLift, WebkitTapHighlightColor:'transparent' }}>
+              <span style={{ fontSize:28, lineHeight:1 }}>▲</span>
+              <span style={{ fontWeight:900, fontSize:22, whiteSpace:'nowrap' }}>Nagyobb</span>
+            </button>
           </div>
-          <div style={{ display:'flex', gap:12, width:'100%', maxWidth:300 }}>
-            <button onClick={() => sendGuess('K')} style={{ flex:1, minHeight:72, border:'none', background:'#F2C4BC', color:'#C0504A', fontFamily:T.font, fontWeight:800, fontSize:20, borderRadius:18, cursor:'pointer' }}>↓ Kisebb</button>
-            <button onClick={() => sendGuess('N')} style={{ flex:1, minHeight:72, border:'none', background:'#B8E8D4', color:'#2E8B60', fontFamily:T.font, fontWeight:800, fontSize:20, borderRadius:18, cursor:'pointer' }}>↑ Nagyobb</button>
-          </div>
-        </>
+        </React.Fragment>
       ) : voted ? (
-        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:16, color:T.mint, textAlign:'center' }}>Tipp elküldve!</div>
+        <div style={{ display:'flex', alignItems:'center', gap:8, background:T.mintSoft, borderRadius:16, padding:'13px 18px' }}>
+          <BohIcon name="check" size={16} />
+          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:14.5, color:T.mintDeep || T.mint }}>Tipp elküldve — nézd a nagy képernyőt!</span>
+        </div>
       ) : (
-        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:16, color:T.inkSoft, textAlign:'center' }}>Várakozás a te köröd re…</div>
+        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14.5, color:T.inkSoft, textAlign:'center' }}>
+          Várj a sorodra…
+        </div>
       )}
-      <button onClick={() => setSelectedName(null)} style={{ marginTop:8, padding:'6px 18px', borderRadius:20, border:'none', background:T.surface, color:T.inkSoft, fontFamily:T.font, fontWeight:600, fontSize:12, cursor:'pointer' }}>Névcsere</button>
     </div>
   );
 }

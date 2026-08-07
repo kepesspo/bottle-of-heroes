@@ -610,3 +610,34 @@ ugyanakkora súlyt kapott, mint a Szerkesztés, holott visszavonhatatlan.
 
 **A kosárba tevés ikon lett**, a „Keverte:" sor jobb szélén. Teljes szélességű
 gombként kettévágta a lapot a hozzávalók és az értékelések között.
+
+## Kisebb/Nagyobb: observer nézet és élő korty-könyvelés (v10.317)
+
+**A kortyok MENET KÖZBEN kerülnek fel.** Eddig csak a `finishGame` könyvelt, az
+pedig kizárólag akkor futott le, ha a pakli elfogyott vagy egy játékos maradt —
+ha a parti előbb lépett tovább, **minden rontás nyom nélkül elveszett**. Mostantól
+minden rontásnál azonnal megy az `onLiveDrinkUpdate`, és a `finishGame` **csak a
+győztes pontját** adja. Ha ott is osztanánk kortyot, minden rontás duplán számítana.
+
+A két csatorna másképp skáláz, és ezt könnyű elrontani:
+- **`onLiveDrinkUpdate` NYERS számot vár** (nem szoroz) → itt `failedPot * drinkMult` megy;
+- **`onResult` maga szoroz** (`diffDrinks * wcMult`) → oda a nyers `failedPot` megy.
+A fejléc-korong is szorzódik (`stake_test`: nehéz szinten 3–156), tehát a
+kiosztott korty és a korong ígérete csak így marad szinkronban.
+
+**A tipp AZONOSÍTÓT visz** (`kisebbGuess.ts`). Enélkül két egyforma tipp
+(ugyanaz a játékos, ugyanaz az irány) ugyanaz a mezőérték lett volna, a Firestore
+nem küldött volna újabb snapshotot — ez volt a „nem működnek a gombok". Ráadásul
+a régi tipp bennragadt a mezőben, és a kör visszaértekor **magától lefutott
+volna**. A host `lastGuessTsRef`-fel dobja a már feldolgozottat.
+
+**A `kisebbTurn` bővült**: `card`, `lives`, `livesOn`, `activePids`, `remaining`.
+Az observer enélkül nem tudta megmutatni, mire tippel az ember, és **nem látszott
+az élet** sem.
+
+**`KisebbCard` modul-szintű** — a host és az observer UGYANAZT a lapot rajzolja,
+így a két képernyő nem tud elcsúszni egymástól. (És nem a komponens törzsében:
+ott minden újrarenderelés újramountolna — lásd az Időpárbaj avatar-hibáját.)
+
+A „Ki vagy?" képernyő a többi választóval egy nyelvet beszél: kör-ikon jelvény,
+avataros sorok, chevron — nem tömör színes névgombok.
