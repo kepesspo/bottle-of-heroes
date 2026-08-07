@@ -723,3 +723,41 @@ sorsol ellenfelet. Kettőnél több játékosnál a kettő rendszeresen eltért:
 telefon a rossz névre írt (`tapperInput.<név>`), a host pedig sosem látta meg a
 nyomást — ezért „csak a host képernyőn" ment a játék. A `tapperInput` NÉVVEL
 kulcsolt, tehát a szinkronizált párosnak és a hosti névnek egyeznie kell.
+
+## Ország-Város és a Büntetés pont-módja (v10.320)
+
+**⚠️ Egy szavas módban az Enter NEM ment.** `lim === 1`-nél nincs `+` gomb és
+nincs szó-chip sem (`lim !== 1 && saved.length > 0`) — az Enter viszont
+meghívta az `addWord`-öt, a szó `saved`-be került, az input letiltódott
+(„megvan mind"), és **semmi nem vette ki onnan**. A szó véglegesen bennragadt.
+Innentől `lim === 1`-nél az Enter csak a következő kategóriára ugrik, és a
+`disabled` sem kapcsol be (`full && lim !== 1`).
+
+**Idő nélküli körben csak teljes lappal lehet beadni.** Nincs, ami lezárja a
+kört, ezért a „Kész vagyok!" addig letiltott, amíg minden kategóriában megvan a
+kért **darabszám** (`ovfjLimit(limit) || 1`) érvényes szó. Időzítős körben ez
+NEM áll: ott az óra zár, és a félig kitöltött lapot is be kell tudni adni.
+
+**A betűkészlet sima latin** (`A…Z`, Q/W/X/Y nélkül). A magyar készlet (Á, Ő,
+CS, LY, TY, ZS…) túl sok játszhatatlan kört adott. Az **érvényesség szabályai
+változatlanok**: az ékezetes pár továbbra is kétirányú (`O` alatt az „óra" is
+ér), a digráf pedig egyirányú (`N` alatt a „nyár" NEM ér) — azok a húzott
+betűtől függetlenül élnek, és a `ovfj_vote_test` őrzi őket.
+
+**A host kihagyhatja magát.** A `HostPickScreen` régóta tud `onSkip`-et, az
+Ország-Város csak nem adta át. Ha a host nem játszik, az írás fázisban nem
+üres űrlapot kap, hanem a **haladást** (ki van kész) — a `hostPid === null`
+ágakat a kód már eddig is kezelte.
+
+## Büntetés: korty VAGY pont (v10.320)
+A `PenaltyModal` kapott egy szegmens-váltót. A két ág ugyanazt a kiosztót
+használja, csak más mezőbe ír: `drinks` vagy `points`. **A váltás nullázza a
+kiosztást** — ami kortynak szánt 3-as volt, pontként mást jelentene.
+
+A `givePenalty` `opts.kind`-ból dönt. Pont módban a kapók a banner **nyertes**
+oldalára kerülnek (`drinks:0`, hogy a szám-oszlop ne írjon korty-számot), és a
+modal saját címet ad („Ki kap pontot?") — a hívó „…ki igyon?" felirata ott
+ellentmondana. Ami **nem** változott: a szám mindkét ágban ABSZOLÚT, se a
+nehézség, se a wildcard nem szorozza (`docs/buntetes.md` 1. csapda).
+
+Mindkét belépő (MENÜ → Büntetés, Wildcard → „Szabályszegő?") átadja a típust.
