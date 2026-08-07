@@ -430,6 +430,31 @@ amíg egy sincs bejelölve.
 kell**, fél párral a lapok elcsúsznak. Az A/B **sarok-fül**, ezért a szülőn
 `paddingTop:12` van: a fül 10 px-szel a lap fölé lóg.
 
+## Mit választanál: 100 kérdés (v10.312)
+A bank 15-ről **100**-ra nőtt. A játék `gameIdx % hossz` szerint lapoz, tehát a
+darabszám maga is működési kérdés: 15 kérdésnél egy hosszabb esten belül
+visszajött ugyanaz a dilemma.
+
+A `statsA` a „hányan választanák az A-t" — **kitalált szám, nem mérés**. A játék
+egyedül a többségi oldal eldöntésére használja (`statsA >= 50`), és a felfedés
+ezzel zárja a kört („a többséggel értettél egyet" / „kisebbségben voltál").
+Ebből jön három megkötés, amit új kérdésnél tartani kell:
+- **nincs 50** — ott a többség érzésre is döntetlen, és a záró mondat olyat
+  állítana, ami nem igaz;
+- **1–99 között marad** — a 0 és a 100 azt ígérné, hogy az egyik oldalt SENKI
+  nem választja;
+- **mindkét oldalon kell nyerő kérdés** — ha minden érték 50 fölött állna, a „B"
+  soha nem érne pontot, és a játék egy kör után kiadná magát.
+
+Az opciók **60 karakternél rövidebbek**: a 74 px-es kör-jelvény mellett ennél
+hosszabb szöveg 360 px-es kijelzőn négy sorba törik, és kilóg a 118 px-es lapból.
+
+Teszt: `node tests/mitval_test.js` — böngésző nélkül fut (a tömb sima
+objektum-literál, a forrásból kiértékelhető), ezért a teljes bank átnézése
+másodperc. Őrzi a darabszámot, a két emojit (megléte ÉS hogy a páron belül
+különböznek), a `statsA` fenti három szabályát, az ismétlődés-mentességet
+(kérdés-pár és opció-szöveg szintjén is) és a hosszkorlátot.
+
 **Időpárbaj.** A cél-lap **`T.mint`**, nem `T.ink` — a fekete tábla
 hibaüzenet-sávnak látszott. Céltábla-ikon, halvány koncentrikus körök,
 „Minél közelebb, annál jobb!" pirula. A játékos-kártya `isUp` jelzővel mondja
