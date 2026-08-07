@@ -116,8 +116,10 @@ async function setup(p, gameId, opts) {
   // v10.299: a loverseny KIKERULT innen — a felso hatara kiszamolhato
   // (6 x letszam), tehat nem kell talalgatni.
   // v10.302: a kisebb is KIKERULT — a tet felso hatarat a pakli szabja meg.
+  // v10.315: a ritmus is KIKERULT — a vesztes a pontkulonbseget issza, a pont
+  // 0-ra van vagva, tehat a plafon a nem-csapda felvillanasok szama.
   const VART_NULL = ['beerpong','blackjack','busz','farkasos',
-                     'meduza','ovfj','powerhour','ringfire','ritmus','utveszto'].sort();
+                     'meduza','ovfj','powerhour','ringfire','utveszto'].sort();
   ok(decl.nulls.slice().sort().join(',') === VART_NULL.join(','),
      'pontosan a várt játékok deklarálnak null tétet', decl.nulls.slice().sort().join(', '));
 
@@ -143,9 +145,21 @@ async function setup(p, gameId, opts) {
     ok(c && c.num === `1–${r}`, `Kártyacsata ${r} kör: 1–${r} korty`, c && c.num);
   }
   // A hataratlan halmozoknal NINCS korong — inkabb semmi, mint rossz szam
-  for (const gid of ['meduza', 'ritmus', 'utveszto']) {
+  for (const gid of ['meduza', 'utveszto']) {
     await setup(p, gid, { diff: 'hard' });
     ok(await readCap(p) === null, `${gid}: nincs korong (nincs valódi felső határ)`);
+  }
+  // Ritmus (v10.315): VAN korong. A felso hatart a jatek sajat idozitese adja
+  // (900→380 ms lathatosag, 150→60 ms res), csokkentve a csapdak aranyaval.
+  // A korong es a `ritmusMaxDrinks` UGYANABBOL a fuggvenybol dolgozik — ha a
+  // jatek tempoja valtozik, ennek a blokknak buknia kell.
+  for (const [dur, trap] of [[20, 0.2], [30, 0.2], [60, 0]]) {
+    await setup(p, 'ritmus', { diff: 'easy', cfg: { ritmusConfig: { duration: dur, trapChance: trap } } });
+    const varhato = await p.evaluate(([d2, t2]) =>
+      ritmusMaxDrinks({ ritmusConfig: { duration: d2, trapChance: t2 } }), [dur, trap]);
+    const c2 = await readCap(p);
+    ok(c2 && c2.num === `1–${varhato}`,
+       `Ritmus ${dur} mp · csapda ${Math.round(trap * 100)}%: 1–${varhato} korty`, c2 && c2.num);
   }
 
   console.log('\n===== 2. A KIÍRT SZÁM = ALAP × NEHÉZSÉG =====');

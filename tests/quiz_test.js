@@ -103,7 +103,13 @@ const commit = async (p) => {
   await clickText(p, /Bankolom/);
   await p.waitForTimeout(900);
   ok(await p.evaluate(() => /kiosztja — kire\?/.test(document.body.innerText)), 'megnyílik a korty-kiosztó');
-  await p.evaluate(() => { const plus = [...document.querySelectorAll('button')].filter(x => (x.innerText || '').trim() === '+'); if (plus[0]) plus[0].click(); });
+  // v10.315: a kioszto a KOZOS PlayerDrinkRow-t hasznalja, mint a Buntetes es a
+  // tobbi felulet. A leptetok SVG-k, nincs szoveges „+" — az aria-label a fogodzo
+  // (ugyanaz, amire a ledger_test / sohanem_test / penalty_unified_test kattint).
+  await p.evaluate(() => {
+    const plus = [...document.querySelectorAll('button[aria-label="Egy korttyal több"]')];
+    if (plus[0]) plus[0].click();
+  });
   await p.waitForTimeout(400);
   await clickText(p, /Mentés/);
   await p.waitForTimeout(1200);

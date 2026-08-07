@@ -526,3 +526,50 @@ Amit könnyű összekeverni: a `config/homeConfig.dnrAppsEnabled` kapcsoló **NE
 ezekre vonatkozik. Az a főoldal alján lévő „TOVÁBBI DNR" sort kapcsolja
 (`dnrAppsOn`, egyetlen helyen) — a DNR exkluzív játékok a listában attól
 függetlenül ott maradnak.
+
+## Kártyacsata, Mit választanál, Időpárbaj, Ritmus, Quiz (v10.315)
+
+**Kártyacsata — a lerakott lap KISEBB.** A `CardChip` `small` propja 46×62-ről
+30×38-ra viszi a lapot a kör-soron. A méret nem esetleges: a sor `minHeight`-ja
+62 px, és a 30×38-as lap (+2 px keret, +2 px dobózóna-keret, +16 px sor-padding)
+pontosan 62-t ad — **a sor magassága lerakáskor sem változik**. Ha a lap vagy a
+paddingek változnak, a `minHeight`-ot utána kell igazítani, különben a sorok
+megugranak lerakáskor.
+
+**A lap visszahozható a kézbe** — kétféleképp, és mindkettő ugyanoda fut:
+a soron kívül elengedve, vagy egyszerűen **rákoppintva** (a `pointerdown`
+kezdőpontjához képest 6 px-nél kisebb elmozdulás = koppintás). A kéz
+`sort((a,b)=>a-b)`-vel rendezve marad, különben a visszatett lap a legyező
+végére ugrana. A kéz `justifyContent:'center'`.
+
+**A tervező-lap fölött két sor** mondja el a szabályt és a tétet — enélkül a
+képernyő egy nevet és öt üres sort mutatott.
+
+**Mit választanál — az óra NEM indul a lap megjelenésével.** `started` állapot +
+„Felfed & Indít" gomb, ugyanaz a minta, mint az Ötdolognál. A kérdés indulás
+előtt **nem látszik**: ha látszana, a játékos elolvashatná, majd felkészülve
+indítaná, és az óra semmit nem mérne. A választás már **nem** hív `startTimer`-t
+(az meghosszabbította volna a kört).
+
+**⚠️ Időpárbaj — alkomponens NEM mehet a törzsbe.** A `PlayerCard` és a `BigBtn`
+a játék törzsében volt definiálva, ezért minden újrarendereléskor ÚJ
+függvény-azonosságot kapott: a React nem frissítette a fát, hanem **leszedte és
+újramountolta**, az avatar `<img>` pedig újratöltődött. Ez volt az „ugrálnak az
+avatar képek". Mindkettő kikerült a komponensen kívülre
+(`IdoparbajPlayerCard`, `IdoparbajBigBtn`), a `tgt` pedig **prop**, nem closure.
+Új alkomponenst ne tegyél a törzsbe.
+
+**Ritmus — van fejléc-korong.** Eddig `stake:null` volt („határtalan halmozók").
+A vesztes a **pontkülönbséget** issza, és a pont `Math.max(0, …)`-szal 0-ra van
+vágva, tehát a plafon a **nem-csapda felvillanások száma**. A `ritmusMaxDrinks()`
+a játék saját ütemezéséből számol (900→380 ms láthatóság, 150→60 ms rés),
+`(1 - trapChance)`-szal szorozva: 30 mp / 20% csapda → **1–32 korty**.
+Ha a `spawnNext` tempója változik, ezt a függvényt is át kell vezetni.
+
+**Quiz — a korty-kiosztó a KÖZÖS `PlayerDrinkRow`.** Kézzel lemásolt változat
+volt benne: unicode `−`/`+` a korongos `BohIcon` helyett, saját színek, és
+hiányzó `aria-label`. A `quiz_test.js` emiatt a `'+'` feliratra kattintott —
+most `button[aria-label="Egy korttyal több"]`-re, mint a többi korty-teszt.
+
+Teszt: `stake_test.js` (Ritmus három beállítással), `quiz_test.js`,
+`drinkrow_unified_test.js`.

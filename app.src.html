@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.314';
+const APP_VERSION = 'v10.315';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -35947,6 +35947,26 @@ const IMGS = {
   'utveszto_banner.png': 'assets/utveszto_banner.png',
 };
 const IMG = '';  // images embedded below
+
+// Ritmus Játék — hany kortyot erhet legfeljebb egy kor.
+// A jatek ugyanezzel az idozitessel pergeti a felvillanasokat (RitmusGame
+// `spawnNext`): a lathatosag 900 ms-rol 380-ra, a res 150-rol 60-ra rovidul a
+// kor vegere. Ha ott valtozik a tempo, ITT is at kell vezetni, kulonben a
+// fejlec-korong mast igér, mint amennyit a jatek kioszt.
+// A csapdak aranya nem szamit bele a talalatokba, ezert szorzunk (1 - trap).
+function ritmusMaxDrinks(meta) {
+  const cfg = (meta && meta.ritmusConfig) || {};
+  const D = cfg.duration || 30;
+  const trap = cfg.trapChance ?? 0.2;
+  let t = 0, n = 0;
+  while (t < D * 1000) {
+    const p = Math.min(1, t / (D * 1000));
+    t += Math.max(380, 900 - p * 520) + 40 + Math.max(60, 150 - p * 90);
+    n++;
+  }
+  return Math.max(1, Math.round(n * (1 - trap)));
+}
+
 const GAMES = [
   { id:'blackjack', stake:null, roundTime:'slow',  name:'Blackjack',             difficulty:'közepes', category:'Csapat', emoji:'🂡', symbol:IMGS['blackjack_icon.png'], img:IMGS['blackjack_icon.png'], banner:IMGS['blackjack_banner.png'], dnr:true, color:'#1a6b3c', desc:'Csatlakozz a telefonoddal, tegyél tétet kortyokban, és játssz az osztó (a host) ellen! Hit, Stand vagy Double Down — aki veszít, megissza a tétjét, aki nyer, kiosztja. Blackjack másfélszeresét ér!' },
   { id:'busz', stake:null,      roundTime:'slow',  name:'Busz',                  difficulty:'nehéz',   category:'Csapat', emoji:'🚌', symbol:IMGS['busz_symbol.png'], img:IMGS['busz_icon.png'], banner:IMGS['busz_banner.png'], color:'#F4A04A', desc:'A piramis kártyasor aljától indulva fordítják fel sorban a lapokat. Akinek megegyezik a lapja az aktuális kártyával, kioszthat annyi kortyt amennyit ér a sor. Az utolsó helyen állók buszoznak: kisebb-nagyobb tippeket kell mondani egy 6 lapos sorra — ha rontasz, előről kezded és iszol.' },
@@ -35992,7 +36012,13 @@ const GAMES = [
   { id:'hajime', stake:[1,3],    roundTime:'mid',  name:'Hajime',                difficulty:'nehéz',   category:'Csapat', emoji:'😆', symbol:IMGS['hajime_symbol.png'], img:IMGS['hajime_icon.png'], banner:IMGS['hajime_banner.png'], color:'#FACC15', desc:'Számolj helyesen! El kell kezdeni számolni 1-től és ha 5-tel vagy 7-tel osztható a szám vagy szerepel benne az 5 vagy a 7 akkor "hajime"-t kell mondani. Aki eltéveszti az iszik. Egy plusz csavar: minden "hajime" után megfordul a kör.' },
   { id:'kopapir', stake:[1,3],   roundTime:'mid',  name:'Kő Papír Olló',         difficulty:'nehéz',   category:'Páros', emoji:'✊', symbol:IMGS['kopapir_symbol.png'], img:IMGS['kopapir_icon.png'], banner:IMGS['kopapir_banner.png'], color:'#7C3AED', desc:'Annyi kört kell játszani ahány játékos van. Kell egy kezdő ember aki kihivja a mellette ülőt, ezt a játék választja ki. Ha te nyersz akkor ő iszik és az ő mellette ülővel kell játszania. Ha te vesztesz akkor a te melletted ülővel kell játszanod. Ha döntetlen akkor mind a ketten isztok.' },
   { id:'szolánc', stake:[1,3],   name:'Szólánc',              difficulty:'közepes', category:'Csapat', emoji:'🔗', symbol:IMGS['szolanc_symbol.png'], img:IMGS['szolanc_icon.png'], banner:IMGS['szolanc_banner.png'], color:'#F59E0B', desc:'Minden körben egy szóval több villog fel a képernyőn. Sorrendben vissza kell koppintani a szavakat. Aki elront, iszik — a többiek pontot kapnak. Ha a sor eléri a 12 szót, mindenki nyer egy pontot.' },
-  { id:'ritmus', stake:null,   roundTime:'fast', name:'Ritmus Játék',     difficulty:'közepes', category:'Páros',  emoji:'🥁', img:IMGS['ritmus_icon.png'], symbol:IMGS['ritmus_symbol.png'], banner:IMGS['ritmus_banner.png'], color:'#F97316', desc:'Az app kisorsol két játékost. Az első játékos 30 másodpercig próbálja megkoppintani a felvillanó gombokat mielőtt eltűnnek. Majd a második játékos is lejátssza. Aki kevesebbet talált el, iszik annyit amennyi a különbség.' },
+  // A vesztes a KULONBSEGET issza (|s1 - s2|), dontetlennel mindenki 1-et. A
+  // pont 0-ra van vagva, tehat a maximum kulonbseg = a nem-csapda felvillanasok
+  // szama: ennyit talalhat el az egyik, ha a masik egyet sem. A `ritmusSpawns`
+  // a jatek sajat idozitesebol szamol (900→380 ms lathatosag, 150→60 ms res).
+  // A statikus `stake` a 30 mp / 20% csapda ALAPBEALLITAS erteke — ezt mutatjuk,
+  // ha nincs meg mentett config. A tenyleges tartomanyt a `stakeOf` szamolja.
+  { id:'ritmus', stake:[1,32], stakeOf:(m)=>[1, ritmusMaxDrinks(m)],   roundTime:'fast', name:'Ritmus Játék',     difficulty:'közepes', category:'Páros',  emoji:'🥁', img:IMGS['ritmus_icon.png'], symbol:IMGS['ritmus_symbol.png'], banner:IMGS['ritmus_banner.png'], color:'#F97316', desc:'Az app kisorsol két játékost. Az első játékos 30 másodpercig próbálja megkoppintani a felvillanó gombokat mielőtt eltűnnek. Majd a második játékos is lejátssza. Aki kevesebbet talált el, iszik annyit amennyi a különbség.' },
   { id:'mitval', stake:[1,1],   roundTime:'fast', name:'Mit Választanál?', difficulty:'könnyű',  category:'Egyéni', emoji:'🤔', img:IMGS['mitval_icon.png'], banner:IMGS['mitval_banner.png'], symbol:IMGS['mitval_symbol.png'], color:'#8B5CF6', desc:'Megjelenik két opció és döntened kell melyiket választanád. 5 másodperc van dönteni hangosan. Ha nem tudsz dönteni, iszol. A végén kiderül hogy a világ hány százaléka választotta azt amit te.' },
   { id:'meduza', stake:null,   roundTime:'fast', name:'Medúza',           difficulty:'könnyű',  category:'Csapat', emoji:'🎯', img:IMGS['meduza_icon.png'], banner:IMGS['meduza_banner.png'], symbol:IMGS['meduza_symbol.png'], color:'#06B6D4', desc:'Mindenki lehajtja a fejét és a körben álló játékosokra néz valakire. 3-2-1-re felemelik a fejüket. Ha szemkontaktus van két játékos között, mindkettő iszik. Addig megy amíg 1-2 ember nem marad.' },
   { id:'farkasos', stake:null, roundTime:'slow', name:'Farkasos',         difficulty:'nehéz',   category:'Csapat', emoji:'🐺', img:IMGS['farkasos_icon.png'], banner:IMGS['farkasos_banner.png'], symbol:IMGS['farkasos_symbol.png'], color:'#374151', desc:'Klasszikus Mafia/Farkasos játék. Az app titokban oszt szerepeket (Faluslakó, Farkas, Orvos, Nyomozó). Éjszaka a farkasok ölnek, az orvos ment, a nyomozó kérdez. Nappal a falu szavaz. Az a csapat nyer amelyik megszünteti a másikat.' },
@@ -59759,19 +59785,22 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
   // Igy a lap ranezesre azonosithato, de a jatekmenetre semmi hatasa —
   // a Kartyacsataban csak a SZAM szamit.
   const CB_SUITS = ['♣','♦','♥','♠','♣','♦','♥','♠'];
-  const CardChip = ({value, color, dim=false}) => (
+  // `small` — a KOR-SORBA lerakott lap. A kezben levo 46×62 szetfeszitette a
+  // sort (a sor belmagassaga ennel kisebb), ezert ott egy kisebb valtozat megy.
+  // Ugyanaz a lap, csak aranyosan kicsinyitve — nem masik komponens.
+  const CardChip = ({value, color, dim=false, small=false}) => (
     <div style={{
-      width:46, height:62, borderRadius:11,
+      width: small ? 30 : 46, height: small ? 38 : 62, borderRadius: small ? 8 : 11,
       background:'#fff', border:'2px solid '+(dim ? color+'55' : color),
       display:'flex', alignItems:'center', justifyContent:'center',
-      fontFamily:T.font, fontWeight:900, fontSize:26, color: dim ? color+'88' : color,
+      fontFamily:T.font, fontWeight:900, fontSize: small ? 17 : 26, color: dim ? color+'88' : color,
       boxShadow: dim ? 'none' : '0 2px 8px rgba(0,0,0,.14)',
       position:'relative', flexShrink:0, userSelect:'none',
       opacity: dim ? 0.4 : 1,
     }}>
-      <span style={{position:'absolute',top:3,left:5,fontSize:10,fontWeight:900,opacity:.75}}>{value}</span>
+      {!small && <span style={{position:'absolute',top:3,left:5,fontSize:10,fontWeight:900,opacity:.75}}>{value}</span>}
       {value}
-      <span style={{position:'absolute',bottom:2,right:5,fontSize:12,fontWeight:900,opacity:.9,color: dim ? color+'88' : CB.ink}}>{CB_SUITS[value % CB_SUITS.length]}</span>
+      <span style={{position:'absolute',bottom:2,right: small ? 3 : 5,fontSize: small ? 9 : 12,fontWeight:900,opacity:.9,color: dim ? color+'88' : CB.ink}}>{CB_SUITS[value % CB_SUITS.length]}</span>
     </div>
   );
 
@@ -59832,10 +59861,15 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
     };
     const onCardPointerUp = (e) => {
       if (!dragRef.current) { setGhost(null); return; }
-      const { cardIdx, value, fromSlot, fromRi, fromCi } = dragRef.current;
+      const { cardIdx, value, fromSlot, fromRi, fromCi, x0, y0 } = dragRef.current;
       dragRef.current = null;
       const els = document.elementsFromPoint(e.clientX, e.clientY);
-      const slot = els.find(el => el.dataset && el.dataset.roundIdx !== undefined);
+      let slot = els.find(el => el.dataset && el.dataset.roundIdx !== undefined);
+      // Koppintas (nem huzas) egy mar lerakott lapon = visszavetel. A `slot`
+      // ilyenkor sajat maga lenne, es a lenti ag valtozatlanul hagyna a sort.
+      const tap = fromSlot && x0 !== undefined
+        && Math.abs(e.clientX - x0) < 6 && Math.abs(e.clientY - y0) < 6;
+      if (tap) slot = null;
       if (slot) {
         const ri = parseInt(slot.dataset.roundIdx);
         if (fromSlot) {
@@ -59848,13 +59882,27 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
         } else {
           setS(s => ({...s, [hk]: s[hk].filter((_,i)=>i!==cardIdx), [pk]: s[pk].map((r,i)=>i===ri?[...r,value]:r), sel:null}));
         }
+      } else if (fromSlot) {
+        // VISSZA A KEZBE. Ha a lapot a sorokon KIVUL engedjuk el, visszakerul a
+        // kezbe — enelkul a rossz korre tett lapot csak egy masik korre lehetett
+        // athuzni, visszavonni sehogy. A kez rendezett marad (VALS sorrend),
+        // kulonben a visszatett lap a legyezo vegere ugrana.
+        setS(s => ({
+          ...s,
+          [hk]: [...s[hk], value].sort((a,b)=>a-b),
+          [pk]: s[pk].map((r,i)=> i===fromRi ? r.filter((_,j)=>j!==fromCi) : r),
+          sel:null,
+        }));
       }
       setGhost(null); setDropHover(null);
     };
     const onSlotCardPointerDown = (e, ri, ci, v) => {
       e.preventDefault(); e.stopPropagation();
       e.currentTarget.setPointerCapture(e.pointerId);
-      dragRef.current = { cardIdx:-1, value:v, fromSlot:true, fromRi:ri, fromCi:ci };
+      // A kezdopontot elmentjuk: ha a lapot elmozdulas nelkul engedik el
+      // (egyszeru koppintas), az is visszateszi a kezbe. Enelkul a visszavonas
+      // csak huzassal menne, es semmi nem jelezne, hogy egyaltalan lehet.
+      dragRef.current = { cardIdx:-1, value:v, fromSlot:true, fromRi:ri, fromCi:ci, x0:e.clientX, y0:e.clientY };
       setGhost({ x:e.clientX, y:e.clientY, value:v });
       setDropHover(null);
     };
@@ -59872,6 +59920,15 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
 
         {/* Fejléc */}
         <div style={{textAlign:'center'}}>
+          {/* Ket sor a pirula FOLOTT: az elso a szabaly, a masodik a tet. A
+              tervezo-kepernyo enelkul csak egy nevet es ot ures sort mutatott —
+              aki eloszor latja, nem tudta, mi alapjan ossza szet a lapjait. */}
+          <div style={{fontFamily:T.font,fontWeight:800,fontSize:13,color:CB.ink,lineHeight:1.45,marginBottom:8,padding:'0 4px'}}>
+            Oszd szét az 5 lapod az 5 körre — a magasabb lap viszi a kört.
+            <span style={{display:'block',fontWeight:600,fontSize:12,color:CB.inkSoft,marginTop:2}}>
+              Hol engeded el, és hol ütsz nagyot? Az ellenfél nem látja.
+            </span>
+          </div>
           <div style={{display:'inline-flex',alignItems:'center',gap:8,padding:'6px 14px',background:'rgba(255,255,255,.85)',borderRadius:999,boxShadow:'0 2px 8px rgba(0,0,0,.1)'}}>
             <div style={{width:8,height:8,borderRadius:'50%',background:pColor}} />
             <span style={{fontFamily:T.font,fontWeight:800,fontSize:14,color:T.ink}}>{pName} tervez</span>
@@ -59899,7 +59956,7 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
               boxShadow:'0 2px 10px rgba(0,0,0,.08)',
               cursor: S.sel!==null ? 'pointer' : 'default',
               transition:'border .1s',
-              minHeight:56,
+              minHeight:62,
             }}>
               <div style={{width:26,height:26,borderRadius:999,background:CB_ROUND_TONE[ri % CB_ROUND_TONE.length],flexShrink:0,display:'grid',placeItems:'center'}}>
                 <span style={{fontFamily:T.font,fontWeight:800,fontSize:13,color:'#fff'}}>{ri+1}</span>
@@ -59916,7 +59973,7 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
               }}>
                 {cards.length>0 ? cards.map((v,ci) => (
                   <div key={ci} onPointerDown={e=>onSlotCardPointerDown(e,ri,ci,v)} style={{pointerEvents:'all',touchAction:'none',cursor:'grab'}}>
-                    <CardChip value={v} color={pColor} dim={isDraggingCard(ci)} />
+                    <CardChip value={v} color={pColor} dim={isDraggingCard(ci)} small />
                   </div>
                 )) : (
                   <span style={{fontFamily:T.font,fontSize:12.5,color:CB.inkMute,pointerEvents:'none'}}>Húzz ide</span>
@@ -59934,7 +59991,7 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
               gombok; a dolessel latszik, hogy ez egy KEZ, amit tartunk. A dolés
               a kozeptol szamitva no, es a kivalasztott lap kiegyenesedik —
               kulonben a felemelt lap ferden allna, es elesnek latszana. */}
-          <div style={{display:'flex',gap:2,flexWrap:'wrap',paddingTop:6,paddingBottom:2}}>
+          <div style={{display:'flex',gap:2,flexWrap:'wrap',justifyContent:'center',paddingTop:6,paddingBottom:2}}>
             {hand.map((v,i) => {
               const mid = (hand.length - 1) / 2;
               const off = i - mid;
@@ -60065,6 +60122,55 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
   return null;
 }
 
+// ⚠️ Ez a harom a komponensen KIVUL van, es ez nem stiluskerdes.
+// Amig a `PlayerCard` az IdoparbajGame TORZSEBEN volt definialva, minden egyes
+// ujrarenderelesnel UJ fuggveny-azonossagot kapott, tehat a React nem
+// frissitette a meglevo fat, hanem LESZEDTE es ujramountolta. Az avatar `<img>`
+// ezzel egyutt ujratoltodott — ez volt a „ugralnak az avatar kepek".
+// Ugyanez all a BigBtn-re. Uj alkomponenst NE tegyunk a torzsbe.
+const IDOPARBAJ_TIPS = [
+  { ic:'timer',  a:'Pontosság',    b:'a lényeg' },
+  { ic:'target', a:'Közelebb',     b:'= több pont' },
+  { ic:'star',   a:'Te döntöd el', b:'a stoppert' },
+];
+
+function IdoparbajBigBtn({ label, sub, onClick, color }) {
+  return (
+    <button onClick={onClick} style={{ width:'100%', padding:'22px 0', background:color||T.mint, color:'#fff', border:'none', borderRadius:20, fontFamily:T.font, fontWeight:900, fontSize:22, cursor:'pointer', boxShadow:T.shadowLift, display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+      <span>{label}</span>
+      {sub && <span style={{ fontSize:13, fontWeight:600, opacity:0.85 }}>{sub}</span>}
+    </button>
+  );
+}
+
+// `isUp` — o kovetkezik. Enelkul a ket lap egyforma volt, es a jatek csak a
+// lenti gomb feliratabol derult ki („Sere indul") — a ket arckep semmit nem
+// mondott arrol, kinel van a stopper.
+// A `tgt` PROP, nem closure: a komponens kikerult a jatek torzsebol.
+function IdoparbajPlayerCard({ p, time, diff, isWinner, isLoser, isUp, tgt }) {
+  return (
+    <div style={{ flex:1, position:'relative', display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:'16px 10px 14px', borderRadius:18, background: isWinner ? `${T.mint}18` : isLoser ? `${T.coral}18` : isUp ? `${T.coral}0F` : T.surface, border:`2px solid ${isWinner?T.mint:isLoser?T.coral:isUp?T.coral:'transparent'}`, boxShadow:T.shadow }}>
+      {time === null && (
+        <div style={{ position:'absolute', top:10, right:10, width:26, height:26, borderRadius:999, background: isUp ? T.coral : 'transparent', border: isUp ? 'none' : `2px solid ${T.inkMute}55`, display:'grid', placeItems:'center' }}>
+          {isUp && Icon.check('#fff')}
+        </div>
+      )}
+      <PlayerAvatar player={p} size={52} />
+      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color: isUp && time===null ? T.coral : T.ink }}>{p?.name}</div>
+      {time !== null ? (
+        <React.Fragment>
+          <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:26, color:isWinner?T.mint:isLoser?T.coral:T.ink }}>{time.toFixed(1)}<span style={{ fontFamily:T.font, fontSize:13, fontWeight:700 }}>mp</span></div>
+          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>{diff===0?'🎯 Pontos!':`${diff>0?'+':''}${(time-tgt).toFixed(1)} mp`}</div>
+          {isWinner && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.mint, background:`${T.mint}22`, borderRadius:999, padding:'2px 10px' }}>NYERT</div>}
+          {isLoser  && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.coral, background:`${T.coral}22`, borderRadius:999, padding:'2px 10px' }}>ISZIK 🍺</div>}
+        </React.Fragment>
+      ) : (
+        <div style={{ fontFamily:T.font, fontSize:13, fontWeight:600, color: isUp ? T.ink : T.inkSoft }}>{isUp ? 'Te következel' : 'Várakozik'}</div>
+      )}
+    </div>
+  );
+}
+
 function IdoparbajGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
   const target = React.useRef(+(5 + Math.random() * 25).toFixed(1));
   const [phase, setPhase] = React.useState('idle'); // 'idle'|'p1running'|'p1done'|'p2running'|'result'
@@ -60102,46 +60208,6 @@ function IdoparbajGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
   const d2 = t2 !== null ? Math.abs(t2 - tgt) : null;
   const p1wins = phase === 'result' ? (d1 <= d2) : null;
 
-  const BigBtn = ({ label, sub, onClick, color }) => (
-    <button onClick={onClick} style={{ width:'100%', padding:'22px 0', background:color||T.mint, color:'#fff', border:'none', borderRadius:20, fontFamily:T.font, fontWeight:900, fontSize:22, cursor:'pointer', boxShadow:T.shadowLift, display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-      <span>{label}</span>
-      {sub && <span style={{ fontSize:13, fontWeight:600, opacity:0.85 }}>{sub}</span>}
-    </button>
-  );
-
-  // `isUp` — o kovetkezik. Enelkul a ket lap egyforma volt, es a jatek csak a
-  // lenti gomb feliratabol derult ki („Sere indul") — a ket arckep semmit nem
-  // mondott arrol, kinel van a stopper.
-  const PlayerCard = ({ p, time, diff, isWinner, isLoser, isUp }) => (
-    <div style={{ flex:1, position:'relative', display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:'16px 10px 14px', borderRadius:18, background: isWinner ? `${T.mint}18` : isLoser ? `${T.coral}18` : isUp ? `${T.coral}0F` : T.surface, border:`2px solid ${isWinner?T.mint:isLoser?T.coral:isUp?T.coral:'transparent'}`, boxShadow:T.shadow }}>
-      {time === null && (
-        <div style={{ position:'absolute', top:10, right:10, width:26, height:26, borderRadius:999, background: isUp ? T.coral : 'transparent', border: isUp ? 'none' : `2px solid ${T.inkMute}55`, display:'grid', placeItems:'center' }}>
-          {isUp && Icon.check('#fff')}
-        </div>
-      )}
-      <PlayerAvatar player={p} size={52} />
-      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color: isUp && time===null ? T.coral : T.ink }}>{p?.name}</div>
-      {time !== null ? (
-        <>
-          <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:26, color:isWinner?T.mint:isLoser?T.coral:T.ink }}>{time.toFixed(1)}<span style={{ fontFamily:T.font, fontSize:13, fontWeight:700 }}>mp</span></div>
-          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>{diff===0?'🎯 Pontos!':`${diff>0?'+':''}${(time-tgt).toFixed(1)} mp`}</div>
-          {isWinner && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.mint, background:`${T.mint}22`, borderRadius:999, padding:'2px 10px' }}>NYERT</div>}
-          {isLoser  && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.coral, background:`${T.coral}22`, borderRadius:999, padding:'2px 10px' }}>ISZIK 🍺</div>}
-        </>
-      ) : (
-        <div style={{ fontFamily:T.font, fontSize:13, fontWeight:600, color: isUp ? T.ink : T.inkSoft }}>{isUp ? 'Te következel' : 'Várakozik'}</div>
-      )}
-    </div>
-  );
-
-  // Harom rovid szabaly-emlekezteto. A jatek egy mondatos: „allitsd meg a
-  // celhoz kozel" — ez a harom csempe mondja meg, MIERT erdemes pontosnak lenni.
-  const TIPS = [
-    { ic:'timer',  a:'Pontosság',  b:'a lényeg' },
-    { ic:'target', a:'Közelebb',   b:'= több pont' },
-    { ic:'star',   a:'Te döntöd el', b:'a stoppert' },
-  ];
-
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16, alignItems:'center', width:'100%' }}>
 
@@ -60173,8 +60239,8 @@ function IdoparbajGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
       {/* Player result cards — always show in any phase */}
       {(
         <div style={{ display:'flex', gap:10, width:'100%' }}>
-          <PlayerCard p={challenger} time={t1} diff={d1} isWinner={phase==='result'&&p1wins===true} isLoser={phase==='result'&&p1wins===false} isUp={phase==='idle'||phase==='p1running'} />
-          <PlayerCard p={opponent}   time={t2} diff={d2} isWinner={phase==='result'&&p1wins===false} isLoser={phase==='result'&&p1wins===true} isUp={phase==='p1done'||phase==='p2running'} />
+          <IdoparbajPlayerCard p={challenger} time={t1} diff={d1} tgt={tgt} isWinner={phase==='result'&&p1wins===true} isLoser={phase==='result'&&p1wins===false} isUp={phase==='idle'||phase==='p1running'} />
+          <IdoparbajPlayerCard p={opponent}   time={t2} diff={d2} tgt={tgt} isWinner={phase==='result'&&p1wins===false} isLoser={phase==='result'&&p1wins===true} isUp={phase==='p1done'||phase==='p2running'} />
         </div>
       )}
 
@@ -60182,7 +60248,7 @@ function IdoparbajGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
           kell hogy a kepernyo alja legyen, nem szabalyszoveg. */}
       {phase === 'idle' && (
         <div style={{ display:'flex', gap:8, width:'100%' }}>
-          {TIPS.map((x, i) => (
+          {IDOPARBAJ_TIPS.map((x, i) => (
             <div key={i} style={{ flex:1, minWidth:0, display:'flex', alignItems:'center', gap:7, padding:'10px 9px', borderRadius:14, background:T.surface, boxShadow:T.shadowPill }}>
               <div style={{ flexShrink:0, display:'grid', placeItems:'center' }}>
                 {x.ic === 'timer' ? (
@@ -60205,18 +60271,18 @@ function IdoparbajGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
           esetleges (korall, sarga, lila) — egy sarga „indul" savon a feher
           felirat alig latszott, es a gomb nem nezett ki elsodlegesnek. Kit
           inditunk, azt a felirat es a kijelolt kartya mondja meg. */}
-      {phase==='idle'     && <BigBtn label={`▶ ${challenger?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP1} color={T.mint} />}
+      {phase==='idle'     && <IdoparbajBigBtn label={`▶ ${challenger?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP1} color={T.mint} />}
       {phase==='p1running' && (
         <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
           <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, fontWeight:600 }}>{challenger?.name} mér… állítsd meg időben!</div>
-          <BigBtn label="⏹ Stop!" onClick={stopP1} color={T.coral} />
+          <IdoparbajBigBtn label="⏹ Stop!" onClick={stopP1} color={T.coral} />
         </div>
       )}
-      {phase==='p1done'   && <BigBtn label={`▶ ${opponent?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP2} color={T.mint} />}
+      {phase==='p1done'   && <IdoparbajBigBtn label={`▶ ${opponent?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP2} color={T.mint} />}
       {phase==='p2running' && (
         <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
           <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, fontWeight:600 }}>{opponent?.name} mér… állítsd meg időben!</div>
-          <BigBtn label="⏹ Stop!" onClick={stopP2} color={T.coral} />
+          <IdoparbajBigBtn label="⏹ Stop!" onClick={stopP2} color={T.coral} />
         </div>
       )}
     </div>
@@ -61393,25 +61459,18 @@ function QuizGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHide
             <div style={{fontFamily:T.font,fontSize:12,fontWeight:700,color:T.mint,marginTop:4}}>✓ Minden kiosztva!</div>
           )}
         </div>
-        {/* Játékos sorok */}
-        <div style={{display:'flex',flexDirection:'column',gap:7,overflowY:'auto'}}>
+        {/* Játékos sorok — a KOZOS PlayerDrinkRow. Korabban ez egy kezzel
+            lemasolt valtozat volt: unicode „−"/„+" a korongos BohIcon helyett,
+            sajat szinek, es hianyzo aria-label, amivel a korty-tesztek
+            kattintanak. Egy felulet, egy komponens. */}
+        <div style={{display:'flex',flexDirection:'column',gap:DRINK_ROW_GAP,overflowY:'auto'}}>
           {others.map(p => {
             const given = gifts[p.id] || 0;
             return (
-              <div key={p.id} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',background:T.surface,borderRadius:14,boxShadow:T.shadowPill,flexShrink:0}}>
-                <PlayerAvatar player={p} size={36} />
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontFamily:T.font,fontWeight:700,fontSize:14,color:T.ink,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
-                  {given > 0 && <div style={{fontFamily:T.font,fontSize:12,color:T.coral,fontWeight:700,marginTop:1}}>+{given} 🍺 kap</div>}
-                </div>
-                <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
-                  <button onClick={()=>setGifts(g=>({...g,[p.id]:Math.max(0,(g[p.id]||0)-1)}))} disabled={given<=0}
-                    style={{width:32,height:32,borderRadius:9,border:'none',background:given>0?T.coral+'22':T.bgSoft,color:given>0?T.coral:T.inkMute,fontFamily:T.font,fontSize:20,cursor:given>0?'pointer':'default',fontWeight:700,lineHeight:1}}>−</button>
-                  <div style={{fontFamily:T.font,fontWeight:800,fontSize:16,color:given>0?T.coral:T.inkMute,minWidth:20,textAlign:'center'}}>{given}</div>
-                  <button onClick={()=>{if(remaining>0)setGifts(g=>({...g,[p.id]:(g[p.id]||0)+1}));}} disabled={remaining<=0}
-                    style={{width:32,height:32,borderRadius:9,border:'none',background:remaining>0?T.mint+'22':T.bgSoft,color:remaining>0?T.mint:T.inkMute,fontFamily:T.font,fontSize:20,cursor:remaining>0?'pointer':'default',fontWeight:700,lineHeight:1}}>+</button>
-                </div>
-              </div>
+              <PlayerDrinkRow key={p.id} p={p} cnt={given}
+                addDisabled={remaining <= 0}
+                onAdd={() => { if (remaining > 0) setGifts(g => ({...g, [p.id]: (g[p.id]||0)+1})); }}
+                onRemove={() => setGifts(g => ({...g, [p.id]: Math.max(0, (g[p.id]||0)-1)}))} />
             );
           })}
         </div>
@@ -65272,23 +65331,19 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult, difficul
   const [revealed, setRevealed] = useState(false);
   const [timeLeft, setTimeLeft] = useState(TOTAL_SECS);
   const [timedOut, setTimedOut] = useState(false);
+  // Az idozito NEM indul a lap megjelenesevel. Korabban a kerdes es a visszaszamlalo
+  // egyszerre erkezett, tehat az elso masodpercek arra mentek el, hogy a jatekos
+  // egyaltalan eszrevegye, rajta a sor. Ugyanaz a minta, mint az Ötdolognal:
+  // egy gomb fedi fel a kerdest ES inditja az orat.
+  const [started, setStarted] = useState(false);
   const ivRef = useRef(null);
   const advancedRef = useRef(false);
 
   useEffect(() => {
     setChoice(null); setRevealed(false); setTimeLeft(TOTAL_SECS); setTimedOut(false);
+    setStarted(false);
     advancedRef.current = false;
     clearInterval(ivRef.current);
-    const end = Date.now() + TOTAL_SECS * 1000;
-    let lastSec = TOTAL_SECS + 1;
-    ivRef.current = setInterval(() => {
-      const rem = Math.max(0, (end - Date.now()) / 1000);
-      const v = Math.ceil(rem);
-      if (v !== lastSec && v <= 3 && v > 0 && typeof window.bohSound === 'function') window.bohSound('tick');
-      lastSec = v;
-      setTimeLeft(v);
-      if (rem <= 0) { clearInterval(ivRef.current); setTimedOut(true); }
-    }, 100);
   }, [gameIdx]);
 
   const startTimer = () => {
@@ -65355,6 +65410,26 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult, difficul
   const timerPct = timeLeft / TOTAL_SECS;
   const r2 = 36, circ2 = 2 * Math.PI * r2;
 
+  // Indulas elott: egyetlen gomb. A kerdes ilyenkor MEG NEM latszik — ha
+  // latszana, a jatekos elolvashatna, majd felkeszulve inditana, es az ora
+  // semmit nem merne.
+  if (!started) {
+    return (
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, width:'100%', paddingTop:8 }}>
+        <div style={{ textAlign:'center', fontFamily:T.font, fontSize:14, fontWeight:600, color:T.inkSoft, lineHeight:1.5 }}>
+          Két lehetőség, egy döntés — és nincs jó válasz.<br />
+          A többséggel értesz egyet? Akkor pontot érsz.
+        </div>
+        <button onClick={() => { setStarted(true); startTimer(); }}
+          style={{ width:148, height:148, borderRadius:'50%', background:T.mint, border:'none', cursor:'pointer',
+                   display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, boxShadow:T.shadow }}>
+          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:36, color:'#fff', lineHeight:1 }}>▶</div>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.85)' }}>{TOTAL_SECS}mp · Felfed &amp; Indít</div>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14, width:'100%' }}>
       {/* A „MIT VÁLASZTANÁL?" felirat itt nem kell — a fejlecben mar ott all
@@ -65409,7 +65484,10 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult, difficul
                 <div style={{ position:'absolute', left:0, top:-10, width:44, height:38, borderRadius:'12px 12px 0 12px', background:'#4A8FD4', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1, pointerEvents:'none' }}>
                   <span style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:'#fff' }}>{badge}</span>
                 </div>
-                <button onClick={!revealed && !timedOut ? (() => { if (!choice) { startTimer(); } handleChoose(side); }) : undefined}
+                {/* A valasztas mar NEM indit orat — az a „Felfed & Indít"
+                    gombnal tortenik. Itt egy ujraindulo startTimer csak
+                    meghosszabbitotta volna a kort. */}
+                <button onClick={!revealed && !timedOut ? (() => handleChoose(side)) : undefined}
                   style={{ position:'relative', width:'100%', minHeight:118, padding:'18px 18px 18px 14px', background:bg, border, borderRadius:18, cursor: !revealed && !timedOut ? 'pointer' : 'default', fontFamily:T.font, fontWeight:800, fontSize:17, color:textColor, textAlign:'left', transition:'all .2s', boxShadow: T.shadow, display:'flex', alignItems:'center', gap:14 }}>
                   <div style={{ width:74, height:74, borderRadius:999, background:medal, flexShrink:0, display:'grid', placeItems:'center', fontSize:34, lineHeight:1 }}>
                     {emoji || badge}
