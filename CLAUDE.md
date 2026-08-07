@@ -684,3 +684,42 @@ de egyetlen app sincs engedélyezve (üres lapra vinne).
 
 **Kártyacsata** — a kör-sor összege EGY lapnál is kint van (eddig csak 1-nél
 többnél), és a `SetupPickSheet` sorai megkapták a 18 px vízszintes paddingot.
+
+## Wildcard, dupla kör, Kategória, Tapper (v10.319)
+
+**⚠️ A wildcard KÉT részre válik szét.** Az időzítő bármikor lejárhat — akár a
+Ritmus közepén —, és a teljes képernyős popup ott elvágta a kört. A szétválasztás:
+- a **SZABÁLY** (`activeWildcard`: felső sáv + hatás, pl. a dupla szorzó)
+  **azonnal** életbe lép — ez csak megjelenik, nem szakít félbe semmit;
+- a **POPUP** (`showWcPopup`, és a Szerencsekör bannere) csak a **következő
+  átmenetnél** jön elő, a `commitRound` blokkjából, elsőbbséggel a körszámláló
+  fölött (a kettő egymásra csúszna).
+
+Ez a határvonal nem esztétikai: a `stake_test` azt őrzi, hogy dupla wildcard
+alatt a fejléc-korong a TELJES szorzót mutassa (nehéz × dupla = 6). Ha a szabály
+is az átmenetig várna, az a teszt — és vele a korong ígérete — elcsúszna.
+A Szerencsekör **pontja** is azonnal felmegy (az csak állapot), csak a bannere
+vár a popupra.
+
+**Kivétel a magukban futó játék** (`isSoloGame` — Busz, Power Hour): ott nincs
+átmenet, amire várni lehetne, ezért a wildcard szándékosan menet közben jön.
+A `soloNowRef` követi az épp futó játékot. Ha ez a jelző elromlana, a Buszban
+soha többé nem lenne wildcard.
+
+**Dupla kör: a banner sem írhat „+1"-et.** A könyvelés régóta szorzott
+(`points + pm[id] * wcMult`), a banner viszont **bedrótozott** `'+1'`-et
+mutatott — a nagy kártyán és a kicsinyített sávon is. Dupla körben két pont ment
+fel, a felirat meg mást állított. A szám mostantól a banner SAJÁT effektjéből
+jön (`gameResult.effect === 'double' ? 2 : 1`), nem az élő `wcMult`-ból: egy már
+lezárt banner különben megkapná egy későbbi kör szorzóját.
+
+**Kategória: ki kezd.** A játék körbe megy, de sehol nem állt, kinél indul a sor
+— a footer „most ő jön" pirulája a következő kört jelzi, nem a kezdést. A
+`challenger` innentől prop, és a kategória-lap alatt egy sor mondja ki.
+
+**⚠️ Tapper: a párost a HOST küldi le** (`tapperPair`). Az observer eddig
+találgatta („az első más `id`-jű játékos"), a host viszont **véletlenszerűen**
+sorsol ellenfelet. Kettőnél több játékosnál a kettő rendszeresen eltért: a
+telefon a rossz névre írt (`tapperInput.<név>`), a host pedig sosem látta meg a
+nyomást — ezért „csak a host képernyőn" ment a játék. A `tapperInput` NÉVVEL
+kulcsolt, tehát a szinkronizált párosnak és a hosti névnek egyeznie kell.

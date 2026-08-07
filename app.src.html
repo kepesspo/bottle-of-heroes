@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.318';
+const APP_VERSION = 'v10.319';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -56773,7 +56773,16 @@ function TapperGame({ gameIdx, challenger, opponent, onAdvance, onResult, roomCo
     advancedRef.current = false;
     clearInterval(ivRef.current);
     // Clear tapper input in Firestore when game resets
-    if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { tapperInput: null });
+    // A VALODI paros leszinkronizalasa. Az observer eddig talalgatta: az elso
+    // olyan jatekost vette ellenfelnek, akinek mas az id-je — a host viszont
+    // VELETLENSZERUEN sorsol parost. Ha nem egyeztek, a telefon a rossz nevre
+    // irt (`tapperInput.<nev>`), a host pedig sosem latta meg a nyomast.
+    if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, {
+      tapperInput: null,
+      tapperPair: { p1: challenger ? { id: challenger.id, name: challenger.name, color: challenger.color } : null,
+                    p2: opponent   ? { id: opponent.id,   name: opponent.name,   color: opponent.color   } : null,
+                    gameIdx },
+    });
     return () => clearInterval(ivRef.current);
   }, [gameIdx]);
 
@@ -58970,7 +58979,7 @@ function CollectBoomGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
   );
 }
 
-function KategoriaGame({ gameIdx, players, onAdvance, onResult, drinkMult = 1 }) {
+function KategoriaGame({ gameIdx, players, challenger, onAdvance, onResult, drinkMult = 1 }) {
   const CATS_HU = [
     'Fővárosok','Gyümölcsök','Sportágak','Filmek','Állatok',
     'Autómárkák','Zenekarok','Ételek','Országok','TV-sorozatok',
@@ -59018,6 +59027,18 @@ function KategoriaGame({ gameIdx, players, onAdvance, onResult, drinkMult = 1 })
           <div style={{ fontFamily:T.font, fontWeight:800, fontSize:26, lineHeight:1.2, letterSpacing:'-0.02em' }}>{cat}</div>
         </div>
       </div>
+
+      {/* KI KEZD. A jatek korbe megy, de eddig sehol nem allt, hogy kinel indul
+          a sor — a footer „most o jon" pirulaja a kovetkezo kort jelzi, nem a
+          kezdest. Enelkul minden korben ranezesre kellett eldonteni. */}
+      {challenger && (
+        <div style={{ display:'flex', alignItems:'center', gap:10, background:T.surface, borderRadius:16, padding:'9px 14px', boxShadow:T.shadowPill }}>
+          <PlayerAvatar player={challenger} size={30} />
+          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>Kezd</span>
+          <span style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{challenger.name}</span>
+          <span style={{ fontFamily:T.font, fontWeight:700, fontSize:11.5, color:T.inkMute, flexShrink:0 }}>utána körbe</span>
+        </div>
+      )}
 
       {/* ── PLAYER SELECTION: Full-width rows ── */}
       {!committed ? (
@@ -59935,7 +59956,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'kopapir') return <KoPapirGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} drinkMult={drinkMult} />;
   if (gameId === 'collect') return <CollectBoomGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
   if (gameId === 'powerhour') return <PowerHourGame key={gameIdx} players={players||[]} onAdvance={onAdvance} />;
-  if (gameId === 'kategoria') return <KategoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} drinkMult={drinkMult} />;
+  if (gameId === 'kategoria') return <KategoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} challenger={challenger} onAdvance={onAdvance} onResult={onResult} drinkMult={drinkMult} />;
   if (gameId === 'memoria') return <MemoriaGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
   if (gameId === 'kezcsere') return <KezCsereGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'hajime') return <HajimeGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
@@ -61836,6 +61857,46 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const wildcardOn = (gameMeta?.modes || []).includes('wildcard');
   const activeWcRef = React.useRef(null);
   React.useEffect(() => { activeWcRef.current = activeWildcard; }, [activeWildcard]);
+  // A SORBAN ALLO wildcard. Az idozito barmikor lejarhat — akar a Ritmus
+  // kellos kozepen —, es a teljes kepernyos popup ott elvagta a jatekot.
+  // Mostantol csak ELTESSZUK, es a kovetkezo ATMENETNEL sul el.
+  const pendingWcRef = React.useRef(null);
+  // A magukban futo jatekokra (Busz, Power Hour) ez NEM vonatkozik: ott nincs
+  // atmenet, amire varni lehetne — ott a wildcard szandekosan menet kozben jon,
+  // ahogy a Jatekmenet oldal figyelmezteto sora is kimondja.
+  const soloNowRef = React.useRef(false);
+
+  // A wildcard KET reszre valik szet:
+  //   * a SZABALY (sav + hatas, pl. dupla szorzo) azonnal eletbe lep — ez nem
+  //     szakitja felbe a jatekot, csak megjelenik a felso savon;
+  //   * a TELJES KEPERNYOS popup (es a Szerencsekor bannere) viszont csak az
+  //     atmenetnel jon elo. Ez volt a panasz: a Ritmus kellos kozepen ugrott fel.
+  const showWcPopup = React.useCallback((wc) => {
+    // A savra koppintva is ez a nezet jon fel — nincs uj felulet.
+    setRoundPopup({ round: null, wildcard: wc, showRound: false, leaving: false });
+    if (wc.effect === 'lucky' && wc.__luckyName) {
+      setGameResult({ winners:[wc.__luckyP].filter(Boolean), winNote:'+1 pont',
+        subtitle:`${wc.__luckyName} — Szerencsekör!`, drinks:0, effect:'lucky', ts:Date.now() });
+    }
+  }, []);
+
+  const applyWildcard = React.useCallback((wc, popupNow) => {
+    setActiveWildcard({ ...wc, ts: Date.now() });
+    if (typeof window.bohSound === 'function') window.bohSound('wildcard');
+    // Szerencsekor: veletlen aktiv jatekos kap +1 pontot. A PONT azonnal
+    // felmegy (ez csak allapot), a bannere viszont a popuppal egyutt jon.
+    if (wc.effect === 'lucky') {
+      setPlayers(prev => {
+        const act = prev.filter(p => p.active !== false);
+        if (!act.length) return prev;
+        const lucky = act[Math.floor(Math.random() * act.length)];
+        wc.__luckyName = lucky.name; wc.__luckyP = lucky;
+        return prev.map(p => p.id === lucky.id ? { ...p, points: (p.points || 0) + 1 } : p);
+      });
+    }
+    if (popupNow) setTimeout(() => showWcPopup(wc), wc.effect === 'lucky' ? 900 : 0);
+    else pendingWcRef.current = wc;
+  }, [setPlayers, showWcPopup]);
   React.useEffect(() => {
     if (!wildcardOn) return;
     const lo = Math.max(1, gameMeta?.wildcardMin || 6);
@@ -61846,21 +61907,9 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       const pool = (cur && WILDCARDS.length > 1) ? WILDCARDS.filter(w => w.text !== cur.text) : WILDCARDS;
       if (!pool.length) return;
       const wc = pool[Math.floor(Math.random() * pool.length)];
-      setActiveWildcard({ ...wc, ts: Date.now() });
-      if (typeof window.bohSound === 'function') window.bohSound('wildcard');
-      // A savra koppintva is ez a nezet jon fel — nincs uj felulet.
-      setRoundPopup({ round: null, wildcard: wc, showRound: false, leaving: false });
-      // Szerencsekor: veletlen aktiv jatekos kap +1 pontot
-      if (wc.effect === 'lucky') {
-        setPlayers(prev => {
-          const act = prev.filter(p => p.active !== false);
-          if (!act.length) return prev;
-          const lucky = act[Math.floor(Math.random() * act.length)];
-          setTimeout(() => setGameResult({ winners:[lucky], winNote:'+1 pont',
-            subtitle:`${lucky.name} — Szerencsekör!`, drinks:0, effect:'lucky', ts:Date.now() }), 900);
-          return prev.map(p => p.id === lucky.id ? { ...p, points: (p.points || 0) + 1 } : p);
-        });
-      }
+      // A szabaly azonnal eletbe lep; a popup viszont csak akkor jon rogton,
+      // ha magaban futo jatek megy (ott nincs atmenet, amire varni lehetne).
+      applyWildcard(wc, soloNowRef.current);
     };
     const schedule = () => {
       const ms = (lo + Math.random() * (hi - lo)) * 60000;
@@ -62070,6 +62119,8 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     ? randomOrder
     : games.map((_,i)=>i);
   const currentGameId = games[effectiveOrder[gameIdx % games.length]];
+  // A wildcard idozitoje ebbol tudja, van-e egyaltalan atmenet, amire varhat.
+  React.useEffect(() => { soloNowRef.current = isSoloGame(currentGameId); }, [currentGameId]);
   const currentGame = GAMES.find(g=>g.id===currentGameId) || GAMES[0];
   const activePlayers = players.filter(p => !p.disabled);
   const currentPlayer = activePlayers[turn % Math.max(activePlayers.length, 1)];
@@ -62200,9 +62251,15 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         go('end');
         return;
       }
-      if (newRound > round) {
-                const showCounter = gameMeta?.showRoundCounter !== false;
-        // A wildcardot mar nem a korszam hozza, hanem az idozito (lasd lentebb).
+      // A sorban allo wildcard ITT sul el — a jatekok kozotti atmenetben.
+      // Elsobbseget kap a korszamlalo felett: a ketto egymasra csuszna.
+      const queuedWc = pendingWcRef.current;
+      if (queuedWc) {
+        pendingWcRef.current = null;
+        showWcPopup(queuedWc);
+      } else if (newRound > round) {
+        const showCounter = gameMeta?.showRoundCounter !== false;
+        // A wildcardot mar nem a korszam hozza, hanem az idozito (lasd fentebb).
         if (showCounter) {
           setRoundPopup({ round: newRound, wildcard: null, showRound: true, leaving: false });
           setTimeout(() => setRoundPopup(p => p ? {...p, leaving:true} : p), 1500);
@@ -62907,7 +62964,13 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           const kicker = isDraw ? 'Döntetlen'
             : kind === 'win' ? (list.length > 1 ? 'Nyertesek' : 'Nyertes')
                              : (list.length > 1 ? 'Isznak' : 'Iszik');
-          const value = kind === 'win' ? '+1' : String(drinks);
+          // A pont ugyanugy szorzodik a dupla korben, mint a korty (lasd
+          // `wcMult`), tehat a banner sem irhat bedrotozott „+1"-et: dupla
+          // korben ket pont megy fel, es a felirat mast allitott, mint a
+          // konyveles. A `wcPts` a banner sajat effektjebol jon, hogy egy
+          // regi (mar lezart) banner ne kapja meg egy ujabb kor szorzojat.
+          const wcPts = gameResult.effect === 'double' ? 2 : 1;
+          const value = kind === 'win' ? '+' + wcPts : String(drinks);
           const unit = kind === 'win' ? 'PONT' : 'KORTY';
           // Ha fejenkent MAS az osszeg (Buntetes, Sohanem, Fingerit), a jatek
           // drinks:0-t kuld, es a jegyzet sorolja fel nevenkent. Ilyenkor nincs
@@ -62995,7 +63058,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                   mast allitana, mint ami tortent (lasd patch_10_263.py). */}
               {(drinks > 0 || (hasWin && !hasLose)) && (
                 <div style={{ flexShrink:0, display:'flex', alignItems:'baseline', gap:5 }}>
-                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:24, letterSpacing:'-0.03em', color:miniCol, fontVariantNumeric:'tabular-nums' }}>{drinks ? drinks : '+1'}</span>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:24, letterSpacing:'-0.03em', color:miniCol, fontVariantNumeric:'tabular-nums' }}>{drinks ? drinks : ('+' + (gameResult.effect === 'double' ? 2 : 1))}</span>
                   <span style={{ fontFamily:T.font, fontWeight:900, fontSize:9, letterSpacing:'0.13em', color:T.inkMute }}>{drinks ? 'KORTY' : 'PONT'}</span>
                 </div>
               )}
@@ -67977,8 +68040,15 @@ function TapperObserverView({ code, room, observerName }) {
   const gameIdx = room.gameIdx || 0;
   const p1 = room.players?.[0] || null;
   const p2 = room.players?.[1] || null;
-  const challenger = room.players?.find(p => p.isCurrent) || room.players?.[gameIdx % Math.max(1, room.players?.length || 1)] || p1;
-  const opponent = room.players?.find(p => p.id !== challenger?.id) || p2;
+  // A parost a HOST kuldi le (`tapperPair`) — az a hiteles forras. A regi
+  // talalgatas (elso mas id-ju jatekos) tobb mint ket fonel rendszeresen mast
+  // adott, mint amit a host var, es a telefonos nyomas nyom nelkul elveszett.
+  const pair = room.tapperPair || null;
+  const byId = (x) => x && (room.players || []).find(p => p.id === x.id) || x || null;
+  const challenger = pair ? byId(pair.p1)
+    : (room.players?.find(p => p.isCurrent) || room.players?.[gameIdx % Math.max(1, room.players?.length || 1)] || p1);
+  const opponent = pair ? byId(pair.p2)
+    : (room.players?.find(p => p.id !== challenger?.id) || p2);
   const twoPlayers = [challenger, opponent].filter(Boolean);
 
   const [selectedName, setSelectedName] = React.useState(() =>
@@ -68001,16 +68071,29 @@ function TapperObserverView({ code, room, observerName }) {
     <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:24, background:T.bg, padding:24 }}>
       <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.1em' }}>🍺 Tapper · {code}</div>
       {!myPlayer ? (
-        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:20, width:'100%', maxWidth:300 }}>
-          <div style={{ fontSize:40 }}>👆</div>
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink }}>Ki vagy te?</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:12, width:'100%' }}>
+        /* Ugyanaz az avataros valaszto, mint a Kisebb/Nagyobb observerén es a
+           tobbi kepernyon — nem tomor szines nevgombok. */
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:18, width:'100%', maxWidth:320 }}>
+          <div style={{ width:76, height:76, borderRadius:999, background:T.surface, display:'grid', placeItems:'center', boxShadow:T.shadowLift || T.shadow }}>
+            <div style={{ transform:'scale(1.5)', display:'grid', placeItems:'center' }}>{Icon.users(T.mint)}</div>
+          </div>
+          <div style={{ textAlign:'center' }}>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:21, color:T.ink, marginBottom:4 }}>Ki vagy?</div>
+            <div style={{ fontFamily:T.font, fontSize:13.5, color:T.inkSoft }}>Válaszd ki magad — a saját telefonodról nyomhatod.</div>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:8, width:'100%' }}>
             {twoPlayers.map(p => (
               <button key={p.id} onClick={() => setSelectedName(p.name)}
-                style={{ width:'100%', padding:'18px', borderRadius:18, border:'none', background:p.color, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', boxShadow:`0 6px 20px ${p.color}55`, touchAction:'manipulation' }}>
-                {p.name}
+                style={{ width:'100%', display:'flex', alignItems:'center', gap:12, padding:'10px 14px', borderRadius:16,
+                         border:'none', background:T.surface, boxShadow:T.shadow, cursor:'pointer', textAlign:'left', touchAction:'manipulation' }}>
+                <PlayerAvatar player={p} size={40} />
+                <span style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:16, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.inkMute }}>›</span>
               </button>
             ))}
+            {twoPlayers.length === 0 && (
+              <div style={{ textAlign:'center', fontFamily:T.font, fontSize:13, color:T.inkMute }}>Várakozás a párosításra…</div>
+            )}
           </div>
         </div>
       ) : (
