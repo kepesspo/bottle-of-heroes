@@ -761,3 +761,23 @@ ellentmondana. Ami **nem** változott: a szám mindkét ágban ABSZOLÚT, se a
 nehézség, se a wildcard nem szorozza (`docs/buntetes.md` 1. csapda).
 
 Mindkét belépő (MENÜ → Büntetés, Wildcard → „Szabályszegő?") átadja a típust.
+
+## 🌪 Szélvihar (Busz) — mikor sül el (v10.320)
+A lánc ellenőrizve, `node tests/szelvihar_test.js`. Négy feltételnek EGYSZERRE
+kell teljesülnie, különben csendben nem történik semmi:
+1. **online szoba** (`roomCode`) — offline Buszban nincs;
+2. a Busz beállításokban a **Szélvihar kapcsoló BE** (`buszConfig.szelviharEnabled`,
+   alapból KI);
+3. a játék a **`bus` fázisban** van;
+4. van legalább egy **néző, aki NEM ül a buszon** (`busWatchers[pid]` igaz, és
+   vagy nincs a `busRiders` között, vagy már `busRiderDone`). Ha senki nem nézi,
+   az ütemező 45 mp múlva újrapróbál.
+
+Az időzítés **3–10 perc** (`randomDelay`), tehát egy rövid teszt-partiban simán
+elő sem jön — ez nem hiba. A `window.__szelviharTestDelay` erre való: az első
+tüzelés idejét írja felül.
+
+A gomb 3 mp-ig él a célnál, az esemény 5 mp után magától törlődik. A megnyomás
+új útvonalat oszt ÉS a még úton lévő buszozókat visszateszi a startra
+(`busRiderPositions[rid] = 0`), majd `szelviharAnnounce`-ot ír — arra ugrik fel
+mindenkinél a popup.
