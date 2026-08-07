@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.315';
+const APP_VERSION = 'v10.316';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -41516,7 +41516,7 @@ function canvasToCompressedURL(canvas, quality) {
 }
 
 // ── Pub: saját keverés űrlap (új / szerkesztés) — app design, EventForm mintára ──
-function DrinkForm({ init, profiles, onSave, onCancel }) {
+function DrinkForm({ init, profiles, onSave, onCancel, onDelete, allTags }) {
   const [name, setName] = React.useState(init.name || '');
   const [emoji, setEmoji] = React.useState(init.emoji || '🍹');
   const [str, setStr] = React.useState(init.str || 2);
@@ -41536,27 +41536,28 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
   });
   const [type, setType] = React.useState(init.type === 'shot' ? 'shot' : 'cocktail');
   const [note, setNote] = React.useState(init.note || '');
-  const [image, setImage] = React.useState(init.image || null);
-  const imgInputRef = React.useRef(null);
-  function handleImageUpload(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = evt => {
-      const img = new Image();
-      img.onload = () => {
-        const MAX = 900;
-        let w = img.width, h = img.height;
-        if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        setImage(canvasToCompressedURL(canvas, 0.72));
-      };
-      img.src = evt.target.result;
-    };
-    reader.readAsDataURL(file);
-  }
+  // A fotó-feltöltő v10.316-ban kikerült, de az `image` mezőt VISSZAADJUK a
+  // mentésnél — a korábban feltöltött képek különben az első szerkesztéskor
+  // csendben eltűnnének.
+  const image = init.image || null;
+  // Cimkek. Kisbetusitve es trimmelve tarolunk, kulonben az „Édes" es az
+  // „édes" ket kulon cimke lenne, es a szuro egyiket sem talalna meg.
+  const [tags, setTags] = React.useState(() =>
+    Array.isArray(init.tags) ? init.tags.filter(Boolean) : []);
+  const [tagInput, setTagInput] = React.useState('');
+  const [delArm, setDelArm] = React.useState(false);   // torles megerositese
+  const addTag = () => {
+    const v = tagInput.trim().toLowerCase();
+    if (!v) return;
+    setTags(ts => ts.includes(v) ? ts : [...ts, v]);
+    setTagInput('');
+  };
+  // A tobbi italon mar hasznalt cimkek, amik ezen meg nincsenek rajta.
+  const tagSuggest = React.useMemo(() => {
+    const all = new Set();
+    (allTags || []).forEach(t2 => { if (t2 && !tags.includes(t2)) all.add(t2); });
+    return [...all].sort().slice(0, 12);
+  }, [allTags, tags]);
   const valid = name.trim().length > 0;
   const strColor = s => s >= 3 ? T.coral : s === 2 ? (T.yellow || '#F4C95A') : T.mint;
   const inpStyle = { width:'100%', boxSizing:'border-box', padding:'13px 14px', borderRadius:13, border:'none', background:T.bg, fontFamily:T.font, fontSize:15, color:T.ink, outline:'none' };
@@ -41565,7 +41566,7 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
   const save = () => {
     if (!valid) return;
     const ingOut = ingRows.map(r => ({ q:(r.q||'').trim(), n:(r.n||'').trim() })).filter(r => r.q || r.n);
-    onSave({ name:name.trim(), emoji:(emoji||'').trim()||'🍹', type, str, serv:Math.max(1, serv||1), ing:ingOut, step:step.trim(), by: creator ? (creator.name || '') : (init.byId ? '' : (init.by || '')), byId: creator ? creator.id : '', note:note.trim(), image: image || null });
+    onSave({ name:name.trim(), emoji:(emoji||'').trim()||'🍹', type, str, serv:Math.max(1, serv||1), ing:ingOut, step:step.trim(), by: creator ? (creator.name || '') : (init.byId ? '' : (init.by || '')), byId: creator ? creator.id : '', note:note.trim(), image: image || null, tags });
   };
   return (
     <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
@@ -41621,20 +41622,44 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
             <textarea value={step} onChange={e => setStep(e.target.value)} rows={2} placeholder="Hogyan kevered ki?" style={{ ...inpStyle, resize:'vertical', lineHeight:1.55 }} />
           </div>
         </div>
-        {/* Fotó */}
+        {/* Címkék. A fotó-választó helyére került (v10.316). A meglevo kepek
+            adata NEM vesz el: az `image` mezot a mentes tovabbviszi, csak a
+            feltolto felulet szunt meg. */}
         <div style={card}>
-          {label('Fotó (opcionális)')}
-          {image ? (
-            <div style={{ position:'relative', marginBottom:8, borderRadius:12, overflow:'hidden' }}>
-              <img src={image} style={{ width:'100%', objectFit:'cover', maxHeight:180, display:'block' }} />
-              <button onClick={() => { setImage(null); if (imgInputRef.current) imgInputRef.current.value=''; }} style={{ position:'absolute', top:8, right:8, width:30, height:30, borderRadius:'50%', border:'none', background:'rgba(0,0,0,0.55)', color:'#fff', fontSize:16, cursor:'pointer', display:'grid', placeItems:'center', lineHeight:1 }}>✕</button>
+          {label('Címkék (opcionális)')}
+          <div style={{ display:'flex', gap:7 }}>
+            <input value={tagInput} onChange={e => setTagInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
+              placeholder="Pl. édes, nyári, erős…" style={{ ...inpStyle, flex:1, minWidth:0 }} />
+            <button onClick={addTag} disabled={!tagInput.trim()}
+              style={{ padding:'0 18px', borderRadius:13, border:'none', flexShrink:0,
+                       background: tagInput.trim() ? T.mint : T.bg, color: tagInput.trim() ? '#fff' : T.inkMute,
+                       fontFamily:T.font, fontWeight:900, fontSize:15, cursor: tagInput.trim() ? 'pointer' : 'default' }}>+</button>
+          </div>
+          {tags.length > 0 && (
+            <div style={{ display:'flex', flexWrap:'wrap', gap:7, marginTop:10 }}>
+              {tags.map(tg => (
+                <button key={tg} onClick={() => setTags(ts => ts.filter(x => x !== tg))}
+                  style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'6px 10px 6px 12px', borderRadius:999,
+                           border:'none', background:T.mintSoft, color:T.mintDeep || T.mint,
+                           fontFamily:T.font, fontWeight:800, fontSize:12.5, cursor:'pointer' }}>
+                  {tg}<span style={{ fontSize:14, lineHeight:1, opacity:.7 }}>✕</span>
+                </button>
+              ))}
             </div>
-          ) : null}
-          <label style={{ display:'flex', alignItems:'center', gap:10, background:T.bg, borderRadius:13, padding:'12px 14px', cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.inkSoft} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-            <span style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>{ image ? 'Fotó cseréje…' : 'Fotó kiválasztása…' }</span>
-            <input ref={imgInputRef} type="file" accept="image/*" onChange={handleImageUpload} style={{ display:'none' }} />
-          </label>
+          )}
+          {/* Mar hasznalt cimkek — gepeles helyett egy koppintas. Enelkul
+              ugyanaz a cimke tizfelekeppen irodna le, es a szuro szethullana. */}
+          {tagSuggest.length > 0 && (
+            <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:10 }}>
+              {tagSuggest.map(tg => (
+                <button key={tg} onClick={() => setTags(ts => ts.includes(tg) ? ts : [...ts, tg])}
+                  style={{ padding:'5px 10px', borderRadius:999, border:`1.5px solid ${T.inkMute}33`,
+                           background:'transparent', color:T.inkSoft, fontFamily:T.font, fontWeight:700,
+                           fontSize:12, cursor:'pointer' }}>+ {tg}</button>
+              ))}
+            </div>
+          )}
         </div>
         {/* Ki keverte — avataros választó */}
         {profiles.length > 0 && (
@@ -41664,6 +41689,18 @@ function DrinkForm({ init, profiles, onSave, onCancel }) {
           {label('Megjegyzés — pl. melyik bulin készült')}
           <input value={note} onChange={e => setNote(e.target.value)} placeholder="Nem kötelező" style={inpStyle} />
         </div>
+        {/* Törlés — v10.316 óta ITT, nem a részletek képernyőn. Ott a Törlés
+            ugyanakkora súlyt kapott, mint a Szerkesztés, holott visszavonhatatlan.
+            A szerkesztő lapon szándékosan egy lépéssel messzebb van, és
+            megerősítést kér. */}
+        {onDelete && (
+          <button onClick={() => { if (delArm) onDelete(); else setDelArm(true); }}
+            style={{ width:'100%', padding:'13px 0', borderRadius:14, border: delArm ? 'none' : `1.5px solid ${T.coral}55`,
+                     background: delArm ? T.coral : 'transparent', color: delArm ? '#fff' : T.coral,
+                     fontFamily:T.font, fontWeight:800, fontSize:13.5, cursor:'pointer', marginBottom:12 }}>
+            {delArm ? (init.dnr ? 'Biztos? Visszaáll az eredeti!' : 'Biztos? Végleg törli!') : (init.dnr ? 'Visszaállítás' : 'Keverés törlése')}
+          </button>
+        )}
       </div>
       {/* Fix alsó gombsor — document.body-ba portálozva, hogy a valós fizikai aljhoz
           igazodjon (mint a felső status-sáv), függetlenül a 100dvh/animált wrapper viselkedésétől */}
@@ -41689,6 +41726,7 @@ function BarScreen({ go, deepLink }) {
   const [favorites, setFavorites] = React.useState({});
   const [own, setOwn] = React.useState(null);
   const [sheetId, setSheetId] = React.useState(null);
+  const [ratingFor, setRatingFor] = React.useState(null);   // melyik ital ertekelo lapja nyilik
   const [adag, setAdag] = React.useState(1);
   const [imgZoom, setImgZoom] = React.useState(null);
   const [pickHint, setPickHint] = React.useState(false);
@@ -41696,6 +41734,7 @@ function BarScreen({ go, deepLink }) {
   const [form, setForm] = React.useState(null);
   const [confirmDel, setConfirmDel] = React.useState(false);
   const [ownFilter, setOwnFilter] = React.useState('all');
+  const [tagFilter, setTagFilter] = React.useState(() => new Set());   // cimke-szuro
   const [cart, setCart] = React.useState([]);
   const [cartOpen, setCartOpen] = React.useState(false);
   const [customQ, setCustomQ] = React.useState('');
@@ -41886,9 +41925,24 @@ function BarScreen({ go, deepLink }) {
   });
   const medalFor = {};
   ownSorted.filter(d => avgOf(d.id).n > 0).slice(0, 3).forEach((d, i) => { medalFor[d.id] = ['🥇','🥈','🥉'][i]; });
-  const ownShown = ownFilter === 'all' ? ownSorted
+  // Minden hasznalt cimke — a szurohoz ES az urlap javaslataihoz. Egy forrasbol,
+  // kulonben a ket lista elcsuszna egymastol.
+  const allTags = React.useMemo(() => {
+    const s = new Set();
+    (ownList || []).forEach(d => (d.tags || []).forEach(t2 => { if (t2) s.add(String(t2).toLowerCase()); }));
+    return [...s].sort();
+  }, [ownList]);
+
+  const byType = ownFilter === 'all' ? ownSorted
     : ownFilter === 'fav' ? ownSorted.filter(d => isFav(d.id))
     : ownSorted.filter(d => (d.type === 'shot' ? 'shot' : 'cocktail') === ownFilter);
+  // A cimke-szuro a tipus-szuro UTAN fut, tehat a ketto egyszerre is hasznalhato
+  // („Shot" + „édes"). Több kijelolt cimkenel MINDEGYIKNEK szerepelnie kell.
+  const ownShown = tagFilter.size === 0 ? byType
+    : byType.filter(d => {
+        const ts = (d.tags || []).map(x => String(x).toLowerCase());
+        return [...tagFilter].every(t2 => ts.includes(t2));
+      });
 
   let recipeList = DRINKS.filter(d => d.type === tab);
   if (avail.size) recipeList = [...recipeList].sort((a,b) => (canMake(b) - canMake(a)));
@@ -41972,7 +42026,9 @@ function BarScreen({ go, deepLink }) {
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
       {ReactDOM.createPortal(<div style={{ position:'fixed', top:0, left:0, right:0, height:'env(safe-area-inset-top)', background:T.surface, zIndex:56, pointerEvents:'none' }} />, document.body)}
       {form ? (
-        <DrinkForm init={form} profiles={profiles} onSave={saveDrink} onCancel={() => setForm(null)} />
+        <DrinkForm init={form} profiles={profiles} onSave={saveDrink} onCancel={() => setForm(null)}
+          allTags={allTags}
+          onDelete={form && form.id ? () => { deleteDrink(form.id); setForm(null); } : null} />
       ) : imgZoom ? (
         <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:'#0e0e18', overflow:'hidden' }}>
           <AppBar title="Fotó" onBack={() => setImgZoom(null)} bg="#0e0e18" />
@@ -42016,10 +42072,23 @@ function BarScreen({ go, deepLink }) {
                   <img src={d.image} style={{ width:'100%', objectFit:'cover', maxHeight:200, display:'block' }} />
                 </div>
               )}
-              {(d.byId || d.by) ? (() => { const bp = profOf(d.byId) || (d.by ? { name: d.by } : null); return (
+              {/* „Keverte" sor — a jobb szelen a kosar-ikon. A hozzavalok
+                  kosarba tetele korabban egy teljes szelessegu gomb volt a lap
+                  kozepen; ikonkent ugyanott van, de nem szakitja ketté a lapot. */}
+              {(d.byId || d.by || (d.ing && d.ing.length)) ? (() => { const bp = profOf(d.byId) || (d.by ? { name: d.by } : null); return (
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:6 }}>
-                  <Avatar pr={bp} size={20} />
-                  <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12.5, color:T.inkSoft }}>Keverte: {(bp && bp.name) || ''}</span>
+                  {bp && <Avatar pr={bp} size={20} />}
+                  {bp && <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12.5, color:T.inkSoft }}>Keverte: {bp.name || ''}</span>}
+                  <div style={{ flex:1 }} />
+                  {(d.ing && d.ing.length) ? (
+                    <button onClick={() => addDrinkToCart(d, adag / Math.max(1, d.serv || 1))}
+                      aria-label="Hozzávalók a kosárba"
+                      style={{ flexShrink:0, width:36, height:36, borderRadius:12, border:'none', cursor:'pointer',
+                               background: addedId === d.id ? T.mint : T.surfaceMuted,
+                               display:'grid', placeItems:'center' }}>
+                      <BohIcon name="cart" size={17} />
+                    </button>
+                  ) : null}
                 </div>
               ); })() : null}
               {d.note ? <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, marginTop:3 }}>📝 {d.note}</div> : null}
@@ -42047,9 +42116,6 @@ function BarScreen({ go, deepLink }) {
                 </div>
                 );
               })() : (d.step ? <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkMute, marginTop:10, lineHeight:1.45 }}>{d.step}</div> : null)}
-              {(d.ing && d.ing.length) ? (
-                <button onClick={() => addDrinkToCart(d, adag / Math.max(1, d.serv || 1))} style={{ width:'100%', marginTop:10, padding:'12px 0', borderRadius:12, border:'none', background: addedId === d.id ? T.mint : T.surfaceMuted, color: addedId === d.id ? onInk() : T.ink, fontFamily:T.font, fontWeight:800, fontSize:13.5, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:7 }}>{addedId === d.id ? 'Hozzávalók a kosárban' : <><BohIcon name="cart" size={15} /> Hozzávalók a kosárba</>}</button>
-              ) : null}
               <div ref={ratingsCardRef} style={{ background:T.surface, borderRadius:14, padding:'12px 13px', boxShadow:T.shadow, marginTop:10, outline: pickHint ? `2.5px solid ${T.coral}` : '2.5px solid transparent', outlineOffset:2, transition:'outline-color .25s' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
                   <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em' }}>Értékelések</span>
@@ -42069,36 +42135,35 @@ function BarScreen({ go, deepLink }) {
                     ); })}
                   </div>
                 )}
-                {rater && !pickingRater ? (
+                {/* A sajat ertekeles bekerese v10.316 ota kulon lapon van (a
+                    lenti fix „Értékelés" gomb nyitja). Itt csak az osszegzes
+                    all — a kartya igy nem no meg a profil-valasztoval. */}
+                {my > 0 && (
                   <div style={{ display:'flex', alignItems:'center', gap:8, paddingTop:9, borderTop:`1px solid ${T.inkMute}1f` }}>
                     <Avatar pr={rp} size={24} />
-                    <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12.5, color:T.ink }}>Te{rp ? ' (' + rp.name + ')' : ''}</span>
+                    <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12.5, color:T.ink }}>A te értékelésed</span>
                     <div style={{ flex:1 }} />
-                    <Stars value={my} size={21} onPick={s => rate(d.id, s)} />
-                    <button onClick={() => setPickingRater(true)} style={{ border:'none', background:'transparent', color:T.inkMute, fontFamily:T.font, fontWeight:700, fontSize:11, cursor:'pointer', textDecoration:'underline', padding:0, marginLeft:2 }}>váltás</button>
-                  </div>
-                ) : (
-                  <div style={{ paddingTop:9, borderTop:`1px solid ${T.inkMute}1f` }}>
-                    <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.inkSoft, marginBottom:7 }}>Ki vagy? Válaszd ki magad az értékeléshez:</div>
-                    <div style={{ display:'flex', gap:8, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
-                      {profiles.map(pr => (
-                        <button key={pr.id} onClick={() => setRaterPersist(pr.id)} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3, border:'none', background:'transparent', cursor:'pointer', flexShrink:0, padding:0 }}>
-                          <Avatar pr={pr} size={38} />
-                          <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.inkSoft, maxWidth:50, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pr.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                    {profiles.length === 0 && <div style={{ fontFamily:T.font, fontSize:11.5, color:T.inkMute }}>Nincs profil — hozz létre egyet a Statisztika oldalon.</div>}
+                    <Stars value={my} size={18} />
                   </div>
                 )}
               </div>
-              {d.custom && (
-                <div style={{ display:'flex', gap:10, marginTop:12 }}>
-                  <button onClick={() => setForm(d)} style={{ flex:1, padding:'11px 0', borderRadius:12, border:'none', background:T.surfaceMuted, color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer' }}>Szerkesztés</button>
-                  <button onClick={() => { if (confirmDel) deleteDrink(d.id); else setConfirmDel(true); }} style={{ flex:1, padding:'11px 0', borderRadius:12, border:'none', background: confirmDel ? T.coral : T.coralSoft, color: confirmDel ? '#fff' : T.coral, fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer' }}>{confirmDel ? (d.dnr ? 'Biztos? Visszaáll az eredeti!' : 'Biztos? Végleg törli!') : (d.dnr ? 'Visszaállítás' : 'Törlés')}</button>
-                </div>
-              )}
             </div>
+            {/* FIX also sav: Szerkesztes + Ertekeles. A Torles innen kikerult —
+                a szerkeszto lap aljan van, megerositessel. */}
+            {ReactDOM.createPortal(
+              <div style={{ position:'fixed', left:0, right:0, bottom:'calc(-1 * env(safe-area-inset-bottom) - 80px)', zIndex:70,
+                            background:T.surface, boxShadow:'0 -4px 18px rgba(20,30,50,0.08)',
+                            borderTopLeftRadius:20, borderTopRightRadius:20,
+                            padding:'10px 16px calc(env(safe-area-inset-bottom) + 108px)', boxSizing:'border-box' }}>
+                <div style={{ display:'flex', gap:10, maxWidth:680, width:'100%', margin:'0 auto' }}>
+                  {d.custom && (
+                    <button onClick={() => setForm(d)} style={{ flex:1, padding:'15px 0', borderRadius:16, border:'none', background:T.surfaceMuted, color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:14.5, cursor:'pointer' }}>Szerkesztés</button>
+                  )}
+                  <button onClick={() => setRatingFor(d.id)} style={{ flex:2, padding:'15px 0', borderRadius:16, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer', boxShadow:`0 4px 14px ${T.mint}55` }}>
+                    {my > 0 ? 'Értékelés módosítása' : 'Értékelés'}
+                  </button>
+                </div>
+              </div>, document.body)}
           </div>
         );
       })() : cartOpen ? (
@@ -42142,11 +42207,10 @@ function BarScreen({ go, deepLink }) {
       ) : (<React.Fragment>
       <AppBar title={view === 'recipes' ? 'Receptek' : (deepLink ? 'DNR Pub' : 'Pub')} onBack={deepLink && view !== 'recipes' ? null : () => { if (view === 'recipes') setView('own'); else go('home'); }} right={cartBtn} />
       {view === 'own' && (
-        <PullToRefresh onRefresh={refreshOwn} contentStyle={{ padding:'14px 16px max(40px, calc(env(safe-area-inset-bottom) + 24px))', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
-          <div style={{ display:'flex', gap:10, marginBottom:16 }}>
-            <button onClick={() => setForm({})} style={{ flex:1, padding:'13px 0', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14.5, cursor:'pointer', boxShadow:`0 4px 14px ${T.mint}44` }}>+ Új keverés</button>
-            <button onClick={() => setView('recipes')} style={{ padding:'13px 16px', borderRadius:14, border:'none', background:T.surface, color:T.ink, fontFamily:T.font, fontWeight:800, fontSize:13.5, cursor:'pointer', boxShadow:T.shadow, display:'flex', alignItems:'center', gap:6 }}><BohIcon name="book" size={16} /> Receptek</button>
-          </div>
+        <React.Fragment>
+        <PullToRefresh onRefresh={refreshOwn} contentStyle={{ padding:'14px 16px calc(env(safe-area-inset-bottom) + 104px)', maxWidth:680, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
+          {/* A ket gomb v10.316 ota a kepernyo ALJAN all, fix pozicioban —
+              lasd a lenti portalt. Itt csak a lista cime marad. */}
           <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:2 }}><div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink }}>Mi kevertük</div><BohIcon name="cocktail" size={14} /></div>
           <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginBottom:10 }}>A DNR-eken készült keverések — koppints egy italra a részletekhez és az értékeléshez.</div>
           <div style={{ display:'flex', gap:7, marginBottom:12 }}>
@@ -42154,6 +42218,25 @@ function BarScreen({ go, deepLink }) {
               <button key={k} onClick={() => setOwnFilter(k)} style={{ padding:'7px 13px', borderRadius:999, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:12.5, background: on ? T.mint : T.surface, color: on ? onInk() : T.ink, boxShadow: on ? `0 3px 0 ${T.mintDeep||T.mint}66, 0 6px 14px ${T.mint}33` : T.shadow, display:'inline-flex', alignItems:'center', gap:5 }}>{ic && <BohIcon name={ic} size={12} />}{l}</button>
             ); })}
           </div>
+          {/* Cimke-szuro. Csak akkor jelenik meg, ha van egyaltalan cimke —
+              ures sor helypazarlas volna. Tobb cimke egyszerre is valaszthato:
+              olyankor MINDEGYIKNEK szerepelnie kell az italon. */}
+          {allTags.length > 0 && (
+            <div style={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:6, marginBottom:12 }}>
+              <BohIcon name="search" size={13} />
+              {allTags.map(tg => { const on = tagFilter.has(tg); return (
+                <button key={tg} onClick={() => setTagFilter(s => { const n2 = new Set(s); if (n2.has(tg)) n2.delete(tg); else n2.add(tg); return n2; })}
+                  style={{ padding:'5px 11px', borderRadius:999, cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:12,
+                           border: on ? 'none' : `1.5px solid ${T.inkMute}33`,
+                           background: on ? T.mint : 'transparent', color: on ? onInk() : T.inkSoft }}>{tg}</button>
+              ); })}
+              {tagFilter.size > 0 && (
+                <button onClick={() => setTagFilter(new Set())}
+                  style={{ padding:'5px 10px', borderRadius:999, border:'none', background:'transparent', color:T.inkMute,
+                           fontFamily:T.font, fontWeight:700, fontSize:12, cursor:'pointer', textDecoration:'underline' }}>szűrő törlése</button>
+              )}
+            </div>
+          )}
           {own === null ? (
             <SkeletonList count={4} />
           ) : ownSorted.length === 0 ? (
@@ -42171,6 +42254,27 @@ function BarScreen({ go, deepLink }) {
           )}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:5, fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:20, lineHeight:1.5 }}>Idd felelősséggel! <BohIcon name="cocktail" size={13} /></div>
         </PullToRefresh>
+        {/* FIX also gombsor. Ugyanaz a portal-minta, mint a DrinkForm lableceen:
+            a document.body-ba rendereljuk, hogy a VALODI fizikai aljhoz igazodjon
+            — a 100dvh es az animalt wrapper kulonben iOS PWA-ban elcsusztatna.
+            A „Receptek" szandekosan sokkal kisebb: az elsodleges akcio az uj
+            keveres felvetele, a receptek csak egy atkapcsolo. */}
+        {ReactDOM.createPortal(
+          <div style={{ position:'fixed', left:0, right:0, bottom:'calc(-1 * env(safe-area-inset-bottom) - 80px)', zIndex:70,
+                        background:T.surface, boxShadow:'0 -4px 18px rgba(20,30,50,0.08)',
+                        borderTopLeftRadius:20, borderTopRightRadius:20,
+                        padding:'10px 16px calc(env(safe-area-inset-bottom) + 108px)', boxSizing:'border-box' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, maxWidth:680, width:'100%', margin:'0 auto' }}>
+              <button onClick={() => setForm({})} style={{ flex:1, padding:'15px 0', borderRadius:16, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer', boxShadow:`0 4px 14px ${T.mint}55` }}>+ Új keverés</button>
+              <button onClick={() => setView('recipes')} aria-label="Receptek"
+                style={{ flexShrink:0, padding:'9px 12px', borderRadius:12, border:'none', background:T.surfaceMuted, color:T.inkSoft,
+                         fontFamily:T.font, fontWeight:800, fontSize:11, cursor:'pointer',
+                         display:'flex', flexDirection:'column', alignItems:'center', gap:2, lineHeight:1 }}>
+                <BohIcon name="book" size={15} />Receptek
+              </button>
+            </div>
+          </div>, document.body)}
+        </React.Fragment>
       )}
       {view === 'recipes' && (
         <React.Fragment>
@@ -42200,6 +42304,52 @@ function BarScreen({ go, deepLink }) {
         </React.Fragment>
       )}
       </React.Fragment>)}
+
+      {/* ÉRTÉKELŐ LAP (v10.316). Korabban a csillagok es a „ki vagy?" profil-
+          valaszto a reszletek kartyajaba volt beagyazva: a kartya minden
+          megnyitaskor mas magassagu volt, es a valaszto lejjebb tolta az egesz
+          lapot. Most egy gomb nyitja, es egy helyen kerdezi meg mindkettot. */}
+      {ratingFor && (() => {
+        const rd = ownList.find(x => x.id === ratingFor) || DRINKS.find(x => x.id === ratingFor);
+        if (!rd) return null;
+        const mine = rater ? ((ratings[rd.id] || {})[rater] || 0) : 0;
+        return (
+          <SheetOverlay title="Értékelés" onClose={() => setRatingFor(null)}>
+            <div style={{ padding:'0 18px 18px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:9, marginBottom:14 }}>
+                <span style={{ fontSize:22, lineHeight:1 }}>{rd.emoji || '🍹'}</span>
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink }}>{rd.name}</span>
+              </div>
+
+              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>Ki vagy?</div>
+              {profiles.length === 0 ? (
+                <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkMute, marginBottom:14 }}>Nincs profil — hozz létre egyet a Statisztika oldalon.</div>
+              ) : (
+                <div style={{ display:'flex', gap:10, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:4, marginBottom:16 }}>
+                  {profiles.map(pr => { const sel = rater === pr.id; return (
+                    <button key={pr.id} onClick={() => setRaterPersist(pr.id)}
+                      style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, border:'none', cursor:'pointer', flexShrink:0,
+                               background: sel ? T.mintSoft : 'transparent', borderRadius:14, padding:'8px 10px' }}>
+                      <Avatar pr={pr} size={42} />
+                      <span style={{ fontFamily:T.font, fontWeight: sel ? 900 : 700, fontSize:10.5, color: sel ? (T.mintDeep||T.mint) : T.inkSoft, maxWidth:54, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pr.name}</span>
+                    </button>
+                  ); })}
+                </div>
+              )}
+
+              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Hány csillagot ér?</div>
+              {/* A csillagok csak akkor elok, ha mar tudjuk, KI ertekel —
+                  kulonben a pontszam nem tudna, kihez tartozik. */}
+              <div style={{ display:'flex', justifyContent:'center', padding:'6px 0 4px', opacity: rater ? 1 : 0.35, pointerEvents: rater ? 'auto' : 'none' }}>
+                <Stars value={mine} size={38} onPick={st => { rate(rd.id, st); setRatingFor(null); }} />
+              </div>
+              {!rater && profiles.length > 0 && (
+                <div style={{ textAlign:'center', fontFamily:T.font, fontSize:12, color:T.inkMute, marginTop:8 }}>Előbb válaszd ki, ki vagy.</div>
+              )}
+            </div>
+          </SheetOverlay>
+        );
+      })()}
     </div>
   );
 }

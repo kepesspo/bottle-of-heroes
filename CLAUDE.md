@@ -573,3 +573,40 @@ most `button[aria-label="Egy korttyal több"]`-re, mint a többi korty-teszt.
 
 Teszt: `stake_test.js` (Ritmus három beállítással), `quiz_test.js`,
 `drinkrow_unified_test.js`.
+
+## DNR Pub: fix gombsávok, címkék, értékelő lap (v10.316)
+
+**A két gombsáv PORTÁLBA megy.** A lista alján az „Új keverés" + „Receptek", a
+részleteknél a „Szerkesztés" + „Értékelés" — mindkettő `ReactDOM.createPortal`
+a `document.body`-ba, ugyanazzal a `bottom:'calc(-1 * env(safe-area-inset-bottom)
+- 80px)'` számítással, mint a `DrinkForm` lábléce. Ez nem stílus: a `100dvh` és
+az animált wrapper iOS PWA-ban elcsúsztatná a sávot a valódi képernyő-aljtól
+(lásd `docs/safe-area.md`). A görgő terület alsó paddingja ezért
+`calc(env(safe-area-inset-bottom) + 104px)` — enélkül az utolsó kártyát takarná.
+
+A **„Receptek" szándékosan kicsi** (ikon + 11 px felirat): az elsődleges akció az
+új keverés felvétele, a receptek csak egy átkapcsoló. Két egyforma súlyú gomb
+korábban azt sugallta, hogy egyenrangúak.
+
+**Fotó helyett címke.** A fotó-feltöltő kikerült az űrlapból, de az `image`
+mezőt a mentés **visszaadja** — enélkül a korábban feltöltött képek az első
+szerkesztéskor csendben eltűnnének. A címkék **kisbetűsítve és trimmelve**
+tárolódnak (`addTag`), különben az „Édes" és az „édes" két külön címke lenne, és
+a szűrő egyiket sem találná meg. A már használt címkék javaslatként megjelennek
+(`tagSuggest`) — gépelés helyett egy koppintás, így nem szóródik szét a névtér.
+
+**A tag-szűrő a típus-szűrő UTÁN fut**, tehát a kettő kombinálható („Shot" +
+„édes"). Több kijelölt címkénél **MINDEGYIKNEK** szerepelnie kell az italon.
+Az `allTags` egy forrás: a szűrő és az űrlap javaslatai ugyanabból dolgoznak.
+
+**Az értékelés külön lapra került** (`ratingFor` → `SheetOverlay`). Korábban a
+csillagok és a „ki vagy?" profil-választó a részletek kártyájába volt ágyazva:
+a kártya minden megnyitáskor más magasságú volt, és a választó lejjebb tolta az
+egész lapot. A lapon a csillagok csak akkor élők, ha már ki van választva a
+értékelő — különben a pontszám nem tudná, kihez tartozik.
+
+**A Törlés a szerkesztő lap aljára költözött**, megerősítéssel. A részleteknél
+ugyanakkora súlyt kapott, mint a Szerkesztés, holott visszavonhatatlan.
+
+**A kosárba tevés ikon lett**, a „Keverte:" sor jobb szélén. Teljes szélességű
+gombként kettévágta a lapot a hozzávalók és az értékelések között.
