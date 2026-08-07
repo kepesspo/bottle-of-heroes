@@ -641,3 +641,46 @@ ott minden újrarenderelés újramountolna — lásd az Időpárbaj avatar-hibá
 
 A „Ki vagy?" képernyő a többi választóval egy nyelvet beszél: kör-ikon jelvény,
 avataros sorok, chevron — nem tömör színes névgombok.
+
+## Nyolc javítás: bannerek, rácsok, csapdák, PWA-kapcsolók (v10.318)
+
+**⚠️ A banner ELŐBB jön, mint az advance.** A „Ki vagyok én" és az „5 dolog"
+fordítva hívta: `onAdvance` → `onResult`. Az advance `gameIdx`-et válthat, a
+`useEffect([gameIdx])` pedig `setGameResult(null)`-t hív — a banner így
+kitörlődhetett, mielőtt megjelent volna. Új játéknál is EZ a sorrend:
+**`onResult`, aztán `onAdvance`.** Mindkettő `winners`/`losers` tömböt is kap,
+különben a banner csak a nevet tudja, az arcot nem.
+
+**Szerencsekerék — a címke nem csúszhat a hub alá.** A `labelR` eddig fix arány
+volt (`rad × 0.45` két játékosnál), a középső „PÖRGESS!" gomb viszont `46·k`
+sugarú: két főnél a név pont alá került. Mostantól a `labelR` alsó határa
+`hubR + címkeblokk/2 + 6` — ha a hub vagy az avatar mérete változik, ez
+automatikusan követi.
+
+**⚠️ Útvesztő — egy TÍPUSBÓL TÖBB is lerakható.** A kód önmagával került
+ellentmondásba: a `TRAPS` a mezők ötöde (6×6-on 7, 7×7-en 10), a `canPlace`
+viszont típusonként egyet engedett, és csak öt típus van. A lerakás így a
+nagyobb pályákon SOHA nem telt be — a számláló „5 / 10"-en állt, a „Kész" gomb
+pedig hazudott. A típusonkénti korlát került ki, nem a képlet: a `gamecfg_test`
+azt őrzi, hogy a csapdaszám **kövesse a pályát**. Ha valaha visszajönne a
+típusonkénti korlát, a `TRAPS`-ot is le kell sapkázni a típusok számára.
+
+**Memória — a rács oszlopszáma a LAPOKBÓL jön**, nem a helyből. Az `auto-fill`
+más párszámnál csonka utolsó sort hagyott. A `memCols` a négyzetgyökhöz
+legközelebbi OSZTÓ: 8 lap → 4×2 · 12 → 4×3 · 16 → 4×4 · 20 → 5×4 · 24 → 6×4.
+A kör végén **végeredmény-tábla** mutatja, ki hány párt talált — eddig csak a
+győztes és a vesztes látszott, a köztük levők teljesítménye sehol.
+
+**Kvíz — a vesztes is bekerül a bannerbe.** A kiosztás után `onResult` csak a
+nyertest vitte (`drinks:0`, `losers` nélkül). Most `winners`/`losers` megy, és a
+korty is: ha mindenki ugyanannyit kapott, egy szám áll a banneren, ha nem, a
+`loseNote` sorolja fel nevenként — ugyanaz a szabály, mint a `givePenalty`-nél.
+
+**PWA appok külön kapcsolhatók.** A `config/homeConfig.dnrApps` térkép
+appokra bontva (`{ bar:false }`), a `dnrAppEnabled()` egy forrásból dönt.
+A hiányzó mező **BE**-t jelent — egy régi config különben csendben mindent
+elrejtene. A „TOVÁBBI DNR" sor akkor is elmarad, ha a mester-kapcsoló BE van,
+de egyetlen app sincs engedélyezve (üres lapra vinne).
+
+**Kártyacsata** — a kör-sor összege EGY lapnál is kint van (eddig csak 1-nél
+többnél), és a `SetupPickSheet` sorai megkapták a 18 px vízszintes paddingot.

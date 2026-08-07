@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.317';
+const APP_VERSION = 'v10.318';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -40006,6 +40006,27 @@ function AdminHomeToggles() {
         </div>
       )}
 
+      {/* Appok KULON-KULON. A fenti kapcsolo az egesz sort viszi; ezek egyenkent
+          rejtik el a listabol. Alapertelmezes: mind BE (a hianyzo mezo nem
+          jelenthet kikapcsolast, kulonben egy regi config mindent elrejtene). */}
+      {on && (
+        <div style={{ marginTop:14 }}>
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>Melyik app látszódjon</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+            {DNR_APPS.map(app => {
+              const appOn = dnrAppEnabled(cfg, app.screen);
+              return (
+                <div key={app.screen} style={{ display:'flex', alignItems:'center', gap:11, padding:'7px 0' }}>
+                  <img src={app.icon} style={{ width:30, height:30, borderRadius:9, flexShrink:0 }} />
+                  <span style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:700, fontSize:13.5, color:T.ink }}>{app.name}</span>
+                  <Toggle on={appOn} onChange={() => write({ dnrApps: Object.assign({}, (cfg && cfg.dnrApps) || {}, { [app.screen]: !appOn }) })} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div style={{ height:1, background:`${T.inkMute}22`, margin:'14px 0' }} />
 
       <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -43286,6 +43307,13 @@ function SeasonClosingSheet({ season, standings, nextSeason, onClose, onOpenLeag
 }
 
 // A DNR csalad appjai — uj app felvetele ide egy sor, a fooldalhoz nem kell nyulni
+// Latszik-e egy adott DNR app a fooldal listajaban. A hianyzo mezo BE-t jelent:
+// egy regi config kulonben csendben elrejtene mindet.
+function dnrAppEnabled(cfg, screen) {
+  const m = cfg && cfg.dnrApps;
+  return !m || m[screen] !== false;
+}
+
 const DNR_APPS = [
   { screen:'log',     name:'DNR Events', icon:'assets/dnr_events_icon.png', sub: c => c.ev },
   { screen:'jukebox', name:'DNR BOX',    icon:'assets/dnr_box_icon.png',    sub: c => c.box },
@@ -43375,7 +43403,10 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
       () => setHomeCfgLoaded(true));
     return () => { try { un(); } catch(e) {} };
   }, []);
-  const dnrAppsOn = !homeCfg || homeCfg.dnrAppsEnabled !== false;
+  // A sor akkor is elmarad, ha a mester-kapcsolo BE van, de EGYETLEN app sincs
+  // engedelyezve — kulonben egy ures lapra vinne a felhivas.
+  const dnrAppsOn = (!homeCfg || homeCfg.dnrAppsEnabled !== false)
+    && DNR_APPS.some(a2 => dnrAppEnabled(homeCfg, a2.screen));
   // 'always' (alap) = minden app-inditasnal · 'once' = keszulekenkent egyszer · 'off'
   const closeMode = (homeCfg && homeCfg.seasonCloseMode) || 'always';
 
@@ -43470,7 +43501,7 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
       {showMoreApps && (
         <SheetOverlay onClose={() => setShowMoreApps(false)} title="DNR appok">
           <div style={{ padding:'0 16px 24px', display:'flex', flexDirection:'column', gap:10 }}>
-            {DNR_APPS.map(app => (
+            {DNR_APPS.filter(app => dnrAppEnabled(homeCfg, app.screen)).map(app => (
               <button key={app.screen} onClick={() => { setShowMoreApps(false); go(app.screen); }}
                 style={{ display:'flex', alignItems:'center', gap:13, width:'100%', boxSizing:'border-box', background:T.surface, border:'none', borderRadius:16, padding:'12px 14px', cursor:'pointer', textAlign:'left', boxShadow:T.shadowPill, WebkitTapHighlightColor:'transparent' }}>
                 <img src={app.icon} style={{ width:44, height:44, borderRadius:13, flexShrink:0 }} />
@@ -45468,7 +45499,10 @@ function SetupPickCard({ icon, label, value, onClick }) {
 function SetupPickSheet({ title, options, current, onPick, onClose }) {
   return (
     <SheetOverlay title={title} onClose={onClose}>
-      <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'2px 0 8px' }}>
+      {/* Vizszintes padding: enelkul a sorok a lap szelétől szélig futottak, es
+          szelesebbnek latszottak, mint a lap tobbi tartalma. 18 px — ugyanaz,
+          amit a tobbi lap (pl. DifficultyInfoSheet, ertekelo lap) hasznal. */}
+      <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'2px 18px 18px' }}>
         {options.map(o => {
           const on = o.id === current;
           return (
@@ -48022,8 +48056,12 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult, difficulty }) {
     const pm = {};
     if (!correct && challenger) dm[challenger.id] = 1;
     if (correct && challenger) pm[challenger.id] = 1;
+    // Eloszor a BANNER, utana az advance — ez a sorrend minden mas jatekban.
+    // Forditva a `gameIdx` valtasa (`useEffect([gameIdx])` → setGameResult(null))
+    // kitorolhette a bannert, mielott egyaltalan megjelent volna.
+    onResult && onResult({ correct, playerName: challenger ? challenger.name : null, drinks: correct ? 0 : 1,
+      winners: correct && challenger ? [challenger] : [], losers: !correct && challenger ? [challenger] : [] });
     onAdvance && onAdvance(dm, pm);
-    onResult && onResult({ correct, playerName: challenger ? challenger.name : null, drinks: correct ? 0 : 1 });
   };
 
   // Auto-win when all 5 checked
@@ -51427,8 +51465,12 @@ function KivagyokGame({ gameIdx, challenger, onAdvance, onResult }) {
     const pm = {};
     if (!correct && challenger) dm[challenger.id] = 1;
     if (correct && challenger) pm[challenger.id] = 1;
+    // Eloszor a BANNER, utana az advance — ez a sorrend minden mas jatekban.
+    // Forditva a `gameIdx` valtasa (`useEffect([gameIdx])` → setGameResult(null))
+    // kitorolhette a bannert, mielott egyaltalan megjelent volna.
+    onResult && onResult({ correct, playerName: challenger ? challenger.name : null, drinks: correct ? 0 : 1,
+      winners: correct && challenger ? [challenger] : [], losers: !correct && challenger ? [challenger] : [] });
     onAdvance && onAdvance(dm, pm);
-    onResult && onResult({ correct, playerName: challenger ? challenger.name : null, drinks: correct ? 0 : 1 });
   };
 
   const initials = celeb.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
@@ -52307,7 +52349,16 @@ function SzerencsekerékGame({ gameIdx, players, onAdvance, onResult }) {
   // Egy jatekosnal nincs cikkely-hatar, ott teli kort rajzolunk.
   const nameSize = (n <= 4 ? 13 : n <= 7 ? 11.5 : 10) * k;
   const avSize = Math.round((n <= 4 ? 42 : n <= 7 ? 34 : 26) * k);
-  const labelR = rad * (n <= 2 ? 0.45 : 0.62);
+  // A cimke (avatar + nev) SOHA ne csusszon a kozepso „PÖRGESS!" gomb ala.
+  // A gomb sugara 46·k; a cimke-blokk fuggolegesen kozepre ul a `labelR`-en,
+  // tehat a belso ele `labelR - blokkMagassag/2`. Ket jatekosnal a regi 0.45-os
+  // arany pont a gomb ala huzta a nevet — innen jott a „kitakarja a nevet".
+  const hubR = Math.round(46 * k);
+  const labelBlockH = avSize + 3 + Math.round(nameSize * 1.35);
+  const labelR = Math.min(
+    Math.max(rad * (n <= 2 ? 0.45 : 0.62), hubR + labelBlockH / 2 + 6),
+    Math.max(hubR + labelBlockH / 2 + 6, rad - labelBlockH / 2 - 4)
+  );
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, width:'100%' }}>
@@ -59046,7 +59097,17 @@ function MemoriaGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
     return deck;
   }, [gameIdx]);
 
+  // A negyzetgyokhoz legkozelebbi OSZTO — igy a racs sorai mindig tele vannak.
+  // 8 lap → 4×2 · 12 → 4×3 · 16 → 4×4 · 20 → 5×4 · 24 → 6×4
+  const memCols = React.useMemo(() => {
+    const t = PAIR_COUNT * 2;
+    let c2 = Math.ceil(Math.sqrt(t));
+    while (c2 < t && t % c2 !== 0) c2++;
+    return Math.max(2, c2);
+  }, [PAIR_COUNT]);
+
   const n = Math.max(players.length, 1);
+  const [finalScores, setFinalScores] = React.useState(null);   // vegeredmeny-tabla
   const [flipped, setFlipped] = React.useState([]);
   const [matched, setMatched] = React.useState(new Set());
   const [turn, setTurn] = React.useState(gameIdx % n);
@@ -59094,8 +59155,17 @@ function MemoriaGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
             const pointMap = {};
             losers.forEach(p  => { drinkMap[p.id] = 1; });
             winners.forEach(p => { pointMap[p.id] = 1; });
+            // A VEGEREDMENY kiirasa: ki hany part talalt. A jatek eddig csak a
+            // gyoztest es a vesztest mondta meg — a kozottuk levok teljesitmenye
+            // sehol nem latszott, pedig vegig azt szamoltak.
+            setFinalScores(newScores);
+            const sorrend = [...players]
+              .sort((x, y) => (newScores[y.id] || 0) - (newScores[x.id] || 0))
+              .map(pp => `${pp.name} ${newScores[pp.id] || 0}`)
+              .join(' · ');
             setTimeout(() => {
-              onResult && onResult({ winners, losers, drinks: losers.length?1:0, winNote:'+1 pont' });
+              onResult && onResult({ winners, losers, drinks: losers.length?1:0, winNote:'+1 pont',
+                subtitle: sorrend });
               onAdvance && onAdvance(drinkMap, pointMap);
             }, 600);
           }
@@ -59126,7 +59196,11 @@ function MemoriaGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
       </div>
 
       {/* Card grid */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(68px, 1fr))', gap:7, width:'100%', maxWidth:520, margin:'0 auto' }}>
+      {/* A racs oszlopszama a LAPOK szamabol jon, nem a rendelkezesre allo
+          helybol. Az `auto-fill` mas parszamnal csonka utolso sort hagyott —
+          8 parnal 4×4 negyzet volt, 6-nal viszont szethullott. A `memCols`
+          a negyzetgyokhoz legkozelebbi OSZTO, tehat minden sor tele van. */}
+      <div style={{ display:'grid', gridTemplateColumns:`repeat(${memCols}, 1fr)`, gap:7, width:'100%', maxWidth: Math.min(520, memCols * 78), margin:'0 auto' }}>
         {cards.map((emoji, i) => {
           const isMatched = matched.has(i);
           const isFaceUp  = isMatched || flipped.includes(i);
@@ -59148,6 +59222,25 @@ function MemoriaGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
           );
         })}
       </div>
+
+      {/* VEGEREDMENY — ki hany part talalt. Rendezve, a gyoztes elol. */}
+      {finalScores && (
+        <div style={{ width:'100%', maxWidth:520, margin:'0 auto', background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow, display:'flex', flexDirection:'column', gap:7 }}>
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em' }}>Végeredmény</div>
+          {[...players].sort((x,y) => (finalScores[y.id]||0) - (finalScores[x.id]||0)).map(pp => {
+            const db = finalScores[pp.id] || 0;
+            const top = db > 0 && db === Math.max(...players.map(q => finalScores[q.id] || 0));
+            return (
+              <div key={pp.id} style={{ display:'flex', alignItems:'center', gap:9 }}>
+                <PlayerAvatar player={pp} size={26} />
+                <span style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight: top ? 900 : 700, fontSize:13.5, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pp.name}</span>
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color: top ? T.mint : T.inkSoft }}>{db}</span>
+                <span style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkMute }}>pár</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Match flash */}
       {matchFlash && (() => {
@@ -60155,7 +60248,10 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
                   <span style={{fontFamily:T.font,fontSize:12.5,color:CB.inkMute,pointerEvents:'none'}}>Húzz ide</span>
                 )}
               </div>
-              {cards.length>1 && <div style={{fontFamily:T.font,fontWeight:800,fontSize:13,color:pColor,minWidth:20,textAlign:'right',pointerEvents:'none'}}>{cards.reduce((a,b)=>a+b,0)}</div>}
+              {/* Az osszeg EGY lapnal is kint van. Korabban csak 1-nel tobbnel
+                  latszott, es igy a legtobb soron semmi nem allt — pedig a
+                  kor tetje pont ez a szam. */}
+              {cards.length>0 && <div style={{fontFamily:T.font,fontWeight:800,fontSize:13,color:pColor,minWidth:20,textAlign:'right',pointerEvents:'none'}}>{cards.reduce((a,b)=>a+b,0)}</div>}
             </div>
           );
         })}
@@ -60685,8 +60781,6 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
 
 function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onResult, onSetHideFooter, gameMeta }) {
   const GRID = gameMeta?.utvesztoConfig?.grid || 5;
-  // A csapdaszam kovesse a palyat: a mezok otode, de legalabb 3.
-  const TRAPS = Math.max(3, Math.round(GRID * GRID / 5));
   const START_IDX = 0;
   const END_IDX = GRID * GRID - 1;
 
@@ -60697,6 +60791,14 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
     { id:'orv',  emoji:'🌀', name:'Örvény',    desc:'2 mezővel visszadobja' },
     { id:'tel',  emoji:'🔀', name:'Teleport',  desc:'Random pozícióra ugrik' },
   ];
+
+  // A csapdaszam kovesse a palyat: a mezok otode, de legalabb 3.
+  // ⚠️ Ezert egy TIPUSBOL TOBB is lerakhato. Amig tipusonkent csak egyet
+  // engedtunk, a nagyobb palyakon a lerakas SOHA nem telt be: 6×6 7-et,
+  // 7×7 10-et kert, de csak 5 tipus van — a szamlalo vegig „5 / 10"-en allt,
+  // es a „Kész" gomb hazudott. Ha valaha visszajonne a tipusonkenti korlat,
+  // a TRAPS-ot is le kell sapkazni a tipusok szamara.
+  const TRAPS = Math.max(3, Math.round(GRID * GRID / 5));
 
   const p1 = challenger;
   const p2 = opponent || (players||[]).find(p => p.id !== challenger?.id) || (players||[])[0];
@@ -60755,8 +60857,7 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
     const alreadyHas = board[idx] !== null;
     const total = board.filter(Boolean).length;
     if (!alreadyHas && total >= TRAPS) return;
-    // only 1 of each type
-    if (board.includes(selTrap) && !alreadyHas) return;
+    // Egy tipusbol tobb is lerakhato — csak az OSSZ darabszam a plafon.
     const nb = [...board]; nb[idx] = selTrap; setBoard(nb);
   };
 
@@ -60920,7 +61021,7 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
   // ── SETUP 1 (P1 places traps) ──
   if (phase === 'setup1') {
     const placed = board1.filter(Boolean).length;
-    const canPlace = (id) => !board1.includes(id) && placed < TRAPS;
+    const canPlace = (id) => placed < TRAPS;
     return (
       <div style={wrapStyle}>
         <div style={{background:T.surface,borderRadius:14,padding:'10px 14px',boxShadow:T.shadow,display:'flex',alignItems:'center',gap:10}}>
@@ -61610,11 +61711,24 @@ function QuizGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHide
     const confirmGifts = () => {
       const drinkMap = {};
       Object.entries(gifts).forEach(([pid,n]) => { if(n>0) drinkMap[pid]=n; });
+      // A VESZTESEK is bekerulnek a bannerbe. Eddig csak a nyertes latszott
+      // (`drinks:0`, `losers` nelkul), a kortyot kapok pedig legfeljebb a
+      // felirat szovegeben — igy a banner nem mutatta, KI iszik.
+      const loserList = Object.entries(gifts).filter(([,n]) => n > 0)
+        .map(([pid]) => players.find(x => x.id === pid)).filter(Boolean);
+      const amounts = Object.values(gifts).filter(n => n > 0);
+      // Ha mindenki ugyanannyit kapott, van EGY igaz szam — azt irja ki a
+      // banner. Ha fejenkent mas, nincs ilyen szam, marad a nevenkenti sor.
+      const uniform = amounts.length > 0 && amounts.every(v => v === amounts[0]);
+      if (onResult) onResult({
+        winners: challenger ? [challenger] : [],
+        losers: loserList,
+        drinks: uniform ? amounts[0] : 0,
+        winNote: '+1 pont',
+        loseNote: uniform ? '' : Object.entries(gifts).filter(([,n]) => n > 0)
+          .map(([pid,n]) => { const q = players.find(x => x.id === pid); return `${q?.name || '?'} ${n}🍺`; }).join(', '),
+      });
       if (onAdvance) onAdvance(drinkMap, { [challenger?.id]: 1 });
-      const names = Object.entries(gifts).filter(([,n])=>n>0)
-        .map(([pid,n]) => { const p=players.find(x=>x.id===pid); return `${p?.name||'?'} iszik ${n} kortyt`; });
-      if (onResult) onResult({ correct: true, playerName: challenger?.name, drinks: 0,
-        subtitle: names.length > 0 ? `+1 pont · ${names.join(' · ')}` : `+1 pont · ${pName} kiosztotta a kortyokat` });
       setPhase('done');
     };
     const skipGifts = () => {
