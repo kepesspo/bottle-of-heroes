@@ -351,6 +351,10 @@
     @keyframes slideUp    { from{transform:translateY(100%)} to{transform:translateY(0)} }
     @keyframes alertPulse { 0%,100%{box-shadow:0 0 0 0 rgba(244,160,74,0)} 50%{box-shadow:0 0 0 6px rgba(244,160,74,0.35)} }
     @keyframes vinylSpin  { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+    /* Zene Felismeres — a hanghullam csikjai lejatszas kozben. Nem a zene
+       ritmusara mozog (a preview-hoz nincs analizer), csak eletet ad a savnak:
+       minden csik sajat keslesse kap, igy hullamzik, nem egyszerre pumpal. */
+    @keyframes wavePulse  { 0%,100%{transform:scaleY(0.42)} 50%{transform:scaleY(1)} }
     @keyframes lobbyFloatUp { 0%{transform:translateY(0) scale(0.85);opacity:0} 12%{transform:translateY(-14px) scale(1);opacity:1} 78%{opacity:1} 100%{transform:translateY(-360px) scale(1);opacity:0} }
     @keyframes cardFlipIn  { 0%{transform:rotateY(90deg);opacity:0} 100%{transform:rotateY(0deg);opacity:1} }
     @keyframes coin3DFlip {
@@ -35214,7 +35218,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.310';
+const APP_VERSION = 'v10.311';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -35574,7 +35578,7 @@ const TR = {
     clearGames: 'Törlés',
     randomGames: 'Véletlen',
     filterGames: 'Szűrő',
-    addPlayer: '. Játékos',
+    addPlayer: '. játékos',
     playerName: 'Játékos neve…',
     minPlayers: 'Minimum 2 fő szükséges',
     roundLabel: 'KÖR',
@@ -35656,8 +35660,8 @@ const TR = {
     addPlayersOnboard: 'Játékosok hozzáadása',
     chooseGamesOnboard: 'Játékok kiválasztása',
     splashSub: 'Betöltési animáció indításkor',
-    noPlayersTitle: 'Kik játszanak ma?',
-    noPlayersSub: 'Adj hozzá játékosokat',
+    noPlayersTitle: 'Még nincsenek játékosok',
+    noPlayersSub: 'Hívd meg a barátaidat és kezdődhet a játék!',
     continueToGames: 'Tovább a játékokhoz',
     go: 'Mehet',
     inOrder: 'Sorban',
@@ -36145,6 +36149,9 @@ const Icon = {
   star:     (c='currentColor') => <svg width="16" height="16" viewBox="0 0 24 24" fill={c}><path d="M12 2l2.9 6.9L22 10l-5.5 4.8L18.2 22 12 18l-6.2 4 1.7-7.2L2 10l7.1-1.1L12 2z"/></svg>,
   settings: (c='currentColor') => <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke={c} strokeWidth="2"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3h0a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8v0a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   menu:     (c='currentColor') => <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke={c} strokeWidth="2.5" strokeLinecap="round"/></svg>,
+  // „Ember + plusz" — a Jatekosok oldal korvonalas CTA-ja. Az Icon.user
+  // aranyaival rajzolva, csak balra tolva, hogy a plusz elferjen jobbra.
+  userPlus: (c='currentColor') => <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="10" cy="8" r="3.5" stroke={c} strokeWidth="2"/><path d="M3 20c1.4-3.5 3.8-5 7-5 1 0 1.9.15 2.7.44" stroke={c} strokeWidth="2" strokeLinecap="round"/><path d="M18 13v6M15 16h6" stroke={c} strokeWidth="2" strokeLinecap="round"/></svg>,
 };
 
 // ─── Shared UI Components ─────────────────────────────────────
@@ -43812,37 +43819,44 @@ function PlayersScreen({ players, setPlayers, go }) {
           </button>
         )}
         {players.length === 0 ? (
-          <div style={{ display:'flex', flexDirection:'column', gap:16, padding:'8px 0 4px' }}>
-            {/* Heading with faded 0 anchor */}
-            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:52, lineHeight:1, color:T.ink, opacity:0.1, flexShrink:0 }}>0</div>
-              <div style={{ minWidth:0 }}>
-                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink, marginBottom:2 }}>{t('noPlayersTitle')}</div>
-                <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft }}>{t('noPlayersSub')}</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:22, padding:'26px 0 4px' }}>
+            {/* Ures allapot fejlec — KOZEPRE igazitva, kor-ikon jelvennyel.
+                A regi valtozat egy nagy halvany „0"-hoz igazitotta balra a
+                szoveget; a jelveny ugyanazt a horgonyt adja, de a lap
+                tengelyeben, igy a harom szek-kartya alatta szimmetrikus. */}
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+              <div style={{ width:76, height:76, borderRadius:999, background:T.surface, display:'grid', placeItems:'center', boxShadow:T.shadowLift || T.shadow }}>
+                <div style={{ transform:'scale(1.5)', display:'grid', placeItems:'center' }}>{Icon.users(T.mint)}</div>
+              </div>
+              <div style={{ textAlign:'center' }}>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:21, color:T.ink, marginBottom:4 }}>{t('noPlayersTitle')}</div>
+                <div style={{ fontFamily:T.font, fontSize:13.5, color:T.inkSoft }}>{t('noPlayersSub')}</div>
               </div>
             </div>
-            {/* Seat placeholder grid — matches PlayerCard add-box */}
+            {/* Szek-helyorzok. A szaggatott kontur a KOR-on van, nem a lapon:
+                a lap tomor feher, mint minden mas kartya a kepernyon. */}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
               {[0,1,2].map(i => (
                 <button key={i} onClick={addPlayer} style={{
                   aspectRatio:'1/1.18', minHeight:120,
-                  border:`2.5px dashed ${T.mint}66`, borderRadius:16, background:T.surfaceMuted,
-                  boxShadow:'0 6px 16px rgba(26,42,74,0.07)',
-                  transform:`rotate(${[-0.8,0.8,-0.6][i]}deg)`,
+                  border:'none', borderRadius:20, background:T.surface,
+                  boxShadow:T.shadow,
                   display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-                  gap:8, cursor:'pointer', color:T.mint, padding:6,
-                  opacity: i===2 ? 0.5 : 1,
+                  gap:12, cursor:'pointer', color:T.mint, padding:6,
+                  opacity: i===2 ? 0.55 : 1,
                   WebkitTapHighlightColor:'transparent',
                 }}>
-                  <div style={{ width:46, height:46, borderRadius:999, background:T.mintSoft, border:`2px solid ${T.mint}`, display:'grid', placeItems:'center' }}>{Icon.plus(T.mint)}</div>
+                  <div style={{ width:46, height:46, borderRadius:999, background:'transparent', border:`2px dashed ${T.mint}88`, display:'grid', placeItems:'center' }}>{Icon.plus(T.mint)}</div>
                   <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.mintDeep||T.mint, textAlign:'center' }}>{i+1}{t('addPlayer')}</div>
                 </button>
               ))}
             </div>
-            {/* Primary CTA — emelt gomb, mint a home Játék */}
-            <button onClick={addPlayer} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, background:T.mint, borderRadius:18, padding:'16px 24px', boxShadow:`0 4px 0 ${T.mintDeep || T.mint}, 0 10px 26px ${T.mint}55`, border:'none', cursor:'pointer', width:'100%', WebkitTapHighlightColor:'transparent' }}>
-              {Icon.plus('#fff')}
-              <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff' }}>{t('addPlayerBtn')}</span>
+            {/* CTA — KORVONALAS. Tomor mint savkent ugyanolyan sulyu volt, mint
+                a lenti „Tovabb a jatekokhoz", es ket elsodleges gomb allt egy
+                kepernyon. Itt a hozzaadas a masodlagos lepes. */}
+            <button onClick={addPlayer} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, background:'transparent', borderRadius:18, padding:'16px 24px', boxShadow:'none', border:`2px solid ${T.mint}`, cursor:'pointer', width:'100%', WebkitTapHighlightColor:'transparent' }}>
+              {Icon.userPlus ? Icon.userPlus(T.mint) : Icon.plus(T.mint)}
+              <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.mint }}>{t('addPlayerBtn')}</span>
             </button>
           </div>
         ) : (
@@ -43871,15 +43885,19 @@ function PlayersScreen({ players, setPlayers, go }) {
 
       {players.length < 2 && (
         <div style={{ padding:'0 16px 8px' }} onClick={handleSecretTap}>
+          {/* Ikon balra, szoveg kozepen, a haladas-pottyok JOBBRA. A pottyok
+              korabban legelol alltak, es igy a sor ugy nezett ki, mintha a
+              szoveghez tartozo felsorolas-jel volna — nem allapotjelzo. */}
           <div style={{ background:T.surface, borderRadius:12, boxShadow: T.shadow, border: 'none', padding:'11px 14px', display:'flex', alignItems:'center', gap:10, userSelect:'none' }}>
+            <div style={{ flexShrink:0, display:'grid', placeItems:'center', color:T.inkSoft }}>{Icon.users(T.inkSoft)}</div>
+            <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft }}>
+              {secretTaps > 0 ? `${secretTaps}/5…` : t('minPlayers')}
+            </div>
             <div style={{ display:'flex', gap:5, flexShrink:0 }}>
               {[0,1,2,3].map(i => {
                 const filled = i < players.length;
                 return <div key={i} style={{ width:8, height:8, borderRadius:'50%', background: filled ? T.mint : T.inkMute, opacity: filled ? 1 : (i===3 ? 0.35 : i===2 ? 0.55 : 1) }} />;
               })}
-            </div>
-            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft }}>
-              {secretTaps > 0 ? `${secretTaps}/5…` : t('minPlayers')}
             </div>
           </div>
         </div>
@@ -45130,6 +45148,7 @@ const isSoloGame = (id) => SOLO_GAME_IDS.indexOf(id) !== -1;
 // kikapcsolva a Jatekok oldalrol indul a parti, mint korabban.
 function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
   const [openCfg, setOpenCfg] = React.useState(null);
+  const [picker, setPicker] = React.useState(null);   // 'difficulty' | 'order' | null
 
   const games = (selectedGames || []).map(id => GAMES.find(g => g.id === id)).filter(Boolean);
   const configurable = games.filter(g => hasGameConfig(g.id));
@@ -45138,6 +45157,17 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
   const soloGame = games.length === 1 && isSoloGame(games[0].id) ? games[0] : null;
 
 
+
+  // A negy nehezsegi szint. Ugyanaz a NEGY azonosito, amit a gameMeta tarol
+  // (easy/mid/hard/extreme) — NEM a GAMES[].difficulty magyar cimkéi.
+  //
+  // A forras a DIFFICULTY_INFO, mert a szint FO hatasa a KORTYSZORZO, es azt
+  // csak ez tartja (`mult`). A regi elrendezesben ez egy kulon info-gombon
+  // nyilo lapon volt; mostantol a valaszto MAGA irja ki — aki szintet valt,
+  // ott latja, hogy 1× vagy 5× kortyot valaszt, nem egy masodik koppintasra.
+  const DIFFS_SETUP = DIFFICULTY_INFO.map(d => ({
+    id: d.id, label: d.label, mult: d.mult, tone: d.tone, note: d.who,
+  }));
 
   // Minden doboz ugyanezt hasznalja — a szelesseguk igy nem tud elcsuszni.
   const cardStyle = { background:T.surface, borderRadius:16, boxShadow:T.shadow };
@@ -45202,10 +45232,25 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
         {/* Egyedül futó játéknál a játéksorrend értelmetlen (egy játék van), a
             max körök pedig félbevágná a menetet — mindkettő kimarad. */}
         {soloGame && gamesBlock}
-        <div style={{ ...cardStyle, marginTop:12, padding:'14px 16px' }}>
-          <GameSettingsContent meta={gameMeta} setMeta={setGameMeta}
-            group={soloGame ? ['difficulty'] : ['difficulty', 'order', 'maxRounds']} />
+        {/* Nehezseg + Jatéksorrend KOMPAKT sor-kartyakent, egymas mellett. Ket
+            teljes szelessegu szegmens-sav (4 + 2 gomb) fuggolegesen 150 px-t
+            vitt el a lap tetejerol, holott mindketto egyetlen kivalasztott
+            erteket mutat. A reszletes valaszto lapon nyilik. */}
+        <div style={{ display:'flex', gap:10, marginTop:12 }}>
+          <SetupPickCard icon="users" label={t('difficulty')}
+            value={(DIFFS_SETUP.find(d => d.id === (gameMeta.difficulty || 'easy')) || DIFFS_SETUP[0]).label}
+            onClick={() => setPicker('difficulty')} />
+          {!soloGame && (
+            <SetupPickCard icon="shuffle" label={t('gameOrder')}
+              value={(gameMeta.gameOrder || 'random') === 'sorban' ? t('inOrder') : t('randomGames')}
+              onClick={() => setPicker('order')} />
+          )}
         </div>
+        {!soloGame && (
+          <div style={{ ...cardStyle, marginTop:10, padding:'14px 16px' }}>
+            <GameSettingsContent meta={gameMeta} setMeta={setGameMeta} group={['maxRounds']} />
+          </div>
+        )}
 
         {!soloGame && gamesBlock}
 
@@ -45239,7 +45284,80 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
 
       <GameConfigHost openId={openCfg} onClose={() => setOpenCfg(null)}
         gameMeta={gameMeta} setGameMeta={setGameMeta} playerCount={(players || []).length} />
+
+      {picker && (
+        <SetupPickSheet
+          title={picker === 'difficulty' ? t('difficulty') : t('gameOrder')}
+          options={picker === 'difficulty'
+            ? DIFFS_SETUP.map(d => ({ id:d.id, label:d.label, note:d.note, tag:d.mult + '× korty', tone:d.tone }))
+            : [{ id:'sorban', label:t('inOrder') }, { id:'random', label:t('randomGames') }]}
+          current={picker === 'difficulty' ? (gameMeta.difficulty || 'easy') : (gameMeta.gameOrder || 'random')}
+          onPick={(id) => {
+            setGameMeta(m => Object.assign({}, m, picker === 'difficulty' ? { difficulty:id } : { gameOrder:id }));
+            setPicker(null);
+          }}
+          onClose={() => setPicker(null)} />
+      )}
     </div>
+  );
+}
+
+// A Jatekmenet ket kompakt valasztoja. Ikon + apro cimke + a KIVALASZTOTT
+// ertek — a reszletek a lapon nyilnak, nem a fokepernyot foglaljak.
+function SetupPickCard({ icon, label, value, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      flex:1, minWidth:0, display:'flex', alignItems:'center', gap:10,
+      background:T.surface, borderRadius:16, boxShadow:T.shadow, border:'none',
+      padding:'12px 12px', cursor:'pointer', textAlign:'left', WebkitTapHighlightColor:'transparent',
+    }}>
+      <div style={{ width:34, height:34, borderRadius:11, background:`${T.mint}1F`, display:'grid', placeItems:'center', flexShrink:0 }}>
+        {(Icon[icon] || Icon.settings)(T.mint)}
+      </div>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:9.5, letterSpacing:'0.09em', textTransform:'uppercase', color:T.inkMute, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{label}</div>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{value}</div>
+      </div>
+      <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.inkMute, flexShrink:0 }}>›</span>
+    </button>
+  );
+}
+
+// A hozza tartozo valaszto lap. Ugyanaz a rádiós sor-forma, mint a Szűrés
+// kategoria-listaja — ket kulonbozo valaszto-nyelv egy appon belul zavaros.
+function SetupPickSheet({ title, options, current, onPick, onClose }) {
+  return (
+    <SheetOverlay title={title} onClose={onClose}>
+      <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'2px 0 8px' }}>
+        {options.map(o => {
+          const on = o.id === current;
+          return (
+            /* `role`/`aria-checked`: a kivalasztottsagot a kitoltott korong es
+               a hatter viszi — szoveges „MOST EZ" cimke nelkul. A jeloles igy
+               is gepi olvasoval ES teszttel egyarant megfoghato marad. */
+            <button key={o.id} role="radio" aria-checked={on} onClick={() => onPick(o.id)} style={{
+              width:'100%', display:'flex', alignItems:'center', gap:12, textAlign:'left',
+              padding:'12px 14px', borderRadius:16, cursor:'pointer',
+              background: on ? T.mintSoft : T.surface,
+              border: on ? `1.5px solid ${T.mint}` : '1.5px solid '+T.inkMute+'26',
+            }}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <span style={{ fontFamily:T.font, fontWeight: on ? 900 : 800, fontSize:15, color: on ? T.mintDeep : T.ink }}>{o.label}</span>
+                  {/* A kortyszorzo — ez a szint FO hatasa, ezert a cimke mellett
+                      all, nem a leirasban elrejtve. */}
+                  {o.tag && <span style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:'#1A2A4A', background:o.tone || T.mintSoft, borderRadius:999, padding:'3px 9px', flexShrink:0 }}>{o.tag}</span>}
+                </div>
+                {o.note && <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:3 }}>{o.note}</div>}
+              </div>
+              <div style={{ width:22, height:22, borderRadius:999, flexShrink:0, border:`2px solid ${on ? T.mint : T.inkMute+'66'}`, display:'grid', placeItems:'center' }}>
+                {on && <div style={{ width:11, height:11, borderRadius:999, background:T.mint }} />}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </SheetOverlay>
   );
 }
 
@@ -45672,18 +45790,32 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
             {/* Kategória */}
             <div>
               <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:8 }}>Kategória</div>
-              <div style={{ display:'flex', gap:7, flexWrap:'wrap' }}>
-                {[{k:'Egyéni',l:'Egyéni'},{k:'Páros',l:'Páros'},{k:'Csapat',l:'Csapat'},{k:'DNR',l:'DNR Exkluzív'},{k:'Önálló',l:'Önálló'}].map(({k,l}) => {
+              {/* Teljes szelessegu SOROK, nem chip-pirulak. Ot pirula ket sorba
+                  tordelve nem mutatta, hogy egy listarol van szo, es a „DNR
+                  Exkluzív" hosszu felirata mindig maga tort uj sorba. Az ikon-
+                  csempe szine a kategoria sajat szine — ugyanaz, amit a
+                  jatekkartyak is visznek. */}
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {FILTER_CATS.map(({k,l,tone,ic}) => {
                   const on = activeFilters.includes(k);
                   return (
                     <button key={k} onClick={() => toggleFilter(k)} style={{
-                      padding:'9px 14px', borderRadius:12, cursor:'pointer',
-                      fontFamily:T.font, fontWeight: on ? 700 : 600, fontSize:13,
+                      width:'100%', display:'flex', alignItems:'center', gap:12,
+                      padding:'10px 12px', borderRadius:16, cursor:'pointer', textAlign:'left',
                       background: on ? T.mintSoft : T.surface,
-                      color: on ? T.mintDeep : T.ink,
-                      border: on ? `1.5px solid ${T.mint}` : '1.5px solid '+T.inkMute+'30',
-                      transition:'background .12s,color .12s,border .12s',
-                    }}>{l}</button>
+                      border: on ? `1.5px solid ${T.mint}` : '1.5px solid '+T.inkMute+'26',
+                      transition:'background .12s,border .12s',
+                    }}>
+                      <div style={{ width:38, height:38, borderRadius:12, background:`${tone}22`, display:'grid', placeItems:'center', flexShrink:0 }}>
+                        {ic(tone)}
+                      </div>
+                      <span style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight: on ? 800 : 700, fontSize:15, color: on ? T.mintDeep : T.ink }}>{l}</span>
+                      {/* Radio-korong: a kitoltott belso pont mondja meg, hogy
+                          BE van kapcsolva — a keret onmagaban nem allapot. */}
+                      <div style={{ width:22, height:22, borderRadius:999, flexShrink:0, border:`2px solid ${on ? T.mint : T.inkMute+'66'}`, display:'grid', placeItems:'center' }}>
+                        {on && <div style={{ width:11, height:11, borderRadius:999, background:T.mint }} />}
+                      </div>
+                    </button>
                   );
                 })}
               </div>
@@ -45691,18 +45823,29 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
             {/* Nehézség */}
             <div>
               <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:8 }}>Nehézség</div>
-              <div style={{ display:'flex', gap:7 }}>
-                {[{k:'könnyű',l:'Könnyű'},{k:'közepes',l:'Közepes'},{k:'nehéz',l:'Nehéz'}].map(({k,l}) => {
+              {/* Arc-ikonos kartyak. A harom fokozat korabban harom egyforma
+                  szoveges pirula volt — az arc (es a szine) elsore mondja meg
+                  a sorrendet, olvasas nelkul. A szin FIX, nem temafuggo: a
+                  „zold = konnyu, piros = nehez" jelentes nem lehet kek. */}
+              <div style={{ display:'flex', gap:8 }}>
+                {FILTER_DIFFS.map(({k,l,tone,mouth}) => {
                   const on = activeFilters.includes(k);
                   return (
                     <button key={k} onClick={() => toggleFilter(k)} style={{
-                      flex:1, padding:'9px 0', borderRadius:12, cursor:'pointer',
-                      fontFamily:T.font, fontWeight: on ? 700 : 600, fontSize:13,
+                      flex:1, padding:'12px 0 10px', borderRadius:16, cursor:'pointer',
+                      display:'flex', flexDirection:'column', alignItems:'center', gap:6,
                       background: on ? T.mintSoft : T.surface,
-                      color: on ? T.mintDeep : T.ink,
-                      border: on ? `1.5px solid ${T.mint}` : '1.5px solid '+T.inkMute+'30',
-                      transition:'background .12s,color .12s,border .12s',
-                    }}>{l}</button>
+                      border: on ? `1.5px solid ${T.mint}` : '1.5px solid '+T.inkMute+'26',
+                      transition:'background .12s,border .12s',
+                    }}>
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="9.2" stroke={tone} strokeWidth="1.9"/>
+                        <circle cx="9" cy="10" r="1.15" fill={tone}/>
+                        <circle cx="15" cy="10" r="1.15" fill={tone}/>
+                        <path d={mouth} stroke={tone} strokeWidth="1.9" strokeLinecap="round" fill="none"/>
+                      </svg>
+                      <span style={{ fontFamily:T.font, fontWeight: on ? 800 : 700, fontSize:13, color: on ? T.mintDeep : T.ink }}>{l}</span>
+                    </button>
                   );
                 })}
               </div>
@@ -45713,6 +45856,23 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
     </div>
   );
 }
+
+// A Szűrés lap két listája. Kívül van a komponensen, mert a `tone` és az ikon
+// állandó — minden nyitáskor újraépíteni fölösleges, és így egy helyen látszik,
+// melyik kategória milyen színt visz.
+const FILTER_CATS = [
+  { k:'Egyéni',  l:'Egyéni',       tone:'#3B82F6', ic:(c)=>Icon.user(c) },
+  { k:'Páros',   l:'Páros',        tone:'#E0655F', ic:(c)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 20s-7-4.4-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.6-7 9-7 9z" stroke={c} strokeWidth="2" strokeLinejoin="round"/></svg> },
+  { k:'Csapat',  l:'Csapat',       tone:'#3FB8A6', ic:(c)=>Icon.users(c) },
+  { k:'DNR',     l:'DNR Exkluzív', tone:'#8B5CF6', ic:(c)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 3h12l4 6-10 12L2 9l4-6z" stroke={c} strokeWidth="2" strokeLinejoin="round"/><path d="M2 9h20M9 3l-1.5 6L12 21l4.5-12L15 3" stroke={c} strokeWidth="1.4" strokeLinejoin="round" opacity=".7"/></svg> },
+  { k:'Önálló',  l:'Önálló',       tone:'#E0A32E', ic:(c)=>Icon.user(c) },
+];
+// A `mouth` a mosoly SVG-útvonala: felfelé ívelt / egyenes / lefelé ívelt.
+const FILTER_DIFFS = [
+  { k:'könnyű',  l:'Könnyű',  tone:'#3B82F6', mouth:'M8.4 14.4c1 1.3 2.2 2 3.6 2s2.6-.7 3.6-2' },
+  { k:'közepes', l:'Közepes', tone:'#E0A32E', mouth:'M8.6 15h6.8' },
+  { k:'nehéz',   l:'Nehéz',   tone:'#DC4B4B', mouth:'M8.4 16.4c1-1.3 2.2-2 3.6-2s2.6.7 3.6 2' },
+];
 
 function Chip({ label, active, onClick, tone, icon, disabled }) {
   const isFilter = tone === 'filter';
@@ -45980,7 +46140,14 @@ function GameSettingsContent({ meta, setMeta, onDone, go, group }) {
             return (
               <div key={m.id} style={{ paddingTop:8, marginTop:0 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                  <button onClick={() => toggleMode(m.id)} style={{ flex:1, padding:'13px 12px', borderRadius:14, border: on?'none':'1.5px solid rgba(26,42,74,0.10)', background: on?T.mint:`${T.surfaceMuted}`, color: on?onInk():T.ink, fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer', textAlign:'left', transition:'all .15s', display:'flex', alignItems:'center', gap:8 }}><BohIcon name={m.icon} size={17} />{m.label}</button>
+                  {/* Sor, nem tomor pirula. A bekapcsolt mod korabban egy
+                      teli menta savkent allt a lapon, es sulyosabb volt, mint
+                      a kepernyo elsodleges gombja. Az allapotot most a kor-
+                      jelveny es a halvany hatter viszi. */}
+                  <button onClick={() => toggleMode(m.id)} style={{ flex:1, padding:'10px 12px', borderRadius:14, border: on?`1.5px solid ${T.mint}`:'1.5px solid rgba(26,42,74,0.10)', background: on?T.mintSoft:T.surface, color:T.ink, fontFamily:T.font, fontWeight:on?900:800, fontSize:14, cursor:'pointer', textAlign:'left', transition:'all .15s', display:'flex', alignItems:'center', gap:10 }}>
+                    <span style={{ width:34, height:34, borderRadius:999, background: on?T.surface:T.surfaceMuted, display:'grid', placeItems:'center', flexShrink:0 }}><BohIcon name={m.icon} size={17} /></span>
+                    {m.label}
+                  </button>
                   <InfoBtn id={m.id} />
                 </div>
                 <InfoBox id={m.id} text={m.info} />
@@ -46724,22 +46891,25 @@ const ZENE_SONGS_SHUFFLED = (() => {
   return a;
 })();
 
+// Az `ea` / `eb` a ket opcio kor-jelvenyebe kerulo emoji. Nem dekoracio: a ket
+// lap 15 mp alatt olvasva osszefolyt, es a kep az, ami elsore elvalasztja oket.
+// Ha uj kerdes jon, MINDKET oldalra kell jel — fel parral a lapok elcsusznak.
 const MIT_VALASZTANAL = [
-  { a:'Sosem éreznél hideget', b:'Sosem éreznél meleget', statsA:44 },
-  { a:'Mindig siess de soha ne késs', b:'Soha ne siess de mindig késs', statsA:38 },
-  { a:'Repülni tudj de csak 1 méterre a föld felett', b:'Láthatatlan legyél de csak napközben', statsA:41 },
-  { a:'Minden amit eszel ízlik', b:'Soha ne legyél éhes de az étel sosem ízlik', statsA:67 },
-  { a:'Soha ne aludj többet 6 óránál', b:'Soha ne aludj kevesebbet 10 óránál', statsA:52 },
-  { a:'Ismerd az összes nyelvet', b:'Tudj minden hangszeren játszani', statsA:61 },
-  { a:'Visszamennél 10 évet az időben', b:'10 évet ugranál előre', statsA:55 },
-  { a:'Soha ne fizess étteremben', b:'Soha ne fizess szállodában', statsA:48 },
-  { a:'Minden nap esik az eső', b:'Soha nem süt a nap', statsA:63 },
-  { a:'Tudj mindent de semmit se csinálj', b:'Csinálj mindent de semmit se tudj', statsA:34 },
-  { a:'Legyen végtelen pénzed de soha ne utazhass', b:'Utazhass mindenhova de soha ne legyen pénzed', statsA:42 },
-  { a:'Mindig igazat mondj', b:'Soha senki ne higgyen neked', statsA:57 },
-  { a:'Élj 150 évet de mindig fáradt legyél', b:'Élj 70 évet de mindig tele legyél energiával', statsA:39 },
-  { a:'Soha ne használj telefont', b:'Soha ne nézz tévét/filmet', statsA:31 },
-  { a:'Minden kérdésre tudod a választ', b:'Bármit megcsinálhatsz de nem tudod hogyan', statsA:71 },
+  { a:'Sosem éreznél hideget', b:'Sosem éreznél meleget', statsA:44, ea:'❄️', eb:'🔥' },
+  { a:'Mindig siess de soha ne késs', b:'Soha ne siess de mindig késs', statsA:38, ea:'🏃', eb:'🐢' },
+  { a:'Repülni tudj de csak 1 méterre a föld felett', b:'Láthatatlan legyél de csak napközben', statsA:41, ea:'🕊️', eb:'👻' },
+  { a:'Minden amit eszel ízlik', b:'Soha ne legyél éhes de az étel sosem ízlik', statsA:67, ea:'😋', eb:'🍽️' },
+  { a:'Soha ne aludj többet 6 óránál', b:'Soha ne aludj kevesebbet 10 óránál', statsA:52, ea:'⏰', eb:'😴' },
+  { a:'Ismerd az összes nyelvet', b:'Tudj minden hangszeren játszani', statsA:61, ea:'🗣️', eb:'🎸' },
+  { a:'Visszamennél 10 évet az időben', b:'10 évet ugranál előre', statsA:55, ea:'⏪', eb:'⏩' },
+  { a:'Soha ne fizess étteremben', b:'Soha ne fizess szállodában', statsA:48, ea:'🍝', eb:'🏨' },
+  { a:'Minden nap esik az eső', b:'Soha nem süt a nap', statsA:63, ea:'🌧️', eb:'☀️' },
+  { a:'Tudj mindent de semmit se csinálj', b:'Csinálj mindent de semmit se tudj', statsA:34, ea:'🧠', eb:'🛠️' },
+  { a:'Legyen végtelen pénzed de soha ne utazhass', b:'Utazhass mindenhova de soha ne legyen pénzed', statsA:42, ea:'💰', eb:'✈️' },
+  { a:'Mindig igazat mondj', b:'Soha senki ne higgyen neked', statsA:57, ea:'💬', eb:'🤥' },
+  { a:'Élj 150 évet de mindig fáradt legyél', b:'Élj 70 évet de mindig tele legyél energiával', statsA:39, ea:'🐌', eb:'⚡' },
+  { a:'Soha ne használj telefont', b:'Soha ne nézz tévét/filmet', statsA:31, ea:'📱', eb:'📺' },
+  { a:'Minden kérdésre tudod a választ', b:'Bármit megcsinálhatsz de nem tudod hogyan', statsA:71, ea:'❓', eb:'🎯' },
 ];
 
 const MIT_VALASZTANAL_SHUFFLED = [...MIT_VALASZTANAL].sort(() => Math.random() - 0.5);
@@ -47637,7 +47807,16 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult, difficulty }) {
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, width:'100%' }}>
-      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'20px 24px', textAlign:'center', boxShadow:T.shadow }}>
+      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'18px 24px 20px', textAlign:'center', boxShadow:T.shadow }}>
+        {/* Erem — a kategoria „dijat" jelzi. A lap enelkul csak egy feher
+            teglalap volt egy felirattal; az ikon adja meg, hogy ez a feladvany. */}
+        <div style={{ display:'grid', placeItems:'center', marginBottom:2 }}>
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+            <path d="M8.5 2.5l2 5M15.5 2.5l-2 5" stroke={T.yellow} strokeWidth="1.8" strokeLinecap="round"/>
+            <circle cx="12" cy="15" r="6.2" fill="none" stroke={T.yellow} strokeWidth="1.9"/>
+            <path d="M12 11.9l.95 1.94 2.15.31-1.55 1.5.37 2.13L12 16.77l-1.92 1.01.37-2.13-1.55-1.5 2.15-.31z" fill={T.yellow}/>
+          </svg>
+        </div>
         <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>{t('kategoriaLabel')}</div>
         {phase === 'ready' ? (
           <div style={{ height:34, borderRadius:8, background:'repeating-linear-gradient(-45deg,#e0e4f0,#e0e4f0 4px,#d0d4e4 4px,#d0d4e4 8px)' }}/>
@@ -47654,8 +47833,8 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult, difficulty }) {
       ) : (
         <div style={{ position:'relative', width:160, height:160 }}>
           <svg viewBox="0 0 160 160" style={{ position:'absolute', inset:0, width:'100%', height:'100%', transform:'rotate(-90deg)' }}>
-            <circle cx="80" cy="80" r={r} fill="none" stroke={`${T.inkMute}30`} strokeWidth="11" />
-            <circle cx="80" cy="80" r={r} fill="none" stroke={timerColor} strokeWidth="11"
+            <circle cx="80" cy="80" r={r} fill="none" stroke={`${T.inkMute}30`} strokeWidth="7" />
+            <circle cx="80" cy="80" r={r} fill="none" stroke={timerColor} strokeWidth="7"
               strokeDasharray={circ} strokeDashoffset={+(circ*(1-pct)).toFixed(1)} strokeLinecap="round"
               style={{ transition:'stroke .3s' }} />
           </svg>
@@ -47667,20 +47846,32 @@ function OtdologGame({ gameIdx, challenger, onAdvance, onResult, difficulty }) {
       )}
 
       {phase !== 'ready' && (
-        <div style={{ display:'flex', gap:8 }}>
+        /* Az ot jelolo KITOLTI a sort (flex:1), nem fix 50 px. Igy a szamok
+           akkorak lehetnek, hogy futas kozben, feligy odanezve is talalhatoak. */
+        <div style={{ display:'flex', gap:10, width:'100%' }}>
           {checked.map((c, i) => (
             <div key={i} onClick={() => { if (phase === 'done') return; const n=[...checked]; n[i]=!n[i]; setChecked(n); }}
-              style={{ width:50, height:50, borderRadius:14, cursor: phase==='done' ? 'default' : 'pointer', background:c?T.mint:T.surface, opacity: phase==='done' && !c ? 0.45 : 1, display:'grid', placeItems:'center', boxShadow:T.shadowPill, border:`2px solid ${c?T.mint:'transparent'}`, transition:'all .15s' }}>
-              {c ? <span style={{ color:'#fff', fontSize:20 }}>✓</span>
-                 : <span style={{ fontFamily:T.font, fontWeight:700, fontSize:17, color:T.inkSoft }}>{i+1}</span>}
+              style={{ flex:1, minWidth:0, height:64, borderRadius:16, cursor: phase==='done' ? 'default' : 'pointer', background:c?T.mint:T.surface, opacity: phase==='done' && !c ? 0.45 : 1, display:'grid', placeItems:'center', boxShadow:T.shadow, border:`2px solid ${c?T.mint:'transparent'}`, transition:'all .15s' }}>
+              {c ? <span style={{ display:'grid', placeItems:'center' }}>{Icon.check('#fff')}</span>
+                 : <span style={{ fontFamily:T.font, fontWeight:800, fontSize:22, color:T.ink }}>{i+1}</span>}
             </div>
           ))}
         </div>
       )}
 
       {phase !== 'ready' && (
-        <div style={{ fontFamily:T.font, fontSize:14, fontWeight:600, color:T.inkSoft }}>
-          {checkedCount===5 ? '🎉 Mind megvan!' : checkedCount>0 ? `${checkedCount} / 5 ${t('otdologGo')}` : phase==='done' ? 'Idő lejárt!' : 'Jelöld be amit kimondottál!'}
+        /* Az ivelt nyil a jelolokre mutat vissza — a mondat kulonben a
+           levegoben logott, es nem volt egyertelmu, MIT jeloljon be az ember. */
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+          {checkedCount === 0 && phase !== 'done' && (
+            <svg width="26" height="18" viewBox="0 0 26 18" fill="none" style={{ flexShrink:0 }}>
+              <path d="M2 2c0 7 4 11 20 11" stroke={T.inkMute} strokeWidth="1.8" strokeLinecap="round"/>
+              <path d="M17 9.5l5 3.5-5 3.5" stroke={T.inkMute} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          )}
+          <div style={{ fontFamily:T.font, fontSize:14, fontWeight:600, color:T.inkSoft }}>
+            {checkedCount===5 ? '🎉 Mind megvan!' : checkedCount>0 ? `${checkedCount} / 5 ${t('otdologGo')}` : phase==='done' ? 'Idő lejárt!' : 'Jelöld be amit kimondottál!'}
+          </div>
         </div>
       )}
 
@@ -50660,6 +50851,14 @@ function ZeneConfigSheet({ config, setConfig, onClose }) {
   );
 }
 
+// A hanghullam csik-magassagai (0..1). FIX minta, nem veletlen: veletlennel
+// minden ujrarajzolas mas savot adna, es a lap „ugralna" jatek kozben.
+// Kozepen magasabb, a szelek fele elhalo — igy olvashato hangmintanak.
+const ZENE_WAVE = [0.18,0.30,0.22,0.44,0.34,0.58,0.46,0.72,0.55,0.86,0.66,1.00,0.74,0.92,0.62,0.80,0.50,0.68,0.40,0.56,0.30,0.46,0.24,0.36,0.20];
+// Az idovonal pottyeinek szama. Nem a hullam csikjaihoz igazodik: a sav suru,
+// az idovonal ritka — kulonben a ketto egy racsnak latszana.
+const ZENE_TICKS = 22;
+
 function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit }) {
   const selectedEras   = gameMeta?.zeneConfig?.eras   || [];
   const selectedGenres = gameMeta?.zeneConfig?.genres || [];
@@ -50691,6 +50890,7 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
   const song = (!allExhausted && filteredSongs.length > 0) ? filteredSongs[(gameIdx + songOffset) % filteredSongs.length] : null;
 
   const [playing, setPlaying] = React.useState(false);
+  const [progress, setProgress] = React.useState(0);   // 0..1 — az idovonal pottyeihez
   const [revealed, setRevealed] = React.useState(false);
   const [decided, setDecided] = React.useState(false);
   const [previewUrl, setPreviewUrl] = React.useState(null);
@@ -50778,6 +50978,7 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
   const handlePlay = () => {
     if (!audioRef.current || !previewUrl || !song) return;
     audioRef.current.currentTime = song.start || 0;
+    setProgress(0);
     audioRef.current.play().catch(() => {});
   };
   const handleStop = () => {
@@ -50805,7 +51006,15 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
         <audio ref={audioRef} src={previewUrl}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
-          onEnded={() => setPlaying(false)}
+          onEnded={() => { setPlaying(false); setProgress(1); }}
+          onTimeUpdate={(e) => {
+            const el = e.currentTarget;
+            // A preview hossza nem mindig ismert (Infinity/NaN, amig a
+            // metaadat be nem tolt) — ilyenkor a 30 mp-es Spotify-szabvanyt
+            // vesszuk alapul, kulonben a pottyok soha nem indulnanak el.
+            const dur = (el.duration && isFinite(el.duration)) ? el.duration : 30;
+            setProgress(Math.max(0, Math.min(1, el.currentTime / dur)));
+          }}
           onError={() => {
             // lejárt/hibás preview URL — cache törlés és következő szám
             try { localStorage.removeItem('zdz_' + (song?.spotifyId || '')); } catch(e) {}
@@ -50815,25 +51024,32 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
           }} />
       )}
 
-      {/* Vinyl */}
-      <div style={{ position:'relative', width:200, height:200, flexShrink:0 }}>
-        <div style={{ position:'absolute', left:7, top:7, width:186, height:186, transformOrigin:'center', animation: playing ? 'vinylSpin 2.6s linear infinite' : 'none' }}>
-          <svg width="186" height="186" viewBox="0 0 250 250">
-            <circle cx="125" cy="125" r="123" fill="#181818"/>
-            {[112,100,88,76,65,56,47].map(r2 => (
-              <circle key={r2} cx="125" cy="125" r={r2} fill="none" stroke="#282828" strokeWidth="1.8"/>
-            ))}
-            <circle cx="125" cy="125" r="46" fill="#B97060"/>
-            <text x="125" y="133" textAnchor="middle" fontSize="26" fill="#1a1a1a">♫</text>
-            <circle cx="125" cy="125" r="7" fill="#080808"/>
-          </svg>
+      {/* Hanghullam. A bakelit-lemezt valtotta le: a lemez azt igerte, hogy
+          FOROG valami, holott a preview alatt semmi nem mozgott a tunn kivul.
+          A sav maga a lejatszas-gomb — a feher korong a kozepen ul, a csikok
+          korulotte futnak, es lejatszas alatt hullamzanak. */}
+      <button onClick={playing ? handleStop : handlePlay}
+        disabled={loading || allExhausted || !previewUrl}
+        aria-label={playing ? 'Megállítás' : 'Lejátszás'}
+        style={{ position:'relative', width:'100%', height:170, flexShrink:0, background:'transparent', border:'none', padding:0,
+                 cursor: (loading || allExhausted || !previewUrl) ? 'default' : 'pointer', WebkitTapHighlightColor:'transparent',
+                 display:'grid', placeItems:'center', opacity: (loading || allExhausted) ? 0.45 : 1 }}>
+        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', gap:4, pointerEvents:'none' }}>
+          {ZENE_WAVE.map((h, i) => (
+            <div key={i} style={{
+              width:5, height: Math.round(150 * h), borderRadius:999,
+              background: i % 3 === 0 ? T.mint : `${T.mint}66`,
+              transformOrigin:'center',
+              animation: playing ? `wavePulse ${(0.7 + (i % 5) * 0.13).toFixed(2)}s ease-in-out ${(i * 0.06).toFixed(2)}s infinite` : 'none',
+            }} />
+          ))}
         </div>
-        <svg width="200" height="200" viewBox="0 0 270 270" style={{ position:'absolute', left:0, top:0, pointerEvents:'none' }}>
-          <line x1="248" y1="22" x2="158" y2="150" stroke="#E0D8C8" strokeWidth="7" strokeLinecap="round"/>
-          <circle cx="248" cy="22" r="12" fill={T.ink} stroke={T.bgSoft} strokeWidth="2.5"/>
-          <rect x="151" y="146" width="16" height="10" rx="2" fill="#333" transform="rotate(-52 159 151)"/>
-        </svg>
-      </div>
+        <div style={{ position:'relative', width:76, height:76, borderRadius:999, background:T.surface, boxShadow:T.shadowLift || T.shadow, display:'grid', placeItems:'center' }}>
+          {playing
+            ? <svg width="26" height="26" viewBox="0 0 24 24"><rect x="6" y="5" width="4.5" height="14" rx="1.6" fill={T.mint}/><rect x="13.5" y="5" width="4.5" height="14" rx="1.6" fill={T.mint}/></svg>
+            : <svg width="28" height="28" viewBox="0 0 24 24" style={{ marginLeft:4 }}><path d="M8 5.5l11 6.5-11 6.5z" fill={T.mint}/></svg>}
+        </div>
+      </button>
 
       {/* Buttons */}
       <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:8 }}>
@@ -50851,16 +51067,30 @@ function ZeneGame({ gameIdx, challenger, onAdvance, onResult, gameMeta, onCommit
           <div style={{ width:'100%', padding:'14px 0', borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center' }}>
             <span style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>⏳ Betöltés...</span>
           </div>
-        ) : !playing ? (
-          <button onClick={handlePlay}
-            style={{ width:'100%', padding:'14px 0', background:T.blue, border:'none', borderRadius:16, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:16, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
-            <span style={{ fontSize:13 }}>▶</span><span>Lejátszás</span>
-          </button>
         ) : (
-          <button onClick={handleStop}
-            style={{ width:'100%', padding:'14px 0', background:T.blue, border:'none', borderRadius:16, color:T.yellow, fontFamily:T.font, fontWeight:700, fontSize:16, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
-            <span style={{ fontSize:13 }}>⏸</span><span>Megállítás</span>
-          </button>
+          /* A lejatszas-gomb MAGA a hullam-sav — itt mar csak a felirat all,
+             plusz a pottyos idovonal. Ket tomor gomb egymas alatt (lejatszas +
+             felfedes) korabban egyforma sulyu volt, holott a masodik a dontes. */
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12, paddingBottom:2 }}>
+            <button onClick={playing ? handleStop : handlePlay}
+              style={{ background:'transparent', border:'none', padding:'2px 8px', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:16, color:T.mint, WebkitTapHighlightColor:'transparent' }}>
+              {playing ? 'Megállítás' : 'Lejátszás'}
+            </button>
+            {/* Idovonal — a preview hosszat nem ismerjuk elore, ezert ez nem
+                pontos pozicio, hanem halado jelzes: a betelt pottyok szama az
+                eltelt idobol jon, a fogantyu a legutolso betelt potty. */}
+            <div style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+              {Array.from({ length: ZENE_TICKS }).map((_, i) => {
+                const done = i <= Math.round(progress * (ZENE_TICKS - 1));
+                const head = done && i === Math.round(progress * (ZENE_TICKS - 1)) && playing;
+                return <div key={i} style={{
+                  width: head ? 12 : 5, height:5, borderRadius:999,
+                  background: done ? T.mint : `${T.inkMute}55`,
+                  transition:'width .2s ease, background .2s ease',
+                }} />;
+              })}
+            </div>
+          </div>
         )}
         {!loading && (decided
           ? <div style={{ width:'100%', padding:'13px 0', background:T.mintSoft, borderRadius:16, color:T.mint, fontFamily:T.font, fontWeight:700, fontSize:15, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
@@ -59397,12 +59627,16 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
 // és a nyertes sor játékosszíne (rózsaszín / zöld) tisztán marad rajta — a
 // korábbi sárga panelen ugyanez narancsra és olajzöldre keveredett.
 const CB = {
-  bg:'#E4EAF1', ink:'#1A2A4A', inkSoft:'rgba(26,42,74,.62)', inkMute:'rgba(26,42,74,.40)',
+  bg:'#EAF1FA', ink:'#1A2A4A', inkSoft:'rgba(26,42,74,.62)', inkMute:'rgba(26,42,74,.40)',
   rowIdle:'rgba(255,255,255,.55)', rowTie:'#FFFFFF', rowWinA:'26',
   borderIdle:'rgba(26,42,74,.09)', borderWinA:'66',
   slotBg:'rgba(26,42,74,.05)', slotDash:'rgba(26,42,74,.16)',
   label:'rgba(26,42,74,.45)',
 };
+// A kor-korongok szinei. Nem a jatekos szinebol jonnek: az mindket tervezo-
+// kepernyon ugyanaz a szin lenne mind az ot koron, es a sorok megint
+// megkulonboztethetetlenek volnanak. Ez a sorszamot jeloli, nem a tulajdonost.
+const CB_ROUND_TONE = ['#3B82F6', '#3FB8A6', '#8B5CF6', '#F09A45', '#F2C744'];
 
 function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, onSetHideFooter, gameMeta }) {
   const VALS = [3,4,5,6,7];
@@ -59465,19 +59699,24 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
 
 
   // kártya chip vizuál
+  // A szinjel az ERTEKBOL jon (VALS = 3..7), nem veletlenbol: ugyanaz a lap
+  // ugyanazt a jelet viszi mindket jatekosnal es minden ujrarajzolasnal.
+  // Igy a lap ranezesre azonosithato, de a jatekmenetre semmi hatasa —
+  // a Kartyacsataban csak a SZAM szamit.
+  const CB_SUITS = ['♣','♦','♥','♠','♣','♦','♥','♠'];
   const CardChip = ({value, color, dim=false}) => (
     <div style={{
-      width:36, height:48, borderRadius:9,
+      width:46, height:62, borderRadius:11,
       background:'#fff', border:'2px solid '+(dim ? color+'55' : color),
       display:'flex', alignItems:'center', justifyContent:'center',
-      fontFamily:T.font, fontWeight:900, fontSize:19, color: dim ? color+'88' : color,
-      boxShadow: dim ? 'none' : '0 2px 6px rgba(0,0,0,.12)',
+      fontFamily:T.font, fontWeight:900, fontSize:26, color: dim ? color+'88' : color,
+      boxShadow: dim ? 'none' : '0 2px 8px rgba(0,0,0,.14)',
       position:'relative', flexShrink:0, userSelect:'none',
       opacity: dim ? 0.4 : 1,
     }}>
-      <span style={{position:'absolute',top:3,left:5,fontSize:8,fontWeight:900,opacity:.6}}>{value}</span>
+      <span style={{position:'absolute',top:3,left:5,fontSize:10,fontWeight:900,opacity:.75}}>{value}</span>
       {value}
-      <span style={{position:'absolute',bottom:3,right:5,fontSize:8,fontWeight:900,opacity:.6,transform:'rotate(180deg)'}}>{value}</span>
+      <span style={{position:'absolute',bottom:2,right:5,fontSize:12,fontWeight:900,opacity:.9,color: dim ? color+'88' : CB.ink}}>{CB_SUITS[value % CB_SUITS.length]}</span>
     </div>
   );
 
@@ -59592,24 +59831,40 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
           const isHov = dropHover === ri;
           const isDraggingCard = (ci) => ghost && dragRef.current?.fromSlot && dragRef.current?.fromRi===ri && dragRef.current?.fromCi===ci;
           return (
+            /* A SOR tomor feher, es a szaggatott kontur csak a DOBOZONAN van.
+               Korabban az egesz sort szaggatott keret vette korbe, es igy
+               ot egyforma "urlap-mezo" allt egymas alatt — nem latszott, hogy
+               a jobb szel a cel. A szinezett korong adja a kor identitasat, a
+               pontozott vezetovonal pedig osszekoti a kettot. */
             <div key={ri} data-round-idx={ri} onClick={()=>assign(ri)} style={{
-              display:'flex', alignItems:'center', gap:10, padding:'7px 12px',
+              display:'flex', alignItems:'center', gap:10, padding:'8px 12px',
               background:'#fff',
-              borderRadius:13,
-              border: isHov ? '2px solid '+pColor : cards.length>0 ? '2px solid transparent' : '2px dashed rgba(26,42,74,.18)',
+              borderRadius:16,
+              border: isHov ? '2px solid '+pColor : '2px solid transparent',
               boxShadow:'0 2px 10px rgba(0,0,0,.08)',
               cursor: S.sel!==null ? 'pointer' : 'default',
               transition:'border .1s',
-              minHeight:48,
+              minHeight:56,
             }}>
-              <div style={{fontFamily:T.font,fontWeight:700,fontSize:12,color:T.inkSoft,minWidth:38}}>{ri+1}. kör</div>
-              <div style={{flex:1,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',pointerEvents:'none'}}>
+              <div style={{width:26,height:26,borderRadius:999,background:CB_ROUND_TONE[ri % CB_ROUND_TONE.length],flexShrink:0,display:'grid',placeItems:'center'}}>
+                <span style={{fontFamily:T.font,fontWeight:800,fontSize:13,color:'#fff'}}>{ri+1}</span>
+              </div>
+              <div style={{fontFamily:T.font,fontWeight:800,fontSize:13,color:CB.ink,flexShrink:0}}>{ri+1}. kör</div>
+              {cards.length===0 && <div style={{flex:1,minWidth:8,height:2,borderTop:`2px dotted ${CB.slotDash}`,pointerEvents:'none'}} />}
+              <div style={{
+                display:'flex', alignItems:'center', justifyContent:'center', gap:6, flexWrap:'wrap',
+                pointerEvents:'none',
+                width: cards.length===0 ? '46%' : 'auto', flex: cards.length===0 ? 'none' : 1,
+                minHeight:40, borderRadius:12,
+                border: cards.length===0 ? `2px dashed ${CB.slotDash}` : '2px solid transparent',
+                background: cards.length===0 ? CB.slotBg : 'transparent',
+              }}>
                 {cards.length>0 ? cards.map((v,ci) => (
                   <div key={ci} onPointerDown={e=>onSlotCardPointerDown(e,ri,ci,v)} style={{pointerEvents:'all',touchAction:'none',cursor:'grab'}}>
                     <CardChip value={v} color={pColor} dim={isDraggingCard(ci)} />
                   </div>
                 )) : (
-                  <span style={{fontFamily:T.font,fontSize:12,color:T.inkMute,pointerEvents:'none'}}>Húzz ide</span>
+                  <span style={{fontFamily:T.font,fontSize:12.5,color:CB.inkMute,pointerEvents:'none'}}>Húzz ide</span>
                 )}
               </div>
               {cards.length>1 && <div style={{fontFamily:T.font,fontWeight:800,fontSize:13,color:pColor,minWidth:20,textAlign:'right',pointerEvents:'none'}}>{cards.reduce((a,b)=>a+b,0)}</div>}
@@ -59620,18 +59875,30 @@ function CardBattleGame({ gameIdx, challenger, opponent, onAdvance, onResult, on
         {/* Kéz kártyái */}
         <div style={{marginTop:2}}>
           <div style={{fontFamily:T.font,fontSize:10,fontWeight:700,color:CB.label,textTransform:'uppercase',letterSpacing:'.08em',marginBottom:5}}>Kézben</div>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            {hand.map((v,i) => (
+          {/* LEGYEZO. A lapok egyenes sorban ugy alltak, mint kartyak helyett
+              gombok; a dolessel latszik, hogy ez egy KEZ, amit tartunk. A dolés
+              a kozeptol szamitva no, es a kivalasztott lap kiegyenesedik —
+              kulonben a felemelt lap ferden allna, es elesnek latszana. */}
+          <div style={{display:'flex',gap:2,flexWrap:'wrap',paddingTop:6,paddingBottom:2}}>
+            {hand.map((v,i) => {
+              const mid = (hand.length - 1) / 2;
+              const off = i - mid;
+              const picked = S.sel === i;
+              return (
               <div key={i}
                 onPointerDown={e=>onCardPointerDown(e,i,v)}
                 onClick={()=>setS(s=>({...s,sel:s.sel===i?null:i}))}
                 style={{cursor:'grab',touchAction:'none',opacity:ghost?0.6:1,
-                  transform: S.sel===i ? 'translateY(-6px) scale(1.08)' : 'none',
+                  transformOrigin:'bottom center',
+                  transform: picked
+                    ? 'translateY(-10px) scale(1.1)'
+                    : `rotate(${(off * 5).toFixed(1)}deg) translateY(${Math.abs(off) * 3}px)`,
                   transition:'transform .15s',
+                  zIndex: picked ? 2 : 1,
                 }}>
                 <CardChip value={v} color={pColor} />
               </div>
-            ))}
+            );})}
             {allIn && <div style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:CB_GREEN,display:'flex',alignItems:'center'}}>✓ Kész</div>}
           </div>
         </div>
@@ -59787,10 +60054,18 @@ function IdoparbajGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
     </button>
   );
 
-  const PlayerCard = ({ p, time, diff, isWinner, isLoser }) => (
-    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:'14px 10px', borderRadius:16, background: isWinner ? `${T.mint}18` : isLoser ? `${T.coral}18` : T.surface, border:`2px solid ${isWinner?T.mint:isLoser?T.coral:'transparent'}`, boxShadow:T.shadow }}>
-      <PlayerAvatar player={p} size={44} />
-      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{p?.name}</div>
+  // `isUp` — o kovetkezik. Enelkul a ket lap egyforma volt, es a jatek csak a
+  // lenti gomb feliratabol derult ki („Sere indul") — a ket arckep semmit nem
+  // mondott arrol, kinel van a stopper.
+  const PlayerCard = ({ p, time, diff, isWinner, isLoser, isUp }) => (
+    <div style={{ flex:1, position:'relative', display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:'16px 10px 14px', borderRadius:18, background: isWinner ? `${T.mint}18` : isLoser ? `${T.coral}18` : isUp ? `${T.coral}0F` : T.surface, border:`2px solid ${isWinner?T.mint:isLoser?T.coral:isUp?T.coral:'transparent'}`, boxShadow:T.shadow }}>
+      {time === null && (
+        <div style={{ position:'absolute', top:10, right:10, width:26, height:26, borderRadius:999, background: isUp ? T.coral : 'transparent', border: isUp ? 'none' : `2px solid ${T.inkMute}55`, display:'grid', placeItems:'center' }}>
+          {isUp && Icon.check('#fff')}
+        </div>
+      )}
+      <PlayerAvatar player={p} size={52} />
+      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color: isUp && time===null ? T.coral : T.ink }}>{p?.name}</div>
       {time !== null ? (
         <>
           <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:26, color:isWinner?T.mint:isLoser?T.coral:T.ink }}>{time.toFixed(1)}<span style={{ fontFamily:T.font, fontSize:13, fontWeight:700 }}>mp</span></div>
@@ -59799,37 +60074,90 @@ function IdoparbajGame({ gameIdx, challenger, opponent, onAdvance, onResult }) {
           {isLoser  && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.coral, background:`${T.coral}22`, borderRadius:999, padding:'2px 10px' }}>ISZIK 🍺</div>}
         </>
       ) : (
-        <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>vár…</div>
+        <div style={{ fontFamily:T.font, fontSize:13, fontWeight:600, color: isUp ? T.ink : T.inkSoft }}>{isUp ? 'Te következel' : 'Várakozik'}</div>
       )}
     </div>
   );
 
+  // Harom rovid szabaly-emlekezteto. A jatek egy mondatos: „allitsd meg a
+  // celhoz kozel" — ez a harom csempe mondja meg, MIERT erdemes pontosnak lenni.
+  const TIPS = [
+    { ic:'timer',  a:'Pontosság',  b:'a lényeg' },
+    { ic:'target', a:'Közelebb',   b:'= több pont' },
+    { ic:'star',   a:'Te döntöd el', b:'a stoppert' },
+  ];
+
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16, alignItems:'center', width:'100%' }}>
 
-      {/* Target time — always visible */}
-      <div style={{ background:T.ink, borderRadius:16, padding:'16px 24px', width:'100%', textAlign:'center', boxSizing:'border-box' }}>
-        <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:6 }}>CÉL IDŐ</div>
-        <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:52, color:'#fff', lineHeight:1 }}>{tgt.toFixed(1)}<span style={{ fontFamily:T.font, fontSize:22, fontWeight:700, marginLeft:4, color:'rgba(255,255,255,0.7)' }}>mp</span></div>
+      {/* Cel ido. A lap MENTA (T.mint), nem T.ink: a fekete tabla ugy nezett
+          ki, mint egy hibauzenet-sav, holott ez a jatek celja. A halvany
+          koncentrikus korok es a celtabla-ikon mondjak meg, mire celzunk. */}
+      <div style={{ position:'relative', background:T.mint, borderRadius:20, padding:'20px 24px 18px', width:'100%', textAlign:'center', boxSizing:'border-box', overflow:'hidden', boxShadow:T.shadow }}>
+        <svg viewBox="0 0 200 120" preserveAspectRatio="none" style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none', opacity:0.16 }}>
+          <circle cx="100" cy="60" r="34" fill="none" stroke="#fff" strokeWidth="1.4"/>
+          <circle cx="100" cy="60" r="52" fill="none" stroke="#fff" strokeWidth="1.4"/>
+          <circle cx="100" cy="60" r="70" fill="none" stroke="#fff" strokeWidth="1.4"/>
+        </svg>
+        <div style={{ position:'relative' }}>
+          <div style={{ display:'grid', placeItems:'center', marginBottom:2 }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="8.5" stroke="rgba(255,255,255,0.75)" strokeWidth="1.8"/>
+              <circle cx="12" cy="12" r="3.6" stroke="rgba(255,255,255,0.75)" strokeWidth="1.8"/>
+              <path d="M12 1.8v3.2M12 19v3.2M1.8 12h3.2M19 12h3.2" stroke="rgba(255,255,255,0.75)" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.62)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:6 }}>CÉL IDŐ</div>
+          <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:52, color:'#fff', lineHeight:1 }}>{tgt.toFixed(1)}<span style={{ fontFamily:T.font, fontSize:22, fontWeight:700, marginLeft:4, color:'rgba(255,255,255,0.75)' }}>mp</span></div>
+          <div style={{ display:'flex', justifyContent:'center', marginTop:12 }}>
+            <div style={{ padding:'6px 16px', borderRadius:999, background:'rgba(255,255,255,0.18)', fontFamily:T.font, fontWeight:700, fontSize:13, color:'#fff' }}>Minél közelebb, annál jobb!</div>
+          </div>
+        </div>
       </div>
 
       {/* Player result cards — always show in any phase */}
       {(
         <div style={{ display:'flex', gap:10, width:'100%' }}>
-          <PlayerCard p={challenger} time={t1} diff={d1} isWinner={phase==='result'&&p1wins===true} isLoser={phase==='result'&&p1wins===false} />
-          <PlayerCard p={opponent}   time={t2} diff={d2} isWinner={phase==='result'&&p1wins===false} isLoser={phase==='result'&&p1wins===true} />
+          <PlayerCard p={challenger} time={t1} diff={d1} isWinner={phase==='result'&&p1wins===true} isLoser={phase==='result'&&p1wins===false} isUp={phase==='idle'||phase==='p1running'} />
+          <PlayerCard p={opponent}   time={t2} diff={d2} isWinner={phase==='result'&&p1wins===false} isLoser={phase==='result'&&p1wins===true} isUp={phase==='p1done'||phase==='p2running'} />
+        </div>
+      )}
+
+      {/* A harom csempe csak indulas elott all kint — futas kozben a stop-gomb
+          kell hogy a kepernyo alja legyen, nem szabalyszoveg. */}
+      {phase === 'idle' && (
+        <div style={{ display:'flex', gap:8, width:'100%' }}>
+          {TIPS.map((x, i) => (
+            <div key={i} style={{ flex:1, minWidth:0, display:'flex', alignItems:'center', gap:7, padding:'10px 9px', borderRadius:14, background:T.surface, boxShadow:T.shadowPill }}>
+              <div style={{ flexShrink:0, display:'grid', placeItems:'center' }}>
+                {x.ic === 'timer' ? (
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13.5" r="7.8" stroke={T.mint} strokeWidth="1.9"/><path d="M9.5 2.6h5M12 9.6v4.2" stroke={T.mint} strokeWidth="1.9" strokeLinecap="round"/></svg>
+                ) : x.ic === 'target' ? (
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.4" stroke={T.mint} strokeWidth="1.9"/><circle cx="12" cy="12" r="3.4" stroke={T.mint} strokeWidth="1.9"/></svg>
+                ) : Icon.star(T.yellow)}
+              </div>
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.ink, lineHeight:1.25 }}>{x.a}</div>
+                <div style={{ fontFamily:T.font, fontWeight:600, fontSize:11, color:T.inkSoft, lineHeight:1.25 }}>{x.b}</div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
       {/* Action area */}
-      {phase==='idle'     && <BigBtn label={`▶ ${challenger?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP1} color={challenger?.color} />}
+      {/* Az indito gomb a TEMA mentaja, nem a jatekos sajat szine. A jatekos-szin
+          esetleges (korall, sarga, lila) — egy sarga „indul" savon a feher
+          felirat alig latszott, es a gomb nem nezett ki elsodlegesnek. Kit
+          inditunk, azt a felirat es a kijelolt kartya mondja meg. */}
+      {phase==='idle'     && <BigBtn label={`▶ ${challenger?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP1} color={T.mint} />}
       {phase==='p1running' && (
         <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
           <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, fontWeight:600 }}>{challenger?.name} mér… állítsd meg időben!</div>
           <BigBtn label="⏹ Stop!" onClick={stopP1} color={T.coral} />
         </div>
       )}
-      {phase==='p1done'   && <BigBtn label={`▶ ${opponent?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP2} color={opponent?.color} />}
+      {phase==='p1done'   && <BigBtn label={`▶ ${opponent?.name} indul`} sub="Nyomd meg az időzítő indításához" onClick={startP2} color={T.mint} />}
       {phase==='p2running' && (
         <div style={{ width:'100%', display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
           <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, fontWeight:600 }}>{opponent?.name} mér… állítsd meg időben!</div>
@@ -64974,17 +65302,21 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult, difficul
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14, width:'100%' }}>
-      <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:900, fontSize:13, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.08em' }}>Mit Választanál?</div>
+      {/* A „MIT VÁLASZTANÁL?" felirat itt nem kell — a fejlecben mar ott all
+          a jatek neve, es a ket lap kozott a fuggoleges hely a szuk eroforras. */}
 
       {!revealed && !timedOut && (
-        <div style={{ display:'flex', justifyContent:'center' }}>
-          <svg width={88} height={88} viewBox="0 0 88 88">
-            <circle cx={44} cy={44} r={r2} fill="none" stroke="rgba(20,30,50,0.1)" strokeWidth={6}/>
-            <circle cx={44} cy={44} r={r2} fill="none" stroke={timeLeft <= 3 ? T.coral : T.mint} strokeWidth={6}
-              strokeDasharray={circ2} strokeDashoffset={circ2 * (1 - timerPct)}
-              strokeLinecap="round" transform="rotate(-90 44 44)" style={{transition:'stroke-dashoffset 0.1s, stroke 0.3s'}}/>
-            <text x={44} y={54} textAnchor="middle" fontFamily={T.font} fontWeight={900} fontSize={30} fill={timeLeft <= 3 ? T.coral : T.ink}>{timeLeft}</text>
-          </svg>
+        /* Vizszintes idozito-sor a 88 px-es gyuru helyett. A gyuru a lap
+           kozepere ult, es a ket opcio-kartya ala szorult; ez a sor 24 px
+           magas, es a felszabadult helyet a kartyak kapjak meg. */
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ flex:1, height:1.5, borderRadius:999, background:`${T.inkMute}40` }} />
+          <div style={{ display:'flex', alignItems:'center', gap:7, flexShrink:0 }}>
+            <span style={{ fontSize:17, lineHeight:1 }}>⏱️</span>
+            <span style={{ fontFamily:T.font, fontWeight:900, fontSize:19, color: timeLeft <= 3 ? T.coral : T.mint, lineHeight:1, minWidth:24, textAlign:'right' }}>{timeLeft}</span>
+            <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft, lineHeight:1 }}>mp</span>
+          </div>
+          <div style={{ flex:1, height:1.5, borderRadius:999, background:`${T.inkMute}40` }} />
         </div>
       )}
 
@@ -64995,7 +65327,9 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult, difficul
         </div>
       )}
 
-      <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+      {/* A felso padding a sarok-fulnek kell: a ful 10 px-szel a lap FOLE log,
+          es enelkul a szulo levagna. Ugyanezert no a „VAGY" kozti hely is. */}
+      <div style={{ display:'flex', flexDirection:'column', gap:0, paddingTop:12 }}>
         {['a','b'].map((side, idx) => {
           const text = side === 'a' ? q.a : q.b;
           const stat = side === 'a' ? q.statsA : 100 - q.statsA;
@@ -65008,19 +65342,30 @@ function MitValasztanalGame({ gameIdx, challenger, onAdvance, onResult, difficul
             else if (!isChosen && isMajority) { bg = `${T.mint}12`; border = `1.5px dashed ${T.mint}66`; }
           }
           const badge = side === 'a' ? 'A' : 'B';
+          const emoji = side === 'a' ? q.ea : q.eb;
+          // A ket kor-jelveny hattere szandekosan KULONBOZO: az „A" hideg, a
+          // „B" meleg tonusu. Egyforma tonussal a ket lap egymas masolata lenne.
+          const medal = side === 'a' ? `${T.blue}1F` : `${T.yellow}33`;
           return (
             <React.Fragment key={side}>
-              <button onClick={!revealed && !timedOut ? (() => { if (!choice) { startTimer(); } handleChoose(side); }) : undefined}
-                style={{ width:'100%', padding:'16px', background:bg, border, borderRadius:18, cursor: !revealed && !timedOut ? 'pointer' : 'default', fontFamily:T.font, fontWeight:800, fontSize:15, color:textColor, textAlign:'left', transition:'all .2s', boxShadow: T.shadowPill, display:'flex', alignItems:'center', gap:12 }}>
-                <div style={{ width:32, height:32, borderRadius:10, background:'#4A8FD4', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:'#fff' }}>{badge}</span>
+              {/* A/B SAROK-FUL — a lap szelen ul, nem a szoveg elott. Igy a
+                  kepjelveny kapja a bal oldalt, a betu meg vegig lathato marad. */}
+              <div style={{ position:'relative', width:'100%' }}>
+                <div style={{ position:'absolute', left:0, top:-10, width:44, height:38, borderRadius:'12px 12px 0 12px', background:'#4A8FD4', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1, pointerEvents:'none' }}>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:'#fff' }}>{badge}</span>
                 </div>
-                <span style={{ flex:1, lineHeight:1.4 }}>{text}</span>
-                {revealed && <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color: isMajority ? T.mint : T.inkMute, flexShrink:0 }}>{stat}%</span>}
-              </button>
+                <button onClick={!revealed && !timedOut ? (() => { if (!choice) { startTimer(); } handleChoose(side); }) : undefined}
+                  style={{ position:'relative', width:'100%', minHeight:118, padding:'18px 18px 18px 14px', background:bg, border, borderRadius:18, cursor: !revealed && !timedOut ? 'pointer' : 'default', fontFamily:T.font, fontWeight:800, fontSize:17, color:textColor, textAlign:'left', transition:'all .2s', boxShadow: T.shadow, display:'flex', alignItems:'center', gap:14 }}>
+                  <div style={{ width:74, height:74, borderRadius:999, background:medal, flexShrink:0, display:'grid', placeItems:'center', fontSize:34, lineHeight:1 }}>
+                    {emoji || badge}
+                  </div>
+                  <span style={{ flex:1, lineHeight:1.3 }}>{text}</span>
+                  {revealed && <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color: isMajority ? T.mint : T.inkMute, flexShrink:0 }}>{stat}%</span>}
+                </button>
+              </div>
               {idx === 0 && (
-                <div style={{ display:'flex', justifyContent:'center', alignItems:'center', margin:'6px 0' }}>
-                  <div style={{ padding:'4px 18px', background:'#1B2340', borderRadius:20 }}>
+                <div style={{ display:'flex', justifyContent:'center', alignItems:'center', margin:'14px 0 16px' }}>
+                  <div style={{ padding:'6px 22px', background:'#1B2340', borderRadius:20 }}>
                     <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', letterSpacing:'0.06em' }}>VAGY</span>
                   </div>
                 </div>

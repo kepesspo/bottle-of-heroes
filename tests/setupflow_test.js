@@ -215,7 +215,16 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
       return {
         w: { modes: modes && modes.w, other: other && other.w,
              summary: summary && Math.round(summary.getBoundingClientRect().width) },
-        egyBenA3: !!(diff && order && max && diff.el === order.el && order.el === max.el),
+        // v10.311: a nehezseg es a jatéksorrend KOMPAKT sor-kartya lett (ket
+        // kulon doboz, egymas mellett), a max korok pedig sajat dobozt kapott.
+        // Korabban mind a harom EGY dobozban, teljes szelessegu szegmens-savkent
+        // allt — az a lap tetejerol ~150 px-t vitt el.
+        haromKulonDoboz: !!(diff && order && max
+          && diff.el !== order.el && order.el !== max.el && diff.el !== max.el),
+        // A ket kompakt kartya EGY sorban all — nem egymas alatt.
+        egySorban: !!(diff && order
+          && Math.abs(Math.round(diff.el.getBoundingClientRect().top)
+                    - Math.round(order.el.getBoundingClientRect().top)) <= 2),
         modokKulon: !!(modes && diff && modes.el !== diff.el),
         egyebKulon: !!(other && diff && other.el !== diff.el),
       };
@@ -235,7 +244,8 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
        sorrend.tops.every((v, i) => v > 0 && (i === 0 || v > sorrend.tops[i - 1])),
        sorrend.want.map((w, i) => `${w}:${sorrend.tops[i]}`).join('  '));
     ok('a Módok külön dobozban van', boxes.modokKulon, JSON.stringify(boxes.w));
-    ok('nehézség + sorrend + max körök EGY dobozban', boxes.egyBenA3);
+    ok('nehézség / sorrend / max körök HÁROM külön dobozban', boxes.haromKulonDoboz);
+    ok('a nehézség és a játéksorrend egy sorban áll', boxes.egySorban);
     ok('az Egyéb külön dobozban van', boxes.egyebKulon);
     ok('minden doboz olyan széles, mint a felső összefoglaló',
        boxes.w.modes === boxes.w.summary && boxes.w.other === boxes.w.summary,
@@ -246,9 +256,19 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
     // mondata. A tartalom a kodbol jon: a fo hatas a KORTYSZORZO (1/2/3/5),
     // nem az idozito. Ha a szorzo elcsuszna a diffDrinks-tol, ez bukjon.
     ok('nincs inline nehézség-magyarázó sor', !/Hosszabb időzítők|Normál játéksebesség/i.test(t));
-    ok('van info gomb a nehézségi szint mellett',
-       await p.evaluate(() => !!document.querySelector('#__g button[aria-label="Nehézségi szintek"]')));
-    await p.evaluate(() => document.querySelector('#__g button[aria-label="Nehézségi szintek"]').click());
+    // v10.311: a szintek magyarazata nem kulon info-gombon nyilik, hanem MAGA a
+    // valaszto irja ki. A kartyara koppintva jon a lap, es ott all mind a negy
+    // szint a kortyszorzojaval — aki szintet valt, egy koppintasbol latja, mit
+    // valaszt. Ha a valaszto valaha visszaesne puszta cimke-listara, az alabbi
+    // ket ellenorzes bukik.
+    ok('a nehézségi szint kártyája megnyitja a választót',
+       await p.evaluate(() => {
+         const lab = [...document.querySelectorAll('#__g div')]
+           .find(d => d.children.length === 0 && /^nehézségi szint$/i.test(d.textContent.trim()));
+         const btn = lab && lab.closest('button');
+         if (btn) btn.click();
+         return !!btn;
+       }));
     await p.waitForTimeout(800);
     const sheet = await p.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
     ok('a lap mind a négy szintet mutatja',
@@ -273,10 +293,20 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
       ok('a diffDrinks nem számol újat, hanem a DIFFICULTY_INFO mult-ját veszi',
          /diffMeta\.mult/.test(code), code.slice(0, 100));
     }
-    ok('a jelenlegi szint meg van jelölve', /MOST EZ/i.test(sheet));
+    // A jeloles nem szoveg („MOST EZ"), hanem allapot: PONTOSAN egy sor van
+    // bejelolve, es az a beallitott szint (a META0-ban `easy`).
+    ok('pontosan a jelenlegi szint van megjelölve',
+       await p.evaluate(() => {
+         const on = [...document.querySelectorAll('button[role="radio"][aria-checked="true"]')];
+         return on.length === 1 && /Könnyű/.test(on[0].innerText || '');
+       }));
+    // A lapot a hatter-fatyolra koppintva zarjuk — ennek a valasztonak nincs
+    // „Értem" lablece, mert a valasztas MAGA a zaras.
     await p.evaluate(() => {
-      const b2 = [...document.querySelectorAll('button')].find(x => /^Értem$/.test(x.innerText.trim()));
-      if (b2) b2.click();
+      const veil = [...document.querySelectorAll('div')]
+        .find(d => { const s = getComputedStyle(d);
+          return s.position === 'fixed' && parseFloat(s.zIndex) > 100 && d.childElementCount <= 2; });
+      if (veil) veil.click();
     });
     await p.waitForTimeout(600);
 

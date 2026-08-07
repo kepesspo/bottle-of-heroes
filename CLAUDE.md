@@ -397,3 +397,71 @@ Teszt: `node tests/gamectrl_test.js` — online ÉS offline partiban méri az
 elrendezést (egy sor, négy külön háttér, nincs apró „+", sorrend, Kilépés).
 A menü PORTÁLBA renderel, ezért a teszt esetenként újratölti az oldalt —
 enélkül a második eset mindkét panel gombjait látná.
+
+## Nyolc képernyő az új design szerint (v10.311)
+Egy csomagban nyolc felület igazodott a küldött mockupokhoz. A mockupok az
+**`ice` (Jéghegy) témában** készültek — ha összevetnéd őket, előbb állítsd át a
+témát, különben a meleg alapértelmezés miatt minden színt eltérésnek látsz.
+Az összehasonlító képek Playwrighttal, a **buildelt `index.html`-ből** készültek.
+
+**Játékosok (üres).** Középre igazított kör-ikon jelvény + „Még nincsenek
+játékosok". A régi nagy halvány `0` kikerült. A szaggatott kontúr a **körön**
+van, nem a lapon: a kártya tömör fehér, mint a képernyő többi lapja. A
+„Játékos hozzáadása" **körvonalas** — tömör mentaként ugyanolyan súlyú volt,
+mint a lenti „Tovább a játékokhoz", és két elsődleges gomb állt egy lapon.
+Az info-sávban a haladás-pöttyök **jobbra** mentek: elöl felsorolás-jelnek
+látszottak, nem állapotjelzőnek.
+
+**Zene Felismerés.** A bakelit lemez **kikerült**, helyette hanghullám, közepén
+a fehér kör lejátszás-gomb — a sáv maga a gomb. A `ZENE_WAVE` **fix** minta (a
+véletlen minden újrarajzoláskor más sávot adna), a `wavePulse` animáció csak
+lejátszás alatt fut, és **nem a zene ritmusára** — a preview-hoz nincs analizer.
+A „Lejátszás" innentől **szöveg-felirat**, nem tömör gomb, alatta `ZENE_TICKS`
+pöttyös idővonal (a preview hossza ismeretlenül **30 mp**-nek számít).
+
+**5 dolog.** Érem-ikon a „KATEGÓRIA" fölé, a gyűrű 11→**7 px**, az öt jelölő
+`flex:1`-gyel **kitölti a sort** (fix 50 px helyett), és ívelt nyíl mutat rájuk,
+amíg egy sincs bejelölve.
+
+**Mit választanál.** A gyűrűs visszaszámláló helyett **vízszintes sor**
+(vonal — ⏱ szám mp — vonal): a gyűrű 88 px-et vitt el a két laptól. A body-beli
+„MIT VÁLASZTANÁL?" felirat kikerült (a fejlécben már ott van). Minden kérdés
+**két emojit** visz (`ea`/`eb`) a kör-jelvénybe — új kérdésnél **mindkettő
+kell**, fél párral a lapok elcsúsznak. Az A/B **sarok-fül**, ezért a szülőn
+`paddingTop:12` van: a fül 10 px-szel a lap fölé lóg.
+
+**Időpárbaj.** A cél-lap **`T.mint`**, nem `T.ink` — a fekete tábla
+hibaüzenet-sávnak látszott. Céltábla-ikon, halvány koncentrikus körök,
+„Minél közelebb, annál jobb!" pirula. A játékos-kártya `isUp` jelzővel mondja
+meg, kinél van a stopper („Te következel" / „Várakozik"), és az indító gomb a
+**téma mentája**, nem a játékos saját színe: sárga játékoson a fehér felirat
+alig látszott.
+
+**Kártyacsata.** A szaggatott kontúr a **dobózónára** költözött; a sor tömör
+fehér, benne `CB_ROUND_TONE` színes korong + pontozott vezetővonal. A korong
+színe a **kör sorszámát** jelöli, nem a tulajdonost — játékos-színnel mind az öt
+sor egyforma lenne. A kéz **legyezőben** áll (a kiválasztott lap kiegyenesedik),
+a lapok 36×48 → **46×62 px**, és a `CB_SUITS` jel az **értékből** jön, hogy
+ugyanaz a lap mindig ugyanazt vigye. A színjel dísz: a játékban csak a szám számít.
+
+**Szűrés.** A kategória chip-pirulákból **teljes szélességű sor** lett, színes
+ikon-csempével és rádió-koronggal (`FILTER_CATS`); a nehézség **arc-ikonos**
+kártya (`FILTER_DIFFS`). A három fokozat színe **FIX**, nem témafüggő: a
+„zöld = könnyű, piros = nehéz" jelentés nem lehet kék.
+
+**Játékmenet.** A nehézség és a játéksorrend **kompakt sor-kártya** lett
+(`SetupPickCard`), egymás mellett, a részletek `SetupPickSheet`-en nyílnak; a
+max körök saját dobozt kapott. A stat sáv (játékos / játék / perc) **marad**.
+A „Nehézségi szintek" külön info-gomb megszűnt — a választó **maga írja ki** a
+kortyszorzót (`DIFFICULTY_INFO[].mult`, `N× korty` chip). Ez nem elhagyható:
+a szint fő hatása a szorzó, és a `diffEasyNote`-féle szövegek csak időzítőkről
+beszélnek. A MÓDOK sorai fehérek, kör-ikonnal — a bekapcsolt mód korábban tömör
+menta sáv volt, súlyosabb, mint a képernyő elsődleges gombja.
+
+A `SetupPickSheet` sorai `role="radio"` + `aria-checked`-et visznek: a
+kiválasztottságot a korong és a háttér mutatja, szöveges „MOST EZ" nélkül —
+a jelölés így is megfogható géppel és teszttel.
+
+Teszt: `node tests/setupflow_test.js` (három külön doboz, a két kompakt kártya
+egy sorban, a választó kiírja mind a négy szintet a szorzóval, és pontosan egy
+sor van bejelölve).
