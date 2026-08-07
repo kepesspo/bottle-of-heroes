@@ -509,3 +509,20 @@ használtuk.
 
 A felirat (`splashLetterSlam`) és a tagline (`splashTagline`) **marad** — azok
 nem a logó mögött vannak, hanem alatta, és a szöveg érkezését jelzik.
+
+## DNR exkluzív: hat játék (v10.314)
+A jelölő a `GAMES[]` bejegyzésen a **`dnr:true`** mező — nem a `category`.
+A kategória marad, ami volt (mind a hat `Csapat`); a DNR-státusz e mellé jön.
+Aki `category:'DNR'`-t írna, az kiesne a saját kategória-szekciójából.
+
+A hat játék: **blackjack, imposztor, kisebb, beerpong, powerhour, ovfj**
+(a `busz` a hetedik, de az azonosítóval van bedrótozva: `g.id === 'busz' || g.dnr`).
+
+A jelölő két helyre megy le, és sehova máshova:
+- a Szűrés `DNR Exkluzív` sora (`f === 'DNR'`),
+- a kártyán a **★ DNR EXKLUZÍV** szalag.
+
+Amit könnyű összekeverni: a `config/homeConfig.dnrAppsEnabled` kapcsoló **NEM**
+ezekre vonatkozik. Az a főoldal alján lévő „TOVÁBBI DNR" sort kapcsolja
+(`dnrAppsOn`, egyetlen helyen) — a DNR exkluzív játékok a listában attól
+függetlenül ott maradnak.
