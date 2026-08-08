@@ -933,3 +933,40 @@ Teszt: `node tests/bj_design_test.js` — az elrendezést méri, nem a színt: e
 sor / három vízszintes pozíció, a letiltott gyorsválasztó, a kör alakú léptetők
 és akciógombok (négyzetes befoglaló + `50%` sugár), a felirat a korong alatt,
 a fejlécbe került pontszám, és a csempe-háttér nélküli helyek elválasztóval.
+
+## Éremdobás, Kártyacsata, admin XP-lap, Statisztika fülsor (v10.326)
+
+**Éremdobás — a játék saját végképernyője nem szorzott.** „iszik 1-et" volt
+bedrótozva, miközben az `onResult` ÉS a könyvelés is szoroz a nehézséggel:
+nehéz szinten a banner 3-at mondott, a játék 1-et. A szám innentől a
+`drinkMult` propból jön (a `GameContent` eddig nem adta tovább az éremnek).
+A szöveg **„N kortyot"**, nem „N-et": a magyar toldalék számonként más
+(1-et / 3-at / 5-öt), a „kortyot" viszont mindegyikkel jó.
+
+**Kártyacsata — a kör-sor az ÖSSZEGET mutatta egy lapon.** Aki két lapot rakott
+egy körre, annál a 3+4-ből egyetlen „7"-es chip lett — egy nem létező lap.
+A `results` mostantól a lapokat is viszi (`p1c` / `p2c`), és a sor minden
+lerakott lapot külön chipben rajzol; egynél többnél az összeg **pirulában** áll
+mellettük (`=25`). A tét-oldal tükrözve van: balra lapok→összeg, jobbra
+összeg→lapok, hogy a két oszlop a középső jel felé fusson.
+
+**Admin: „Büntetés" fül → „XP & Szint".** A büntetés-lista funkciója rég más
+(a Büntetés-modal osztja a kortyot/pontot), ezért a fül kikerült. Helyette az
+`AdminXpInfo` írja le, miből jön az XP — és a súlyokat **az `XP_W` konstansból
+olvassa**, nem beírt számokból: különben a leírás csendben elcsúszna a
+képlettől, amint a súlyok változnak. Ugyanígy a szint-küszöbök az
+`xpForLevel()`-ből és a rangok a `LEVEL_BANDS`-ből jönnek.
+Az `AdminPunishments` komponens **megmaradt** (a `config/punishments`
+dokumentum és a `PUNISHMENTS_DEFAULT` is) — csak nincs rá belépő.
+
+**Statisztika fülsor.** Négy fül (Profil / Játékok / Beerpong / Busz) + a Múlt
+gomb 360 px-es kijelzőn már nem fért ki: előbb a „Beerpong" felirat vált
+ellipszisre, aztán a sor kicsúszott. A fülek `flex:'1 0 auto'` + `minWidth:60`
+— széles képernyőn kitöltik a sort, keskenyen megtartják az olvasható méretet,
+és a **konténer görgethető vízszintesen**. A **Múlt a görgő sávon KÍVÜL** marad,
+különben elgörögne a fülekkel.
+
+Teszt: `node tests/erem_cardbattle_test.js` — az Érem mindhárom nehézségen
+összeveti a játék végképernyőjét a **result bannerrel** (pont ez a kettő tért
+el), a Kártyacsata pedig végigjátszik egy partit, ahol mindkét játékos MIND az
+öt lapját az 1. körre teszi: ott kell tíz chipnek és két `=25` pirulának lennie.
