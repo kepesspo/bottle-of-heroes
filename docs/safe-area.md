@@ -189,3 +189,45 @@ Mit néz az ember:
 3. **Alul üres hely / kilóg a tartalom?** → `korrekció=BE`? A `hiány` egyezik az
    `envTop`-pal? Használ valahol még `100dvh`-t olyan elem, ami teljes képernyős?
 4. `node tests/safearea_test.js` — zöld?
+
+---
+
+## 6. Teljes képernyős FIX réteg: a pull-up KIOLTHATJA a felső paddingot (v10.328)
+
+Volt a kódban hét ilyen wrapper:
+
+```jsx
+position:'fixed',
+top:'calc(-1 * env(safe-area-inset-top))',   // felhúzás
+paddingTop:'env(safe-area-inset-top)',       // …és ugyanennyi vissza
+```
+
+A kettő **EREDŐJE NULLA**: a tartalom pont a fizikai kijelző tetején kezdődik,
+tehát a **státuszsáv mögé** kerül. Böngészőben ez láthatatlan (`env()` = 0).
+
+**Miért nem tűnt fel évekig?** Mert a gyökér képernyő-konténer animációja
+(`slideIn`) `transform`-ot használ, és egy futó transzformáció **tartalmazó
+blokkot** csinál a `position:fixed` leszármazottaknak. Amíg az animáció fut
+(0,35 mp), a felhúzás a *már paddingelt* héjhoz képest számít, tehát jónak
+látszik — utána viszont a viewporthoz, és a tartalom becsúszik a sáv mögé.
+Ezért tűnt „néha jónak".
+
+Ami elromlott tőle: a Busz „host játszik játékosként" nézetében a felső sáv a
+**🎮 kijárattal együtt** a státuszsáv alá került — a játékos nem tudott
+visszalépni.
+
+**A helyes alak** (a háttér így is befest a sáv mögé, mert a padding-terület a
+konténer hátterét viseli):
+
+```jsx
+position:'fixed', top:0, left:0, right:0, bottom:0,
+paddingTop:'env(safe-area-inset-top)', boxSizing:'border-box'
+```
+
+**A pull-up NEM mindig hibás**: ahol a felső padding *nagyobb*
+(`calc(env(safe-area-inset-top) + 20px)`), ott szándékosan kompenzál —
+a Profil-részletek és az ünneplő overlay ilyen. A `safearea_test.js` 4. blokkja
+ezért nem a pull-upra szűr, hanem a **kioltó párosra**.
+
+Teszt: `node tests/safearea_test.js` 4. blokk. A regressziót a **forrás-
+ellenőrzés** fogja meg (a DOM-mérés a helyes geometriát dokumentálja).

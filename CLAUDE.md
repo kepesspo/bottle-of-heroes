@@ -1005,3 +1005,28 @@ pontosan annyi megy fel (`docs/buntetes.md` 1. csapda).
 történik, és a **Kövi gomb végig letiltott marad** (`active = !!pendingCommit`).
 A mérés ilyenkor csupa nullát ad, és úgy néz ki, mintha a játék nem könyvelne.
 Játék-tesztben `modes: ['points']` (vagy `['drinks']`) kell.
+
+## ⚠️ Fix réteg + safe area: a felhúzás kioltotta a paddingot (v10.328)
+Hét teljes képernyős `position:fixed` wrapper `top:'calc(-1 * env(safe-area-inset-top))'`
++ `paddingTop:'env(safe-area-inset-top)'` párost vitt. A kettő **eredője nulla**,
+tehát a tartalom a **státuszsáv mögé** került. Böngészőben láthatatlan.
+
+Ami elromlott tőle: a Busz „host játszik játékosként" nézetében a felső sáv a
+**🎮 kijárattal** együtt a sáv alá csúszott — a játékos nem tudott visszalépni.
+Helyesen `top:0` + `paddingTop:env(...)`: a háttér így is befest a sáv mögé
+(a padding-terület a konténer hátterét viseli), a tartalom viszont alatta kezdődik.
+
+**Miért tűnt néha jónak:** a gyökér konténer `slideIn` animációja `transform`-ot
+használ, ami futás közben **tartalmazó blokkot** csinál a `fixed` elemeknek — a
+0,35 mp alatt a felhúzás a már paddingelt héjhoz képest számít.
+
+A pull-up NEM mindig hibás: ahol a padding *nagyobb* (`calc(env(...) + 20px)`),
+ott szándékosan kompenzál (Profil-részletek, ünneplő overlay) — ezért a teszt a
+**kioltó párosra** szűr, nem a felhúzásra.
+
+A Busz játékos-nézet azonosító sávja ezen felül **sticky** lett: ez az egyetlen
+kijárat azon a képernyőn, és sok játékosnál a „Kiosztott kortyok" lista
+elgörgette.
+
+Részletek és a szimulációs recept: `docs/safe-area.md` 6. szakasz.
+Teszt: `node tests/safearea_test.js` 4. blokkja.

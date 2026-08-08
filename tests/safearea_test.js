@@ -153,6 +153,60 @@ const gotoPlayers = async (p) => {
        `${label}: a theme-color is fehér AppBar-os képernyőn`, themeColor);
   }
 
+  // ── 4. Teljes képernyős FIX rétegek: a tartalom a státuszsáv ALATT kezdődjön ──
+  // A `position:fixed; top:calc(-1 * envTop); paddingTop:envTop` páros EREDŐJE
+  // NULLA: a tartalom pont a fizikai kijelző tetejére kerül, tehát a státuszsáv
+  // MÖGÉ. Böngészőben ez nem látszik (env() = 0), készüléken viszont a felső
+  // sáv gombjai elérhetetlenek — a Busz „host játszik játékosként" nézetében
+  // pont a 🎮 kijárat tűnt el, és a játékos bennragadt.
+  console.log('\n===== 4. FIX RÉTEG: A TARTALOM A STÁTUSZSÁV ALATT =====');
+  {
+    const src = fs.readFileSync(path.join(ROOT, 'app.src.html'), 'utf8');
+    // stílus-objektumonként nézzük: van-e pull-up ÉS csak envTop-nyi felső padding
+    const bad = (src.match(/style=\{\{[^}]*top:'calc\(-1 \* env\(safe-area-inset-top\)\)'[^}]*\}\}/g) || [])
+      .filter(st => /paddingTop:'env\(safe-area-inset-top\)'/.test(st));
+    ok(bad.length === 0,
+       'nincs olyan fix réteg, ahol a pull-up és a felső padding kioltja egymást',
+       bad.length ? bad[0].slice(0, 90) + '…' : '0 db');
+  }
+  {
+    // …és megmutatjuk, mi a HELYES geometria: a helyes wrappperrel a Busz
+    // játékos-nézet kijárata (🎮) a szimulált 62 px-es státuszsáv ALATT áll.
+    // FIGYELEM: a wrapper itt a TESZTBEN van beégetve (a valódi belépőhöz egy
+    // teljes online partit kellene felállítani), tehát ez a blokk a geometriát
+    // dokumentálja — a regressziót a fenti FORRÁS-ellenőrzés fogja meg.
+    const p = await open(b, { file: makeSim(62, 34, 812), standalone: 1, screenH: 874, innerH: 812 });
+    const geo = await p.evaluate(() => {
+      const C = (v, s, r) => ({ id: v + s + r, value: v, suit: s, rowIdx: r, faceUp: true });
+      const pl = [{ id:'p0', name:'Olcsi', color:'#A78BFA' }, { id:'p1', name:'Sere', color:'#E07A5F' },
+                  { id:'p3', name:'Márk', color:'#4C8DD8' }];
+      const bs = { phase:'pyramid', settings:{ pyramidRows:5 }, pyramid:[C('8','♥',6)], nextFlipIdx:1,
+                   hands:{ p3:[C('10','♦',0), C('3','♣',0), C('K','♥',0)] }, valueCounts:{ '8':1 },
+                   initialDrinks:{ p0:0, p1:0, p3:0 } };
+      const room = { players: pl.map(x => ({ ...x, drinks:0 })), buszState: bs, buszTakenIds:['p3'] };
+      window.__fbStore['rooms'] = { '424242': room };
+      const r0 = document.getElementById('root'); if (r0) r0.style.display = 'none';
+      const root = document.createElement('div'); root.id = '__p';
+      document.body.appendChild(root);
+      // UGYANAZ a fix wrapper, mint a PlayScreen „host játszik játékosként" ága
+      ReactDOM.createRoot(root).render(
+        React.createElement('div', { style: { position:'fixed', top:0, left:0, right:0, bottom:0,
+          paddingTop:'62px', boxSizing:'border-box', zIndex:200, display:'flex', flexDirection:'column', background:T.bg } },
+          React.createElement(BuszPlayerView, { room, roomCode:'424242', forcedPlayerId:'p3',
+            forcedBusIntroShown:true, onBusIntroShown:()=>{}, onSwitchToHost:()=>{} })));
+      return null;
+    });
+    void geo;
+    await p.waitForTimeout(1600);
+    const m = await p.evaluate(() => {
+      const gm = [...document.querySelectorAll('#__p button')].find(x => /🎮/.test(x.innerText || ''));
+      return gm ? Math.round(gm.getBoundingClientRect().top) : null;
+    });
+    ok(m !== null && m >= 62, 'a 🎮 kijárat a státuszsáv ALATT áll', m + ' px (státuszsáv: 62)');
+    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+    await p.close();
+  }
+
   await b.close();
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) {}
   console.log(fail ? '\n❌ ' + fail + ' HIBA' : '\n✅ MINDEN ELLENORZES RENDBEN');
