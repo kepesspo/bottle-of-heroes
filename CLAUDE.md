@@ -893,3 +893,43 @@ három bukott tippet ugyanazon a megállón, és a `__fbStore`-ból olvassa viss
 hármat — seedelt előzménnyel a renderelés akkor is átmenne, ha a könyvelés soha
 nem írna semmit. A tipp-gombokra **várni kell** (bukás után 6 mp-ig áll az
 eredmény-sáv); fix várakozással a 2. és 3. kattintás némán elveszne.
+
+## Blackjack: a telefonos felület három képernyője (v10.325)
+A küldött mockupok szerint igazodott a **csatlakozás**, a **tét** és az
+**asztal**. Az összehasonlító képek Playwrighttal, a buildelt `index.html`-ből
+készültek, a **`BlackjackObserverView`** közvetlen mountolásával (a szoba a
+`fbstub` `__fbStore`-jában ül) — a teljes parti végigjátszása nélkül.
+
+**Csatlakozás.** A három készlet-választó **EGY sorban**, csempeként (korsó +
+szám + „KORTY" pirula). Egymás alatt, teljes szélességű gombként mindhárom
+ugyanakkora súlyú volt, mint a képernyő elsődleges akciója. A kijelölést
+**borostyán keret** viszi, nem menta: a menta a megerősítő gombok színe, itt
+egy választás áll, nem egy akció. A pipa zöld **körbe** került konfettivel
+(`BJ_CONFETTI` — a pozíciók FIXEK, véletlennel minden újrarendereléskor máshova
+ugrálna a szemcse), és a blokk nyitánya vonal–korsó-medál–vonal.
+
+**Tét.** A lap felső harmada `T.mintSoft`, benne a medál, a cím és a tömör
+**„Készleted" sáv**. A −/+ **kör**, a szám keretes dobozban. Új a
+**gyorsválasztó sor** (1/2/3/5 korty): ami nem fér a készletbe, az **le van
+tiltva** — enélkül egy koppintással olyan tétet állítana be a játékos, amit a
+`setMyBet` clamp-je (`Math.min(myChips, v)`) úgyis visszavág, és a felület
+mást mutatna, mint ami ténylegesen bemegy.
+
+**Asztal.** A poszton halvány ♣/♥ vízjel (`aria-hidden`, `pointerEvents:none`).
+A lefordított lap háta **zöld mintás fehér kerettel** (`BJCardEl`) — a kékes hát
+idegen testként ült az asztal zöldjén. A helyek **nem csempék**: kör-avatar,
+a soros játékosnál arany gyűrű, a helyeket **függőleges vonal** választja el.
+Az akciógombok **KÖRÖK, a felirat a kör ALATT** — a régi széles téglalapokon a
+felirat mellett álló emoji négy gombnál (split is) kicsordult.
+
+Két dolog, amit könnyű elrontani:
+- **A `BJActionBtn` MODUL-szintű.** A komponens törzsében minden újrarenderelés
+  új függvény-azonosságot adna, és a React leszedné-újramountolná a gombokat
+  (ugyanaz a hiba, ami az Időpárbajnál az avatarokat ugráltatta).
+- **Egy kéznél a pontszám a FEJLÉC sorában van**, split után marad kezenként.
+  A kettőt együtt renderelve a szám kétszer jelenne meg.
+
+Teszt: `node tests/bj_design_test.js` — az elrendezést méri, nem a színt: egy
+sor / három vízszintes pozíció, a letiltott gyorsválasztó, a kör alakú léptetők
+és akciógombok (négyzetes befoglaló + `50%` sugár), a felirat a korong alatt,
+a fejlécbe került pontszám, és a csempe-háttér nélküli helyek elválasztóval.
