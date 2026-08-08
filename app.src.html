@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.323';
+const APP_VERSION = 'v10.324';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -54993,6 +54993,87 @@ function BusDrinkOverlay({ drinks, name, card, fromName, unit, onClose }) {
   );
 }
 
+// ═══════════════ BUSZ — megálló-előzmény ═══════════════
+// A „Húzott lapok" sor pozíciónként csak az UTOLSÓ lapot mutatja
+// (`busPositionDrawnCards`), mert a következő buszozó felülírja. A megállóra
+// koppintva viszont az kell, ami ott KORÁBBAN fordult — ezért külön
+// történet-térkép: `busPositionHistory[posIdx] = [{ c: lap, r: [{id, ok}] }]`.
+//
+// Egy húzás TÖBB buszozóhoz is tartozhat: aki ugyanazon a megállón áll, mind
+// UGYANARRA a lapra tippel, ezért az `r` tömb, nem egyetlen azonosító.
+//
+// A plafon nem esztétikai: a TELJES `buszState` újraíródik a `rooms/<kód>`
+// dokumentumba minden lépésnél, tehát a történet minden eleme drágítja az
+// összes további írást. 12 megálló-előzmény bőven több, mint amennyi egy
+// partiban összejön.
+const BUS_HISTORY_MAX = 12;
+function busPushHistory(prev, posIdx, drawnCard, ridersAtPos, results) {
+  const map = { ...(prev || {}) };
+  const entry = {
+    c: drawnCard,
+    r: (ridersAtPos || []).map(rid => ({ id: rid, ok: !!(results && results[rid] && results[rid].correct) })),
+  };
+  const list = [...(map[posIdx] || []), entry];
+  map[posIdx] = list.length > BUS_HISTORY_MAX ? list.slice(-BUS_HISTORY_MAX) : list;
+  return map;
+}
+
+// A megállóra koppintva nyíló lap. Egy komponens, mert a host tábla és a
+// nézőmód UGYANAZT az előzményt mutatja — két másolat elcsúszna egymástól.
+function BusStopHistorySheet({ posIdx, routeCard, revealed, entries, players, onClose }) {
+  const list = entries || [];
+  return (
+    <SheetOverlay title={`${posIdx + 1}. megálló`} onClose={onClose}>
+      <div style={{ padding:'0 18px 18px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:16 }}>
+          <PlayingCard card={routeCard} size='lg' faceDown={!revealed} />
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>
+              {revealed ? 'A megálló lapja' : 'Még lefordítva'}
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, marginTop:3 }}>
+              {list.length === 0
+                ? 'Itt még senki nem húzott.'
+                : `Eddig ${list.length} lap fordult itt.`}
+            </div>
+          </div>
+        </div>
+
+        {list.length > 0 && (
+          <React.Fragment>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:9 }}>Ami itt fordult</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {list.map((e, k) => {
+                const rs = (e.r || []).map(x => ({ p: (players || []).find(pp => pp.id === x.id), ok: x.ok })).filter(x => x.p);
+                const last = k === list.length - 1;
+                return (
+                  <div key={k} style={{ display:'flex', alignItems:'center', gap:11, padding:'8px 11px', borderRadius:14,
+                                        background: last ? T.surfaceMuted : 'transparent',
+                                        border:`1.5px solid ${last ? T.inkMute + '22' : 'transparent'}` }}>
+                    <span style={{ width:18, fontFamily:T.font, fontWeight:800, fontSize:12, color:T.inkMute, flexShrink:0 }}>{k + 1}.</span>
+                    <PlayingCard card={e.c} size='md' />
+                    <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:4 }}>
+                      {rs.length === 0
+                        ? <span style={{ fontFamily:T.font, fontSize:12.5, color:T.inkMute }}>—</span>
+                        : rs.map((x, j) => (
+                            <div key={j} style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
+                              <PlayerAvatar player={x.p} size={20} />
+                              <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12.5, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{x.p.name}</span>
+                              <BohIcon name={x.ok ? 'check' : 'cross'} size={15} />
+                            </div>
+                          ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </React.Fragment>
+        )}
+      </div>
+    </SheetOverlay>
+  );
+}
+
 function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFooter, onSetBuszSwitch }) {
   const isOnline = !!roomCode;
   const [buszState, setBuszState] = useState(null);
@@ -55002,6 +55083,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
   const [drinkBurst, setDrinkBurst] = useState(null); // online host: nagy „kapott korty" overlay
   const prevRiderDrinksRef = useRef(null);
   const [lastCardFail, setLastCardFail] = useState(false);
+  const [historyPos, setHistoryPos] = useState(null); // melyik megallo elozmeny-lapja nyilik
   const [takenIds, setTakenIds] = useState([]);
   const [showQR, setShowQR] = useState(false);
   const [hostPlayerId, setHostPlayerId] = useState(null);
@@ -55226,7 +55308,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
     const busRiderDrawnCards = {};
     riders.forEach(rid => { busRiderPositions[rid] = 0; busRiderDone[rid] = false; busRiderBonusUsed[rid] = false; busRiderDrawnCards[rid] = []; });
     const busRevealedPositions = [1, 3].filter(i => i < st.settings.busSteps);
-    await persist({...st, phase:'bus', busRiders:riders, busRouteCards, busDrawDeck, busRiderPositions, busRiderDone, busRiderBonusUsed, busRiderDrawnCards, busRiderPendingGuesses:{}, busRevealedPositions, currentTurnRiderId:riders[0], busRiderDrinks:{}, settings:{...st.settings, bonusGuess:!!(gameMeta?.buszConfig?.bonusGuess!==false), aceMode: gameMeta?.buszConfig?.aceMode ?? 'high'}});
+    await persist({...st, phase:'bus', busRiders:riders, busRouteCards, busDrawDeck, busRiderPositions, busRiderDone, busRiderBonusUsed, busRiderDrawnCards, busRiderPendingGuesses:{}, busRevealedPositions, currentTurnRiderId:riders[0], busRiderDrinks:{}, busPositionDrawnCards:{}, busPositionHistory:{}, settings:{...st.settings, bonusGuess:!!(gameMeta?.buszConfig?.bonusGuess!==false), aceMode: gameMeta?.buszConfig?.aceMode ?? 'high'}});
   };
 
   const evalBusGuess = (guess, routeCard, drawnCard) => {
@@ -55276,7 +55358,8 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
     ridersAtPos.forEach(rid => delete newPending[rid]);
     const nextCurrent = [...busRiders].filter(rid => !newDone[rid]).sort((a,b) => (newPositions[a]||0) - (newPositions[b]||0))[0] || busRiders[0];
     const newPositionDrawnCards = {...(st.busPositionDrawnCards||{}), [posIdx]: drawnCard};
-    return { newPositions, newDone, newBonus, newDrawn, newDrinks, newRevealed, newPending, results, allDone, nextCurrent, drawnCard, newPositionDrawnCards };
+    const newPositionHistory = busPushHistory(st.busPositionHistory, posIdx, drawnCard, ridersAtPos, results);
+    return { newPositions, newDone, newBonus, newDrawn, newDrinks, newRevealed, newPending, results, allDone, nextCurrent, drawnCard, newPositionDrawnCards, newPositionHistory };
   };
 
   const makeGuess = async (guess, isBonus=false) => {
@@ -55327,7 +55410,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
         await firebase.firestore().collection('rooms').doc(roomCode).update({players:updated});
       } catch(e){}
     }
-    await persist({...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:r.newDrawn, busPositionDrawnCards:r.newPositionDrawnCards, busRiderPositions:r.newPositions, busRiderDone:r.newDone, busRiderBonusUsed:r.newBonus, busRiderDrinks:r.newDrinks, busRiderPendingGuesses:r.newPending, busRevealedPositions:r.newRevealed, currentTurnRiderId:r.nextCurrent, ...(r.allDone?{phase:'done'}:{})});
+    await persist({...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:r.newDrawn, busPositionDrawnCards:r.newPositionDrawnCards, busPositionHistory:r.newPositionHistory, busRiderPositions:r.newPositions, busRiderDone:r.newDone, busRiderBonusUsed:r.newBonus, busRiderDrinks:r.newDrinks, busRiderPendingGuesses:r.newPending, busRevealedPositions:r.newRevealed, currentTurnRiderId:r.nextCurrent, ...(r.allDone?{phase:'done'}:{})});
   };
 
   // PlayScreen signals — must be before any early return (Rules of Hooks)
@@ -55635,6 +55718,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
     const currentRider = players.find(p => p.id === currentTurnRiderId);
     const myStep = busRiderPositions?.[currentTurnRiderId] || 0;
     const positionDrawnCards = buszState.busPositionDrawnCards || {};
+    const posHistory = buszState.busPositionHistory || {};
     return (
       <div style={{display:'flex',flexDirection:'column',gap:14,paddingTop:8,width:'100%'}}>
         {/* current rider */}
@@ -55672,9 +55756,25 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
               const dc = positionDrawnCards[i] || (guessResult?.card && guessResult.step === i ? guessResult.card : null);
               const isResult = guessResult?.step === i && !positionDrawnCards[i];
               const glow = isResult && !guessResult?.correct;
-              return dc
-                ? <div key={`card-${i}-${dc.value}-${dc.suit}`} style={{animation:'cardFlip .4s cubic-bezier(.2,.9,.3,1.2)'}}><PlayingCard card={dc} size='lg' glow={glow} /></div>
-                : <div key={i} style={{width:_lgW,height:_lgH,borderRadius:7,border:`1.5px dashed ${i<myStep?T.coral+'60':T.inkMute+'30'}`,background:i<myStep?`${T.coral}08`:'transparent',flexShrink:0}} />;
+              // A sor csak az UTOLSO lapot mutatja — a korabbiak a megallo-lapon
+              // vannak. A darabszam-jelveny nelkul senki nem tudna, hogy van mit
+              // megnyitni; ezert csak 1-nel tobb elozmenynel jelenik meg.
+              const hist = posHistory[i] || [];
+              const cell = dc
+                ? <div style={{animation:'cardFlip .4s cubic-bezier(.2,.9,.3,1.2)'}}><PlayingCard card={dc} size='lg' glow={glow} /></div>
+                : <div style={{width:_lgW,height:_lgH,borderRadius:7,border:`1.5px dashed ${i<myStep?T.coral+'60':T.inkMute+'30'}`,background:i<myStep?`${T.coral}08`:'transparent'}} />;
+              if (hist.length === 0) return <div key={`h-${i}`} style={{flexShrink:0}}>{cell}</div>;
+              return (
+                <button key={`h-${i}`} onClick={() => setHistoryPos(i)} aria-label={`${i+1}. megálló előzménye`}
+                  style={{position:'relative',padding:0,border:'none',background:'transparent',cursor:'pointer',flexShrink:0,lineHeight:0}}>
+                  {cell}
+                  {hist.length > 1 && (
+                    <span style={{position:'absolute',top:-5,right:-5,minWidth:17,height:17,padding:'0 4px',borderRadius:999,
+                                  background:T.mint,color:'#fff',fontFamily:T.font,fontWeight:900,fontSize:10.5,
+                                  display:'grid',placeItems:'center',boxShadow:'0 2px 6px rgba(0,0,0,0.25)'}}>{hist.length}</span>
+                  )}
+                </button>
+              );
             })}
           </div>
         </div>); })()}
@@ -55754,6 +55854,11 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
             <div style={{fontFamily:T.font,fontSize:15,color:T.inkSoft,textAlign:'center',lineHeight:1.5}}>{t('busUnluckyMsg')}</div>
           </div>
         </div>
+      )}
+      {historyPos !== null && (
+        <BusStopHistorySheet posIdx={historyPos} routeCard={(busRouteCards||[])[historyPos]}
+          revealed={(buszState.busRevealedPositions||[1,3]).includes(historyPos)}
+          entries={posHistory[historyPos]} players={players} onClose={() => setHistoryPos(null)} />
       )}
       </div>
     );
@@ -64245,6 +64350,7 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
   const [pyramidWatching, setPyramidWatching] = useState(false);
   // ── 🚌 Busz nézőmód (leszállt / nem-buszozó játékosoknak) + 🌪 szélvihar ──
   const [busWatching, setBusWatching] = useState(false);
+  const [historyPos, setHistoryPos] = useState(null); // melyik megallo elozmeny-lapja nyilik
   const [szelviharBtn, setSzelviharBtn] = useState(null); // { ts } — 3 mp-ig él
   const [szelviharPlayerNotice, setSzelviharPlayerNotice] = useState(null);
   const busWatchingRef = React.useRef(false);
@@ -64297,7 +64403,7 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
       await firebase.firestore().collection('rooms').doc(roomCode).update({ buszState: {
         ...st, busRouteCards, busDrawDeck,
         busRiderPositions: newPositions, busRiderDrawnCards: newDrawn,
-        busPositionDrawnCards: {}, busRiderPendingGuesses: {},
+        busPositionDrawnCards: {}, busPositionHistory: {}, busRiderPendingGuesses: {},
         busRevealedPositions: [1, 3].filter(i => i < busStepsC),
         szelvihar: null,
         szelviharAnnounce: { name: (players.find(p => p.id === playerId)?.name) || '?', ts: Date.now() },
@@ -64460,6 +64566,7 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
       const wRoute = buszState.busRouteCards || [];
       const wRevealed = buszState.busRevealedPositions || [1, 3];
       const wDrawn = buszState.busPositionDrawnCards || {};
+      const wHist = buszState.busPositionHistory || {};
       const wRiders = (buszState.busRiders || []).map(rid => players.find(p => p.id === rid)).filter(Boolean);
       const wPos = buszState.busRiderPositions || {};
       const wDone = buszState.busRiderDone || {};
@@ -64482,10 +64589,27 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
                   <div key={i} style={{ flexShrink:0 }}><PlayingCard card={card} size='lg' faceDown={!wRevealed.includes(i)} /></div>
                 ))}
               </div>
+              {/* A megallora koppintva ugyanaz az elozmeny-lap nyilik, mint a
+                  host tablan — egy komponens, hogy a ket kepernyo ne csuszhasson el. */}
               <div style={{ display:'flex', gap:4 }}>
-                {wRoute.map((_, i) => wDrawn[i]
-                  ? <div key={i} style={{ flexShrink:0 }}><PlayingCard card={wDrawn[i]} size='lg' /></div>
-                  : <div key={i} style={{ width:56, height:78, borderRadius:8, flexShrink:0, border:`1.5px dashed ${T.inkMute}25` }} />)}
+                {wRoute.map((_, i) => {
+                  const hist = wHist[i] || [];
+                  const cell = wDrawn[i]
+                    ? <PlayingCard card={wDrawn[i]} size='lg' />
+                    : <div style={{ width:56, height:78, borderRadius:8, border:`1.5px dashed ${T.inkMute}25` }} />;
+                  if (hist.length === 0) return <div key={i} style={{ flexShrink:0 }}>{cell}</div>;
+                  return (
+                    <button key={i} onClick={() => setHistoryPos(i)} aria-label={`${i+1}. megálló előzménye`}
+                      style={{ position:'relative', padding:0, border:'none', background:'transparent', cursor:'pointer', flexShrink:0, lineHeight:0 }}>
+                      {cell}
+                      {hist.length > 1 && (
+                        <span style={{ position:'absolute', top:-5, right:-5, minWidth:17, height:17, padding:'0 4px', borderRadius:999,
+                                       background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:10.5,
+                                       display:'grid', placeItems:'center', boxShadow:'0 2px 6px rgba(0,0,0,0.25)' }}>{hist.length}</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
               <div style={{ display:'flex', gap:4 }}>
                 {wRoute.map((_, i) => (
@@ -64529,6 +64653,11 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
                 <div style={{ fontFamily:T.font, fontSize:15, color:T.ink, marginTop:10 }}><b>{szelviharPlayerNotice.name}</b> elfújta a lapokat — új osztás! 🃏</div>
               </div>
             </div>
+          )}
+          {historyPos !== null && (
+            <BusStopHistorySheet posIdx={historyPos} routeCard={wRoute[historyPos]}
+              revealed={wRevealed.includes(historyPos)} entries={wHist[historyPos]}
+              players={players} onClose={() => setHistoryPos(null)} />
           )}
         </div>
       );
@@ -64607,7 +64736,8 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
         const rPlayers = snap.data()?.players || [];
         const updatedPlayers = rPlayers.map(p => { const d=results[p.id]?.drinks||0; return d>0?{...p,drinks:(p.drinks||0)+d}:p; });
         const newPositionDrawnCards2 = {...(st.busPositionDrawnCards||{}), [myStep]: drawnCard};
-        const newSt = {...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawn, busPositionDrawnCards:newPositionDrawnCards2, busRiderPositions:newPositions, busRiderDone:newDone, busRiderBonusUsed:newBonus, busRiderDrinks:newDrinks, busRiderPendingGuesses:newPending, busRevealedPositions:newRevealed, currentTurnRiderId:nextCurrent, ...(allDone?{phase:'done'}:{})};
+        const newPositionHistory2 = busPushHistory(st.busPositionHistory, myStep, drawnCard, ridersAtPos, results);
+        const newSt = {...st, busDrawDeck:newDrawDeck, busRiderDrawnCards:newDrawn, busPositionDrawnCards:newPositionDrawnCards2, busPositionHistory:newPositionHistory2, busRiderPositions:newPositions, busRiderDone:newDone, busRiderBonusUsed:newBonus, busRiderDrinks:newDrinks, busRiderPendingGuesses:newPending, busRevealedPositions:newRevealed, currentTurnRiderId:nextCurrent, ...(allDone?{phase:'done'}:{})};
         await firebase.firestore().collection('rooms').doc(roomCode).update({players:updatedPlayers, buszState:newSt});
       } catch(e) { console.error(e); }
     };

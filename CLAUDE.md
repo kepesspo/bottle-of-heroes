@@ -855,3 +855,41 @@ Teszt: `bar_fradigrill_test.js` „AZ ERTEKELES TORLESE" blokkja. A fogódzó a
 **store** (`window.__fbStore`), nem a felület: a kulcsnak el kell TŰNNIE
 (`{}`), nem `0`-ra vagy `null`-ra állnia — a felületen mind a három egyformán
 „nincs értékelés"-nek látszik, az átlagban viszont nem.
+
+## Busz: mi fordult ezen a megállón? (v10.324)
+A „Húzott lapok" sor pozíciónként **mindig csak az UTOLSÓ lapot** mutatja
+(`busPositionDrawnCards`), mert a következő buszozó felülírja. Az előzményt
+ezért külön térkép őrzi:
+
+```
+busPositionHistory[posIdx] = [{ c: lap, r: [{ id, ok }] }, …]
+```
+
+A megállóra koppintva a `BusStopHistorySheet` nyílik — **egy komponens**, mert a
+host tábla és a nézőmód ugyanazt mutatja; két másolat elcsúszna egymástól
+(ugyanaz a hiba, ami a korty-sornál négy változatot szült).
+
+Három dolog, amit könnyű elrontani:
+- **Egy húzás TÖBB buszozóhoz tartozhat.** Aki ugyanazon a megállón áll, mind
+  UGYANARRA a lapra tippel, ezért az `r` tömb, nem egyetlen azonosító.
+- **KÉT könyvelő hely van.** A host (`resolvePosition`) és a játékos-eszköz
+  (`BuszPlayerView`, inline másolat) külön oldja fel a pozíciót — a
+  `busPushHistory` hívást MINDKETTŐBE be kell tenni, különben a telefonról
+  játszott kör nyom nélkül marad.
+- **A `BUS_HISTORY_MAX = 12` nem esztétika.** A TELJES `buszState` újraíródik a
+  `rooms/<kód>` dokumentumba minden lépésnél, tehát a történet minden eleme
+  drágítja az összes további írást. A plafonnál a **legrégebbi** esik ki.
+
+A jelvény (darabszám a lap sarkán) csak **1-nél több** előzménynél jelenik meg:
+egyetlen bejegyzésnél a látható lap maga az egész történet, ott a jelvény
+zajt csinálna. Nélküle viszont senki nem tudná, hogy van mit megnyitni.
+
+A történet ott nullázódik, ahol a `busPositionDrawnCards` is: a busz indulásakor
+és a **szélvihar** új osztásánál. (A `startBus` eddig egyiket sem nullázta —
+egy újrajátszott parti a régi húzott lapokkal indult volna.)
+
+Teszt: `node tests/bus_history_test.js`. A 2. blokk a lényeg: **végigjátszik**
+három bukott tippet ugyanazon a megállón, és a `__fbStore`-ból olvassa vissza a
+hármat — seedelt előzménnyel a renderelés akkor is átmenne, ha a könyvelés soha
+nem írna semmit. A tipp-gombokra **várni kell** (bukás után 6 mp-ig áll az
+eredmény-sáv); fix várakozással a 2. és 3. kattintás némán elveszne.
