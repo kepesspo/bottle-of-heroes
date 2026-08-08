@@ -809,3 +809,25 @@ derült ki, milyen címke alatt fut az ital.
 Teszt: `node tests/bar_fradigrill_test.js` — a hét recept adata (1000 ml,
 egyedi HELL+Sió páros, egy közös kisbetűs címke), a lista, a szűrés (a címke
 nélküli Barack Attack / Bogyóbomba kiesik) és a részletek lapja.
+
+## Pub: az értékelő lap alatt eltűnik a gombsáv (v10.322)
+A részletek „Szerkesztés / Értékelés" sávja `ReactDOM.createPortal`-lal a
+`document.body`-ba megy (`docs/safe-area.md` — iOS PWA-ban másképp nem tapad a
+képernyő aljához). Emiatt viszont **magasabban ült, mint a fölé nyíló értékelő
+lap**, és rácsúszott a csillagokra: a „HÁNY CSILLAGOT ÉR?" sort a sáv takarta,
+és rá sem lehetett koppintani.
+
+**Nem z-indexszel javítjuk.** A sáv a MÖGÖTTE lévő részletek laphoz tartozik —
+aktívnak sem szabad látszania, amíg az értékelő lap nyitva van. Ezért
+`{!ratingFor && ReactDOM.createPortal(…)}`: a lap alatt egyszerűen nincs sáv.
+Ugyanez a minta bármelyik jövőbeli portálos sávra: ha lap nyílik fölé, a sávot
+a lap állapota kapcsolja ki, nem a rétegsorrend.
+
+A `SheetOverlay` alsó `calc(6px + env(safe-area-inset-bottom))` paddingja
+változatlan — az a home indicatortól tartja el a tartalmat, a takarást nem az
+okozta.
+
+Teszt: `bar_fradigrill_test.js` „AZ ERTEKELO LAP" blokkja. A fogódzó a
+**hit-test** (`elementFromPoint` a csillag-sor közepén), nem a geometria: a sáv
+nem tolta el a tartalmat, csak ráfeküdt, ezért a „képernyőn belül van" ellenőrzés
+a hibás verzión is átment. Az `elementFromPoint` viszont a sávot adta vissza.

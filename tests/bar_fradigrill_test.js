@@ -67,6 +67,13 @@ const TAG = 'fradi - grill';
     const root = document.createElement('div'); root.id = '__p';
     root.style.cssText = 'position:fixed;inset:0;z-index:1;display:flex;flex-direction:column';
     document.body.appendChild(root);
+    // Profilok kellenek az ertekelo laphoz: a csillagok csak akkor elok, ha mar
+    // tudjuk, KI ertekel. Ot profil = a valodi eset, ott a legmagasabb a lap.
+    window.getProfiles = () => Promise.resolve([
+      { id:'p1', name:'Bacsinszky Ádám', color:'#A78BFA' }, { id:'p2', name:'Bíró Bence', color:'#4FC2A0' },
+      { id:'p3', name:'Kecskés Márk', color:'#6FA86F' },    { id:'p4', name:'Kiss Vivien', color:'#E8843C' },
+      { id:'p5', name:'Makláry Sára', color:'#E86A9B' },
+    ]);
     ReactDOM.createRoot(root).render(React.createElement(BarScreen, { go: () => {}, deepLink: null }));
   });
   await p.waitForTimeout(1800);
@@ -111,6 +118,39 @@ const TAG = 'fradi - grill';
   ok(/25\s*adag/.test(t), 'az alap adagszam 25 (1 liter felesekbe töltve)');
   ok(t.includes(TAG), 'a cimke a RESZLETEK lapjan is kint van (nem csak a szuroben)');
   ok(/Egységes trópusi ízvilág/.test(t), 'az izvilag-leiras is latszik');
+
+  // ── 7. az ertekelo lap: a fix also sav nem csuszhat a csillagokra ──
+  // A reszletek „Szerkesztés / Értékelés" savja PORTALBA megy (a body-ba), tehat
+  // a lapnal magasabban ult, es ra csuszott a csillag-sorra. A javitas nem
+  // z-index: a sav a MOGOTTE levo laphoz tartozik, ezert `ratingFor` alatt
+  // egyszeruen nem renderelodik.
+  console.log('\n===== AZ ERTEKELO LAP =====');
+  await p.evaluate(() => {
+    const b2 = [...document.querySelectorAll('button')].find(x => /^Értékelés/.test((x.innerText || '').trim()));
+    if (b2) b2.click();
+  });
+  await p.waitForTimeout(900);
+  await p.evaluate(() => {
+    const b3 = [...document.querySelectorAll('button')].find(x => /Bíró Bence/.test(x.innerText || ''));
+    if (b3) b3.click();   // ertekelo kivalasztva → a csillagok elok lesznek
+  });
+  await p.waitForTimeout(500);
+  const g = await p.evaluate(() => {
+    const lbl = [...document.querySelectorAll('*')]
+      .find(x => x.children.length === 0 && /HÁNY CSILLAGOT/i.test(x.innerText || ''));
+    const row = lbl ? lbl.nextElementSibling : null;
+    const r = row ? row.getBoundingClientRect() : null;
+    let hit = null;
+    if (r) {
+      const el = document.elementFromPoint(Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2));
+      hit = el ? (row.contains(el) || el === row) : false;
+    }
+    return { bottom: r ? Math.round(r.bottom) : null, vh: window.innerHeight,
+             hit, bar: [...document.querySelectorAll('button')].filter(x => /Szerkesztés/.test(x.innerText || '')).length };
+  });
+  ok(g.bar === 0, 'az ertekelo lap alatt NEM latszik a „Szerkesztés" sav', g.bar);
+  ok(g.bottom !== null && g.bottom <= g.vh, 'a csillag-sor a kepernyon belul van', g.bottom + ' / ' + g.vh);
+  ok(g.hit === true, 'a csillagokra tenylegesen ra lehet koppintani (semmi nem takarja)');
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
 
