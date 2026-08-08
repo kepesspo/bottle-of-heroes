@@ -781,3 +781,31 @@ A gomb 3 mp-ig él a célnál, az esemény 5 mp után magától törlődik. A me
 új útvonalat oszt ÉS a még úton lévő buszozókat visszateszi a startra
 (`busRiderPositions[rid] = 0`), majd `szelviharAnnounce`-ot ír — arra ugrik fel
 mindenkinél a popup.
+
+## „Fradi - Grill" shot-sorozat a Pubban (v10.321)
+Hét beépített DNR keverés (`FRADI_GRILL_SHOTS`, modul-szintű konstans a
+`BarScreen` felett, a `DNR_MIXES`-be spreadelve). Egyetlen alap-arány, hét
+ízvariáció: **csak a HELL és a Sió íze változik**, a Finlandia és a szóda /
+citrom-lime nem — ezért a hét bejegyzés egy `.map()`-ből jön, nem hét kézzel
+írt objektumból.
+
+**Az arányok 1 literre vannak felszorozva.** A kapott alap
+(250 Finlandia : 250 HELL : 250 Sió : 100 szóda) **850 ml**, tehát a szorzó
+1,176 — így áll a recept **295 / 295 / 295 / 115 ml**-en, ami pontosan 1000 ml.
+Ha az arány valaha változik, a négy szám összegének 1000-nek kell maradnia
+(a `bar_fradigrill_test` ezt méri): a `serv:25` ezen a literen alapul
+(1 liter ÷ 4 cl-es feles ≈ 25 adag), és a részletek lapján az adagszámláló
+ebből skálázza a mennyiségeket.
+
+**A címke KISBETŰS** (`FRADI_GRILL_TAG = 'fradi - grill'`). Az `allTags` és a
+tag-szűrő is `toLowerCase()`-el dolgozik, egy nagybetűs változat külön címkévé
+esne szét, és a szűrő egyiket sem találná meg — ugyanaz a szabály, amit az
+űrlap `addTag`-je érvényesít a kézzel felvett italokra.
+
+A **címkék a részletek lapján is kint vannak** (a jegyzet alatt, pirulákban).
+Eddig kizárólag a lista szűrőjében látszottak, tehát a recept mellett sehol nem
+derült ki, milyen címke alatt fut az ital.
+
+Teszt: `node tests/bar_fradigrill_test.js` — a hét recept adata (1000 ml,
+egyedi HELL+Sió páros, egy közös kisbetűs címke), a lista, a szűrés (a címke
+nélküli Barack Attack / Bogyóbomba kiesik) és a részletek lapja.

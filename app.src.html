@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.320';
+const APP_VERSION = 'v10.321';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -41736,6 +41736,33 @@ function DrinkForm({ init, profiles, onSave, onCancel, onDelete, allTags }) {
   );
 }
 
+// „Fradi - Grill" shot-sorozat. Egyetlen alap-arany, het izvariacio: a Sio le es a
+// HELL izesites valtozik, a Finlandia es a szoda / citrom-lime nem. Az adagok mar
+// 1 literre vannak felszorozva (250:250:250:100 = 850 ml → ×1,176), ezert allnak
+// 295 / 295 / 295 / 115 ml-en. A cimke KISBETUS — a tag-szuro es az `allTags` is
+// `toLowerCase()`-el dolgozik, egy nagybetus valtozat kulon cimkeve esne szet.
+const FRADI_GRILL_TAG = 'fradi - grill';
+const FRADI_GRILL_STEP = 'Mindent jéghidegen összekeversz egy 1 literes kancsóban, a szódát / citrom-lime-ot a végén óvatosan hozzálöttyinted, hogy ne veszítse el a pezsgését. Felesekbe töltve kb. 25 adag.';
+const FRADI_GRILL_SHOTS = [
+  { id:'fg_tropicalfusion', name:'Tropical Fusion', emoji:'🥭', sio:'Sió Alma–Maracuja–Mangó', hell:'HELL Mango-Orange', note:'Egységes trópusi ízvilág' },
+  { id:'fg_summerwave',     name:'Summer Wave',     emoji:'🍉', sio:'Sió Alma–Maracuja–Mangó', hell:'HELL Watermelon',   note:'Trópusi, friss, dinnyés' },
+  { id:'fg_greenrush',      name:'Green Rush',      emoji:'🍏', sio:'Sió Alma',                hell:'HELL Zero Green Apple', note:'Friss, ropogós, almás' },
+  { id:'fg_purpleorchard',  name:'Purple Orchard',  emoji:'🍇', sio:'Sió Alma',                hell:'HELL Red Grape',    note:'Alma + szőlő, testesebb gyümölcsös íz' },
+  { id:'fg_berrywave',      name:'Berry Wave',      emoji:'🍓', sio:'Sió Eper–Lime',           hell:'HELL Watermelon',   note:'Nyárias, epres-dinnyés' },
+  { id:'fg_berrygarden',    name:'Berry Garden',    emoji:'🫐', sio:'Sió Eper–Lime',           hell:'HELL Zero Berry',   note:'Bogyós gyümölcsök, friss lime-os lecsengéssel' },
+  { id:'fg_melonbreeze',    name:'Melon Breeze',    emoji:'🍈', sio:'Sió Citrus–Sárgadinnye',  hell:'HELL Classic',      note:'Friss citrusos, könnyed dinnyés' },
+].map(s => ({
+  id:s.id, dnr:true, custom:true, type:'shot', name:s.name, emoji:s.emoji,
+  str:3, serv:25, by:'Fradi - Grill', note:s.note, tags:[FRADI_GRILL_TAG],
+  ing:[
+    { q:'295 ml', n:'Finlandia vodka' },
+    { q:'295 ml', n:s.hell },
+    { q:'295 ml', n:s.sio },
+    { q:'115 ml', n:'szóda / citrom-lime' },
+  ],
+  step:FRADI_GRILL_STEP,
+}));
+
 function BarScreen({ go, deepLink }) {
   const [view, setView] = React.useState('own');
   const [tab, setTab] = React.useState('cocktail');
@@ -41821,6 +41848,11 @@ function BarScreen({ go, deepLink }) {
     { id:'dnr_bogyobomba', dnr:true, custom:true, type:'shot', name:'Bogyóbomba', emoji:'🍓', str:3, serv:25, by:'DNR',
       ing:[{q:'5 dl',n:'vodka'},{q:'5 dl',n:'epres Sió limonádé'},{q:'5 dl',n:'Hell gojibogyó'},{q:'5 dl',n:'citrusos Sió zéró'}],
       step:'Jéggel jól behűtve összekevered, felesekbe töltöd — 25 adag, buli-mennyiség.' },
+    // „Fradi - Grill" sorozat — a kapott arany (250 Finlandia : 250 HELL : 250 Sio :
+    // 100 szoda) 850 ml-t ad ki, ezert 1 literre 1,176-szoros a szorzo:
+    // 295 / 295 / 295 / 115 ml = pontosan 1000 ml. A het recept CSAK a HELL es a Sio
+    // izeben ter el — az aranyok es a keszites mindenutt azonosak.
+    ...FRADI_GRILL_SHOTS,
   ];
 
   // A szerkesztett (Firestore-ba mentett) DNR keverés felülírja a beépítettet — id
@@ -42113,6 +42145,16 @@ function BarScreen({ go, deepLink }) {
                 </div>
               ); })() : null}
               {d.note ? <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, marginTop:3 }}>📝 {d.note}</div> : null}
+              {/* Cimkek a reszleteknel is — eddig csak a lista szurojeben latszottak,
+                  igy a recept mellett sehol nem derult ki, milyen cimke alatt fut. */}
+              {(d.tags && d.tags.length) ? (
+                <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:7 }}>
+                  {d.tags.map(tg => (
+                    <span key={tg} style={{ padding:'4px 10px', borderRadius:999, background:T.surfaceMuted, color:T.inkSoft,
+                                            fontFamily:T.font, fontWeight:800, fontSize:11.5 }}>{tg}</span>
+                  ))}
+                </div>
+              ) : null}
               {(d.ing && d.ing.length) ? (() => {
                 const baseServ = Math.max(1, d.serv || 1);
                 const factor = adag / baseServ;
