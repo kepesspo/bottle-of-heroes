@@ -152,6 +152,52 @@ const TAG = 'fradi - grill';
   ok(g.bottom !== null && g.bottom <= g.vh, 'a csillag-sor a kepernyon belul van', g.bottom + ' / ' + g.vh);
   ok(g.hit === true, 'a csillagokra tenylegesen ra lehet koppintani (semmi nem takarja)');
 
+  // ── 8. az ertekeles visszavonhato ──
+  // A 0 csillag nem jo visszavonasra: az beleszamitana az atlagba. A mezot
+  // tenylegesen ki kell venni a terkepbol — ezt nezi a store-ellenorzes.
+  console.log('\n===== AZ ERTEKELES TORLESE =====');
+  const delBtn = () => p.evaluate(() => [...document.querySelectorAll('button')]
+    .some(x => /Értékelésem törlése/.test(x.innerText || '')));
+  ok(!(await delBtn()), 'ertekeles NELKUL nincs torles gomb');
+
+  // 4 csillag a kivalasztott ertekelotol
+  await p.evaluate(() => {
+    const lbl = [...document.querySelectorAll('*')]
+      .find(x => x.children.length === 0 && /HÁNY CSILLAGOT/i.test(x.innerText || ''));
+    const row = lbl ? lbl.nextElementSibling : null;
+    // A csillagok <span>★</span>-ok, nem gombok — a 4. a negycsillagos ertekeles
+    const st = row ? [...row.querySelectorAll('span')].filter(x => x.innerText.trim() === '★') : [];
+    if (st[3]) st[3].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  await p.waitForTimeout(900);
+  const stored = () => p.evaluate(() => {
+    const doc = ((window.__fbStore || {})['config'] || {})['drinkRatings'] || {};
+    return doc['fg_tropicalfusion'] || {};
+  });
+  let s1 = await stored();
+  ok(Object.keys(s1).length === 1, 'az ertekeles lement a Firestore-ba', JSON.stringify(s1));
+  t = await txt();
+  ok(/A te értékelésed/.test(t), 'a reszleteknel megjelenik „A te értékelésed" sor');
+
+  // ujranyitas → most mar „Ertekeles modositasa", es van torles gomb
+  await p.evaluate(() => {
+    const b2 = [...document.querySelectorAll('button')].find(x => /^Értékelés/.test((x.innerText || '').trim()));
+    if (b2) b2.click();
+  });
+  await p.waitForTimeout(800);
+  ok(await delBtn(), 'modositasnal MAR van „Értékelésem törlése" gomb');
+
+  await p.evaluate(() => {
+    const b4 = [...document.querySelectorAll('button')].find(x => /Értékelésem törlése/.test(x.innerText || ''));
+    if (b4) b4.click();
+  });
+  await p.waitForTimeout(900);
+  const s2 = await stored();
+  ok(!('p2' in s2), 'a mezo TENYLEGESEN eltunt a terkepbol (nem 0, nem null)', JSON.stringify(s2));
+  t = await txt();
+  ok(!/A te értékelésed/.test(t), 'a reszletekbol is eltunt a sajat ertekeles');
+  ok(!/Értékelés módosítása/.test(t), 'az also gomb ujra „Értékelés" (nem „módosítása")');
+
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
 
   await p.close();

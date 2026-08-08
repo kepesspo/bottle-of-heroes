@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.322';
+const APP_VERSION = 'v10.323';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -41867,6 +41867,21 @@ function BarScreen({ go, deepLink }) {
     setRatings(prev => ({ ...prev, [drinkId]: { ...(prev[drinkId] || {}), [rater]: stars } }));
     if (db) db.collection('config').doc('drinkRatings').set({ [drinkId]: { [rater]: stars } }, { merge: true }).catch(() => {});
   };
+  // Sajat ertekeles visszavonasa. A 0 csillag NEM jo ra: az beleszamitana az
+  // atlagba, es „mindenki utalja" lenne belole — a mezot tenylegesen ki kell
+  // venni a terkepbol. A beagyazott FieldValue.delete() a set({merge:true})-ban
+  // pont ezt teszi; dotted path (`id.rater`) helyett azert igy, mert az ital-id
+  // pontot is tartalmazhat, azt pedig az update() mezoutkent ertelmezne.
+  const unrate = (drinkId) => {
+    if (!rater) return;
+    setRatings(prev => {
+      const cur = { ...(prev[drinkId] || {}) };
+      delete cur[rater];
+      return { ...prev, [drinkId]: cur };
+    });
+    if (db) db.collection('config').doc('drinkRatings')
+      .set({ [drinkId]: { [rater]: firebase.firestore.FieldValue.delete() } }, { merge: true }).catch(() => {});
+  };
   const avgOf = id => { const v = Object.values(ratings[id] || {}); return v.length ? { avg: v.reduce((a,b) => a+b, 0) / v.length, n: v.length } : { avg: 0, n: 0 }; };
   const isFav = id => !!(rater && favorites[id] && favorites[id][rater]);
   const toggleFav = id => {
@@ -42412,6 +42427,16 @@ function BarScreen({ go, deepLink }) {
               </div>
               {!rater && profiles.length > 0 && (
                 <div style={{ textAlign:'center', fontFamily:T.font, fontSize:12, color:T.inkMute, marginTop:8 }}>Előbb válaszd ki, ki vagy.</div>
+              )}
+              {/* Visszavonas — csak akkor, ha a kivalasztott ertekelo MAR ertekelt.
+                  Nincs megerosites: egy koppintassal vissza is rakhato egy csillag,
+                  szemben az ital torlesevel, ami visszavonhatatlan. */}
+              {mine > 0 && (
+                <button onClick={() => { unrate(rd.id); setRatingFor(null); }}
+                  style={{ display:'block', margin:'14px auto 0', padding:'11px 18px', borderRadius:14, border:'none',
+                           background:'transparent', color:T.coral, fontFamily:T.font, fontWeight:800, fontSize:13.5, cursor:'pointer' }}>
+                  Értékelésem törlése
+                </button>
               )}
             </div>
           </SheetOverlay>

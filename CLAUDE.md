@@ -831,3 +831,27 @@ Teszt: `bar_fradigrill_test.js` „AZ ERTEKELO LAP" blokkja. A fogódzó a
 **hit-test** (`elementFromPoint` a csillag-sor közepén), nem a geometria: a sáv
 nem tolta el a tartalmat, csak ráfeküdt, ezért a „képernyőn belül van" ellenőrzés
 a hibás verzión is átment. Az `elementFromPoint` viszont a sávot adta vissza.
+
+## Pub: az értékelés visszavonható (v10.323)
+Az értékelő lapon a saját pontszám törölhető — „Értékelésem törlése", a
+csillagok alatt, és **csak akkor jelenik meg, ha a kiválasztott értékelő már
+értékelt** (`mine > 0`). Nincs megerősítés: egy koppintással vissza is rakható
+egy csillag, szemben az ital törlésével, ami visszavonhatatlan (az ezért maradt
+a szerkesztő lap alján, megerősítéssel).
+
+**A 0 csillag NEM visszavonás.** Az `avgOf` az értékek átlagát veszi, tehát egy
+lementett 0 lehúzná az átlagot — „mindenki utálja" lenne belőle, holott a
+játékos épp azt mondta, hogy nem akar véleményt adni. A mezőt tényleg ki kell
+venni a térképből, ezt teszi az `unrate`.
+
+**Beágyazott `FieldValue.delete()`, nem dotted path.** A `set({ [drinkId]:
+{ [rater]: FieldValue.delete() } }, { merge:true })` alak azért kell, mert a
+`update('id.rater')` a pontot MEZŐÚTKÉNT értelmezné — egy pontot tartalmazó
+ital-id (a Firestore auto-id-k is bármit tartalmazhatnak) csendben rossz helyre
+írna. A `set`+`merge` a kulcsokat szó szerinti mezőnévnek veszi; a `fbstub` is
+így viselkedik.
+
+Teszt: `bar_fradigrill_test.js` „AZ ERTEKELES TORLESE" blokkja. A fogódzó a
+**store** (`window.__fbStore`), nem a felület: a kulcsnak el kell TŰNNIE
+(`{}`), nem `0`-ra vagy `null`-ra állnia — a felületen mind a három egyformán
+„nincs értékelés"-nek látszik, az átlagban viszont nem.
