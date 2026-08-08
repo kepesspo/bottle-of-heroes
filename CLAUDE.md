@@ -970,3 +970,38 @@ Teszt: `node tests/erem_cardbattle_test.js` — az Érem mindhárom nehézségen
 összeveti a játék végképernyőjét a **result bannerrel** (pont ez a kettő tért
 el), a Kártyacsata pedig végigjátszik egy partit, ahol mindkét játékos MIND az
 öt lapját az 1. körre teszi: ott kell tíz chipnek és két `=25` pirulának lennie.
+
+## Csoportos ivászat: számlálódik, és a PARTI szintjét követi (v10.327)
+**Igen, számlálódik.** A „Megiszom!" MINDEN játékos `drinks` mezőjét növeli
+(`setPlayers`), a parti végén pedig ez megy fel a statisztikába
+(`totalDrinks += p.drinks`) — ugyanaz a csatorna, mint a játékokban szerzett
+kortyoké.
+
+**A mennyiség viszont rossz forrásból jött.** A `currentGame.difficulty`
+(`könnyű`/`közepes`/`nehéz`) adta az 1/2/3-at — az a **játék saját, statikus
+címkéje**, nem a partira beállított szint, tehát extrém nehézségen ugyanannyi
+kortyot osztott, mint könnyűn. Innentől a `DIFFICULTY_INFO[].mult` (1/2/3/5),
+mint minden más korty-forrásnál. Pontosan az a keverés, amitől a v10.296
+szakasz óv.
+
+**A wildcard szorzó NEM játszik.** A csoportos ivászat nem egy kör eredménye,
+hanem két kör KÖZÖTT felugró esemény — nincs mihez képest duplázni.
+
+Az esemény 5–10 percenként sül el, és a popup nem játék közben jön: az ütemező
+csak „esedékesre" állít, a felület pedig a **következő kör/játék** kezdete után
+~1,8 mp-cel mutatja. Ezért egy rövid teszt-partiban elő sem jönne — a
+`window.__groupDrinkTestDelay` írja felül az első tüzelés idejét (ugyanaz a
+fogódzó, mint a szélviharnál).
+
+Teszt: `node tests/groupdrink_test.js` — mind a négy szinten. A hordozó játék az
+**Éremdobás**, aminek a kártyáján `könnyű` áll: a régi képlet így mind a négy
+esetben 1-et adott volna, tehát a teszt tényleg a parti szintjét méri.
+
+**A Büntetés marad ABSZOLÚT** — ott a játékos konkrét számot választ, és
+pontosan annyi megy fel (`docs/buntetes.md` 1. csapda).
+
+**Teszt-harness buktató, ami órákat tud elvinni:** a `PlayScreen`-t
+`gameMeta.modes` NÉLKÜL mountolva a `trackScores` hamis, a könyvelés meg sem
+történik, és a **Kövi gomb végig letiltott marad** (`active = !!pendingCommit`).
+A mérés ilyenkor csupa nullát ad, és úgy néz ki, mintha a játék nem könyvelne.
+Játék-tesztben `modes: ['points']` (vagy `['drinks']`) kell.

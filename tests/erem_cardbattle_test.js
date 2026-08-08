@@ -52,7 +52,9 @@ async function page(b) {
         window.__players = ps;
         return React.createElement(PlayScreen, {
           go: () => {}, players: ps, setPlayers: setPs, selectedGames: ['erem'],
-          roomCode: null, gameMeta: { modes: [], difficulty: diff }, setGameMeta: () => {},
+          // `modes:['points']` KELL: enelkul a `trackScores` hamis, es a PlayScreen
+          // egyaltalan nem konyvel — a Kövi gomb vegig letiltva marad.
+          roomCode: null, gameMeta: { modes: ['points'], difficulty: diff }, setGameMeta: () => {},
           setScoreHistory: () => {}, setLastGameRound: () => {},
         });
       }
@@ -81,6 +83,16 @@ async function page(b) {
        (all.match(/ISZIK[\s\S]{0,40}KORTY/) || ['-'])[0].replace(/\n/g, ' '));
     ok(bm && Number(bm[1]) === mult, `[${diff}] a banner és a játék UGYANAZT mondja`,
        'jatek=' + (m && m[1]) + ' banner=' + (bm && bm[1]));
+    // …es a Kövi utan tenylegesen ennyi kerul a jatekosra
+    await p.evaluate(() => {
+      const x = [...document.querySelectorAll('button')].find(y => /Kövi/.test(y.innerText || ''));
+      if (x && !x.disabled) x.click();
+    });
+    await p.waitForTimeout(1600);
+    const st = await p.evaluate(() => (window.__players || []).map(x => ({ n:x.name, d:x.drinks, pt:x.points })));
+    const drank = st.filter(x => x.d > 0);
+    ok(drank.length === 1 && drank[0].d === mult,
+       `[${diff}] a játékosra is ${mult} korty került`, JSON.stringify(st));
     ok(p.__errs.length === 0, `[${diff}] nincs JS hiba`, p.__errs.join(' | '));
     await p.close();
   }

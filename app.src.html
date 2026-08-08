@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.326';
+const APP_VERSION = 'v10.327';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -62696,7 +62696,12 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const groupDrinkDueRef = React.useRef(false);
   React.useEffect(() => {
     if (!groupDrinkEnabled) return;
-    const ms = (5 + Math.random() * 5) * 60 * 1000;
+    // 5–10 perc. A teszt ezt felul tudja irni (`window.__groupDrinkTestDelay`) —
+    // ugyanaz a fogodzo, mint a szelviharnal: fix varakozassal egy rovid
+    // teszt-parti sosem erne el az esemenyt.
+    const ms = (typeof window.__groupDrinkTestDelay === 'number')
+      ? window.__groupDrinkTestDelay
+      : (5 + Math.random() * 5) * 60 * 1000;
     const t = setTimeout(() => { groupDrinkDueRef.current = true; }, ms);
     return () => clearTimeout(t);
   }, [groupDrinkEnabled, groupDrinkOverlay]); // re-arm after each event
@@ -62706,9 +62711,15 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     const t = setTimeout(() => {
       if (!groupDrinkDueRef.current) return;
       groupDrinkDueRef.current = false;
-      const diff = currentGame.difficulty;
-      const drinks = diff === 'nehéz' ? 3 : diff === 'közepes' ? 2 : 1;
-      setGroupDrinkOverlay({ drinks });
+      // A mennyiseg a PARTIRA beallitott nehezsegbol jon (DIFFICULTY_INFO.mult),
+      // nem a jatek-kartya statikus cimkejebol. Korabban a `currentGame.difficulty`
+      // (könnyű/közepes/nehéz) adta 1/2/3-at — az a jatek SAJAT cimkeje, es
+      // teljesen fuggetlen a partira valasztott szinttol, tehat extrem szinten
+      // ugyanugy 1-2-3 kortyot osztott, mint konnyun.
+      // A wildcard szorzo NEM jatszik: a csoportos ivaszat nem egy kor
+      // eredmenye, hanem ket kor kozott felugro esemeny.
+      const gdMeta = DIFFICULTY_INFO.find(d => d.id === (gameMeta?.difficulty || 'easy')) || DIFFICULTY_INFO[0];
+      setGroupDrinkOverlay({ drinks: gdMeta.mult });
       if (typeof window.bohSound === 'function') window.bohSound('cheers');
     }, 1800);
     return () => clearTimeout(t);
