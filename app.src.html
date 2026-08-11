@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.331';
+const APP_VERSION = 'v10.332';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -35967,6 +35967,42 @@ function ritmusMaxDrinks(meta) {
   return Math.max(1, Math.round(n * (1 - trap)));
 }
 
+// ═══════════════ ÚTVESZTŐ — a csapdák EGY forrásból ═══════════════
+// A leírás és a viselkedés eddig két helyen élt, és el is csúszott: a „Fal"
+// 3 lépés késést ígért, de ötöt adott, az „Örvény" pedig „2 mezővel
+// visszadobja"-t, holott a pozíció nem változik — csak 3 lépést veszít.
+//
+// A `steps()` MAGA a viselkedés (a `buildAnim` ezt fűzi a sorba), a `delay`
+// pedig ugyanennek a hossza — a `utveszto_traps_test` a kettőt összeveti, így
+// a kiírt szám nem tud elszakadni attól, amit a játék csinál.
+//
+// Miért „lépés" a mértékegység? Mert a győztes az, akinek KEVESEBB lépése van
+// (`steps: seq.length`) — a késleltetés tehát pontosan ennyi lépéssel ront.
+const UTVESZTO_TRAPS = [
+  { id:'sorc', emoji:'🍺', name:'Sörcsokor', korty:2, delay:2,
+    note:'Megáll meginni egy sört',
+    steps: ({ idx }) => [{ idx, pause:'sorc' }, { idx, pause:'sorc' }] },
+  { id:'fal', emoji:'🧱', name:'Fal', korty:3, delay:5,
+    note:'Nekimegy, és visszapattan róla',
+    steps: ({ idx, prev }) => [
+      { idx, pause:'fal' }, { idx, pause:'fal' }, { idx, pause:'fal' },
+      ...(prev !== null ? [{ idx:prev, bounce:true }] : []), { idx, bounce:true }] },
+  { id:'alom', emoji:'💤', name:'Álom', korty:0, delay:4,
+    note:'Elalszik a pálya közepén',
+    steps: ({ idx }) => [0,1,2,3].map(() => ({ idx, pause:'alom' })) },
+  { id:'orv', emoji:'🌀', name:'Örvény', korty:0, delay:3,
+    note:'Két mezőt visszasodor, majd visszaenged',
+    steps: ({ idx, prev, prev2 }) => [
+      ...(prev !== null ? [{ idx:prev, reverse:true }] : []),
+      ...(prev2 !== null ? [{ idx:prev2, reverse:true }] : []),
+      { idx, recover:true }] },
+  { id:'tel', emoji:'🔀', name:'Teleport', korty:0, delay:1,
+    note:'Az útvonal egy másik pontjára dobja',
+    steps: ({ jumpIdx }) => jumpIdx === null ? [] : [{ idx:jumpIdx, teleport:true }] },
+];
+// „+2 korty · +2 lépés" — a korty csak ott jelenik meg, ahol van.
+const utvesztoEffect = t => [t.korty ? `+${t.korty} korty` : null, `+${t.delay} lépés`].filter(Boolean).join(' · ');
+
 const GAMES = [
   { id:'blackjack', stake:null, roundTime:'slow',  name:'Blackjack',             difficulty:'közepes', category:'Csapat', emoji:'🂡', symbol:IMGS['blackjack_icon.png'], img:IMGS['blackjack_icon.png'], banner:IMGS['blackjack_banner.png'], dnr:true, color:'#1a6b3c', desc:'Csatlakozz a telefonoddal, tegyél tétet kortyokban, és játssz az osztó (a host) ellen! Hit, Stand vagy Double Down — aki veszít, megissza a tétjét, aki nyer, kiosztja. Blackjack másfélszeresét ér!' },
   { id:'busz', stake:null,      roundTime:'slow',  name:'Busz',                  difficulty:'nehéz',   category:'Csapat', emoji:'🚌', symbol:IMGS['busz_symbol.png'], img:IMGS['busz_icon.png'], banner:IMGS['busz_banner.png'], color:'#F4A04A', desc:'A piramis kártyasor aljától indulva fordítják fel sorban a lapokat. Akinek megegyezik a lapja az aktuális kártyával, kioszthat annyi kortyt amennyit ér a sor. Az utolsó helyen állók buszoznak: kisebb-nagyobb tippeket kell mondani egy 6 lapos sorra — ha rontasz, előről kezded és iszol.' },
@@ -36029,7 +36065,7 @@ const GAMES = [
   { id:'reakcio', stake:[1,1],  roundTime:'fast', name:'Reakció Teszt',    difficulty:'könnyű',  category:'Páros',  emoji:'⚡', img:IMGS['reakcio_icon.png'], banner:IMGS['reakcio_banner.png'], symbol:IMGS['reakcio_symbol.png'], color:'#FACC15', desc:'Párbaj! Mindkét játékos megnyomja a gombot amint a képernyő zöldre vált. A lassabb iszik.' },
   { id:'szamsor', stake:[1,1],  roundTime:'fast', name:'Szám Sorrend',     difficulty:'közepes', category:'Páros',  emoji:'🔢', img:IMGS['szamsor_icon.png'], banner:IMGS['szamsor_banner.png'], symbol:IMGS['szamsor_symbol.png'], color:'#3B82F6', desc:'Párbaj! Mindkét játékos külön koppintja sorrendben 1-től 9-ig a számokat. Az app összehasonlítja az időt — a lassabb iszik.' },
   { id:'cardbattle', stake:[1,3], stakeOf:(m)=>[1, m?.cardbattleConfig?.rounds || 5], roundTime:'mid', name:'Kártyacsata', difficulty:'közepes', category:'Páros', emoji:'🃏', symbol:null, img:IMGS['cardbattle_icon.png'], banner:IMGS['cardbattle_banner.png'], color:'#8B5CF6', desc:'Mindkét játékos 5 lapot oszt szét 5 körre (összérték: 25). A magasabb összeget befektető játékos nyeri a kört — döntetnél a tét továbbbgördül. Aki több kört nyer, az győz!' },
-  { id:'utveszto', stake:null, roundTime:'slow', name:'Útvesztő', difficulty:'nehéz', category:'Páros', emoji:'🗺️', symbol:null, img:IMGS['utveszto_icon.png'], banner:IMGS['utveszto_banner.png'], color:'#7c3aed', desc:'Csapdákat rejtettél el — az ellenfél vakon navigál a pályádon. Aki előbb ér célba, nyer. A vesztes iszik!' },
+  { id:'utveszto', stake:null, roundTime:'slow', name:'Útvesztő', difficulty:'nehéz', category:'Páros', emoji:'🗺️', symbol:null, img:IMGS['utveszto_icon.png'], banner:IMGS['utveszto_banner.png'], color:'#7c3aed', desc:'Csapdákat rejtettél el — az ellenfél vakon navigál a pályádon. Aki kevesebb lépésből ér célba, nyer; a vesztes issza, amit a csapdák összeszedtek (+2 korty a vereségért).\n\nA lerakható csapdák:\n' + UTVESZTO_TRAPS.map(t => `${t.emoji} ${t.name} — ${utvesztoEffect(t)} · ${t.note}`).join('\n') },
   { id:'quiz', stake:[1,1], roundTime:'mid', name:'Kvíz', difficulty:'közepes', category:'Egyéni', emoji:'🧠', symbol:null, img:IMGS['quiz_icon.png'], banner:IMGS['quiz_banner.png'], color:'#6366F1', desc:'Válaszolj a kérdésekre! Helyes válasz után pontot vehetsz — vagy tovább mersz menni és kortyokat gyűjthetsz osztogatásra. Ha tovább mégy és hibázol, te iszol annyit ahány kördnél vesztetted.' },
 ];
 
@@ -61561,13 +61597,7 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
   const START_IDX = 0;
   const END_IDX = GRID * GRID - 1;
 
-  const TRAP_TYPES = [
-    { id:'sorc', emoji:'🍺', name:'Sörcsokor', desc:'+2 korty · 2 lépés késés' },
-    { id:'fal',  emoji:'🧱', name:'Fal',       desc:'+3 korty · 3 lépés késés · visszapattan' },
-    { id:'alom', emoji:'💤', name:'Álom',       desc:'4 lépés késés · megáll' },
-    { id:'orv',  emoji:'🌀', name:'Örvény',    desc:'2 mezővel visszadobja' },
-    { id:'tel',  emoji:'🔀', name:'Teleport',  desc:'Random pozícióra ugrik' },
-  ];
+  const TRAP_TYPES = UTVESZTO_TRAPS;
 
   // A csapdaszam kovesse a palyat: a mezok otode, de legalabb 3.
   // ⚠️ Ezert egy TIPUSBOL TOBB is lerakhato. Amig tipusonkent csak egyet
@@ -61662,29 +61692,17 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
       const idx = path[i];
       const trap = board[idx];
       seq.push({ idx, trap, i });
-      if (trap === 'sorc') {
-        korty += 2;
-        seq.push({ idx, pause:'sorc' });
-        seq.push({ idx, pause:'sorc' });
-      } else if (trap === 'fal') {
-        korty += 3;
-        seq.push({ idx, pause:'fal' });
-        seq.push({ idx, pause:'fal' });
-        seq.push({ idx, pause:'fal' });
-        if (i > 0) seq.push({ idx:path[i-1], bounce:true });
-        seq.push({ idx, bounce:true });
-      } else if (trap === 'alom') {
-        for (let j=0;j<4;j++) seq.push({ idx, pause:'alom' });
-      } else if (trap === 'orv') {
-        if (i >= 2) { seq.push({ idx:path[i-1], reverse:true }); seq.push({ idx:path[i-2], reverse:true }); }
-        else if (i >= 1) { seq.push({ idx:path[i-1], reverse:true }); }
-        seq.push({ idx, recover:true });
-      } else if (trap === 'tel') {
-        const candidates = path.filter((_,j) => j!==i);
-        if (candidates.length > 0) {
-          const jumpIdx = candidates[Math.floor(Math.random()*candidates.length)];
-          seq.push({ idx:jumpIdx, teleport:true });
+      // A csapda hatasa a KOZOS konstansbol jon (`UTVESZTO_TRAPS[].steps`),
+      // hogy a kiirt „+N lepes" ne tudjon elszakadni a valodi viselkedestol.
+      const t = trap ? UTVESZTO_TRAPS.find(x => x.id === trap) : null;
+      if (t) {
+        korty += t.korty;
+        let jumpIdx = null;
+        if (t.id === 'tel') {
+          const candidates = path.filter((_, j) => j !== i);
+          if (candidates.length > 0) jumpIdx = candidates[Math.floor(Math.random() * candidates.length)];
         }
+        seq.push(...t.steps({ idx, prev: i > 0 ? path[i-1] : null, prev2: i > 1 ? path[i-2] : null, jumpIdx }));
       }
     }
     return { seq, korty };
@@ -61775,8 +61793,13 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
           {TRAP_TYPES.map(t => (
             <div key={t.id} style={{display:'flex',alignItems:'center',gap:10,paddingBottom:6,marginBottom:6,borderBottom:'1px solid '+T.inkMute+'15'}}>
               <span style={{fontSize:18,flexShrink:0}}>{t.emoji}</span>
-              <span style={{fontFamily:T.font,fontWeight:800,fontSize:13,color:T.ink,minWidth:72}}>{t.name}</span>
-              <span style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,flex:1}}>{t.desc}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:'flex',alignItems:'baseline',gap:7,flexWrap:'wrap'}}>
+                  <span style={{fontFamily:T.font,fontWeight:800,fontSize:13,color:T.ink}}>{t.name}</span>
+                  <span style={{fontFamily:T.font,fontWeight:800,fontSize:11.5,color:T.coral}}>{utvesztoEffect(t)}</span>
+                </div>
+                <div style={{fontFamily:T.font,fontSize:11.5,color:T.inkSoft,marginTop:1}}>{t.note}</div>
+              </div>
             </div>
           ))}
         </div>
@@ -61823,13 +61846,18 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
                 fontFamily:T.font,fontWeight:700,fontSize:12,cursor:used&&!isSel?'default':'pointer',
                 boxShadow:isSel?'none':T.shadowPill,
               }}>
-                {t.emoji} {t.name}{used?' ✓':''}
+                {/* A hatas a gombon van, nem csak kivalasztas utan: igy
+                    OSSZEHASONLITHATO, mit erdemes hova rakni. */}
+                <span style={{display:'flex',flexDirection:'column',alignItems:'center',gap:1,lineHeight:1.15}}>
+                  <span>{t.emoji} {t.name}{used?' ✓':''}</span>
+                  <span style={{fontSize:10,fontWeight:800,opacity:0.75}}>{utvesztoEffect(t)}</span>
+                </span>
               </button>
             );
           })}
         </div>
         {selTrap && <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,textAlign:'center',marginTop:4,padding:'6px 12px',background:T.bgSoft,borderRadius:10}}>
-          {TRAP_TYPES.find(t=>t.id===selTrap)?.emoji} {TRAP_TYPES.find(t=>t.id===selTrap)?.desc} — koppints a pályára!
+          {(() => { const t = TRAP_TYPES.find(x=>x.id===selTrap); return t ? `${t.emoji} ${t.name} — ${utvesztoEffect(t)} · ${t.note} — koppints a pályára!` : null; })()}
         </div>}
         <button onClick={()=>{setSelTrap(null);setPhase('setup2');}} disabled={placed===0} style={{
           marginTop:4,padding:'14px',borderRadius:14,border:'none',
@@ -61868,13 +61896,18 @@ function UtvesztoGame({ gameIdx, challenger, opponent, players, onAdvance, onRes
                 fontFamily:T.font,fontWeight:700,fontSize:12,cursor:used&&!isSel?'default':'pointer',
                 boxShadow:isSel?'none':T.shadowPill,
               }}>
-                {t.emoji} {t.name}{used?' ✓':''}
+                {/* A hatas a gombon van, nem csak kivalasztas utan: igy
+                    OSSZEHASONLITHATO, mit erdemes hova rakni. */}
+                <span style={{display:'flex',flexDirection:'column',alignItems:'center',gap:1,lineHeight:1.15}}>
+                  <span>{t.emoji} {t.name}{used?' ✓':''}</span>
+                  <span style={{fontSize:10,fontWeight:800,opacity:0.75}}>{utvesztoEffect(t)}</span>
+                </span>
               </button>
             );
           })}
         </div>
         {selTrap && <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,textAlign:'center',marginTop:4,padding:'6px 12px',background:T.bgSoft,borderRadius:10}}>
-          {TRAP_TYPES.find(t=>t.id===selTrap)?.emoji} {TRAP_TYPES.find(t=>t.id===selTrap)?.desc} — koppints a pályára!
+          {(() => { const t = TRAP_TYPES.find(x=>x.id===selTrap); return t ? `${t.emoji} ${t.name} — ${utvesztoEffect(t)} · ${t.note} — koppints a pályára!` : null; })()}
         </div>}
         <button onClick={()=>{setSelTrap(null);setPhase('path1');}} disabled={placed===0} style={{
           marginTop:4,padding:'14px',borderRadius:14,border:'none',

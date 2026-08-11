@@ -1122,3 +1122,30 @@ hibás kód is átmegy — fejlesztés közben át is ment, kétszer.
 
 Teszt: `node tests/bj_race_test.js` — lassú ÉS gyors koppintás-sorozat, két
 mountolt készülékkel (host tábla + telefon) ugyanarra a szobára.
+
+## Útvesztő: a csapda-leírás EGY forrásból (v10.332)
+A leírás és a viselkedés két helyen élt, és el is csúszott:
+
+| csapda | amit ÍRT | amit CSINÁL |
+|---|---|---|
+| 🧱 Fal | „3 lépés késés" | **5** lépés (3 megállás + 2 visszapattanás) |
+| 🌀 Örvény | „2 mezővel visszadobja" | a pozíció NEM változik — **3** lépést veszít |
+| 🔀 Teleport | „random pozícióra ugrik" | ez a **legenyhébb**: +1 lépés |
+
+Innentől az `UTVESZTO_TRAPS` (modul-szintű, a `GAMES` tömb ELŐTT) hordozza a
+`korty` / `delay` / `note` mezőket ÉS a `steps()` függvényt, ami **maga a
+viselkedés** — a `buildAnim` ezt fűzi a sorba. A `delay` ugyanennek a hossza,
+tehát a kiírt szám nem tud elszakadni attól, amit a játék csinál.
+
+**Miért „lépés" a mértékegység?** A győztes az, akinek KEVESEBB lépése van
+(`steps: seq.length`), tehát a késleltetés pontosan ennyi lépéssel ront. Nem
+másodperc: az animáció tempója nem befolyásolja az eredményt.
+
+A hatás **három helyen** látszik, mind ugyanabból a forrásból:
+- a játék leírásában (`GAMES[].desc` — az info-lapon és a kártyán),
+- az intró CSAPDÁK blokkjában (hatás + magyarázat),
+- a **lerakó gombokon** — nem csak a kiválasztott alatt, hogy össze lehessen
+  hasonlítani, mit érdemes hova rakni.
+
+Teszt: `node tests/utveszto_traps_test.js` — a `steps()` hossza = a kiírt
+`delay`, a konkrét számok, a leírás és a gombok.
