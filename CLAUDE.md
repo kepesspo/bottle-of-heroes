@@ -1054,9 +1054,17 @@ a **vészjelzés VILÁGOSABB lenne, mint a nyugalmi állapot**. Ugyanaz a szabá
 mint a Szűrés nehézség-kártyáinál: a „zöld = van idő, piros = mindjárt lejár"
 jelentés nem lehet kék.
 
-Két apróság, ami könnyen elromlik:
+**A `bar` variáns a LETELT időt rajzolja, nem a hátralévőt** — és a jobb végén
+ott a jelölt „necces" zóna, amibe a mozgó fej beér. Fordítva (fogyó sávnál) a
+zóna a bal szélre esne, pont a szám-csip alá. A sor végén a **kezdő időtartam**
+áll (`/ 30 mp`) — az a léc, amihez a hátralévő szám méri magát.
+
+Három apróság, ami könnyen elromlik:
 - **A riasztás küszöbe az utolsó negyed, DE legfeljebb 5 mp.** Egy 60 mp-es
   körnél a negyed 15 mp lenne — ott a piros túl korán jönne.
+- **A zóna szélessége UGYANAZ a küszöb** (`min(25%, 5/total)`), nem külön szám:
+  így a zóna pontosan ott kezdődik, ahol a szám is pirosra vált. 20 mp-ig
+  negyed, fölötte arányosan keskenyebb (30 mp → 1/6, 60 mp → 1/12).
 - **A sávban a szám OPAK csipben ül.** Közvetlenül a sávra írva a végén a
   színes kitöltésre esne, és beleolvadna.
 

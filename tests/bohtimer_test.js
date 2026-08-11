@@ -100,6 +100,55 @@ const mount = (p, items) => p.evaluate((its) => {
   ok(geo[0].w > 300 && geo[1].w > 300, 'a sáv és a pöttyök teljes szélességet töltenek', geo[0].w + ' / ' + geo[1].w);
   ok(geo[2].w < 160, 'a pirula csak akkora, amekkora kell', geo[2].w);
   ok(geo.every(g => /Hátralévő idő/.test(g.aria || '')), 'mindhárom visz aria-label-t');
+
+  // ── 4. a SÁV: a letelt ido no, es van „necces" zona a jobb vegen ──
+  // A regi valtozat a HATRALEVO idot rajzolta, ami balra fogyott — oda nem
+  // lehetett zonat tenni (a szam-csip alá esett volna).
+  console.log('\n===== 4. A SAV: LETELT IDO + NECCES ZONA =====');
+  await mount(p, [
+    { variant:'bar', total:30, left:30 },   // induláskor: semmi nem telt el
+    { variant:'bar', total:30, left:15 },   // félidő
+    { variant:'bar', total:30, left:0 },    // lejárt: a sáv tele
+  ]);
+  await p.waitForTimeout(700);
+  const bar = await p.evaluate(() => {
+    const tracks = [...document.querySelectorAll('#__p [role="timer"]')];
+    return tracks.map(tr => {
+      const w = tr.getBoundingClientRect().width;
+      const kids = [...tr.children];
+      // a kitoltes az egyetlen gyerek, aminek TOMOR hattere van (a zona csikos)
+      const fillEl = kids.find(k => /^rgb\(/.test(getComputedStyle(k).backgroundColor) && getComputedStyle(k).backgroundImage === 'none' && k.getAttribute('aria-hidden') === null);
+      const zone = kids.find(k => getComputedStyle(k).backgroundImage.includes('gradient'));
+      return { fill: fillEl ? Math.round(fillEl.getBoundingClientRect().width / w * 100) : null,
+               zone: zone ? Math.round(zone.getBoundingClientRect().width / w * 100) : null,
+               zoneRight: zone ? Math.round(tr.getBoundingClientRect().right - zone.getBoundingClientRect().right) : null };
+    });
+  });
+  ok(bar[0].fill === 0, 'induláskor a sáv ÜRES (semmi nem telt el)', bar[0].fill + '%');
+  ok(bar[1].fill === 50, 'félidőben félig telt', bar[1].fill + '%');
+  ok(bar[2].fill === 100, 'lejártkor teljesen telt — beért a végére', bar[2].fill + '%');
+  ok(bar.every(x => x.zone === 17), 'a „necces" zóna 30 mp-nél a sáv 1/6-a (5 mp)', bar.map(x => x.zone + '%').join(','));
+  ok(bar.every(x => x.zoneRight === 0), 'a zóna a sáv JOBB végén van', JSON.stringify(bar.map(x => x.zoneRight)));
+
+  // rovid kornel a zona nem viheti el az egesz savot
+  await mount(p, [{ variant:'bar', total:10, left:10 }, { variant:'bar', total:60, left:60 }]);
+  await p.waitForTimeout(600);
+  const zones = await p.evaluate(() => [...document.querySelectorAll('#__p [role="timer"]')].map(tr => {
+    const w = tr.getBoundingClientRect().width;
+    const z = [...tr.children].find(k => getComputedStyle(k).backgroundImage.includes('gradient'));
+    return z ? Math.round(z.getBoundingClientRect().width / w * 100) : null;
+  }));
+  // A zona szelessege = a piros kuszob: min(25%, 5/total).
+  ok(zones[0] === 25, '20 mp-ig a zóna a sáv negyede (a küszöb ott a negyed)', zones[0] + '%');
+  ok(zones[1] === 8, '60 mp-nél arányosan keskenyebb (5 mp = 1/12)', zones[1] + '%');
+  // …es a zona PONTOSAN ott kezdodik, ahol a szam is pirosra valt
+  const sync = await p.evaluate(() => {
+    const at = t => { const w = Math.min(t * 0.25, 5); return { frac: w / t, warnAt: w }; };
+    return [10, 30, 60].map(t => ({ t, ...at(t), key: bohTimerTone(t, at(t).warnAt).key }));
+  });
+  ok(sync.every(x => x.key === 'warn'),
+     'a zóna kezdetén a szám MÁR piros — a két küszöb ugyanaz', JSON.stringify(sync.map(x => x.t + 'mp:' + x.key)));
+
   ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
   await p.close();
 

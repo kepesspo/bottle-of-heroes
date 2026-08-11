@@ -53696,27 +53696,48 @@ function BohTimer({ variant = 'bar', total = 30, left = 0, label, paused = false
   const aria = `Hátralévő idő: ${txt} másodperc`;
   const puls = tone.urgent && !paused ? { animation: 'pulse 0.7s ease-in-out infinite' } : null;
 
-  // ── A) SÁV — teljes szélességű pirula, a szám BENNE, a kitöltés fogy ──
+  // ── A) SÁV — a sav a LETELT idot rajzolja, es a jobb vegen ott a „necces" zona ──
+  // Miert a letelt ido no, es nem a hatralevo fogy? Mert igy van MIBE beerni:
+  // a mozgo fej jobbra halad, es a vegen belefut a jelolt zonaba. Fogyo savnal
+  // a jelolo a bal szelre esne — pont a szam-csip ala.
   if (variant === 'bar') {
+    // A zona SZELESSEGE = ugyanaz a kuszob, amitol pirosra valt (utolso negyed,
+    // de legfeljebb 5 mp). Vagyis `min(25%, 5/total)`: 20 mp-ig negyed, folotte
+    // aranyosan keskenyebb — 30 mp-nel 1/6, 60 mp-nel 1/12. Igy a zona MINDIG
+    // pont azt a szakaszt jeloli, ahol a szam is pirosra valt.
+    const warnAt = Math.min((total || 0) * 0.25, 5);
+    const dangerFrac = warnAt / Math.max(0.001, total || 0);
+    const elapsed = 1 - pct;
     return (
-      <div role="timer" aria-label={aria} style={{ position:'relative', width:'100%', height:BOH_TIMER_H,
-             borderRadius:999, background:T.surfaceMuted, overflow:'hidden', flexShrink:0, ...style }}>
-        <div style={{ position:'absolute', left:0, top:0, bottom:0, width:(pct * 100) + '%',
-                      background:tone.color, borderRadius:999, transition:'width .25s linear, background .4s',
-                      opacity: paused ? 0.45 : 1, ...(puls || {}) }} />
-        {/* A szam OPAK csipben ul: a kitoltes alatta fut el, igy minden
-            allapotban olvashato marad. Kozvetlenul a savra irva a vegen a
-            szam a szines kitoltesre esne, es beleolvadna. */}
-        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 4px' }}>
-          <span style={{ ...num, fontSize:15, color:T.ink, background:T.surface, borderRadius:999,
-                         padding:'5px 11px', boxShadow:'0 1px 3px rgba(20,30,50,0.12)' }}>
-            {txt}<span style={{ fontSize:11, fontWeight:800, color:T.inkSoft }}> mp</span>
-          </span>
-          {label && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, background:T.surface,
-                                   borderRadius:999, padding:'5px 11px', textTransform:'uppercase', letterSpacing:'0.06em',
-                                   overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginLeft:8,
-                                   boxShadow:'0 1px 3px rgba(20,30,50,0.12)' }}>{label}</span>}
+      <div style={{ display:'flex', alignItems:'center', gap:9, width:'100%', flexShrink:0, ...style }}>
+        <div role="timer" aria-label={aria} style={{ position:'relative', flex:1, minWidth:0, height:BOH_TIMER_H,
+               borderRadius:999, background:T.surfaceMuted, overflow:'hidden' }}>
+          {/* „Necces" zona — ELORE latszik, hogy hol kezd szorulni a hurok */}
+          {dangerFrac > 0.02 && (
+            <React.Fragment>
+              <div aria-hidden="true" style={{ position:'absolute', right:0, top:0, bottom:0, width:(dangerFrac * 100) + '%',
+                     background:`repeating-linear-gradient(-45deg, ${BOH_TIMER_TONES.warn}22 0 6px, ${BOH_TIMER_TONES.warn}0f 6px 12px)` }} />
+              <div aria-hidden="true" style={{ position:'absolute', top:0, bottom:0, right:(dangerFrac * 100) + '%',
+                     width:2, background:BOH_TIMER_TONES.warn, opacity:0.5 }} />
+            </React.Fragment>
+          )}
+          {/* A LETELT ido — ez er be a zonaba */}
+          <div style={{ position:'absolute', left:0, top:0, bottom:0, width:(elapsed * 100) + '%',
+                        background:tone.color, borderRadius:999, transition:'width .25s linear, background .4s',
+                        opacity: paused ? 0.45 : 1, ...(puls || {}) }} />
+          {/* A hatralevo masodperc OPAK csipben: a kitoltes alatta fut el, igy
+              minden allapotban olvashato marad. */}
+          <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', padding:'0 4px' }}>
+            <span style={{ ...num, fontSize:15, color:T.ink, background:T.surface, borderRadius:999,
+                           padding:'5px 11px', boxShadow:'0 1px 3px rgba(20,30,50,0.12)' }}>
+              {txt}<span style={{ fontSize:11, fontWeight:800, color:T.inkSoft }}> mp</span>
+            </span>
+          </div>
         </div>
+        {/* A sor vegen a KEZDO idotartam — a lec, amihez a szam melle meri magat */}
+        <span style={{ ...num, fontSize:12.5, color:T.inkSoft, flexShrink:0, whiteSpace:'nowrap' }}>
+          / {Math.round(total || 0)}<span style={{ fontSize:10.5, fontWeight:800 }}> mp</span>
+        </span>
       </div>
     );
   }
