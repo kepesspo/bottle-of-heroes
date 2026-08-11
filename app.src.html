@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.328';
+const APP_VERSION = 'v10.329';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -53643,6 +53643,119 @@ function PlayingCard({ card, size='md', faceDown=false, glow=false }) {
       <div style={{ fontFamily:'Georgia,serif', fontWeight:700, fontSize:s.fs, color:red?T.coral:T.ink, lineHeight:1 }}>{card.value}</div>
       <div style={{ fontFamily:'Georgia,serif', fontSize:s.fs2+1, color:red?T.coral:T.ink, lineHeight:1.1 }}>{card.suit}</div>
       <div style={{ position:'absolute', bottom:2, right:3, fontFamily:'Georgia,serif', fontSize:s.fs2+1, color:red?T.coral:T.ink, transform:'rotate(180deg)', lineHeight:1, userSelect:'none' }}>{card.suit}</div>
+    </div>
+  );
+}
+
+// ═══════════════ BohTimer — a KÖZÖS visszaszámláló ═══════════════
+// Ma nyolc külön időzítő-megjelenítés él a játékokban (Ötdolog, Fingerit,
+// Power Hour, Csak egy szó, Ritmus, Tabu gyűrűvel; Mit választanál sorral;
+// Zene pöttyökkel). Mind ugyanazt csinálja, csak máshogy néz ki — és a
+// gyűrűs változatok 88–200 px magasságot esznek a játék tartalma elől.
+//
+// Ez a komponens VÍZSZINTES és lapos: mindhárom variáns 34 px alatt marad.
+//
+//   <BohTimer variant="bar|ticks|pill" total={30} left={12.4} />
+//
+// `total` és `left` MÁSODPERCBEN. A komponens nem méri az időt — csak kirajzolja,
+// amit kap. Így ugyanaz a nézet használható host-oldali és Firestore-ból
+// szinkronizált (observer) időzítőre is.
+const BOH_TIMER_H = 30;          // mindhárom variáns EGY magasságon áll
+const BOH_TIMER_TICKS = 24;      // a `ticks` variáns szegmensei
+// A három fokozat színe FIX, NEM témafüggő — ugyanaz a szabály, mint a Szűrés
+// nehézség-kártyáinál: a „zöld = van idő, piros = mindjárt lejár" jelentés nem
+// lehet kék. Ez itt nem esztétika: a `T.mint` a téma AKCENTUSA (barackban
+// `#E06030`, jégben `#2070C0`), a `T.coral` pedig barackban `#F08060` — vagyis
+// a vészjelzés VILÁGOSABB lenne, mint a nyugalmi állapot. Pont fordítva.
+const BOH_TIMER_TONES = { ok:'#3FA96B', mid:'#E8A31E', warn:'#E0483C' };
+// A figyelmeztetés az utolsó NEGYEDBEN kapcsol be, de legfeljebb 5 mp-nél —
+// egy 60 mp-es körnél a 15 mp-es riasztás túl korai lenne.
+function bohTimerTone(total, left) {
+  const t = Math.max(0.001, total || 0);
+  const l = Math.max(0, left || 0);
+  const warnAt = Math.min(t * 0.25, 5);
+  if (l <= 0)       return { key:'done', color:BOH_TIMER_TONES.warn, urgent:true };
+  if (l <= warnAt)  return { key:'warn', color:BOH_TIMER_TONES.warn, urgent:true };
+  if (l <= t * 0.5) return { key:'mid',  color:BOH_TIMER_TONES.mid,  urgent:false };
+  return { key:'ok', color:BOH_TIMER_TONES.ok, urgent:false };
+}
+// A kiírt szám: 10 mp alatt egy tizedes (ott számít a töredék), fölötte egész.
+// `tabular-nums` + fix szélesség, különben a sor ugrál minden másodpercben.
+function bohTimerLabel(left) {
+  const l = Math.max(0, left || 0);
+  return l < 10 ? l.toFixed(1) : String(Math.ceil(l));
+}
+function BohTimer({ variant = 'bar', total = 30, left = 0, label, paused = false, style }) {
+  const tone = bohTimerTone(total, left);
+  const pct = Math.max(0, Math.min(1, (left || 0) / Math.max(0.001, total || 0)));
+  const txt = bohTimerLabel(left);
+  const num = {
+    fontFamily: T.font, fontWeight: 900, fontVariantNumeric: 'tabular-nums',
+    letterSpacing: '-0.01em', lineHeight: 1,
+  };
+  const aria = `Hátralévő idő: ${txt} másodperc`;
+  const puls = tone.urgent && !paused ? { animation: 'pulse 0.7s ease-in-out infinite' } : null;
+
+  // ── A) SÁV — teljes szélességű pirula, a szám BENNE, a kitöltés fogy ──
+  if (variant === 'bar') {
+    return (
+      <div role="timer" aria-label={aria} style={{ position:'relative', width:'100%', height:BOH_TIMER_H,
+             borderRadius:999, background:T.surfaceMuted, overflow:'hidden', flexShrink:0, ...style }}>
+        <div style={{ position:'absolute', left:0, top:0, bottom:0, width:(pct * 100) + '%',
+                      background:tone.color, borderRadius:999, transition:'width .25s linear, background .4s',
+                      opacity: paused ? 0.45 : 1, ...(puls || {}) }} />
+        {/* A szam OPAK csipben ul: a kitoltes alatta fut el, igy minden
+            allapotban olvashato marad. Kozvetlenul a savra irva a vegen a
+            szam a szines kitoltesre esne, es beleolvadna. */}
+        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 4px' }}>
+          <span style={{ ...num, fontSize:15, color:T.ink, background:T.surface, borderRadius:999,
+                         padding:'5px 11px', boxShadow:'0 1px 3px rgba(20,30,50,0.12)' }}>
+            {txt}<span style={{ fontSize:11, fontWeight:800, color:T.inkSoft }}> mp</span>
+          </span>
+          {label && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, background:T.surface,
+                                   borderRadius:999, padding:'5px 11px', textTransform:'uppercase', letterSpacing:'0.06em',
+                                   overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginLeft:8,
+                                   boxShadow:'0 1px 3px rgba(20,30,50,0.12)' }}>{label}</span>}
+        </div>
+      </div>
+    );
+  }
+
+  // ── B) PÖTTYÖK — szegmensek fogynak, a szám balra ──
+  if (variant === 'ticks') {
+    const lit = Math.ceil(pct * BOH_TIMER_TICKS);
+    return (
+      <div role="timer" aria-label={aria} style={{ display:'flex', alignItems:'center', gap:10, width:'100%', height:BOH_TIMER_H, flexShrink:0, ...style }}>
+        <span style={{ ...num, fontSize:16, color:tone.color, minWidth:38, textAlign:'right', flexShrink:0, ...(puls || {}) }}>{txt}</span>
+        <div style={{ flex:1, minWidth:0, display:'flex', alignItems:'center', gap:3, opacity: paused ? 0.45 : 1 }}>
+          {Array.from({ length: BOH_TIMER_TICKS }).map((_, i) => {
+            const on = i < lit;
+            return <span key={i} style={{ flex:1, height: on ? 15 : 7, borderRadius:3,
+                                          background: on ? tone.color : T.inkMute + '2e',
+                                          transition:'height .2s, background .3s' }} />;
+          })}
+        </div>
+        {label && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', flexShrink:0 }}>{label}</span>}
+      </div>
+    );
+  }
+
+  // ── C) PIRULA — kompakt, csak akkora, amekkora kell; a haladás a hátterében ──
+  return (
+    <div role="timer" aria-label={aria} style={{ position:'relative', height:BOH_TIMER_H, borderRadius:999,
+           background:T.surfaceMuted, overflow:'hidden', display:'inline-flex', alignItems:'center', flexShrink:0, ...style }}>
+      <div style={{ position:'absolute', left:0, top:0, bottom:0, width:(pct * 100) + '%',
+                    background:tone.color, opacity: paused ? 0.2 : 0.28, transition:'width .25s linear, background .4s' }} />
+      <div style={{ position:'absolute', left:0, bottom:0, height:3, width:(pct * 100) + '%',
+                    background:tone.color, transition:'width .25s linear, background .4s', ...(puls || {}) }} />
+      <span style={{ position:'relative', display:'inline-flex', alignItems:'center', gap:6, padding:'0 14px' }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0 }}>
+          <circle cx="12" cy="13" r="8.5" stroke={tone.color} strokeWidth="2.4"/>
+          <path d="M12 9v4.2l2.6 1.6M9 2.5h6" stroke={tone.color} strokeWidth="2.4" strokeLinecap="round"/>
+        </svg>
+        <span style={{ ...num, fontSize:15, color:T.ink, minWidth:30, textAlign:'center' }}>{txt}</span>
+        <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft }}>mp</span>
+      </span>
     </div>
   );
 }

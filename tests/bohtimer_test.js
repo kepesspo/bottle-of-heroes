@@ -1,0 +1,109 @@
+// v10.329 — BohTimer: a KÖZÖS vízszintes visszaszámláló (három variáns)
+//
+// Amit őriz:
+//   1. mindhárom variáns UGYANAZON a magasságon áll (BOH_TIMER_H = 30) — ez a
+//      lényeg: a mai gyűrűk 148–200 px-et esznek a játék tartalma elől;
+//   2. a három fokozat színe FIX, NEM témafüggő. Ez nem esztétika: a `T.mint`
+//      a téma AKCENTUSA (barackban #E06030), a `T.coral` pedig #F08060 — vagyis
+//      témából származtatva a VÉSZJELZÉS világosabb lenne, mint a nyugalmi
+//      állapot. Ugyanaz a szabály, mint a Szűrés nehézség-kártyáinál.
+//   3. a küszöbök: fél idő alatt borostyán, az utolsó negyedben (de legfeljebb
+//      5 mp-nél) piros;
+//   4. a kiírt szám 10 mp alatt tizedes, fölötte egész.
+const { chromium } = require('/opt/node22/lib/node_modules/playwright');
+const fs = require('fs');
+const ROOT = '/home/user/bottle-of-heroes';
+const stub = fs.readFileSync(ROOT + '/tests/fbstub.js', 'utf8');
+let fail = 0;
+const ok = (c, l, e) => { console.log((c ? '  OK   ' : '  HIBA ') + l + (e !== undefined ? '  → ' + e : '')); if (!c) fail++; };
+
+async function open(b, theme) {
+  const p = await b.newPage({ viewport: { width: 402, height: 900 } });
+  p.__errs = [];
+  p.on('pageerror', e => { if (!/ServiceWorker/.test(e.message)) p.__errs.push(e.message); });
+  await p.route('**://**', r => r.request().url().startsWith('file://') ? r.continue() : r.abort());
+  await p.addInitScript(stub);
+  await p.addInitScript(`try{localStorage.setItem('boh_onboarded','1');localStorage.setItem('boh_splash','0');localStorage.setItem('boh_theme','${theme}');}catch(e){}`);
+  await p.goto('file://' + ROOT + '/index.html', { waitUntil: 'domcontentloaded' });
+  await p.waitForTimeout(3200);
+  return p;
+}
+
+const mount = (p, items) => p.evaluate((its) => {
+  const r0 = document.getElementById('root'); if (r0) r0.style.display = 'none';
+  let root = document.getElementById('__p');
+  if (root) root.remove();
+  root = document.createElement('div'); root.id = '__p';
+  root.style.cssText = 'position:fixed;inset:0;z-index:9;overflow:auto;padding:12px';
+  document.body.appendChild(root);
+  ReactDOM.createRoot(root).render(React.createElement('div', {},
+    its.map((it, i) => React.createElement('div', { key:i, style:{ marginBottom:10 } },
+      React.createElement(BohTimer, it)))));
+}, items);
+
+(async () => {
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+
+  // ── 1. küszöbök és felirat (böngésző nélkül is kiértékelhető függvények) ──
+  console.log('\n===== 1. KUSZOBOK ES FELIRAT =====');
+  let p = await open(b, 'peach');
+  const logic = await p.evaluate(() => {
+    const k = (t, l) => bohTimerTone(t, l).key;
+    return {
+      keys30: [k(30,30), k(30,20), k(30,15), k(30,6), k(30,4), k(30,0)],
+      // 60 mp-es kornel a negyed 15 mp lenne — a plafon 5 mp
+      warn60: [k(60,20), k(60,10), k(60,6), k(60,4)],
+      labels: [bohTimerLabel(30), bohTimerLabel(10), bohTimerLabel(9.94), bohTimerLabel(0)],
+      tones: BOH_TIMER_TONES, H: BOH_TIMER_H,
+    };
+  });
+  ok(logic.keys30.join(',') === 'ok,ok,mid,mid,warn,done',
+     '30 mp: felette ok → fél idő alatt mid → utolsó negyedben warn', logic.keys30.join(','));
+  ok(logic.warn60.join(',') === 'mid,mid,mid,warn',
+     '60 mp: a riasztás 5 mp-nél kapcsol, nem 15-nél', logic.warn60.join(','));
+  ok(logic.labels.join(',') === '30,10,9.9,0.0',
+     '10 mp alatt tizedes, fölötte egész', logic.labels.join(','));
+
+  // ── 2. a fokozat-színek FIXEK, nem témafüggők ──
+  console.log('\n===== 2. A SZINEK FIXEK =====');
+  const peachT = await p.evaluate(() => ({ tones: BOH_TIMER_TONES, mint: T.mint, coral: T.coral }));
+  await p.close();
+  p = await open(b, 'ice');
+  const iceT = await p.evaluate(() => ({ tones: BOH_TIMER_TONES, mint: T.mint, coral: T.coral }));
+  ok(JSON.stringify(peachT.tones) === JSON.stringify(iceT.tones),
+     'a három fokozat színe témától FÜGGETLEN', JSON.stringify(iceT.tones));
+  ok(peachT.mint !== iceT.mint, 'a téma akcentusa viszont TÉNYLEG változik (kontroll)',
+     peachT.mint + ' vs ' + iceT.mint);
+  // a temabol szarmaztatva a veszjelzes vilagosabb lenne, mint a nyugalom —
+  // ezt a csapdat rogziti ez a sor
+  const lum = h => { const n = parseInt(h.slice(1), 16); return ((n>>16&255)*0.299 + (n>>8&255)*0.587 + (n&255)*0.114); };
+  ok(lum(peachT.coral) > lum(peachT.mint),
+     'kontroll: barack témában a T.coral VILÁGOSABB a T.mint-nél — ezért nem témából jön a szín',
+     Math.round(lum(peachT.coral)) + ' > ' + Math.round(lum(peachT.mint)));
+  ok(lum(iceT.tones.warn) < lum(iceT.tones.ok),
+     'a vészjelzés SÖTÉTEBB/erősebb, mint a nyugalmi állapot',
+     Math.round(lum(iceT.tones.warn)) + ' < ' + Math.round(lum(iceT.tones.ok)));
+
+  // ── 3. mindhárom variáns EGY magasságon ──
+  console.log('\n===== 3. HELYFOGLALAS =====');
+  await mount(p, [
+    { variant:'bar', total:30, left:17, label:'Kör' },
+    { variant:'ticks', total:30, left:17 },
+    { variant:'pill', total:30, left:17 },
+  ]);
+  await p.waitForTimeout(700);
+  const geo = await p.evaluate(() => [...document.querySelectorAll('#__p [role="timer"]')]
+    .map(x => ({ h: Math.round(x.getBoundingClientRect().height), w: Math.round(x.getBoundingClientRect().width),
+                 aria: x.getAttribute('aria-label') })));
+  ok(geo.length === 3, 'mindhárom variáns renderel', geo.length);
+  ok(geo.every(g => g.h === logic.H), `mindhárom pontosan ${logic.H} px magas`, JSON.stringify(geo.map(g => g.h)));
+  ok(geo[0].w > 300 && geo[1].w > 300, 'a sáv és a pöttyök teljes szélességet töltenek', geo[0].w + ' / ' + geo[1].w);
+  ok(geo[2].w < 160, 'a pirula csak akkora, amekkora kell', geo[2].w);
+  ok(geo.every(g => /Hátralévő idő/.test(g.aria || '')), 'mindhárom visz aria-label-t');
+  ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+  await p.close();
+
+  await b.close();
+  console.log(fail ? '\n❌ ' + fail + ' HIBA' : '\n✅ MINDEN ELLENORZES RENDBEN');
+  process.exit(fail ? 1 : 0);
+})().catch(e => { console.error('CRASH', e); process.exit(1); });

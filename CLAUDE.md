@@ -1030,3 +1030,35 @@ elgörgette.
 
 Részletek és a szimulációs recept: `docs/safe-area.md` 6. szakasz.
 Teszt: `node tests/safearea_test.js` 4. blokkja.
+
+## BohTimer — a KÖZÖS visszaszámláló (v10.329, még nincs bekötve)
+Ma **nyolc** külön időzítő-megjelenítés él: gyűrű (Ötdolog, Fingerit, Power Hour,
+Csak egy szó, Ritmus, Tabu), vízszintes sor (Mit választanál) és pöttyös idővonal
+(Zene). Mind ugyanazt csinálja, csak máshogy néz ki — és a gyűrűk **148–200 px**
+magasságot esznek a játék tartalma elől.
+
+A `BohTimer` mindhárom variánsa **30 px** (`BOH_TIMER_H`), és vízszintes:
+
+```jsx
+<BohTimer variant="bar|ticks|pill" total={30} left={12.4} label="Kör" paused={false} />
+```
+
+`total` / `left` **másodpercben**. A komponens **nem méri az időt**, csak
+kirajzolja, amit kap — így ugyanaz a nézet szolgálja ki a host-oldali és a
+Firestore-ból szinkronizált (observer) időzítőt is.
+
+**⚠️ A három fokozat színe FIX, NEM témafüggő** (`BOH_TIMER_TONES`). Ez nem
+esztétika: a `T.mint` a téma **akcentusa** (barackban `#E06030`, jégben
+`#2070C0`), a `T.coral` pedig barackban `#F08060` — vagyis témából származtatva
+a **vészjelzés VILÁGOSABB lenne, mint a nyugalmi állapot**. Ugyanaz a szabály,
+mint a Szűrés nehézség-kártyáinál: a „zöld = van idő, piros = mindjárt lejár"
+jelentés nem lehet kék.
+
+Két apróság, ami könnyen elromlik:
+- **A riasztás küszöbe az utolsó negyed, DE legfeljebb 5 mp.** Egy 60 mp-es
+  körnél a negyed 15 mp lenne — ott a piros túl korán jönne.
+- **A sávban a szám OPAK csipben ül.** Közvetlenül a sávra írva a végén a
+  színes kitöltésre esne, és beleolvadna.
+
+Teszt: `node tests/bohtimer_test.js` — a küszöbök, a fix színek (kontrollal:
+barack témában a `T.coral` tényleg világosabb a `T.mint`-nél) és a 30 px.
