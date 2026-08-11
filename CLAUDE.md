@@ -1070,3 +1070,26 @@ Három apróság, ami könnyen elromlik:
 
 Teszt: `node tests/bohtimer_test.js` — a küszöbök, a fix színek (kontrollal:
 barack témában a `T.coral` tényleg világosabb a `T.mint`-nél) és a 30 px.
+
+## Busz: mióta megy a busz (v10.330)
+A `BohTimer` **`pill`** variánsa, `elapsed` móddal — **felfelé** számol, `m:ss`
+alakban. Csak a játék MÁSODIK felében jelenik meg (a `bus` fázisban, ahol már
+ül valaki a buszon); a piramis alatt nincs.
+
+Három helyen látszik, mindhárom UGYANAZT a számot mutatja: a host tábláján (a
+lépés-számláló mellett), a nézőmód fejlécében és a buszozó játékos fejléc-sorában.
+
+**⚠️ A kezdés időbélyege a SZOBÁBAN ül** (`busStartedAt`, a `startBus` írja ki),
+nem eszközönként. Enélkül minden telefon mást számolna, és a később csatlakozó
+0-ról indulna. A **ketyegés viszont helyi** (1 mp-es interval a `BusRideClock`-ban)
+— másodpercenkénti Firestore-írás értelmetlen terhelés lenne.
+
+Az eszközök órái között lehet eltérés, ezért a különbség **0-ra van vágva**:
+egy előresiető telefon különben negatív időt mutatna.
+
+**A felfelé számláló SEMLEGES színű.** Nincs határidő, amihez képest „kevés idő"
+lenne — a zöld/borostyán/piros itt talált jelentést állítana. A `BOH_TIMER_TONES`
+csak a visszaszámláló variánsokra vonatkozik.
+
+Teszt: `node tests/bus_clock_test.js` — a `m:ss` alak, mindhárom felület, hogy a
+piramisban NINCS óra, és hogy tényleg ketyeg.

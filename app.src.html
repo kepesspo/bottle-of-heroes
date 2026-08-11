@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.329';
+const APP_VERSION = 'v10.330';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -53685,7 +53685,32 @@ function bohTimerLabel(left) {
   const l = Math.max(0, left || 0);
   return l < 10 ? l.toFixed(1) : String(Math.ceil(l));
 }
-function BohTimer({ variant = 'bar', total = 30, left = 0, label, paused = false, style }) {
+// Eltelt ido `m:ss` alakban. NINCS `total`, tehat nincs mihez kepest szazalek —
+// a felfele szamlalo ora se szint, se kitoltest nem visz.
+function bohTimerElapsedLabel(sec) {
+  const t = Math.max(0, Math.floor(sec || 0));
+  const m = Math.floor(t / 60), ss = t % 60;
+  return m + ':' + String(ss).padStart(2, '0');
+}
+// `elapsed` (masodperc) → FELFELE szamlalo ora, `variant='pill'` mellett.
+// Semleges szinu: nincs hatarido, amihez kepest „keves ido" lenne — a szinezes
+// itt talalt jelentest allitana.
+function BohTimer({ variant = 'bar', total = 30, left = 0, elapsed = null, label, paused = false, style }) {
+  if (elapsed !== null && elapsed !== undefined) {
+    const et = bohTimerElapsedLabel(elapsed);
+    return (
+      <div role="timer" aria-label={`Eltelt idő: ${et}`} style={{ height:BOH_TIMER_H, borderRadius:999,
+             background:T.surfaceMuted, display:'inline-flex', alignItems:'center', gap:6, padding:'0 13px',
+             flexShrink:0, opacity: paused ? 0.5 : 1, ...style }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0 }}>
+          <circle cx="12" cy="13" r="8.5" stroke={T.inkSoft} strokeWidth="2.4"/>
+          <path d="M12 9v4.2l2.6 1.6M9 2.5h6" stroke={T.inkSoft} strokeWidth="2.4" strokeLinecap="round"/>
+        </svg>
+        <span style={{ fontFamily:T.font, fontWeight:900, fontVariantNumeric:'tabular-nums', fontSize:14.5, color:T.ink, lineHeight:1 }}>{et}</span>
+        {label && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft }}>{label}</span>}
+      </div>
+    );
+  }
   const tone = bohTimerTone(total, left);
   const pct = Math.max(0, Math.min(1, (left || 0) / Math.max(0.001, total || 0)));
   const txt = bohTimerLabel(left);
@@ -55388,6 +55413,23 @@ function BusDrinkOverlay({ drinks, name, card, fromName, unit, onClose }) {
   );
 }
 
+// A busz INDULASA ota eltelt ido. A kezdes idobelyege (`busStartedAt`) a
+// szobaban ul, nem eszkozonkent — kulonben minden telefon mast szamolna, es a
+// kesobb csatlakozo 0-rol indulna. A ketyeges viszont helyi (1 mp-es interval),
+// hogy ne terheljuk a Firestore-t masodpercenkent.
+function BusRideClock({ startedAt, style }) {
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    if (!startedAt) return;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [startedAt]);
+  if (!startedAt) return null;
+  // Az eszkozok orai kozott lehet elteres — a negativ erteket levagjuk.
+  return <BohTimer variant="pill" elapsed={Math.max(0, (now - startedAt) / 1000)} style={style} />;
+}
+
 // ═══════════════ BUSZ — megálló-előzmény ═══════════════
 // A „Húzott lapok" sor pozíciónként csak az UTOLSÓ lapot mutatja
 // (`busPositionDrawnCards`), mert a következő buszozó felülírja. A megállóra
@@ -55703,7 +55745,7 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
     const busRiderDrawnCards = {};
     riders.forEach(rid => { busRiderPositions[rid] = 0; busRiderDone[rid] = false; busRiderBonusUsed[rid] = false; busRiderDrawnCards[rid] = []; });
     const busRevealedPositions = [1, 3].filter(i => i < st.settings.busSteps);
-    await persist({...st, phase:'bus', busRiders:riders, busRouteCards, busDrawDeck, busRiderPositions, busRiderDone, busRiderBonusUsed, busRiderDrawnCards, busRiderPendingGuesses:{}, busRevealedPositions, currentTurnRiderId:riders[0], busRiderDrinks:{}, busPositionDrawnCards:{}, busPositionHistory:{}, settings:{...st.settings, bonusGuess:!!(gameMeta?.buszConfig?.bonusGuess!==false), aceMode: gameMeta?.buszConfig?.aceMode ?? 'high'}});
+    await persist({...st, phase:'bus', busRiders:riders, busRouteCards, busDrawDeck, busRiderPositions, busRiderDone, busRiderBonusUsed, busRiderDrawnCards, busRiderPendingGuesses:{}, busRevealedPositions, currentTurnRiderId:riders[0], busRiderDrinks:{}, busPositionDrawnCards:{}, busPositionHistory:{}, busStartedAt: Date.now(), settings:{...st.settings, bonusGuess:!!(gameMeta?.buszConfig?.bonusGuess!==false), aceMode: gameMeta?.buszConfig?.aceMode ?? 'high'}});
   };
 
   const evalBusGuess = (guess, routeCard, drawnCard) => {
@@ -56123,7 +56165,11 @@ function BuszGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetHideFo
             <PlayerAvatar player={currentRider} size={46} />
             <div style={{fontFamily:T.font,fontWeight:T.weightTitle,fontSize:24,color:T.ink}}>{currentRider?.name||'?'}</div>
           </div>
-          <div style={{fontFamily:T.font,fontSize:12,color:T.inkSoft,marginTop:4}}>{myStep}/{busStepsCount}. lépés</div>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:9,marginTop:6}}>
+            <span style={{fontFamily:T.font,fontSize:12,color:T.inkSoft}}>{myStep}/{busStepsCount}. lépés</span>
+            {/* Mióta megy a busz — a jaték MASODIK felében, ahol már ül valaki rajta */}
+            <BusRideClock startedAt={buszState.busStartedAt} />
+          </div>
         </div>
         {/* Two-row card layout */}
         {(() => { const _cm = Math.min(Math.max(window.innerWidth/390,1),1.5); const _lgW=Math.round(56*_cm), _lgH=Math.round(78*_cm); return (
@@ -65001,8 +65047,8 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
               <button onClick={() => setBusWatching(false)} style={{ width:36, height:36, borderRadius:'50%', background:T.surface, border:'none', cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0, boxShadow:T.shadow }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke={T.inkSoft} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
-              <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>👀 Busz élőben</div>
-              <span style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkSoft, background:T.surfaceMuted, padding:'4px 10px', borderRadius:999 }}>csak nézed</span>
+              <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:18, color:T.ink, textTransform:'uppercase', letterSpacing:T.letterDisplay }}>👀 Busz élőben</div>
+              <BusRideClock startedAt={buszState.busStartedAt} />
             </div>
             {/* Útvonal kártyák */}
             <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
@@ -65257,6 +65303,8 @@ function BuszPlayerView({ room, roomCode, forcedPlayerId, forcedBusIntroShown, o
             <div style={{ flex:1, fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:20, color:canGuess?T.mint:myPendingGuess?T.ink:T.inkSoft, letterSpacing:T.letterDisplay, textTransform:'uppercase', lineHeight:1.1 }}>
               {canGuess ? '🚌 Tippelj!' : myPendingGuess ? '⏳ Tipped leadva' : myDone ? '✓ Teljesítve!' : !isMyTurn ? '⏳ Várakozás...' : '🚌 A te sorod!'}
             </div>
+            {/* Mióta megy a busz — csak a busz fázisban van értelme */}
+            <BusRideClock startedAt={buszState.busStartedAt} />
             <div style={{ display:'flex', alignItems:'center', gap:6, background:T.surface, borderRadius:999, padding:'5px 12px 5px 5px', boxShadow:T.shadow, flexShrink:0 }}>
               <PlayerAvatar player={player} size={32} />
               <div style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink }}>Te</div>
