@@ -1149,3 +1149,34 @@ A hatás **három helyen** látszik, mind ugyanabból a forrásból:
 
 Teszt: `node tests/utveszto_traps_test.js` — a `steps()` hossza = a kiírt
 `delay`, a konkrét számok, a leírás és a gombok.
+
+## ⚠️ Fordított kör: a LEGACY result-alak kimaradt a cseréből (v10.333)
+A Collect & Boom-ban a „Fordított kör" wildcard alatt a **könyvelés megfordult**
+(a bombás kapott pontot, a többiek ittak), a **banner viszont a régi állást**
+mutatta: „Sere csapta fel a bombát! · ISZIK". Két külön állítás ugyanarról a körről.
+
+Az ok nem a játékban volt: a `PlayScreen` `onResult`-jában a csere kapuja a
+`winners`/`losers` tömbre szűrt. A **legacy alak** — `{correct, playerName,
+drinks, subtitle}` — egyiket sem viszi, tehát a feltétel hamis volt, és a banner
+változatlanul ment tovább. A könyvelés (`advance`, `advancePaired`,
+`advanceTeam`, `advanceLoverseny`) **mind** kezeli a reverse-t — ezért csúszott
+szét a kettő.
+
+**Ez 34 hívási helyet érintett (~15 játék)**, nem egyet. A kapu ezért most maga
+normalizálja a legacy alakot (`playerName` + `correct` → egyelemű
+`winners`/`losers`), ugyanúgy, ahogy a banner is teszi rendereléskor. Új játéknál
+így nem kell erre gondolni — de a **teljes alak továbbra is jobb**: a legacy
+alak csak EGY embert nevez meg, tehát a Collect & Boom bannere a többiek pontját
+sosem mutatta. A `collect` ezért átállt `winners`/`losers`-re, és ezzel a
+`onResult` → `onAdvance` **sorrend** is helyreállt (v10.318).
+
+A `__wildcardTestEffect` fogódzó mellékesen javult: a `pool` kihagyja az éppen
+aktív wildcardot, ezért egy újraidőzítésnél a kikényszerített effekt **magától
+átváltott** volna másra. A teljes `WILDCARDS` listára is ránézünk, így a forced
+effekt pinnelve marad.
+
+Teszt: `node tests/wc_reverse_test.js` — a fogódzó a két állítás **egyezése**,
+nem a konkrét oldal: aki a banneren nyertes, annak pontot kell kapnia és nem
+ihat. Három blokk: `collect` fordított körben, `collect` wildcard nélkül
+(kontroll), és a `mitval` — az **maradt legacy alak**, tehát az általánosított
+kaput méri. A javítás előtt mindhárom blokk bukik.

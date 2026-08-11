@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.332';
+const APP_VERSION = 'v10.333';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -59690,9 +59690,10 @@ function CollectBoomGame({ gameIdx, players, onAdvance, onResult, gameMeta }) {
     const dm = { [bombPid]: drinks };
     const pm = {};
     players.forEach(p => { if (p.id !== bombPid) pm[p.id] = 1; });
-    onAdvance && onAdvance(dm, pm);
     const loserPlayer = players.find(p=>p.id===bombPid);
-    onResult && onResult({ correct: false, playerName: loserPlayer?.name, drinks, subtitle: `${loserPlayer?.name} csapta fel a bombát!` });
+    onResult && onResult({ winners: players.filter(p => p.id !== bombPid), losers: [loserPlayer].filter(Boolean),
+                           drinks, winNote: '+1 pont', loseNote: `${loserPlayer?.name} csapta fel a bombát!` });
+    onAdvance && onAdvance(dm, pm);
   }, [bombPid]);
 
   // Auto-advance when all safe
@@ -62695,13 +62696,23 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
       const cur = activeWcRef.current;
       const pool = (cur && WILDCARDS.length > 1) ? WILDCARDS.filter(w => w.text !== cur.text) : WILDCARDS;
       if (!pool.length) return;
-      const wc = pool[Math.floor(Math.random() * pool.length)];
+      // Teszt-fogodzo: egy konkret effekt kikenyszeritese (`'reverse'`, `'double'`…).
+      // A wildcard 6–9 PERCENKENT sul el, tehat egy teszt-partiban elo sem jonne —
+      // ugyanaz a minta, mint a `__szelviharTestDelay` / `__groupDrinkTestDelay`.
+      // A `pool` kihagyja az EPPEN aktivat, tehat egy ujraiditesnel a kikenyszeritett
+      // effekt nem lenne benne — a teszt kozben magatol atvaltana masra. Ezert a
+      // teljes listara is ranezunk: forced effekt PINNELVE marad.
+      const forced = (typeof window !== 'undefined' && window.__wildcardTestEffect)
+        ? (pool.find(w => w.effect === window.__wildcardTestEffect)
+           || WILDCARDS.find(w => w.effect === window.__wildcardTestEffect)) : null;
+      const wc = forced || pool[Math.floor(Math.random() * pool.length)];
       // A szabaly azonnal eletbe lep; a popup viszont csak akkor jon rogton,
       // ha magaban futo jatek megy (ott nincs atmenet, amire varni lehetne).
       applyWildcard(wc, soloNowRef.current);
     };
     const schedule = () => {
-      const ms = (lo + Math.random() * (hi - lo)) * 60000;
+      const ms = (typeof window !== 'undefined' && typeof window.__wildcardTestDelay === 'number')
+        ? window.__wildcardTestDelay : (lo + Math.random() * (hi - lo)) * 60000;
       timer = setTimeout(() => { fire(); schedule(); }, ms);
     };
     schedule();
@@ -63178,9 +63189,20 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     let r = res;
     // Fordított kör: nyertes ↔ vesztes csere a bannerben (a nyertes iszik, a vesztes pontoz).
     // BUNTETESRE NEM VONATKOZIK: ott a szabalyszego nyertesnek latszana. Lasd patch_10_271.py
-    if (wcEffect === 'reverse' && !res.penalty && ((res.winners||[]).length || (res.losers||[]).length)) {
-      const swappedDrinks = (res.drinks ?? 0) || ((res.winners||[]).length ? 1 : 0);
-      r = { ...res, winners: res.losers || [], losers: res.winners || [], drinks: swappedDrinks, winNote: '+1 pont', loseNote: '', subtitle: null, correct: undefined };
+    if (wcEffect === 'reverse' && !res.penalty) {
+      // A LEGACY alak (`correct` + `playerName`) nem visz winners/losers tombot.
+      // Amig a kapu csak a tombre szurt, 34 hivasi hely (~15 jatek) CSENDBEN
+      // kimaradt a cserebol: a konyveles megfordult, a banner nem. Ezert eloszor
+      // ugyanugy normalizaljuk, ahogy a banner is teszi renderelesnel.
+      let w = res.winners, l = res.losers;
+      if (!w && !l && res.playerName) {
+        const rp = players.find(p => p.name === res.playerName);
+        if (rp) { w = res.correct ? [rp] : []; l = res.correct ? [] : [rp]; }
+      }
+      if ((w||[]).length || (l||[]).length) {
+        const swappedDrinks = (res.drinks ?? 0) || ((w||[]).length ? 1 : 0);
+        r = { ...res, winners: l || [], losers: w || [], drinks: swappedDrinks, winNote: '+1 pont', loseNote: '', subtitle: null, correct: undefined };
+      }
     }
     const d = r.drinks ?? 0;
     // A buntetes ABSZOLUT: pontosan ennyi korty ment a players tombbe, tehat
