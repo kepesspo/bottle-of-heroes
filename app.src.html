@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.330';
+const APP_VERSION = 'v10.331';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -54775,7 +54775,43 @@ function BlackjackGame({ players, roomCode, gameIdx, gameMeta, onAdvance, onSetH
 
 // ═══════════════ BLACKJACK — játékos (telefon) nézet ═══════════════
 function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initialPlayerId, onPlayerIdChange, onSwitchToHost }) {
-  const bj = room.bjState || null;
+  // ⚠️ OPTIMISTA VISSZHANG. A telefon a LEGUTOLSO pillanatkepbol szamolja a
+  // kovetkezo allapotot (`bjDoHit(bj, …)`), a pillanatkep viszont csak a halozati
+  // korido utan (100–300 ms) er vissza. Ket gyors koppintas kozott a masodik meg
+  // a REGI allapotot latta, es a sajat irasa felulirta az elsot — a kartya nem
+  // jelent meg, a gomb „halottnak" latszott.
+  // Ezert a sajat irasunkat AZONNAL alkalmazzuk helyben, es addig tartjuk, amig
+  // meg nem erkezik rola a visszhang (barmelyik uj pillanatkep elengedi).
+  // A visszhangot NEM engedheti el barmelyik pillanatkep: az erkezo lehet
+  // REGEBBI, mint amit mi mar kiirtunk (ket gyors koppintasnal pont ez tortenik).
+  // Ezert minden irasunk JELOLOT kap, es csak akkor engedjuk el, ha a SAJAT
+  // irasunk ert vissza — ugyanaz a minta, mint a Kisebb/Nagyobb tipp-azonositoja.
+  const [bjEcho, setBjEcho] = React.useState(null);
+  const bjEchoTokRef = React.useRef(null);
+  const bjEchoTimerRef = React.useRef(null);
+  React.useEffect(() => {
+    const inc = room.bjState;
+    if (!inc) return;
+    if (!bjEchoTokRef.current || inc.echoTok === bjEchoTokRef.current) {
+      bjEchoTokRef.current = null;
+      clearTimeout(bjEchoTimerRef.current);
+      setBjEcho(null);
+    }
+  }, [room.bjState]);
+  React.useEffect(() => () => clearTimeout(bjEchoTimerRef.current), []);
+  const bj = bjEcho || room.bjState || null;
+  // Minden allapot-iras ezen megy at — kozvetlen `bjWrite` helyett.
+  const bjAct = React.useCallback((ns) => {
+    const tok = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const next = { ...ns, echoTok: tok };
+    bjEchoTokRef.current = tok;
+    setBjEcho(next);
+    // Biztonsagi halo: ha a sajat irasunk soha nem er vissza (pl. a host
+    // kozben felulirta), 4 mp utan visszaallunk a szoba allapotara.
+    clearTimeout(bjEchoTimerRef.current);
+    bjEchoTimerRef.current = setTimeout(() => { bjEchoTokRef.current = null; setBjEcho(null); }, 4000);
+    bjWrite(code, next);
+  }, [code]);
   const stackOf = pid => ((bj && bj.stacks) || {})[pid] || (bj && bj.startStack) || 10;
   const players = room.players || [];
   const taken = room.bjTakenIds || [];
@@ -54947,7 +54983,7 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
   const pillS = { display:'inline-flex', alignItems:'center', gap:4, background:T.surfaceMuted, borderRadius:10, padding:'0 10px', height:40, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink };
   const guestRebuy = (drinkN, newStack) => {
     if (drinkN > 0 && !(bj.brokeDrank || {})[playerId]) bjBookDrinksRemote(code, playerId, drinkN);
-    bjWrite(code, { ...bj, stacks: { ...(bj.stacks || {}), [playerId]: newStack }, chips: { ...(bj.chips || {}), [playerId]: newStack }, cashedOut: { ...(bj.cashedOut || {}), [playerId]: false }, brokeDrank: { ...(bj.brokeDrank || {}), [playerId]: false } });
+    bjAct({ ...bj, stacks: { ...(bj.stacks || {}), [playerId]: newStack }, chips: { ...(bj.chips || {}), [playerId]: newStack }, cashedOut: { ...(bj.cashedOut || {}), [playerId]: false }, brokeDrank: { ...(bj.brokeDrank || {}), [playerId]: false } });
     setRebuyPick(null);
   };
   const guestCashOut = () => {
@@ -54956,12 +54992,12 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
       const others = (bj.participants || []).filter(pid => pid !== playerId);
       if (others.length) { setGiftPool(surplus); return; } // nyereség — kiosztó overlay
       alert(`Nincs kinek kiosztani — mondd be szóban a ${surplus} kortyot! 🍺`);
-      bjWrite(code, { ...bj, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true } });
+      bjAct({ ...bj, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true } });
       return;
     }
     const deficit = Math.max(0, startStack - myChips);
     if (deficit > 0) bjBookDrinksRemote(code, playerId, deficit);
-    bjWrite(code, { ...bj, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true } });
+    bjAct({ ...bj, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true } });
   };
   const guestConfirmGift = (assigned) => {
     setGiftPool(null);
@@ -55050,7 +55086,7 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
             {!rebuyPick && (
               <div style={{ display:'flex', gap:8, marginTop:14 }}>
                 <button onClick={() => setRebuyPick({ drinkN: startStack })} style={{ flex:1, padding:'11px', borderRadius:12, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>🔄 Megittam — újra beszállok</button>
-                <button onClick={() => { if (!(bj.brokeDrank || {})[playerId]) bjBookDrinksRemote(code, playerId, startStack); bjWrite(code, { ...bj, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true }, brokeDrank: { ...(bj.brokeDrank || {}), [playerId]: true } }); }} style={{ flex:1, padding:'11px', borderRadius:12, border:'none', background:'#555', fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>🚪 Kiszállok</button>
+                <button onClick={() => { if (!(bj.brokeDrank || {})[playerId]) bjBookDrinksRemote(code, playerId, startStack); bjAct({ ...bj, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true }, brokeDrank: { ...(bj.brokeDrank || {}), [playerId]: true } }); }} style={{ flex:1, padding:'11px', borderRadius:12, border:'none', background:'#555', fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>🚪 Kiszállok</button>
               </div>
             )}
             {rebuyPick && (
@@ -55147,7 +55183,7 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
           const amt = bjInsuranceAmount(bj, playerId);
           const done = !!(bj.insDone || {})[playerId];
           const took = ((bj.insurance || {})[playerId] || 0) > 0;
-          const decide = (take) => bjWrite(code, { ...bj,
+          const decide = (take) => bjAct({ ...bj,
             insurance: { ...(bj.insurance || {}), [playerId]: take ? amt : 0 },
             insDone: { ...(bj.insDone || {}), [playerId]: true } });
           return (
@@ -55296,19 +55332,19 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
                   // teglalapokon a felirat mellett allo emoji negy gombnal
                   // (split is) kicsordult; a korong + alairas nem tordelodik.
                   <div style={{ display:'flex', gap:14, marginTop:16, justifyContent:'center', flexWrap:'wrap' }}>
-                    <BJActionBtn label="Hit" bg={T.mint} onClick={() => bjWrite(code, bjDoHit(bj, myTurnKey))}>
+                    <BJActionBtn label="Hit" bg={T.mint} onClick={() => bjAct(bjDoHit(bj, myTurnKey))}>
                       <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" strokeWidth="3" strokeLinecap="round"/></svg>
                     </BJActionBtn>
-                    <BJActionBtn label="Stand" bg="#3D4149" onClick={() => bjWrite(code, bjDoStand(bj, myTurnKey))}>
+                    <BJActionBtn label="Stand" bg="#3D4149" onClick={() => bjAct(bjDoStand(bj, myTurnKey))}>
                       <span style={{ fontSize:28, lineHeight:1 }}>✋</span>
                     </BJActionBtn>
                     {canD && (
-                      <BJActionBtn label="Dupla" bg="#C08A16" onClick={() => bjWrite(code, bjDoDouble(bj, myTurnKey))}>
+                      <BJActionBtn label="Dupla" bg="#C08A16" onClick={() => bjAct(bjDoDouble(bj, myTurnKey))}>
                         <span style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:'#fff' }}>2x</span>
                       </BJActionBtn>
                     )}
                     {canS && (
-                      <BJActionBtn label="Split" bg="#3b6fb5" onClick={() => bjWrite(code, bjDoSplit(bj, myTurnKey))}>
+                      <BJActionBtn label="Split" bg="#3b6fb5" onClick={() => bjAct(bjDoSplit(bj, myTurnKey))}>
                         <span style={{ fontSize:26, lineHeight:1 }}>✂️</span>
                       </BJActionBtn>
                     )}
@@ -55336,7 +55372,7 @@ function BlackjackObserverView({ room, code, onLeave, keepClaimOnUnmount, initia
                         {!rebuyPick && (
                         <div style={{ display:'flex', gap:8, marginTop:10 }}>
                           <button onClick={() => setRebuyPick({ drinkN: startStack })} style={{ flex:1, padding:'11px', borderRadius:12, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>🔄 Megittam — újra beszállok</button>
-                          <button onClick={() => { if (!(bj.brokeDrank || {})[playerId]) bjBookDrinksRemote(code, playerId, startStack); bjWrite(code, { ...bj, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true }, brokeDrank: { ...(bj.brokeDrank || {}), [playerId]: true } }); }} style={{ flex:1, padding:'11px', borderRadius:12, border:'none', background:'#555', fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>🚪 Kiszállok</button>
+                          <button onClick={() => { if (!(bj.brokeDrank || {})[playerId]) bjBookDrinksRemote(code, playerId, startStack); bjAct({ ...bj, cashedOut: { ...(bj.cashedOut || {}), [playerId]: true }, brokeDrank: { ...(bj.brokeDrank || {}), [playerId]: true } }); }} style={{ flex:1, padding:'11px', borderRadius:12, border:'none', background:'#555', fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', cursor:'pointer' }}>🚪 Kiszállok</button>
                         </div>
                         )}
                         {rebuyPick && (

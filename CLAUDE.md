@@ -1093,3 +1093,32 @@ csak a visszaszámláló variánsokra vonatkozik.
 
 Teszt: `node tests/bus_clock_test.js` — a `m:ss` alak, mindhárom felület, hogy a
 piramisban NINCS óra, és hogy tényleg ketyeg.
+
+## ⚠️ Blackjack: a telefon gyors koppintásai elvesztek (v10.331)
+A tünet „az observernél nem működnek a gombok" volt. A Hit/Stand néha nem
+csinált semmit — de **csak élesben, két készülékkel**.
+
+**Az ok.** A telefon a LEGUTOLSÓ pillanatképből számolja a következő állapotot
+(`bjDoHit(bj, …)`), a pillanatkép viszont csak a hálózati köridő (100–300 ms)
+után ér vissza. Két gyors koppintás között a második még a RÉGI állapotot látta,
+és a saját írása felülírta az elsőt — a lap nem jelent meg, a gomb „halottnak"
+látszott. Lassan (1 mp-enként) koppintva minden működött, ezért tűnt esetlegesnek.
+
+**A javítás — optimista visszhang jelölővel.** Minden írás `echoTok`-ot kap, a
+telefon AZONNAL alkalmazza helyben (`bjAct`), és csak akkor engedi el, ha a SAJÁT
+írása ért vissza. Ugyanaz a minta, mint a Kisebb/Nagyobb tipp-azonosítója.
+
+**Bármelyik pillanatképre elengedni KEVÉS** — ez volt az első, hibás javításom:
+az érkező pillanatkép lehet RÉGEBBI, mint amit már kiírtunk, és a visszhang
+elengedése után a következő koppintás megint a régiből indul. Pont ez történik
+két gyors koppintásnál.
+
+Biztonsági háló: ha a saját írásunk soha nem ér vissza (a host közben felülírta),
+4 mp után visszaállunk a szoba állapotára.
+
+**⚠️ A hiba csak KÉSLELTETÉSSEL látszik.** A `fbstub` azonnal kézbesít, ezért a
+`bj_race_test` maga tolja el a pillanatkép-kézbesítést 250 ms-mal. Enélkül a
+hibás kód is átmegy — fejlesztés közben át is ment, kétszer.
+
+Teszt: `node tests/bj_race_test.js` — lassú ÉS gyors koppintás-sorozat, két
+mountolt készülékkel (host tábla + telefon) ugyanarra a szobára.
