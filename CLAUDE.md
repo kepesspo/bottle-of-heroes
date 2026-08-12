@@ -1398,3 +1398,32 @@ ha valaki átírja, a „régi játék 5-ös liciten" ígéret némán elveszne.
 A több sorba tördelt bejegyzések (a `kisebb` a `stakeOf` miatt) nyitó sorában
 nincs `banner:`, ezért a régi szűrő hiányzónak jelentette őket, holott ott a kép.
 Ez a teszt **v10.302 óta volt tartósan piros** emiatt.
+
+## Halott kód kivezetése: Büntetés-lista és app-design kapcsoló (v10.340)
+Két gépezet élt a forrásban belépő és fogyasztó nélkül. **A viselkedés nem
+változott** — ez tisztán takarítás, 132 sorral és egy indulási Firestore-
+olvasással kevesebb.
+
+**Büntetés-lista.** A v10.326 kivette az admin fülét, de a gépezet maradt:
+- az `AdminPunishments` komponens (59 sor) — sehonnan nem hivatkozott rá semmi;
+- a `PUNISHMENTS` változóba **három helyen írtunk, és sehol nem olvastuk**
+  (nincs `PUNISHMENTS[...]`, nincs `.map`/`.filter` fogyasztó);
+- és **indulásnál minden alkalommal lefutott egy Firestore-olvasás**
+  (`config/punishments`), hogy feltöltse ezt a senki által nem használt
+  változót. Pont az indulás az, amit a v10.337-ben lassúnak találtunk.
+
+A `config/punishments` **dokumentum a Firestore-ban marad** — kód nem töröl
+adatot; csak nem olvassuk és nem írjuk többé.
+
+**App-design kapcsoló.** A `playful` mód rég megszűnt, de maradt egy store
+feliratkozókkal, egy setter, egy init-hook és a `useAppDesign` hook — **nulla
+hívóval**. A `_setAppDesign` ráadásul konstans `'classic'`-ot írt felül, tehát a
+feliratkozók soha nem sültek el: egy kapcsoló, aminek egy állása van. Vele ment
+a `config/homeDesign` három hozzáférője (`getHomeDesign` / `setHomeDesign` /
+`onHomeDesign`) — egyiket sem hívta senki —, két árva kommentár, és a
+`PlayerCard` `playful` propja, amit soha senki nem adott át.
+
+**Ami a listán maradt, és nem véletlenül:** a „Mindenki Iszik" játék. Az
+funkcionálisan a Szerencsekerék és a MENÜ → Büntetés gyengébb változata (nincs
+benne döntés), de ez tartalmi kérdés, nem halott kód — a kivétele a tulajdonos
+döntése.

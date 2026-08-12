@@ -34453,19 +34453,6 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   window.onBoxTheme = function(cb) {
     return db.collection('config').doc('dnrboxTheme').onSnapshot(function(d) { cb(d.exists ? (d.data().theme || 'warm') : 'warm'); });
   };
-  window.getHomeDesign = function() {
-    return db.collection('config').doc('homeDesign').get().then(function(d) {
-      return d.exists ? (d.data().design || 'classic') : 'classic';
-    }).catch(function() { return 'classic'; });
-  };
-  window.setHomeDesign = function(design) {
-    return db.collection('config').doc('homeDesign').set({ design: design }).catch(function(e) { console.warn('setHomeDesign', e); });
-  };
-  window.onHomeDesign = function(cb) {
-    return db.collection('config').doc('homeDesign').onSnapshot(function(d) {
-      cb(d.exists ? (d.data().design || 'classic') : 'classic');
-    });
-  };
   window.onAnnouncement = function(cb) {
     return db.collection('config').doc('announcement').onSnapshot(function(d) {
       cb(d.exists ? d.data() : null);
@@ -34521,14 +34508,6 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   };
   window.setWildcards = function(list) {
     return db.collection('config').doc('wildcards').set({ list: list }).catch(function(e) { console.warn('setWildcards', e); });
-  };
-  window.getPunishments = function() {
-    return db.collection('config').doc('punishments').get().then(function(d) {
-      return d.exists ? (d.data().list || null) : null;
-    }).catch(function() { return null; });
-  };
-  window.setPunishments = function(list) {
-    return db.collection('config').doc('punishments').set({ list: list }).catch(function(e) { console.warn('setPunishments', e); });
   };
   window.getBingoConfig = function() {
     return db.collection('config').doc('bingoConfig').get().then(function(d) {
@@ -35212,36 +35191,8 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.339';
+const APP_VERSION = 'v10.340';
 
-// ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
-let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
-let _appDesignInit = false;
-const _appDesignSubs = new Set();
-function _setAppDesign(d) {
-  const v = 'classic'; // egy dizájn — a playful érték már nem kapcsol át semmit
-  if (v === _appDesign) return;
-  _appDesign = v;
-  try { localStorage.setItem('boh_home_design', v); } catch(e) {}
-  _appDesignSubs.forEach(fn => { try { fn(v); } catch(e) {} });
-}
-function useAppDesign() {
-  const [d, setD] = React.useState(_appDesign);
-  React.useEffect(() => {
-    _appDesignSubs.add(setD);
-    setD(_appDesign);
-    if (!_appDesignInit && typeof window.onHomeDesign === 'function') {
-      _appDesignInit = true;
-      window.onHomeDesign(x => _setAppDesign(x));
-    }
-    return () => { _appDesignSubs.delete(setD); };
-  }, []);
-  return d;
-}
-
-// Mód-függő kontúr/árnyék tokenek EGY helyen definiálva.
-// Szabály: ink kontúr + kemény eltolt árnyék = Playful; lágy szórt árnyék = Classic.
-// (Az ikonok és a kabala márkaelemek — mindkét módban azonosak.)
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
   window.addEventListener('load', () => {
@@ -41056,67 +41007,6 @@ function AdminXpInfo() {
   );
 }
 
-// ── Admin: testreszabható büntetés-lista (nem teljesített feladatokhoz) ──
-function AdminPunishments() {
-  const [list, setList] = React.useState(null);
-  const [saving, setSaving] = React.useState(false);
-  const [saved, setSaved] = React.useState(false);
-  const [dirty, setDirty] = React.useState(false);
-  const [confirmDel, setConfirmDel] = React.useState(null);
-  const [confirmReset, setConfirmReset] = React.useState(false);
-  React.useEffect(() => {
-    (window.getPunishments ? window.getPunishments() : Promise.resolve(null)).then(l => {
-      const src = (Array.isArray(l) && l.length) ? l : PUNISHMENTS_DEFAULT;
-      setList(src.map(w => ({ emoji: w.emoji || '', text: w.text || '' })));
-    }).catch(() => setList(PUNISHMENTS_DEFAULT.map(w => ({ emoji: w.emoji, text: w.text }))));
-  }, []);
-  const upd = (i, field, val) => { setList(l => l.map((w, j) => j === i ? { ...w, [field]: val } : w)); setDirty(true); setSaved(false); };
-  const del = (i) => { setList(l => l.filter((_, j) => j !== i)); setConfirmDel(null); setDirty(true); setSaved(false); };
-  const add = () => { setList(l => [...l, { emoji:'🎲', text:'' }]); setDirty(true); setSaved(false); };
-  const persist = (clean) => {
-    setSaving(true);
-    (window.setPunishments ? window.setPunishments(clean) : Promise.resolve()).then(() => {
-      PUNISHMENTS = clean.map(w => ({ ...w }));
-      setList(clean.map(w => ({ ...w })));
-      setSaving(false); setDirty(false); setConfirmReset(false); setSaved(true);
-    }).catch(() => setSaving(false));
-  };
-  const save = () => {
-    const clean = (list || []).map(w => ({ emoji: (w.emoji || '').trim() || '🎲', text: (w.text || '').trim() })).filter(w => w.text);
-    if (!clean.length) return;
-    persist(clean);
-  };
-  const reset = () => persist(PUNISHMENTS_DEFAULT.map(w => ({ emoji: w.emoji, text: w.text })));
-
-  if (list === null) return <div style={{ textAlign:'center', padding:30, fontFamily:T.font, color:T.sub }}>Betöltés…</div>;
-  const validCount = list.filter(w => (w.text || '').trim()).length;
-  return (
-    <div style={{ padding:16 }}>
-      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-        <span style={{ fontSize:20, lineHeight:1 }}>🎲</span>
-        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>Büntetés-lista</span>
-        <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.mint, background:T.mintSoft, borderRadius:999, padding:'2px 8px' }}>{validCount} db</span>
-      </div>
-      <div style={{ fontFamily:T.font, fontSize:12.5, color:T.sub, marginBottom:12 }}>Ezekből sorsol az app a MENÜ → 🎲 Büntetés gombra koppintva — kortyok helyett/mellett vicces büntetés, aki nem teljesített egy feladatot.</div>
-      <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:14 }}>
-        {list.map((w, i) => (
-          <div key={i} style={{ background:T.surface, borderRadius:14, padding:'10px 12px', boxShadow:T.shadowPill, display:'flex', gap:8, alignItems:'flex-start' }}>
-            <input value={w.emoji} onChange={e => upd(i, 'emoji', e.target.value)} placeholder="🎲" style={{ width:52, boxSizing:'border-box', padding:'9px 4px', borderRadius:10, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:18, textAlign:'center', color:T.ink, outline:'none', flexShrink:0 }} />
-            <textarea value={w.text} onChange={e => upd(i, 'text', e.target.value)} placeholder="Büntetés szövege…" rows={2} style={{ flex:1, boxSizing:'border-box', padding:'9px 10px', borderRadius:10, border:`1.5px solid ${(w.text||'').trim() ? T.border : T.coral}`, background:T.bg, fontFamily:T.font, fontSize:13, color:T.ink, outline:'none', resize:'vertical', minWidth:0 }} />
-            <button onClick={() => { if (confirmDel === i) del(i); else setConfirmDel(i); }} style={{ padding:'8px 10px', borderRadius:10, border:'none', background: confirmDel === i ? T.coral : T.coralSoft, color: confirmDel === i ? '#fff' : T.coral, fontFamily:T.font, fontWeight:700, fontSize:12, cursor:'pointer', flexShrink:0, alignSelf:'center', display:'flex', alignItems:'center' }}>{confirmDel === i ? 'Biztos?' : <BohIcon name="trash" size={14} />}</button>
-          </div>
-        ))}
-      </div>
-      <button onClick={add} style={{ width:'100%', padding:'12px', borderRadius:14, border:`2px dashed ${T.border}`, background:'transparent', fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft, cursor:'pointer', marginBottom:14 }}>+ Új büntetés</button>
-      <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-        <button onClick={() => { if (confirmReset) reset(); else setConfirmReset(true); }} disabled={saving} style={{ padding:'11px 14px', borderRadius:12, border:'none', background: confirmReset ? T.coral : T.surfaceMuted, color: confirmReset ? '#fff' : T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer' }}>{confirmReset ? 'Biztos? Minden felülíródik!' : 'Alaphelyzet'}</button>
-        <div style={{ flex:1 }} />
-        {saved && !dirty && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.mint }}>Mentve ✓</span>}
-        <button onClick={save} disabled={saving || !dirty || !validCount} style={{ padding:'12px 20px', borderRadius:12, border:'none', background: dirty && validCount ? T.mint : T.mintSoft, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14, cursor: dirty && validCount ? 'pointer' : 'default', opacity: saving ? 0.6 : 1 }}>Mentés</button>
-      </div>
-    </div>
-  );
-}
 
 // ── VB Bingó — 5×5, döntő tematika, profilonként saját kártya ──
 const BINGO_ITEMS = [
@@ -43579,9 +43469,6 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
   const [showSettings, setShowSettings] = React.useState(false);
   const isStandalone = typeof window !== 'undefined' && (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches);
 
-  // Home screen design — global, admin-controlled via Firebase ('classic' default | 'playful')
-  // localStorage is only a cache to avoid a flash before the Firestore snapshot arrives.
-
   // DNR dokk — élő infók: következő esemény + jukebox állapot
   const [nextEvent, setNextEvent] = React.useState(null);
   const [boxInfo, setBoxInfo] = React.useState(null);
@@ -44356,7 +44243,7 @@ function PlayersScreen({ players, setPlayers, go }) {
   );
 }
 
-function PlayerCard({ p, onEdit, onRemove, index, badge, recentBadge, playful, onLongPress }) {
+function PlayerCard({ p, onEdit, onRemove, index, badge, recentBadge, onLongPress }) {
   const tilt = [-0.8, 0.8, -0.6, 0.9, -0.9, 0.7][(index||0)%6];
   const lpTimer = React.useRef(null);
   const lpFired = React.useRef(false);
@@ -47636,25 +47523,6 @@ try {
   });
 } catch(e) {}
 
-// Testreszabható büntetés-lista — nem teljesített feladatokhoz, kortyok helyett/mellett.
-const PUNISHMENTS_DEFAULT = [
-  { emoji:'💃', text:'8 másodperces szabad tánc, amit mindenki megítél.' },
-  { emoji:'🎭', text:'Utánozd a jobb oldali szomszédodat egy körig.' },
-  { emoji:'🗣️', text:'A következő körben csak suttogva beszélhetsz.' },
-  { emoji:'🐸', text:'Guggolva kell közlekedned a következő körig.' },
-  { emoji:'📞', text:'Hívj fel valakit, és mondd neki, hogy szeretnéd az almáját.' },
-  { emoji:'🤳', text:'Csinálj egy vicces szelfit, és küldd el a csoportba.' },
-  { emoji:'🎤', text:'Énekeld el a kedvenc dalod refrénjét — kötelező tapsvihar.' },
-  { emoji:'🙅', text:'A következő körben nem mondhatod ki senki nevét.' },
-  { emoji:'🧦', text:'Cseréld el a zoknidat/cipődet valakivel egy körre.' },
-  { emoji:'😶', text:'Egy percig nem beszélhetsz — csak mutogathatsz.' },
-];
-let PUNISHMENTS = PUNISHMENTS_DEFAULT;
-try {
-  if (window.getPunishments) window.getPunishments().then(l => {
-    if (Array.isArray(l) && l.length) PUNISHMENTS = l.filter(w => w && w.text);
-  });
-} catch(e) {}
 
 // A SORSOLHATO betuk: sima latin (angol) betuk — ekezet es ketjegyu nelkul.
 // A magyar keszlet (Á, Ő, CS, LY, TY, ZS…) tul sok olyan kort adott, amire
