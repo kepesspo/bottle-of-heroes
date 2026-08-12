@@ -55,6 +55,12 @@ const open = async (b, what, flowOn, sel) => {
   await p.waitForTimeout(3600);
   await p.evaluate(MOUNT(what, sel || ['zene','erem','anagramma','kisebb']));
   await p.waitForTimeout(1600);
+  // ⚠️ v10.348 ota a jatekvalaszto a DNR felulettel NYIT (kedvenc-soros lista,
+  // rács nelkul). Ez a teszt a RACSOS kartyakat meri, ezert ki kell kapcsolni.
+  if (what === 'games') {
+    await p.click('#__g button[data-chip="dnr"]');
+    await p.waitForTimeout(600);
+  }
   p.__errs = errs;
   return p;
 };

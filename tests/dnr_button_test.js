@@ -104,7 +104,7 @@ const listState = p => p.evaluate(() => {
   {
     const p = await open(b, 402);
     ok(await dnrBtn(p).count() === 1, 'pontosan egy DNR gomb van a szűrősoron');
-    const look = await p.evaluate(() => {
+    const chipLook = () => p.evaluate(() => {
       const btn = document.querySelector('#__g button[data-chip="dnr"]');
       const cs = getComputedStyle(btn);
       const filt = [...document.querySelectorAll('#__g button')].find(x => /^Szűrő/.test(x.textContent.trim()));
@@ -114,32 +114,49 @@ const listState = p => p.evaluate(() => {
                afterFilter: btn.getBoundingClientRect().left >= filt.getBoundingClientRect().right - 1,
                sameRow: Math.abs(btn.getBoundingClientRect().top - filt.getBoundingClientRect().top) < 2 };
     });
+    // Alapbol BE van kapcsolva, ezert eloszor a KIkapcsolt allapot szineit
+    // meressuk le, majd allitsuk vissza.
+    const on = await chipLook();
+    await dnrBtn(p).click(); await p.waitForTimeout(400);
+    const off = await chipLook();
+    await dnrBtn(p).click(); await p.waitForTimeout(400);
+    const look = Object.assign({}, on, { bgOn: on.bg, fgOn: on.fg });
     ok(look.label === 'DNR', 'a felirata „DNR"', look.label);
     ok(look.afterFilter && look.sameRow, '402 px-en a Szűrő MELLETT áll, egy sorban', JSON.stringify(look));
     // ⚠️ FIX szinek: ugyanaz a paros, amit a kartyan a ★ DNR EXKLUZIV szalag visz.
-    ok(look.bg === 'rgb(14, 14, 24)', 'sötét háttér (#0E0E18 — mint a szalag)', look.bg);
-    ok(look.fg === 'rgb(255, 210, 63)', 'arany felirat (#FFD23F — mint a szalag)', look.fg);
-    ok(look.pressed === 'false', 'alapból nincs benyomva', look.pressed);
+    ok(off.bg === 'rgb(14, 14, 24)', 'kikapcsolva sötét háttér (#0E0E18 — mint a szalag)', off.bg);
+    ok(off.fg === 'rgb(255, 210, 63)', 'kikapcsolva arany felirat (#FFD23F — mint a szalag)', off.fg);
+    // ⚠️ v10.348: a jatekvalaszto a DNR felulettel NYIT, tehat a gomb alapbol
+    // BENYOMOTT allapotban all — es arany hattere van, nem sotet.
+    ok(look.pressed === 'true', 'alapból BENYOMVA — a DNR felület az alapértelmezés', look.pressed);
+    ok(look.bgOn === 'rgb(255, 210, 63)', 'bekapcsolva MEGFORDUL: arany háttér', look.bgOn);
+    ok(look.fgOn === 'rgb(14, 14, 24)', 'sötét felirat rajta', look.fgOn);
 
-    // ── 2. MEGNYOMVA: csak a DNR jatekok, KEDVENC-SOROS alakban ──
-    console.log('\n===== 2. A DNR LISTA =====');
-    const before = await listState(p);
-    ok(before.grids > 0 && before.sections.length > 0, 'előtte a normál lista áll (rács + szekciók)',
-       'rács=' + before.grids + ' szekciók=' + before.sections.join(','));
-
-    await dnrBtn(p).click();
-    await p.waitForTimeout(500);
-    const after = await listState(p);
-    ok(after.names.sort().join(' | ') === DNR_NAMES.join(' | '),
-       'pontosan az öt DNR exkluzív játék látszik', after.names.join(' | '));
+    // ── 2. ALAPBOL a DNR lista all, KEDVENC-SOROS alakban ──
+    console.log('\n===== 2. A DNR LISTA (ALAPERTELMEZES) =====');
+    const first = await listState(p);
+    ok(first.names.sort().join(' | ') === DNR_NAMES.join(' | '),
+       'megnyitáskor pontosan az öt DNR exkluzív játék áll', first.names.join(' | '));
     // ⚠️ EZ a fogodzo az ALAKRA: rács-csempekent visszaallitva azonnal elbukik.
-    ok(after.grids === 0, 'NINCS rács — a játékok kedvenc-soros alakban állnak', after.grids);
-    ok(after.rowCount === 5, 'öt széles sor', after.rowCount);
-    ok(after.sections.length === 0, 'a kategória- és Kedvencek szekciók eltűntek', after.sections.join(','));
+    ok(first.grids === 0, 'NINCS rács — a játékok kedvenc-soros alakban állnak', first.grids);
+    ok(first.rowCount === 5, 'öt széles sor', first.rowCount);
+    ok(first.sections.length === 0, 'a kategória- és Kedvencek szekciók nem látszanak', first.sections.join(','));
     ok(await p.evaluate(() => /DNR EXKLUZÍV/.test(document.querySelector('#__g').innerText)),
        'ott a „★ DNR EXKLUZÍV" fejléc');
-    ok(await p.evaluate(() => document.querySelector('#__g button[data-chip="dnr"]').getAttribute('aria-pressed')) === 'true',
-       'a gomb benyomott állapotba került');
+
+    // KIkapcsolva jon elo a teljes kinalat — enelkul a lista nem lenne elerheto
+    await dnrBtn(p).click();
+    await p.waitForTimeout(500);
+    const full = await listState(p);
+    ok(full.grids > 0 && full.sections.length > 0,
+       'a gombot KIkapcsolva előjön a teljes lista (rács + szekciók)',
+       'rács=' + full.grids + ' szekciók=' + full.sections.join(','));
+    ok(await p.evaluate(() => document.querySelector('#__g button[data-chip="dnr"]').getAttribute('aria-pressed')) === 'false',
+       'és a gomb kikapcsolt állapotba került');
+
+    // vissza a DNR feluletre a kovetkezo blokkhoz
+    await dnrBtn(p).click();
+    await p.waitForTimeout(500);
 
     // ── 3. A soron KIVALASZTHATO a jatek ──
     console.log('\n===== 3. VALASZTAS A SORON =====');
@@ -156,15 +173,15 @@ const listState = p => p.evaluate(() => {
     ok((await p.evaluate(() => window.__sel())).join(',') === 'blackjack',
        'a sorra koppintva kiválasztódik a játék', (await p.evaluate(() => window.__sel())).join(','));
 
-    // ── 4. KIKAPCSOLVA visszajon a normal lista ──
-    console.log('\n===== 4. KIKAPCSOLAS =====');
+    // ── 4. A KIVALASZTAS TULELI A VALTAST ──
+    console.log('\n===== 4. VALTAS KOZBEN A KIVALASZTAS =====');
     await dnrBtn(p).click();
     await p.waitForTimeout(500);
     const back = await listState(p);
     ok(back.grids > 0 && back.sections.length > 0, 'visszajön a normál lista',
        'rács=' + back.grids + ' szekciók=' + back.sections.join(','));
     ok(await p.evaluate(() => window.__sel().join(',')) === 'blackjack',
-       'a kiválasztás megmarad', await p.evaluate(() => window.__sel().join(',')));
+       'a DNR felületen kiválasztott játék megmarad', await p.evaluate(() => window.__sel().join(',')));
     ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
     await p.close();
   }

@@ -47,6 +47,12 @@ const open = async (b, { seedCache }) => {
     ReactDOM.createRoot(root).render(React.createElement(H));
   });
   await p.waitForTimeout(1800);
+  // ⚠️ v10.348 ota a jatekvalaszto a DNR felulettel NYIT: a kategoria-szekciok
+  // (es velük a sorrend, amit ez a teszt mer) alapbol nem latszanak. Ki kell
+  // kapcsolni a modot, kulonben minden sorrend-allitas URESEN fut at — a
+  // `soloNames` a chip-sor feliratait adta vissza („Összes | Törlés | …").
+  await p.click('#__g button[data-chip="dnr"]');
+  await p.waitForTimeout(600);
   return p;
 };
 

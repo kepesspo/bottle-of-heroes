@@ -1594,3 +1594,27 @@ Teszt: `node tests/dnr_button_test.js`. Két fogódzó, amit könnyű elrontani:
   `querySelectorAll('button')` a szekciót csukja be a szűrő helyett. Az 5. blokk
   első állítása pont ezen bukott, és a következő kettő ÚGY ment át, hogy soha
   nem volt aktív szűrő.
+
+## A DNR felület az alapértelmezés (v10.348)
+A játékválasztó a **DNR reflektor-móddal nyit**: megnyitáskor az öt DNR
+exkluzív játék áll, kedvenc-soros alakban. A teljes kínálathoz a DNR gombot
+**ki** kell kapcsolni (bekapcsolva arany, kikapcsolva sötét — látszik, hogy egy
+aktív állapotból lehet kilépni).
+
+Egy sor változott (`useState(false)` → `useState(true)`), de a következménye
+nem apró: **mind az öt DNR játék egyedül játszható** (`SOLO_IDS`), tehát a
+nyitóképernyőn egymást kizáró játékok állnak — aki vegyes partit akar, előbb ki
+kell kapcsolja a módot.
+
+A mód a **képernyő állapota, nem mentett beállítás**: a `GamesScreen`
+kilépéskor lebomlik, tehát visszatérve megint a DNR felület jön fel.
+
+**⚠️ Három teszt némán elpirult volna** — mindegyik a rácsos listát méri, ami
+alapból már nincs ott. A javítás mindenhol ugyanaz: a mountolás után egy
+koppintás a `button[data-chip="dnr"]`-re.
+- `gameorder_test` — a `soloNames` a chip-sor feliratait adta vissza
+  („Összes | Törlés | Véletlen | Szűrő | DNR"), és a kategória-sorrend mérése
+  `-1 < -1 < -1`-re esett szét;
+- `setupflow_test` — a beállítás-gombok száma 13-ról 4-re esett (a kedvenc-soros
+  DNR listán csak azok a ceruzák látszanak);
+- a `.grid-games` léte önmagában is állítás volt.
