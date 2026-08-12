@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.349';
+const APP_VERSION = 'v10.350';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -36027,7 +36027,7 @@ const GAMES = [
   // jatekosszam (a tobbi jateknal csak a gameMeta kell). Also hatar 0: a
   // nyertes nem iszik.
   { id:'loverseny', stake:[0,6], stakeOf:(m,n)=>[0, 6 * Math.max(1, n || 1)], roundTime:'mid',  name:'Lóverseny',             difficulty:'közepes', category:'Csapat', emoji:'🐎', symbol:IMGS['loverseny_symbol.png'], img:IMGS['loverseny_icon.png'], banner:IMGS['loverseny_banner.png'], color:'#84CC16', desc:'Minden játékos 1–3 egységben fogadhat a négy ló egyikére. A versenylovak a Sárga, a Zöld, a Kék és a Piros. Ha az a ló ér be először akire fogadott, akkor annyi piát kioszthat. Ha nem az nyer akire fogadott, akkor a megtett mennyiséget kell elfogyasztania.' },
-  { id:'otdolog', stake:[1,1],   roundTime:'fast',  name:'5 dolog',               difficulty:'könnyű',  category:'Páros', emoji:'5️⃣', symbol:IMGS['otdolog_symbol.png'], img:IMGS['otdolog_icon.png'], banner:IMGS['otdolog_banner.png'], color:'#EC4899', desc:'Páros játék. Megjelenik egy kategória, és a soros játékos LICITÁL: megmondja, hány odaillő szót vállal (3–8). Az idő a licithez igazodik. Ha összejön, ő kap pontot és az ellenfele iszik — ha nem, fordítva. Minél többet vállalsz, annál nagyobb a tét: nem az idő fogy el, hanem az ötlet.' },
+  { id:'otdolog', stake:[1,1],   roundTime:'fast',  name:'5 dolog',               difficulty:'könnyű',  category:'Páros', emoji:'5️⃣', symbol:IMGS['otdolog_symbol.png'], img:IMGS['otdolog_icon.png'], banner:IMGS['otdolog_banner.png'], color:'#EC4899', desc:'Páros játék. Megjelenik egy kategória, és a soros játékos LICITÁL: megmondja, hány odaillő szót vállal (legalább 3, felső határ nincs). Az idő a licithez igazodik. Ha összejön, ő kap pontot és az ellenfele iszik — ha nem, fordítva. Minél többet vállalsz, annál nagyobb a tét: nem az idő fogy el, hanem az ötlet.' },
   { id:'szerencse', stake:[1,1], roundTime:'fast',  name:'Szerencsekerék',        difficulty:'könnyű', category:'Csapat', emoji:'🎡', symbol:IMGS['szerencse_symbol.png'], img:IMGS['szerencse_icon.png'], banner:IMGS['szerencse_banner.png'], color:'#14B8A6', desc:'A játék kiválaszt egy játékost akinek meg kell pörgetnie a szerencsekereket. Akit a szerencsekerék kisorsol annak innia kell.' },
   { id:'sohanem', stake:[1,1],   roundTime:'mid',  name:'Én még soha',           difficulty:'közepes', category:'Csapat', emoji:'🙅', symbol:IMGS['sohanem_symbol.png'], img:IMGS['sohanem_icon.png'], banner:IMGS['sohanem_banner.png'], color:'#D946EF', desc:'Jön egy állítás és ha az igaz rád akkor innod kell, ha nem igaz rád akkor nem kell.' },
   { id:'collect', stake:[1,3], stakeOf:(m)=>[1, COLLECT_MAX_POT[m?.collectConfig?.gridSize ?? 4] ?? 10],   roundTime:'mid',  name:'Collect and Boom',      difficulty:'közepes', category:'Csapat', emoji:'💣', symbol:IMGS['collect_symbol.png'], img:IMGS['collect_icon.png'], banner:IMGS['collect_banner.png'], color:'#0EA5E9', desc:'Az app kisorsol egy játékost aki el fogja kezdeni a kört. A játéktábláról ki kell választania egy cellát. Utána a tőle jobbra ülő fog választani egyet, addig választanak a játékosok ameddig egy bombát találnak — ekkor a játék véget ért és az addig összegyűjtött egységet kell meginnia a vesztesnek.' },
@@ -46632,7 +46632,12 @@ const SCENARIOS = {
   rulett:    { prompt:'Válassz egy poharat — ez a kemény?', cta:[] },
   uveg:      { prompt:'Pörgesd meg az üveget — akire mutat, az iszik.', cta:[('Rám mutatott'),('Másra mutatott')] },
   zene:      { prompt:'Hallgasd meg a részletet — ki az előadó és mi a cím?', cta:[('Nem ismertem fel'),('Felismertem!')] },
-  otdolog:   { prompt:'Mondj 5 odaillő szót a megadott időn belül!', cta:[('Nem sikerült'),('Megvan!')] },
+  // ⚠️ `cta: []` — a jatek MAGA konyvel: az ora lejartakor (vagy a licit
+  // teljesitesekor) mar eldolt az eredmeny, tehat a kezi „Vesztettem /
+  // Nyertem!" par egy MASODIK, ellentmondo utat nyitna a ponthoz. Ugyanez a
+  // jelzes all az erem / tapper / kopapir / ritmus / reakcio / szamsor /
+  // cardbattle bejegyzesen is — id-alapu kizaras-lista helyett EZ a mechanizmus.
+  otdolog:   { prompt:'Licitálj, aztán mondd ki annyi odaillő szót az időn belül!', cta:[] },
   szerencse: { prompt:'Pörgesd meg a kereket — akire mutat, az iszik.', cta:[('Rám mutatott'),('Másra mutatott')] },
   sohanem:   { prompt:'Olvasd fel — aztán jelöld, kire igaz', cta:[('Igaz rám — iszom'),('Nem igaz rám')] },
   mindenki:  { prompt:'', cta:[] },
@@ -48227,7 +48232,10 @@ const SOHANEM_CARDS = [
 // OTLET: nyolc szerszamot mondani akkor is nehez, ha van ra ido. A kockazat
 // tudas-alapu, nem tempo-alapu, es igy extrem szinten sem valik jatszhatatlanna.
 const OTDOLOG_PER_WORD = { easy: 1.8, mid: 1.4, hard: 1.0, extreme: 0.8 };
-const OTDOLOG_MIN_BID = 3, OTDOLOG_MAX_BID = 8, OTDOLOG_DEF_BID = 5;
+// ⚠️ NINCS felso hatar (v10.350): a licit addig mehet, ameddig vallaljak.
+// A jelolo-sor ezert RACS, nem egyetlen `flex` sor — soronkent legfeljebb
+// `OTDOLOG_COLS` jelolovel, kulonben 12 szonal 20 px szeles csempek lennenek.
+const OTDOLOG_MIN_BID = 3, OTDOLOG_DEF_BID = 5, OTDOLOG_COLS = 6;
 // Alsó korlat: extrem szinten a 3-as licit 2,4 mp lenne, amibe bejelolni sem
 // lehet.
 const OTDOLOG_MIN_WINDOW = 4;
@@ -48255,7 +48263,7 @@ function OtdologGame({ gameIdx, challenger, opponent, onAdvance, onResult, diffi
   // elott (`ready`), kesobb mar futna az ora.
   const changeBid = (n) => {
     if (phase !== 'ready') return;
-    const v = Math.max(OTDOLOG_MIN_BID, Math.min(OTDOLOG_MAX_BID, n));
+    const v = Math.max(OTDOLOG_MIN_BID, n);
     setBid(v); setChecked(Array(v).fill(false)); setTimeLeft(otdologWindow(v, difficulty));
   };
 
@@ -48272,9 +48280,10 @@ function OtdologGame({ gameIdx, challenger, opponent, onAdvance, onResult, diffi
   }, [phase]);
 
   const checkedCount = checked.filter(Boolean).length;
-  const pct = timeLeft / totalTime;
-  const r = 72, circ = +(2 * Math.PI * r).toFixed(1);
-  const timerColor = pct > 0.5 ? T.mint : pct > 0.2 ? T.yellow : T.coral;
+  // A jelolo-sor RACS: soronkent legfeljebb `OTDOLOG_COLS`. Hat folott kisebb
+  // csempe, hogy 360 px-en is olvashato maradjon a szam.
+  const cols = Math.min(bid, OTDOLOG_COLS);
+  const small = cols > 5;
 
   // PAROS konyveles: aki nyer, pontot kap, a masik iszik. A licitet elvallalo
   // jatekos a kihivo — ha teljesiti, o a nyertes.
@@ -48318,23 +48327,18 @@ function OtdologGame({ gameIdx, challenger, opponent, onAdvance, onResult, diffi
           </svg>
         </div>
         <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>{t('kategoriaLabel')}</div>
-        {phase === 'ready' ? (
-          <div style={{ height:34, borderRadius:8, background:'repeating-linear-gradient(-45deg,#e0e4f0,#e0e4f0 4px,#d0d4e4 4px,#d0d4e4 8px)' }}/>
-        ) : (
-          <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:T.ink, lineHeight:1.1, animation:'popIn .3s cubic-bezier(.2,.9,.3,1.2)' }}>{cat}</div>
-        )}
+        {/* ⚠️ A kategoria MAR A LICIT ALATT latszik (v10.350). A v10.339-ben
+            satirozva volt („vak licit"), de kategoria nelkul nem lehet
+            ertelmesen vallalni egy szamot. */}
+        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:T.ink, lineHeight:1.1, animation:'popIn .3s cubic-bezier(.2,.9,.3,1.2)' }}>{cat}</div>
       </div>
 
       {phase === 'ready' ? (
         <React.Fragment>
-          {/* LICIT — a jatek lenyege. A kategoria meg REJTVE van (a satirozott
-              sav fent), tehat a licit vak dontes: a kategoriat ismerve mar nem
-              lenne tet. */}
+          {/* LICIT — a jatek lenyege. Ki licital, azt a footer pirulaja mondja
+              meg; a lap tetejen ugyanaz a nev feleslegesen ismetlodott. */}
           <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'16px 18px', boxShadow:T.shadow, boxSizing:'border-box' }}>
-            <div style={{ fontFamily:T.font, fontSize:11.5, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.12em', textAlign:'center' }}>
-              {challenger?.name || 'A kihívó'} licitál
-            </div>
-            <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', marginTop:4, marginBottom:12 }}>
+            <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', marginBottom:12 }}>
               Hány szót vállalsz?
             </div>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:16 }}>
@@ -48347,9 +48351,9 @@ function OtdologGame({ gameIdx, challenger, opponent, onAdvance, onResult, diffi
                 <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:46, color:T.ink, lineHeight:1 }}>{bid}</div>
                 <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.1em' }}>szó</div>
               </div>
-              <button onClick={() => changeBid(bid + 1)} disabled={bid >= OTDOLOG_MAX_BID}
+              <button onClick={() => changeBid(bid + 1)}
                 aria-label="Eggyel több"
-                style={{ width:48, height:48, borderRadius:'50%', border:'none', background:T.mintSoft, cursor: bid < OTDOLOG_MAX_BID ? 'pointer' : 'default', opacity: bid < OTDOLOG_MAX_BID ? 1 : 0.4, display:'grid', placeItems:'center' }}>
+                style={{ width:48, height:48, borderRadius:'50%', border:'none', background:T.mintSoft, cursor:'pointer', display:'grid', placeItems:'center' }}>
                 <BohIcon name="plus" size={22} />
               </button>
             </div>
@@ -48361,33 +48365,26 @@ function OtdologGame({ gameIdx, challenger, opponent, onAdvance, onResult, diffi
           </div>
           <button onClick={() => { setTimeLeft(totalTime); setPhase('running'); }} style={{ width:148, height:148, borderRadius:'50%', background:T.mint, border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, boxShadow:T.shadow }}>
             <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:36, color:'#fff', lineHeight:1 }}>▶</div>
-            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.85)' }}>{totalTime}mp · Felfed & Indít</div>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.85)' }}>{totalTime}mp · Indítás</div>
           </button>
         </React.Fragment>
       ) : (
-        <div style={{ position:'relative', width:160, height:160 }}>
-          <svg viewBox="0 0 160 160" style={{ position:'absolute', inset:0, width:'100%', height:'100%', transform:'rotate(-90deg)' }}>
-            <circle cx="80" cy="80" r={r} fill="none" stroke={`${T.inkMute}30`} strokeWidth="7" />
-            <circle cx="80" cy="80" r={r} fill="none" stroke={timerColor} strokeWidth="7"
-              strokeDasharray={circ} strokeDashoffset={+(circ*(1-pct)).toFixed(1)} strokeLinecap="round"
-              style={{ transition:'stroke .3s' }} />
-          </svg>
-          <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
-            <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:52, color:T.ink, lineHeight:1 }}>{phase==='done' ? '0' : Math.ceil(timeLeft)}</div>
-            <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, letterSpacing:'0.07em' }}>MP</div>
-          </div>
-        </div>
+        /* A KOZOS visszaszamlalo (v10.329): 30 px, vizszintes. A regi gyuru
+           160 px-et vett el a jelolok es a lap elol — pont erre keszult. */
+        <BohTimer variant="bar" total={totalTime} left={phase === 'done' ? 0 : timeLeft} />
       )}
 
       {phase !== 'ready' && (
-        /* Az ot jelolo KITOLTI a sort (flex:1), nem fix 50 px. Igy a szamok
-           akkorak lehetnek, hogy futas kozben, feligy odanezve is talalhatoak. */
-        <div style={{ display:'flex', gap: bid > 6 ? 6 : 10, width:'100%' }}>
+        /* A jelolok KITOLTIK a sort (`1fr`), nem fix 50 px — igy a szamok
+           akkorak lehetnek, hogy futas kozben, feligy odanezve is talalhatoak.
+           ⚠️ RACS, nem egyetlen sor: felso licit-hatar nelkul (v10.350) egy
+           12-es vallalas 20 px szeles csempeket adna. */
+        <div style={{ display:'grid', gridTemplateColumns:`repeat(${cols},1fr)`, gap: small ? 6 : 10, width:'100%' }}>
           {checked.map((c, i) => (
             <div key={i} onClick={() => { if (phase === 'done') return; const n=[...checked]; n[i]=!n[i]; setChecked(n); }}
-              style={{ flex:1, minWidth:0, height: bid > 6 ? 52 : 64, borderRadius: bid > 6 ? 13 : 16, cursor: phase==='done' ? 'default' : 'pointer', background:c?T.mint:T.surface, opacity: phase==='done' && !c ? 0.45 : 1, display:'grid', placeItems:'center', boxShadow:T.shadow, border:`2px solid ${c?T.mint:'transparent'}`, transition:'all .15s' }}>
+              style={{ minWidth:0, height: small ? 52 : 64, borderRadius: small ? 13 : 16, cursor: phase==='done' ? 'default' : 'pointer', background:c?T.mint:T.surface, opacity: phase==='done' && !c ? 0.45 : 1, display:'grid', placeItems:'center', boxShadow:T.shadow, border:`2px solid ${c?T.mint:'transparent'}`, transition:'all .15s' }}>
               {c ? <span style={{ display:'grid', placeItems:'center' }}>{Icon.check('#fff')}</span>
-                 : <span style={{ fontFamily:T.font, fontWeight:800, fontSize: bid > 6 ? 17 : 22, color:T.ink }}>{i+1}</span>}
+                 : <span style={{ fontFamily:T.font, fontWeight:800, fontSize: small ? 17 : 22, color:T.ink }}>{i+1}</span>}
             </div>
           ))}
         </div>

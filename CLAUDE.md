@@ -1647,3 +1647,44 @@ beállítható játékok ceruza-gombjai mostantól **két felületen oszlanak me
 (9 a rácson + 4 a DNR-en = 13). Egy nézetben számolva a teszt 9-et látott.
 A gomb-nyitogató kör is mindkét felületen végigmegy — enélkül a négy DNR játék
 beállító lapja soha többé nem lenne tesztelve.
+
+## 5 dolog: nyílt licit, látszó kategória, sávos óra (v10.350)
+Négy változás, és a második **megfordít** egy korábbi szabályt.
+
+**A licitnek nincs felső határa.** Az `OTDOLOG_MAX_BID = 8` megszűnt — a licit
+addig mehet, ameddig vállalják. Ebből következik, hogy a jelölő-sor nem lehet
+többé egyetlen `flex` sor: 12 szónál a csempék 20 px szélesek lennének. **Rács**
+lett belőle, soronként legfeljebb `OTDOLOG_COLS` (=6) jelölővel.
+
+**⚠️ A kategória MÁR A LICIT ALATT látszik.** A v10.339 szándékosan satírozta
+(„a licit VAK döntés: ha a kategória látszana, nem lenne tét"), a tulajdonos
+döntése az ellenkező: **kategória nélkül nem lehet értelmesen számot vállalni**.
+A satírozott sáv és vele a „Felfed" szóhasználat is megszűnt — a gomb már csak
+`Indítás`. Aki a vak licitet visszahozná, ezt a bekezdést írja át, ne csak a
+satírozást tegye vissza.
+
+**A „&lt;név&gt; licitál" sor kikerült** — ki jön, azt a footer pirulája mondja meg.
+
+**Az óra a közös `BohTimer` `bar` változata** (30 px, vízszintes) a 160 px-es
+gyűrű helyett. Pontosan erre készült (v10.329): a gyűrű 160 px-et vett el a
+jelölők és a kategória-lap elől.
+
+### ⚠️ A kézi „Vesztettem / Nyertem!" gombok — és a helyes mechanizmus
+A játék `Páros` (v10.339 óta), a `PlayScreen` pedig a Páros játékokhoz kirakja
+a két kézi gombot. Ez **két, egymásnak ellentmondó utat** nyitott a ponthoz: az
+óra lejártakor (vagy a licit teljesítésekor) a játék MÁR eldöntötte az
+eredményt, a gombok mégis felülírhatták.
+
+A javítás **nem** az azonosító-alapú kizárás-lista bővítése, hanem **üres
+`cta`** a `SCENARIOS.otdolog`-on. Ez már létező jelzés: az `erem`, `tapper`,
+`kopapir`, `ritmus`, `reakcio`, `szamsor` és `cardbattle` mind így mondja meg,
+hogy maga könyvel. Egy azonosító-lista mellettük harmadik forrás lett volna.
+
+**Mérve, és érdemes tudni:** az `otdolog` volt az EGYETLEN nem-kizárt játék
+nem-üres `cta`-val, tehát a kézi gombpár ma már sehol nem jelenik meg az appban.
+Ezért a teszt kontrollja nem lehet másik játék: **futásidőben visszaadja** a
+`cta`-t, és úgy ellenőrzi, hogy a gombok tényleg megjelennek — enélkül a
+„nincs gomb" akkor is igaz lenne, ha a szelektor rossz.
+
+Teszt: `node tests/otdolog_licit_test.js` (7 blokk: időablak, licit-választó,
+nincs plafon, teljesített/bukott licit, óra + jelölő-rács, nincs kézi gomb).
