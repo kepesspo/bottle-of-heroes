@@ -159,8 +159,15 @@ const baseSeed = `
   // ebben a szettben 2 kulon felallas van (abc, ad), es ebbol egy jatszott ketszer
   ok('a visszatero tarsasag 1 / 2', /VISSZATÉRÉS/i.test(t) && /1 \/ 2/.test(t), (t.match(/VISSZATÉRÉS[\s\S]{0,60}/i) || ['?'])[0].replace(/\n/g, ' | '));
   ok('a visszatero jatekos 3 / 4', /3 \/ 4/.test(t), (t.match(/\d \/ \d/g) || []).join(' '));
-  ok('a jatekok blokk 2 / 45-ot mutat', /2 \/ 45játszottak legalább egyszer/.test(t), (t.match(/JÁTÉKOK[\s\S]{0,50}/i) || ['?'])[0].replace(/\n/g, ' | '));
-  ok('kiirja, hany jatek nem futott meg sosem', /43 még sosem futott/.test(t), (t.match(/Mind a[^|]*/) || ['?'])[0]);
+  // ⚠️ A jatekok szama a GAMES listabol jon, NEM bedrotozva. Korabban „45" allt
+  // itt, es a 46. jatek felvetelekor (v10.342) a teszt nemán elpirult — pedig a
+  // termek jol mukodott. Ami valtozhat, azt a forrasbol kell kerdezni.
+  const nGames = await p.evaluate(() => GAMES.length);
+  ok('a jatekok blokk 2 / ' + nGames + '-ot mutat',
+     new RegExp('2 \\/ ' + nGames + 'játszottak legalább egyszer').test(t),
+     (t.match(/JÁTÉKOK[\s\S]{0,50}/i) || ['?'])[0].replace(/\n/g, ' | '));
+  ok('kiirja, hany jatek nem futott meg sosem',
+     new RegExp((nGames - 2) + ' még sosem futott').test(t), (t.match(/Mind a[^|]*/) || ['?'])[0]);
   ok('app-megnyitasnal ures allapot latszik', /Még nincs adat/.test(t), (t.match(/APP-MEGNYITÁS[\s\S]{0,80}/i) || ['?'])[0].replace(/\n/g, ' | '));
   const wide = await p.evaluate(() => {
     const el = document.getElementById('__gr');

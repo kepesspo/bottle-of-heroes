@@ -1488,3 +1488,32 @@ el, hogy erre gondoljon. Részletek és a három kizárandó határeset:
 `docs/safe-area.md` 1/b.
 
 Teszt: `node tests/statusbar_dim_test.js`.
+
+## A profil-statisztika lap túl nagyban jött fel (v10.344)
+Bejelentés: „ha a statisztika oldalon rányomok egy profilra, akkor túl nagyban
+jelenik meg" — a kártya a képernyő tetejétől az aljáig ért.
+
+**⚠️ Az ok a KÖZÖS `ActionModal`-ban volt:** a kártyának nem volt
+magasság-korlátja és nem volt görgetése. Rövid modalnál (egy mondat + két gomb)
+ez sosem látszott; a `QuickStatsModal` viszont egy teljes profil-statisztikát
+tesz bele (csempék, XP-sáv, kitüntetések, grafikon), és a kártya addig nőtt,
+amíg el nem fogyott a képernyő.
+
+**A második, súlyosabb következmény:** ami nem fért ki, az **levágódott**, és
+görgetni sem lehetett hozzá. A puszta „mekkora a kártya" mérés ezt nem fogná
+meg — a teszt ezért külön nézi, hogy a törzs görgethető-e és hogy a gomb a
+kártyán belül van-e.
+
+A kártya: `maxHeight: min(100%, 620px)` + `overflow:hidden`; a **fej és a
+gombsor** `flexShrink:0`, a törzs `flex:0 1 auto; minHeight:0; overflowY:auto`
+— vagyis rövid modalnál a természetes magasság marad, és **csak akkor görget,
+ha tényleg nem fér ki**. A javítás a közös komponensben van, tehát minden hosszú
+modal örökli.
+
+Teszt: `node tests/actionmodal_size_test.js`. A 4. blokk a kontroll: egy RÖVID
+modal nem változhat — enélkül egy „mindent 620-ra vágok" regresszió is átmenne.
+
+**A `growth_test` bedrótozott játékszáma megszűnt:** „45" állt benne, és a 46.
+játék felvételekor (v10.342) némán elpirult, pedig a termék jól működött. A
+szám mostantól a `GAMES` listából jön — ami változhat, azt a forrásból kell
+kérdezni.
