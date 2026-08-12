@@ -110,7 +110,7 @@ const playErem = async (p) => {
   await openMenu(p); await p.waitForTimeout(700);
   const off = await menuBtns(p);
   ok(!off.some(x => /^Állás$/.test(x)), 'NINCS „Állás" fül', off.filter(x => x.length < 14).join(' | '));
-  ok(!off.some(x => /Büntetés/.test(x)), 'NINCS „Büntetés" gomb', off.filter(x => /Bünt/.test(x)).join(','));
+  ok(!off.some(x => /Büntetés/.test(x)), 'NINCS „Büntetés" gomb a menüben', off.filter(x => /Bünt/.test(x)).join(','));
   ok(off.some(x => /Szerkesztés/.test(x)) && off.some(x => /Vezérlés/i.test(x)),
      'a másik két fül viszont megmaradt', off.filter(x => x.length < 14).join(' | '));
   ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
@@ -145,10 +145,21 @@ const playErem = async (p) => {
     if (!x) return 'nincs gomb';
     x.click(); return 'kattintva';
   });
-  ok(clicked === 'nincs gomb', 'a Büntetés gomb el sem érhető', clicked);
+  ok(clicked === 'nincs gomb', 'a MENÜBEN nincs Büntetés gomb', clicked);
   await p.waitForTimeout(600);
   const acc = await p.evaluate(() => (window.__players || []).map(x => x.points + '/' + x.drinks).join(' '));
-  ok(acc === '0/0 0/0 0/0', 'a játékosokon semmi nem változott', acc);
+  ok(acc === '0/0 0/0 0/0', 'a menün keresztül semmi nem került fel', acc);
+
+  // ── 5. ⚠️ A BUNTETES viszont MUKODIK, es VAN bannere ──
+  // A wildcard-savi „Szabalyszego?" belepo pontgyujtes nelkul is kint van
+  // (v10.341, tulajdonosi dontes: kezreesobb ott). Ha a banner elmaradna, a
+  // jatekos kiosztana harom kortyot, es semmi visszajelzest nem kapna rola.
+  console.log('\n===== 5. A BUNTETES MUKODIK, ES VAN BANNERE =====');
+  const fsrc = fs.readFileSync(ROOT + '/app.src.html', 'utf8');
+  ok(!/\{trackScores && \(\s*<button onClick=\{\(\) => setWcPunishOpen/.test(fsrc),
+     'a „Szabályszegő?" belépő NINCS pontgyűjtéshez kötve');
+  ok(/if \(!trackScores && !res\.penalty\)/.test(fsrc),
+     'a banner-kapu átengedi a büntetést (különben néma lenne a kiosztás)');
   ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
   await p.close();
 

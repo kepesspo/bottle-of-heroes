@@ -35191,7 +35191,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.340';
+const APP_VERSION = 'v10.341';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -63297,11 +63297,16 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
 
   const onResult = (res) => {
     if (!res) { setGameResult(null); return; }
-    // Pontgyujtes nelkul nincs mit hirdetni: a `trackScores` hamis, tehat a
-    // konyveles meg sem tortenik. A banner "+1 pont"-ot es korty-szamot igerne,
-    // amibol semmi nem kerul fel. A kapu ITT van, es nem lentebb: igy a hang, a
-    // konfetti es a nezoknek kuldott `gameEvent` is elmarad.
-    if (!trackScores) { setGameResult(null); return; }
+    // Pontgyujtes nelkul a JATEK-korok nem konyvelnek semmit, tehat nincs mit
+    // hirdetni: a banner "+1 pont"-ot es korty-szamot igerne, amibol semmi nem
+    // kerul fel. A kapu ITT van, es nem lentebb: igy a hang, a konfetti es a
+    // nezoknek kuldott `gameEvent` is elmarad.
+    //
+    // ⚠️ A BUNTETES KIVETEL. Az `givePenalty` a `trackScores`-tol fuggetlenul
+    // ir a jatekosokra, es a wildcard-savi „Szabalyszego?" belepo pontgyujtes
+    // nelkul is kint van. Banner nelkul a jatekos kiosztana harom kortyot, es
+    // semmi visszajelzest nem kapna rola.
+    if (!trackScores && !res.penalty) { setGameResult(null); return; }
     let r = res;
     // Fordított kör: nyertes ↔ vesztes csere a bannerben (a nyertes iszik, a vesztes pontoz).
     // BUNTETESRE NEM VONATKOZIK: ott a szabalyszego nyertesnek latszana. Lasd patch_10_271.py
@@ -63603,13 +63608,12 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           <div style={{ display:'flex', alignItems:'center', gap:10, background: T.surface, border:'none', borderLeft: `4px solid ${T.yellow}`, borderRadius:14, padding:'7px 12px', boxShadow: '0 3px 12px rgba(20,30,50,0.10)', animation:'popIn .3s cubic-bezier(.2,.9,.3,1.2)' }}>
             <span style={{ fontSize:22, flexShrink:0, lineHeight:1 }}>{activeWildcard.emoji}</span>
             <div onClick={() => setRoundPopup({ round: activeWildcard.round, wildcard: activeWildcard, showRound: false, leaving: false })} style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:12, lineHeight:1.3, color:T.ink, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden', cursor:'pointer' }}>{activeWildcard.text}</div>
-            {/* Ugyanazt a `PenaltyModal`-t nyitja, mint a MENU -> Buntetes,
-                tehat pontgyujtes nelkul ugyanugy kimarad. */}
-            {trackScores && (
+            {/* Ez a belepo pontgyujtes nelkul IS kint marad: kezreesobb, mint a
+                menuben turkalni. A menubeli „Buntetes" gomb ilyenkor kimarad,
+                tehat EGY belepo van — a kenyelmes. */}
             <button onClick={() => setWcPunishOpen(true)} style={{ flexShrink:0, border:'none', borderRadius:10, background: T.ink, color: inkIsLight() ? (T.yellowText||T.yellow) : T.yellow, fontFamily:T.font, fontWeight:900, fontSize:11.5, padding: '8px 10px', cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
               <BohIcon name="beer" size={13} />Szabályszegő?
             </button>
-            )}
           </div>
         </div>
       )}

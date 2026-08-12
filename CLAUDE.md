@@ -1427,3 +1427,16 @@ a `config/homeDesign` három hozzáférője (`getHomeDesign` / `setHomeDesign` /
 funkcionálisan a Szerencsekerék és a MENÜ → Büntetés gyengébb változata (nincs
 benne döntés), de ez tartalmi kérdés, nem halott kód — a kivétele a tulajdonos
 döntése.
+
+## A „Szabályszegő?" belépő marad, pontgyűjtés nélkül is (v10.341)
+A v10.338-ban a MENÜ → Büntetés gombbal EGYÜTT ezt is elrejtettem, mert
+ugyanazt a `PenaltyModal`-t nyitja. Tulajdonosi döntés: **a wildcard-sávi
+belépő maradjon** — kézreesőbb, mint a menüben turkálni. A menübeli gomb
+továbbra is kimarad, tehát pontgyűjtés nélkül **egy** belépő van, a kényelmes.
+
+**⚠️ Ebből következik a banner-kapu finomítása.** A v10.338 pontgyűjtés nélkül
+MINDEN eredmény-bannert elnyelt. Ha a gomb marad, de a banner nem jön, a játékos
+kioszt három kortyot — és semmi visszajelzést nem kap róla. A kapu ezért
+mostantól `!trackScores && !res.penalty`: a **játék**-eredményeket nyeli el, a
+**büntetést** átengedi, mert az ténylegesen megtörtént és ténylegesen ír a
+játékosokra.
