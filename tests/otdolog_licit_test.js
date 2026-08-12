@@ -74,6 +74,21 @@ const tick = (p, n) => p.evaluate(`(async () => {
     await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
   }
 })()`.replace('${n}', String(n)));
+// „Ki mondja a szavakat?" — a KOZOS PlayerDrinkRow `variant='pick'` sorai.
+// A fogodzo az aria/pipa helyett a NEV: a sorra kattintunk.
+// ⚠️ A sor innerText-je az AVATAR kezdobetujevel indul („S\nSere"), tehat a
+// `startsWith(nev)` a belso nev-divet talalja meg, nem a kattinthato sort.
+// A kapaszkodo: `display:flex` + 14 px sarok + a nev BENNE van.
+const pickPerformer = (p, name) => p.evaluate((name) => {
+  const row = [...document.querySelectorAll('#__p div')].find(d => {
+    const cs = getComputedStyle(d);
+    return cs.display === 'flex' && cs.borderRadius === '14px'
+        && cs.cursor === 'pointer' && (d.innerText || '').includes(name);
+  });
+  if (!row) return 'NINCS';
+  row.click(); return 'ok';
+}, name);
+
 const start = p => p.evaluate(() => {
   const x = [...document.querySelectorAll('#__p button')].find(y => /Indítás/.test(y.textContent || ''));
   if (!x) return 'NINCS'; x.click(); return 'ok';
@@ -272,6 +287,67 @@ const start = p => p.evaluate(() => {
   await p.evaluate(() => { SCENARIOS.otdolog.cta = window.__ctaBak; });
   ok(ctrl.manual.length === 2, 'kontroll: nem-üres `cta`-val a két gomb MEGJELENIK',
      ctrl.manual.join(' | ') || 'egy sem');
+
+  // ── 8. ⚠️ KI MONDJA A SZAVAKAT — a konyveles EZT koveti (v10.353) ──
+  // Alapbol a kihivo mondja, de a licit alatt at lehet adni az ellenfelnek.
+  // A pont es a korty a MONDO-val mozog, nem a licitaloval.
+  console.log('\n===== 8. KI MONDJA A SZAVAKAT =====');
+  await mount(p, 'easy');
+  await p.waitForTimeout(900);
+  const t8 = await txt(p);
+  ok(/Ki mondja a szavakat/i.test(t8), 'ott a választó a licit-lapon', t8.slice(0, 80));
+  // ⚠️ A tet-mondat NEVEKKEL beszel: a regi „…es te iszol" a kihivora volt
+  // szabva, es az ellenfel valasztasa eseten az ellenkezojet allitotta volna.
+  ok(/Sere.*pontot kap.*Kecsi.*iszik/s.test(t8),
+     'alapból a kihívó mondja — a tét-mondat is így szól', (t8.match(/Ha összejön[^.]*\./) || [])[0]);
+
+  // 8a. ALAPERTELMEZES (kihivo mondja) + TELJESITETT licit
+  await bump(p, -1, 2);                       // licit = 3
+  await start(p);
+  await p.waitForTimeout(250);
+  await tick(p, 3);
+  await p.waitForTimeout(700);
+  let r8 = await p.evaluate(() => ({ res: window.__res, adv: window.__adv }));
+  ok((r8.res.winners || [])[0]?.name === 'Sere' && (r8.res.losers || [])[0]?.name === 'Kecsi',
+     'a kihívó mondta és megvolt → ő a nyertes',
+     (r8.res.winners||[])[0]?.name + ' / ' + (r8.res.losers||[])[0]?.name);
+  ok(r8.adv.pm.a === 1 && r8.adv.dm.b === 1, 'a pont hozzá, a korty a másikhoz',
+     JSON.stringify(r8.adv));
+
+  // 8b. AZ ELLENFEL mondja + TELJESITETT licit -> a pont VELE mozog
+  await mount(p, 'easy');
+  await p.waitForTimeout(900);
+  ok(await pickPerformer(p, 'Kecsi') === 'ok', 'át lehet adni a szót az ellenfélnek');
+  await p.waitForTimeout(400);
+  const t8b = await txt(p);
+  ok(/Kecsi.*pontot kap.*Sere.*iszik/s.test(t8b),
+     'a tét-mondat MEGFORDUL', (t8b.match(/Ha összejön[^.]*\./) || [])[0]);
+  await bump(p, -1, 2);
+  await start(p);
+  await p.waitForTimeout(250);
+  ok(/Kecsi mondja/.test(await txt(p)), 'futás közben is látszik, ki mondja');
+  await tick(p, 3);
+  await p.waitForTimeout(700);
+  r8 = await p.evaluate(() => ({ res: window.__res, adv: window.__adv }));
+  ok((r8.res.winners || [])[0]?.name === 'Kecsi' && (r8.res.losers || [])[0]?.name === 'Sere',
+     '⚠️ az ELLENFÉL mondta és megvolt → most Ő a nyertes',
+     (r8.res.winners||[])[0]?.name + ' / ' + (r8.res.losers||[])[0]?.name);
+  ok(r8.adv.pm.b === 1 && r8.adv.dm.a === 1, 'a pont és a korty is MEGFORDULT',
+     JSON.stringify(r8.adv));
+  ok(/Kecsi/.test(r8.res.winNote || ''), 'a banner szövege is a mondót nevezi meg', r8.res.winNote);
+
+  // 8c. AZ ELLENFEL mondja + BUKOTT licit -> a kihivo nyer
+  await mount(p, 'extreme');                  // 5-os licit = 4 mp, magatol lejar
+  await p.waitForTimeout(900);
+  await pickPerformer(p, 'Kecsi');
+  await p.waitForTimeout(300);
+  await start(p);
+  await p.waitForTimeout(5200);
+  r8 = await p.evaluate(() => ({ res: window.__res, adv: window.__adv }));
+  ok((r8.res.winners || [])[0]?.name === 'Sere' && (r8.res.losers || [])[0]?.name === 'Kecsi',
+     'bukáskor a MÁSIK nyer — a mondó iszik',
+     (r8.res.winners||[])[0]?.name + ' / ' + (r8.res.losers||[])[0]?.name);
+  ok(r8.adv.pm.a === 1 && r8.adv.dm.b === 1, 'a könyvelés is ezt követi', JSON.stringify(r8.adv));
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await p.close();

@@ -1742,3 +1742,35 @@ Teszt: `dnr_button_test.js` 7. blokk. Három fogódzó:
 - **7c.**: forrás-szinten ellenőrzi, hogy a `BottleApp` tényleg feltételesen
   rendereli a `GamesScreen`-t — ha ez megváltozna, a harness mást mérne, mint
   a valóság.
+
+## 5 dolog: ki mondja a szavakat (v10.353)
+A licit alatt kiválasztható, **ki teljesíti** a vállalást — és a könyvelés ezt
+követi, nem a licitálót:
+- ha összejön → a **mondó** kap pontot, a másik iszik;
+- ha nem → fordítva.
+
+Alapértelmezés a **kihívó**, tehát aki nem nyúl hozzá, annak a játék változatlan.
+
+**⚠️ A választó a KÖZÖS `PlayerDrinkRow` `variant='pick'` sora**, nem új markup
+(lásd a „Ki igyon?" szakaszt: *Ne írj újat*). Ugyanaz a sor szolgálja ki a
+Kategória játékot is; egy saját, tömör színes névgomb-pár elcsúszna tőle.
+
+**⚠️ A tét-mondat NEVEKKEL beszél.** Eddig második személyben szólt
+(„…ő kap pontot és **te** iszol"), ami a kihívóra volt szabva — ha az ellenfél
+mondja a szavakat, ez szó szerint az ellenkezőjét állította volna. Ugyanezért
+nevezi meg a banner `winNote`-ja is a **mondót**, nem a kihívót.
+
+Egy `performer` / `other` pár van, és a tét-mondat, a futás közbeni jelzés, a
+banner és a könyvelés **mind ebből a kettőből** dolgozik — külön leágazásokkal
+elcsúsznának egymástól.
+
+Indulás után a választó eltűnik, ezért egy sor jelzi, kire megy a játék: a
+footer pirulája a **párost** mutatja, nem a mondót.
+
+Teszt: `node tests/otdolog_licit_test.js` 8. blokk — három eset (kihívó mondja
+és megvan · ellenfél mondja és megvan · ellenfél mondja és bukik), és mindegyiknél
+a **banner ÉS a könyvelés együtt** van ellenőrizve.
+A sor-fogódzó: ⚠️ a sor `innerText`-je az avatar kezdőbetűjével indul
+(„S\nSere"), tehát a `startsWith(név)` a belső név-divet találja meg, nem a
+kattintható sort — a teszt ezért `display:flex` + 14 px sarok + *tartalmazza* a
+nevet alapján keres.
