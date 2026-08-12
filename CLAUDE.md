@@ -1236,3 +1236,36 @@ telefonos írást ír, azt használja — bare `db`-t ne.
 
 Teszt: `idoparbaj_phone_test.js` 6. blokkja. A fogódzó a **hiba aláírása**:
 egyetlen `typeof db === 'undefined'` őrző sem maradhat a forrásban.
+
+## ⚠️ Alkomponens a törzsben = minden rendereléskor ÚJRAMOUNT (v10.335)
+Bejelentés: „Tappernél ugrálnak az avatarok. Mindig ráfrissül."
+
+Ha egy alkomponens a szülő **törzsében** van definiálva, minden
+újrarendereléskor ÚJ függvény-azonosságot kap. A React ezt **más
+komponens-típusnak** látja: nem frissíti a meglévő fát, hanem leszedi és
+újramountolja — az avatar `<img>` pedig ezzel együtt újratöltődik.
+
+A Tappernél ez látható is: a visszaszámláló `setInterval` **40 ms-onként**
+ketyeg, tehát másodpercenként 25-ször épült újra mindkét tábla.
+
+**Ez már harmadszor jött elő** (Időpárbaj v10.315, Blackjack v10.325), ezért
+most az összes olyan hely javult, ahol alkomponens ült a törzsben, JSX-ként
+használjuk, ÉS a szülő gyakran renderel:
+
+| hely | ütem | mi lett belőle |
+|---|---|---|
+| `TapperGame` `Btn` | 40 ms | `TapperBtn` (modul-szint) |
+| `KisebbGame` `LargeCard` | 600 ms | törölve — egysoros burkoló volt a `KisebbCard` körül |
+| `BeerPongObserverView` `PlayerChip` | 1000 ms | `BpObsPlayerChip`, a `hydObs` a hívási helyre került |
+| `KoPapirGame` `PlayerCard` | 3000 ms | `KoPapirPlayerCard` — **árnyékolta** is az azonos nevű, modul-szintű `PlayerCard`-ot |
+
+**A döntő különbség nem a definíció helye, hanem a HASZNÁLAT.** A result-banner
+`Pile` / `Metric` / `Row` szándékosan a renderen belül keletkezik, DE **sima
+függvényként** hívjuk (`Pile({...})`), nem JSX-ként — a React így nem lát külön
+típust. Ezek maradnak.
+
+Teszt: `node tests/avatar_remount_test.js`. A fogódzó **nem a geometria**:
+a `tapper_press_test` az avatar pozícióját méri, az újramountolt kép viszont
+UGYANOTT jelenik meg, tehát az a teszt a hibás verzión is átment. Itt a
+DOM-csomópontot jelöljük meg, és azt nézzük, megvan-e a ketyegés után — a hibás
+verzión **0 / 2** élte túl. A 2. blokk forrás-szinten őrzi a többi helyet.

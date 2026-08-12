@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.334';
+const APP_VERSION = 'v10.335';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -56768,8 +56768,6 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
     </div>
   );}
 
-  const LargeCard = ({ card, faceDown }) => <KisebbCard card={card} faceDown={faceDown} remaining={remaining} />;
-
   const shownCard = guessRes ? guessRes.card : null;
 
   return (
@@ -56805,9 +56803,10 @@ function KisebbGame({ gameIdx, players, onAdvance, onResult, onLiveDrinkUpdate, 
 
       {/* Cards */}
       <div style={{ display:'flex', alignItems:'center', gap:14 }}>
-        <LargeCard card={currentCard} faceDown={false} />
+        <KisebbCard card={currentCard} faceDown={false} remaining={remaining} />
         <div style={{ fontSize:24, color:T.inkSoft, fontWeight:700 }}>→</div>
-        {shownCard ? <LargeCard card={shownCard} faceDown={false} /> : <LargeCard card={null} faceDown={true} />}
+        {shownCard ? <KisebbCard card={shownCard} faceDown={false} remaining={remaining} />
+                   : <KisebbCard card={null} faceDown={true} remaining={remaining} />}
       </div>
 
       {/* Card comparison hint */}
@@ -57484,6 +57483,75 @@ function EremGame({ gameIdx, challenger, opponent, onAdvance, onResult, drinkMul
   );
 }
 
+// ⚠️ MODUL-SZINTU, es ez NEM stiluskerdes. Amig a `Btn` a TapperGame torzseben
+// volt, minden ujrarenderelesnel uj fuggveny-azonossagot kapott: a React MAS
+// tipusnak latta, leszedte es ujramountolta a fat — az avatar `<img>` pedig
+// ujratoltodott. A visszaszamlalo 40 ms-onkent ketyeg, tehat masodpercenkent
+// 25-szor. Ez volt az „ugralnak az avatarok, mindig rafrissul".
+function TapperBtn({ pNum, player, holding, timeVal, phase, countdown, onDown, onUp }) {
+  const released = timeVal !== null;
+  return (
+    <div
+      onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); onDown(pNum, player); }}
+      onPointerUp={() => { onUp(pNum, player); }}
+      onPointerCancel={() => { onUp(pNum, player); }}
+      style={{
+        width:'100%', minHeight:118, borderRadius:22, boxSizing:'border-box', padding:'14px 18px',
+        background: released ? `${player.color}66` : player.color,
+        filter: holding && !released ? 'brightness(1.12)' : 'brightness(1)',
+        boxShadow: holding && !released
+          ? `0 0 0 10px ${player.color}44, 0 0 0 20px ${player.color}18`
+          : `0 0 0 10px rgba(255,255,255,0.85)`,
+        display:'flex', flexDirection:'row', alignItems:'center', gap:16,
+        cursor:'pointer', userSelect:'none', WebkitUserSelect:'none', touchAction:'none',
+        // A transform IS legyen a listaban — nelkule a meret pattan, es a
+        // taplan ulo profilkep ~5 px-t ugrik oldalra minden lenyomasnal.
+        transition:'transform 0.12s, box-shadow 0.15s, background 0.15s',
+        transform: holding && !released ? 'scale(0.985)' : 'scale(1)',
+      }}
+    >
+      {/* Avatar + név balra zárva — a saját tábláját mindenki felismeri,
+          anélkül hogy a nevet kellene elolvasnia. */}
+      <div style={{ width:64, height:64, borderRadius:'50%', flexShrink:0, overflow:'hidden',
+                    background:'rgba(255,255,255,0.28)', border:'3px solid rgba(255,255,255,0.9)',
+                    display:'grid', placeItems:'center' }}>
+        {player.img
+          ? <img src={player.img} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+          : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:'#fff' }}>{(player.name||'?').charAt(0).toUpperCase()}</span>}
+      </div>
+      <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:5 }}>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:21, color:'#fff', lineHeight:1.1,
+                      overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+          {player.name}
+        </div>
+        {!released ? (
+          <>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.85)', letterSpacing:'0.08em' }}>
+              {phase === 'idle' ? 'TARTSD' : 'TARTSD!'}
+            </div>
+            {/* A visszaszamlalas allasa a sajat tablan: a kozepso szam a
+                hüvelykujj alatt van, onnan nem latszik. */}
+            <div style={{ display:'flex', gap:6, marginTop:2 }}>
+              {Array.from({ length: 10 }).map((_, i) => {
+                const done = phase === 'counting' && i < Math.round((1 - countdown / 5) * 10);
+                return <span key={i} style={{ width:9, height:9, borderRadius:'50%',
+                  background:'#fff', opacity: done ? 0.95 : 0.32, transition:'opacity .12s' }} />;
+              })}
+            </div>
+          </>
+        ) : (
+          <div style={{
+            alignSelf:'flex-start', background:'rgba(0,0,0,0.22)', borderRadius:9, padding:'5px 14px',
+            fontFamily:'monospace', fontWeight:900, fontSize:19, color:'#fff', letterSpacing:'0.04em',
+          }}>
+            {timeVal === -1 ? '✗ KÉSŐ' : `${(timeVal * 1000).toFixed(0)}ms`}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TapperGame({ gameIdx, challenger, opponent, onAdvance, onResult, roomCode }) {
   const p1 = challenger;
   const p2 = opponent;
@@ -57646,74 +57714,14 @@ function TapperGame({ gameIdx, challenger, opponent, onAdvance, onResult, roomCo
     ref.update({ [`tapperInput.${playerName}`]: down }).catch(() => {});
   };
 
-  const Btn = ({ pNum, player, holding, timeVal }) => {
-    const released = timeVal !== null;
-    return (
-      <div
-        onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); pressDown(pNum); writeTapperState(player?.name, true); }}
-        onPointerUp={() => { pressUp(pNum); writeTapperState(player?.name, false); }}
-        onPointerCancel={() => { pressUp(pNum); writeTapperState(player?.name, false); }}
-        style={{
-          width:'100%', minHeight:118, borderRadius:22, boxSizing:'border-box', padding:'14px 18px',
-          background: released ? `${player.color}66` : player.color,
-          filter: holding && !released ? 'brightness(1.12)' : 'brightness(1)',
-          boxShadow: holding && !released
-            ? `0 0 0 10px ${player.color}44, 0 0 0 20px ${player.color}18`
-            : `0 0 0 10px rgba(255,255,255,0.85)`,
-          display:'flex', flexDirection:'row', alignItems:'center', gap:16,
-          cursor:'pointer', userSelect:'none', WebkitUserSelect:'none', touchAction:'none',
-          // A transform IS legyen a listaban — nelkule a meret pattan, es a
-          // taplan ulo profilkep ~5 px-t ugrik oldalra minden lenyomasnal.
-          transition:'transform 0.12s, box-shadow 0.15s, background 0.15s',
-          transform: holding && !released ? 'scale(0.985)' : 'scale(1)',
-        }}
-      >
-        {/* Avatar + név balra zárva — a saját tábláját mindenki felismeri,
-            anélkül hogy a nevet kellene elolvasnia. */}
-        <div style={{ width:64, height:64, borderRadius:'50%', flexShrink:0, overflow:'hidden',
-                      background:'rgba(255,255,255,0.28)', border:'3px solid rgba(255,255,255,0.9)',
-                      display:'grid', placeItems:'center' }}>
-          {player.img
-            ? <img src={player.img} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-            : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:'#fff' }}>{(player.name||'?').charAt(0).toUpperCase()}</span>}
-        </div>
-        <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:5 }}>
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:21, color:'#fff', lineHeight:1.1,
-                        overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-            {player.name}
-          </div>
-          {!released ? (
-            <>
-              <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:'rgba(255,255,255,0.85)', letterSpacing:'0.08em' }}>
-                {phase === 'idle' ? 'TARTSD' : 'TARTSD!'}
-              </div>
-              {/* A visszaszamlalas allasa a sajat tablan: a kozepso szam a
-                  hüvelykujj alatt van, onnan nem latszik. */}
-              <div style={{ display:'flex', gap:6, marginTop:2 }}>
-                {Array.from({ length: 10 }).map((_, i) => {
-                  const done = phase === 'counting' && i < Math.round((1 - countdown / 5) * 10);
-                  return <span key={i} style={{ width:9, height:9, borderRadius:'50%',
-                    background:'#fff', opacity: done ? 0.95 : 0.32, transition:'opacity .12s' }} />;
-                })}
-              </div>
-            </>
-          ) : (
-            <div style={{
-              alignSelf:'flex-start', background:'rgba(0,0,0,0.22)', borderRadius:9, padding:'5px 14px',
-              fontFamily:'monospace', fontWeight:900, fontSize:19, color:'#fff', letterSpacing:'0.04em',
-            }}>
-              {timeVal === -1 ? '✗ KÉSŐ' : `${(timeVal * 1000).toFixed(0)}ms`}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:28, width:'100%', flex:1, justifyContent:'center', minHeight:320 }}>
 
-      <Btn pNum={2} player={p2} holding={p2Hold} timeVal={p2Time} />
+      <TapperBtn pNum={2} player={p2} holding={p2Hold} timeVal={p2Time}
+        phase={phase} countdown={countdown}
+        onDown={(k, pl) => { pressDown(k); writeTapperState(pl?.name, true); }}
+        onUp={(k, pl) => { pressUp(k); writeTapperState(pl?.name, false); }} />
 
       {/* VS / timer — kisebb téglalap, középre */}
       <div style={{ width:140, height:60, borderRadius:14, background:T.surface, boxShadow:T.shadow, display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -57723,7 +57731,10 @@ function TapperGame({ gameIdx, challenger, opponent, onAdvance, onResult, roomCo
         }
       </div>
 
-      <Btn pNum={1} player={p1} holding={p1Hold} timeVal={p1Time} />
+      <TapperBtn pNum={1} player={p1} holding={p1Hold} timeVal={p1Time}
+        phase={phase} countdown={countdown}
+        onDown={(k, pl) => { pressDown(k); writeTapperState(pl?.name, true); }}
+        onUp={(k, pl) => { pressUp(k); writeTapperState(pl?.name, false); }} />
 
       {phase === 'idle' && (p1Hold !== p2Hold) && (
         <div style={{ fontFamily:T.font, fontSize:12, color:'#E0A030', textAlign:'center' }}>
@@ -58070,6 +58081,24 @@ function RingFireGame({ gameIdx, players, onAdvance }) {
   );
 }
 
+// ⚠️ MODUL-SZINTU. A torzsben ulve minden ujrarenderelesnel uj tipust kapott,
+// es a React ujramountolta — az avatar `<img>` ujratoltodott. Ez a jatek 3
+// masodpercenkent lepteti a kort, tehat lathatoan villogott.
+// (Ugyanakkor ARNYEKOLTA is az azonos nevu, modul-szintu `PlayerCard`-ot.)
+function KoPapirPlayerCard({ p, drinks }) {
+  return (
+    <div style={{ flex:1, background:T.surface, borderRadius:16, padding:'14px 10px', display:'flex', flexDirection:'column', alignItems:'center', gap:6, boxShadow:T.shadow }}>
+      <div style={{ width:52, height:52, borderRadius:'50%', background:p?.color||T.coral, display:'grid', placeItems:'center', overflow:'hidden', boxShadow:`0 0 0 3px ${p?.color||T.coral}44` }}>
+        {p?.img ? <img src={p.img} style={{ width:52, height:52, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:'#fff' }}>{(p?.name||'?').charAt(0).toUpperCase()}</span>}
+      </div>
+      <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, textAlign:'center' }}>{p?.name||'?'}</div>
+      {drinks !== undefined && (
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color: drinks > 0 ? T.coral : T.mint }}>{drinks > 0 ? <React.Fragment>{drinks} <BohIcon name="beer" size={13} /></React.Fragment> : '😎 0'}</div>
+      )}
+    </div>
+  );
+}
+
 function KoPapirGame({ gameIdx, challenger, opponent, onAdvance, onResult, drinkMult = 1 }) {
   const TOTAL_ROUNDS = 5;
   const [round, setRound] = React.useState(1);
@@ -58106,18 +58135,6 @@ function KoPapirGame({ gameIdx, challenger, opponent, onAdvance, onResult, drink
     }
   };
 
-  const PlayerCard = ({ p, drinks }) => (
-    <div style={{ flex:1, background:T.surface, borderRadius:16, padding:'14px 10px', display:'flex', flexDirection:'column', alignItems:'center', gap:6, boxShadow:T.shadow }}>
-      <div style={{ width:52, height:52, borderRadius:'50%', background:p?.color||T.coral, display:'grid', placeItems:'center', overflow:'hidden', boxShadow:`0 0 0 3px ${p?.color||T.coral}44` }}>
-        {p?.img ? <img src={p.img} style={{ width:52, height:52, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:'#fff' }}>{(p?.name||'?').charAt(0).toUpperCase()}</span>}
-      </div>
-      <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, textAlign:'center' }}>{p?.name||'?'}</div>
-      {drinks !== undefined && (
-        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color: drinks > 0 ? T.coral : T.mint }}>{drinks > 0 ? <React.Fragment>{drinks} <BohIcon name="beer" size={13} /></React.Fragment> : '😎 0'}</div>
-      )}
-    </div>
-  );
-
   if (done) {
     const cd = totalDrinks[challenger?.id] || 0;
     const od = totalDrinks[opponent?.id] || 0;
@@ -58141,9 +58158,9 @@ function KoPapirGame({ gameIdx, challenger, opponent, onAdvance, onResult, drink
         </div>
         {/* Összesítés */}
         <div style={{ display:'flex', alignItems:'flex-start', gap:12, width:'100%' }}>
-          <PlayerCard p={challenger} drinks={cd} />
+          <KoPapirPlayerCard p={challenger} drinks={cd} />
           <VsDivider style={{ paddingTop:24 }} />
-          <PlayerCard p={opponent} drinks={od} />
+          <KoPapirPlayerCard p={opponent} drinks={od} />
         </div>
       </div>
     );
@@ -58164,9 +58181,9 @@ function KoPapirGame({ gameIdx, challenger, opponent, onAdvance, onResult, drink
 
       {/* VS sor */}
       <div style={{ display:'flex', alignItems:'center', gap:12, width:'100%' }}>
-        <PlayerCard p={challenger} drinks={totalDrinks[challenger?.id]} />
+        <KoPapirPlayerCard p={challenger} drinks={totalDrinks[challenger?.id]} />
         <VsDivider />
-        <PlayerCard p={opponent} drinks={totalDrinks[opponent?.id]} />
+        <KoPapirPlayerCard p={opponent} drinks={totalDrinks[opponent?.id]} />
       </div>
 
       {/* DrinkDistributor — key={round}: minden új körben nullázott korty-mezőkkel indul */}
@@ -68435,6 +68452,19 @@ function BeerPongTableau({ champion, players, tournamentName, tournament, seRoun
 }
 
 
+// ⚠️ MODUL-SZINTU. A Beer Pong observer masodpercenkent frissiti az orat,
+// tehat a torzsben ulve masodpercenkent ujramountolta volna az avatart.
+// A `hydObs` feloldas a HIVASI helyre kerult: itt mar kesz jatekos jon.
+function BpObsPlayerChip({ p, highlight }) {
+  if (!p) return null;
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0, padding:'8px 10px', borderRadius:12, background: highlight ? `${p.color}22` : T.surfaceMuted, border: highlight ? `2px solid ${p.color}60` : '2px solid transparent' }}>
+      <PlayerAvatar player={p} size={32} />
+      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
+    </div>
+  );
+}
+
 function BeerPongObserverView({ room, code, onLeave }) {
   const winW = useWindowWidth();
   const isWide = winW >= 1024;
@@ -68517,16 +68547,6 @@ function BeerPongObserverView({ room, code, onLeave }) {
     return null;
   })();
 
-  const PlayerChip = ({ p: pRaw, highlight }) => {
-    const p = hydObs(pRaw);
-    return p ? (
-      <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0, padding:'8px 10px', borderRadius:12, background: highlight ? `${p.color}22` : T.surfaceMuted, border: highlight ? `2px solid ${p.color}60` : '2px solid transparent' }}>
-        <PlayerAvatar player={p} size={32} />
-        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
-      </div>
-    ) : null;
-  };
-
   return (
     <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg }}>
       {/* Status bar */}
@@ -68602,7 +68622,7 @@ function BeerPongObserverView({ room, code, onLeave }) {
               </div>
             </div>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <PlayerChip p={curMatch.p1} highlight />
+              <BpObsPlayerChip p={hydObs(curMatch.p1)} highlight />
               {(() => {
                 const liveCups1 = bp.cups1 ?? null;
                 const liveCups2 = bp.cups2 ?? null;
@@ -68630,7 +68650,7 @@ function BeerPongObserverView({ room, code, onLeave }) {
                 }
                 return <VsDivider size={15} style={{ flexShrink:0 }} />;
               })()}
-              <PlayerChip p={curMatch.p2} highlight />
+              <BpObsPlayerChip p={hydObs(curMatch.p2)} highlight />
             </div>
             {(() => {
               const secs = bp.timerSecs ?? 0;
