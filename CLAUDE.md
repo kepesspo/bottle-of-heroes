@@ -1618,3 +1618,32 @@ koppintás a `button[data-chip="dnr"]`-re.
 - `setupflow_test` — a beállítás-gombok száma 13-ról 4-re esett (a kedvenc-soros
   DNR listán csak azok a ceruzák látszanak);
 - a `.grid-games` léte önmagában is állítás volt.
+
+## A DNR játékok CSAK a DNR felületen, és nincs Kedvencek (v10.349)
+Két változás, és a második az elsőből következik.
+
+**A DNR exkluzív játékok kikerültek a normál listából.** Eddig két helyen
+álltak: a DNR felületen ÉS a saját kategória-szekciójukban (mind az öt
+`Csapat`) — ugyanaz a játék két alakban, két helyen. A kategória-szekciók
+innentől `!isDnrGame`-mel szűrnek, tehát a rács 46-ról **41 csempére** fogyott.
+
+**A Kedvencek szekció megszűnt.** A listája bedrótozva `['beerpong','busz']`
+volt — **mindkettő DNR játék**, tehát az első változás után pont azokat
+ismételte volna meg, amiket épp kivettünk. A `FavTile` komponens **marad**: a
+DNR szekció sorai abból épülnek.
+
+**⚠️ Ebből következik a Szűrés „DNR Exkluzív" sorának halála.** DNR játékok
+nélkül a normál listán az a szűrő nem szűkítene, hanem **kiürítené** a
+képernyőt. Kikerült a `FILTER_CATS`-ból és a `gameMatchesFilter`-ből is.
+Innentől egyetlen belépő van a DNR játékokhoz — a gomb —, és az egyben az
+alapértelmezett nézet is (v10.348). Az `isDnrGame` továbbra is egy forrás, csak
+már két másik helyet szolgál ki: a DNR szekciót és a kategóriák kizárását.
+
+Az **„Önálló" szűrő megmaradt**, de gyakorlatilag a Farkasosra szűkült: a
+`SOLO_IDS` többi tagja mind DNR játék, azok pedig már nincsenek a listán.
+
+**A `setupflow_test` egy sora emiatt bukott, és a javítása is tanulságos:** a
+beállítható játékok ceruza-gombjai mostantól **két felületen oszlanak meg**
+(9 a rácson + 4 a DNR-en = 13). Egy nézetben számolva a teszt 9-et látott.
+A gomb-nyitogató kör is mindkét felületen végigmegy — enélkül a négy DNR játék
+beállító lapja soha többé nem lenne tesztelve.

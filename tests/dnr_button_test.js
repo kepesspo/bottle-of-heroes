@@ -154,6 +154,47 @@ const listState = p => p.evaluate(() => {
     ok(await p.evaluate(() => document.querySelector('#__g button[data-chip="dnr"]').getAttribute('aria-pressed')) === 'false',
        'és a gomb kikapcsolt állapotba került');
 
+    // ── 2b. ⚠️ A NORMAL LISTAN NINCS DNR JATEK, es NINCS KEDVENCEK (v10.349) ──
+    // Eddig mind az ot DNR jatek ott allt a sajat `Csapat` szekciojaban is,
+    // a Kedvencek pedig bedrotozva a `beerpong`-ot es a `busz`-t ismetelte.
+    console.log('\n===== 2b. A NORMAL LISTA TARTALMA =====');
+    const norm = await p.evaluate((DNR) => {
+      const wrap = document.querySelector('#__g');
+      const txt = wrap.innerText;
+      const tiles = [...wrap.querySelectorAll('.grid-games > div')]
+        .map(d => (d.innerText || '').split('\n')[0].trim()).filter(Boolean);
+      return { tiles, hasFav: /^KEDVENCEK$/mi.test(txt),
+               dnrOnList: DNR.filter(n => tiles.includes(n)) };
+    }, DNR_NAMES);
+    ok(norm.dnrOnList.length === 0,
+       'egyetlen DNR exkluzív játék sincs a kategória-szekciókban',
+       norm.dnrOnList.join(', ') || 'egy sem');
+    ok(norm.tiles.length > 20, 'a többi játék viszont ott van', norm.tiles.length + ' csempe');
+    ok(!norm.hasFav, 'nincs KEDVENCEK szekció');
+
+    // ⚠️ A Szures „DNR Exkluziv" sora is KIKERULT: DNR jatekok nelkul a normal
+    // listan ures kepernyot adna. Ha valaki visszatenne, ez elbukik.
+    const filterRows = await p.evaluate(() => {
+      const btn = [...document.querySelectorAll('#__g button')].find(x => /^Szűrő/.test(x.textContent.trim()));
+      btn && btn.click();
+      return null;
+    });
+    await p.waitForTimeout(700);
+    const sheetTxt = await p.evaluate(() => {
+      const out = [...document.querySelectorAll('button')].filter(b => !b.closest('#__g'))
+        .map(b => b.textContent.trim());
+      const close = out.find(x => /Kész|Bezár|Mehet/i.test(x));
+      return { labels: out, has: out.some(x => /DNR Exkluzív/i.test(x)) };
+    });
+    ok(!sheetTxt.has, 'a Szűrés lapon NINCS „DNR Exkluzív" sor (üres listát adna)',
+       sheetTxt.labels.filter(x => /Egyéni|Páros|Csapat|Önálló|DNR/.test(x)).join(' | '));
+    await p.evaluate(() => {
+      const close = [...document.querySelectorAll('button')].filter(b => !b.closest('#__g'))
+        .find(x => /Kész|Bezár|Mehet/i.test(x.textContent.trim()));
+      close && close.click();
+    });
+    await p.waitForTimeout(500);
+
     // vissza a DNR feluletre a kovetkezo blokkhoz
     await dnrBtn(p).click();
     await p.waitForTimeout(500);

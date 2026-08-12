@@ -127,14 +127,18 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
     // kulonben mindent zarol, zarolt jatekon pedig szandekosan nincs fogaskerek
     // (a megnyitasa kijelolne a jatekot, amit a zar epp tilt).
     const p = await open(b, 'games', false, []);
-    const n = await p.evaluate(() => document.querySelectorAll('#__g button[aria-label="Beállítások"]').length);
-    ok('minden beállítható játék kap gombot', n >= 13, n + ' db (13 beállítható játék van)');
+    // ⚠️ v10.349 ota a beallithato jatekok KET feluleten oszlanak meg: a DNR
+    // exkluzivak csak a DNR feluleten allnak, a tobbi csak a racsos listan.
+    // Egy nezetben szamolva a 13-bol 9 latszik — a szamnak az UNIOT kell nezni.
+    const countPencils = () => p.evaluate(() =>
+      document.querySelectorAll('#__g button[aria-label="Beállítások"]').length);
 
     // A v10.175-ben hat uj jatek kapott beallitast, de a GamesScreen sajat
     // opener-terkepe a regi hetnel maradt: a ceruza megjelent, a nyitas viszont
     // CSENDBEN elmaradt. Az akkori teszt csak az ELSO gombot nyomta meg (egy
-    // regi jatekot), ezert atment. Ezert most MINDEGYIKET vegigprobaljuk.
-    const perGame = await p.evaluate(async () => {
+    // regi jatekot), ezert atment. Ezert most MINDEGYIKET vegigprobaljuk —
+    // mindket feluleten.
+    const runOpens = () => p.evaluate(async () => {
       const out = [];
       const btns = [...document.querySelectorAll('#__g button[aria-label="Beállítások"]')];
       for (let i = 0; i < btns.length; i++) {
@@ -152,6 +156,20 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
       }
       return out;
     });
+
+    const nGrid = await countPencils();
+    const openedGrid = await runOpens();
+    // at a DNR feluletre
+    await p.click('#__g button[data-chip="dnr"]');
+    await p.waitForTimeout(700);
+    const nDnr = await countPencils();
+    const openedDnr = await runOpens();
+
+    ok('minden beállítható játék kap gombot', nGrid + nDnr >= 13,
+       nGrid + ' a rácson + ' + nDnr + ' a DNR felületen = ' + (nGrid + nDnr) + ' db (13 beállítható játék van)');
+    ok('a DNR felületen is ott a ceruza', nDnr > 0, nDnr + ' db');
+
+    const perGame = [...openedGrid, ...openedDnr];
     const dead = perGame.filter(x => !x.opened);
     ok('MINDEN beállítás-gomb tényleg megnyitja a lapját', dead.length === 0,
        dead.length ? 'némán nem nyílik: ' + dead.map(x => x.name).join(', ') : perGame.length + ' gomb rendben');

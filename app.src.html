@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.348';
+const APP_VERSION = 'v10.349';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -45867,10 +45867,9 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
 
   const gameMatchesFilter = g => {
     if (!activeFilters.length) return true;
-    const catFilters = activeFilters.filter(f => ['Egyéni','Páros','Csapat','DNR','Önálló'].includes(f));
+    const catFilters = activeFilters.filter(f => ['Egyéni','Páros','Csapat','Önálló'].includes(f));
     const diffFilters = activeFilters.filter(f => ['könnyű','közepes','nehéz'].includes(f));
     const catOk = catFilters.length === 0 || catFilters.some(f =>
-      f === 'DNR'    ? isDnrGame(g) :
       f === 'Önálló' ? SOLO_IDS.has(g.id) :
       g.category === f
     );
@@ -45983,30 +45982,11 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
           </div>
         )}
 
-        {/* ── Kedvencek szekció ── */}
-        {!hasFilter && !dnrMode && (() => {
-          const FAVS = ['beerpong','busz'];
-          const favGames = FAVS.map(id => GAMES.find(g => g.id === id)).filter(Boolean);
-          return (
-            <div style={{ marginBottom:18 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
-                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.12em' }}>Kedvencek</span>
-              </div>
-              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {favGames.map(g => {
-                  const isSelected = selectedGames.includes(g.id);
-                  const locked = isLocked(g.id);
-                  const dim = locked || (anySelected && !isSelected);
-                  const longPress = longPressFor(g.id);
-                  return (
-                    <FavTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked}
-                      onClick={() => toggle(g.id)} onInfo={() => setInfo(g.id)} onLongPress={longPress} />
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })()}
+        {/* A KEDVENCEK szekcio megszunt (v10.349). A listaja bedrotozva
+            `['beerpong','busz']` volt — mindketto DNR jatek, tehat a DNR
+            felulet bevezetese utan pont azokat ismetelte volna meg, amik a
+            kategoria-szekciokbol is kikerultek. A `FavTile` komponens MARAD:
+            a DNR szekcio sorai abbol epulnek. */}
 
         {/* ── DNR exkluzív szekció ──
             A jatekok ugyanabban a szeles, kedvenc-soros alakban (`FavTile`)
@@ -46048,7 +46028,10 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
           { key:'Páros',  label:'Páros'  },
           { key:'Csapat', label:'Csapat' },
         ].map(({ key, label }) => {
-          const sectionGames = visibleGames.filter(g => g.category === key);
+          // ⚠️ `!isDnrGame`: a DNR exkluziv jatekok CSAK a DNR feluleten
+          // allnak. Nelkule mind az ot ott lenne a `Csapat` szekcioban is,
+          // ket kulonbozo alakban ugyanaz a jatek.
+          const sectionGames = visibleGames.filter(g => g.category === key && !isDnrGame(g));
           if (sectionGames.length === 0) return null;
           const isCollapsed = !!collapsedSections[key];
           const selectedCount = sectionGames.filter(g => selectedGames.includes(g.id)).length;
@@ -46253,7 +46236,10 @@ const FILTER_CATS = [
   { k:'Egyéni',  l:'Egyéni',       tone:'#3B82F6', ic:(c)=>Icon.user(c) },
   { k:'Páros',   l:'Páros',        tone:'#E0655F', ic:(c)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 20s-7-4.4-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.6-7 9-7 9z" stroke={c} strokeWidth="2" strokeLinejoin="round"/></svg> },
   { k:'Csapat',  l:'Csapat',       tone:'#3FB8A6', ic:(c)=>Icon.users(c) },
-  { k:'DNR',     l:'DNR Exkluzív', tone:'#8B5CF6', ic:(c)=><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 3h12l4 6-10 12L2 9l4-6z" stroke={c} strokeWidth="2" strokeLinejoin="round"/><path d="M2 9h20M9 3l-1.5 6L12 21l4.5-12L15 3" stroke={c} strokeWidth="1.4" strokeLinejoin="round" opacity=".7"/></svg> },
+  // ⚠️ NINCS „DNR Exkluziv" sor (v10.349): a DNR jatekok kikerultek a normal
+  // listabol, tehat ez a szuro URES listat adna — nem szukitene a kepernyot,
+  // hanem kiuritene. A DNR jatekokhoz egyetlen ut vezet: a szurosor DNR gombja
+  // (ami egyben az alapertelmezett nezet is).
   { k:'Önálló',  l:'Önálló',       tone:'#E0A32E', ic:(c)=>Icon.user(c) },
 ];
 // A `mouth` a mosoly SVG-útvonala: felfelé ívelt / egyenes / lefelé ívelt.
