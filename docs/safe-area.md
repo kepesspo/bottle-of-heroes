@@ -70,6 +70,39 @@ A `statusBarBg` feltételébe azok a képernyők tartoznak, ahol **nincs AppBar*
 jelenleg `home`, `play`, és a `creatingRoom` állapot. Minden más képernyő fehér
 AppBar-t rajzol → fehér sáv. Új, fejléc nélküli képernyőnél ide fel kell venni.
 
+### 1/b. Modal és bottom sheet: a sáv is besötétedik (v10.343)
+
+A modalok sötétítő háttere `position:fixed` — vagyis **pontosan az a réteg,
+amit iOS nem fest a státuszsáv mögé**. Következmény: a lap besötétedett, a
+státuszsáv világos maradt, és a kettő élesen elvált.
+
+Mivel a sáv színe csak a `statusBarBg`-n keresztül jöhet, **magát a
+`statusBarBg`-t sötétítjük**:
+
+```js
+const baseBarBg = (creatingRoom || screen === 'home' || screen === 'play') ? T.bg : T.surface;
+const statusBarBg = bohBlendOver(baseBarBg, useOverlayTint());
+```
+
+**⚠️ Miért nem regisztrációval?** Mert **negyven** ilyen fedő réteg van a
+forrásban, és egy új modal írójától nem várható el, hogy erre gondoljon —
+ugyanúgy elfelejtődne, ahogy a `banner:` mező és a Páros kizárás-lista is
+elfelejtődött. Helyette a DOM-ot nézzük: teljes képernyős, **átlátszó** hátterű
+`position:fixed` elem = fedő réteg (`bohScanOverlayTint`). Olcsó: csak
+DOM-változásra fut, rAF-fel összevonva, és a jelölteket egy inline-stílus
+szelektor szűri elő.
+
+Három határeset, amit a detektornak KI kell zárnia (mind a
+`statusbar_dim_test` 4. blokkjában):
+- **teljesen fedő** réteg (alpha 1) — az nem sötétítés, hanem egy lap;
+- **alig látható** (alpha < 0,15) — nem sötétít láthatóan;
+- **kicsi, lebegő** fix elem — nem fedő réteg.
+
+**Teszt-buktató:** a `SheetOverlay` **portálba** renderel (`document.body`),
+ezért a mountoló host elem törlése NEM szedi le — a React gyökeret kell
+lebontani. És a gyökér képernyő-konténer az, aminek az inline stílusában ott a
+`--app-h`; a `#root > div` egy külső burok, amivel a mérés vakon átmenne.
+
 ---
 
 ## 2. Alsó holt-zóna (safe area)

@@ -1472,3 +1472,19 @@ estén sem jön vissza ugyanaz a hármas.
   banner.
 
 Teszt: `node tests/neugyanazt_test.js`.
+
+## Modal / bottom sheet alatt a státuszsáv is besötétedik (v10.343)
+A modalok sötétítő háttere `position:fixed` — **pontosan az a réteg, amit iOS
+nem fest a státuszsáv mögé** (`docs/safe-area.md` 1. és 1/b.). Ezért a lap
+besötétedett, a státuszsáv világos maradt, és a kettő élesen elvált.
+
+A javítás magát a `statusBarBg`-t sötétíti (`bohBlendOver`), így mind a három
+festő csatorna követi: a gyökér konténer háttere, a fix festősáv és a
+`theme-color`.
+
+**⚠️ Nem regisztrációval, hanem DOM-detektorral** (`bohScanOverlayTint`):
+negyven ilyen fedő réteg van a forrásban, és egy új modal írójától nem várható
+el, hogy erre gondoljon. Részletek és a három kizárandó határeset:
+`docs/safe-area.md` 1/b.
+
+Teszt: `node tests/statusbar_dim_test.js`.
