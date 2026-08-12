@@ -33970,10 +33970,35 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
       return db.collection('config').doc('dbMode').set({ test: !!on, ts: Date.now() });
     } catch (e) { return Promise.resolve(); }
   };
+  // ── HALOZATI KESZENLET ────────────────────────────────────────────────────
+  // A szobanyitas az ELSO Firestore-korfordulo, es indulas utan par tizedig a
+  // csatorna meg epul (persistence, long-polling felderites). Aki azonnal nyomja
+  // a "Jatek inditasa"-t, pont ebbe fut bele. A gomb ezert addig letiltva, amig
+  // ez a jelzo keszre nem all.
+  //
+  // Keszre allitja: az elso `config/dbMode` pillanatkep (akar hibaval), vagy egy
+  // 8 mp-es idokorlat. Az idokorlat NEM elhagyhato: offline is el kell tudni
+  // indulni, csak akkor a felhasznalo dont a "kod nelkul" inditasrol.
+  window.bohNetReady = false;
+  window._bohNetCbs = [];
+  window.onBohNetReady = function (cb) {
+    if (window.bohNetReady) { try { cb(); } catch (e) {} return; }
+    window._bohNetCbs.push(cb);
+  };
+  function _bohMarkNetReady() {
+    if (window.bohNetReady) return;
+    window.bohNetReady = true;
+    var cbs = window._bohNetCbs; window._bohNetCbs = [];
+    cbs.forEach(function (c) { try { c(); } catch (e) {} });
+  }
+  setTimeout(_bohMarkNetReady, 8000);
+
   // Aki máshol kapcsolt, itt is átáll. Újratöltés kell hozzá: a képernyőn már
   // a MÁSIK adatbázis adata állna, miközben az írás új helyre menne.
   try {
     db.collection('config').doc('dbMode').onSnapshot(function(d) {
+      // A korfordulo megvolt - innentol a szobanyitas is mehet.
+      _bohMarkNetReady();
       // Nem letezo dokumentum = nincs jelzes, nem "eles". Az alapertelmezett
       // eles onnan jon, hogy a gyorsitotar is ures — igy egy elakadt olvasas
       // nem kapcsol at senkit menet kozben.
@@ -33981,8 +34006,13 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
       var v = d.data().test === true;
       if (v === window.isTestDb()) return;
       window._setTestDbCache(v);
+      // ⚠️ NEM toltunk ujra parti-inditas kozben. Ez a pillanatkep par
+      // tizedmasodperccel a betoltes utan erkezik - pont akkor, amikor a gyors
+      // felhasznalo mar a "Toltjuk a szobat" kepernyon all. Az ujratoltes
+      // elvagta a folyamatban levo szoba-irast, es a szoba nem jott letre.
+      if (window.__bohBusy) { window.__bohPendingReload = true; return; }
       location.reload();
-    }, function() {});
+    }, function() { _bohMarkNetReady(); });
   } catch (e) {}
   // Minden statisztika-hivas ezen megy at. Futasidoben dont, nem betoltesekor —
   // igy a valtas utan az elso iras mar a helyere kerul.
@@ -35182,7 +35212,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.336';
+const APP_VERSION = 'v10.337';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -36223,7 +36253,10 @@ function PrimaryButton({ children, onClick, disabled, tone='mint', big=true, siz
            : size === 'lg' ? { h:56, fs:17, r:T.r?.md||16 }
            :                  { h: big ? 60 : 48, fs: big ? 20 : 16, r:16 };
   return (
-    <button onClick={disabled ? undefined : onClick} style={{
+    // A `disabled` eddig CSAK elszurkitett es levette az onClick-et: a DOM-ban a
+    // gomb aktiv maradt. Igy a billentyuzet es a kepolvaso hasznalhatonak latta,
+    // es egy gyors dupla koppintas is atment rajta. A jelzes legyen igaz.
+    <button disabled={!!disabled} aria-disabled={!!disabled} onClick={disabled ? undefined : onClick} style={{
       width:'100%', minHeight:sz.h, border: 'none',
       background:bg, color:fg,
       fontFamily:T.font, fontWeight:T.weightTitle,
@@ -45523,7 +45556,7 @@ const isSoloGame = (id) => SOLO_GAME_IDS.indexOf(id) !== -1;
 // A jatekvalasztas UTAN jon, mert a jatek-beallitasok csak akkor ertelmesek,
 // ha mar tudjuk, mit jatszunk. Adminbol kapcsolhato (setupFlowEnabled);
 // kikapcsolva a Jatekok oldalrol indul a parti, mint korabban.
-function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
+function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta, netReady = true }) {
   const [openCfg, setOpenCfg] = React.useState(null);
   const [picker, setPicker] = React.useState(null);   // 'difficulty' | 'order' | null
 
@@ -45653,9 +45686,11 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta }) {
       </div>
 
       <BottomBar>
-        <PrimaryButton disabled={(selectedGames || []).length < 1} onClick={() => go('play')}>
-          <span>{t('startGame')} ({(selectedGames || []).length})</span>
-          <span style={{ display:'block', fontWeight:600, fontSize:12, opacity:0.75, marginTop:2 }}>⏱ kb. {minutes} perc</span>
+        <PrimaryButton disabled={(selectedGames || []).length < 1 || !netReady} onClick={() => go('play')}>
+          <span>{netReady ? t('startGame') : 'Betöltés…'} ({(selectedGames || []).length})</span>
+          <span style={{ display:'block', fontWeight:600, fontSize:12, opacity:0.75, marginTop:2 }}>
+            {netReady ? `⏱ kb. ${minutes} perc` : 'Mindjárt indulhat'}
+          </span>
         </PrimaryButton>
       </BottomBar>
 
@@ -45788,7 +45823,7 @@ function StepDots({ active }) {
   );
 }
 
-function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, go, players }) {
+function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, go, players, netReady = true }) {
   const [info, setInfo] = useState(null);
   const [sheet, setSheet] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState({});
@@ -46142,8 +46177,8 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
           color:T.ink, cursor:'pointer', display:'grid', placeItems:'center', boxShadow:T.shadow,
         }}>{Icon.settings(T.ink)}</button>
       )}>
-        <PrimaryButton disabled={selectedGames.length < 1} onClick={() => go(setupFlow ? 'setup' : 'play')}>
-          <span>{setupFlow ? 'Tovább' : t('startGame')} ({selectedGames.length})</span>
+        <PrimaryButton disabled={selectedGames.length < 1 || (!setupFlow && !netReady)} onClick={() => go(setupFlow ? 'setup' : 'play')}>
+          <span>{setupFlow ? 'Tovább' : (netReady ? t('startGame') : 'Betöltés…')} ({selectedGames.length})</span>
           {selectedGames.length > 0 && <span style={{ display:'block', fontWeight:600, fontSize:12, opacity:0.75, marginTop:2 }}>⏱ kb. {Math.max(5, Math.round(selectedGames.length * 2.5 / 5) * 5)} perc</span>}
         </PrimaryButton>
       </BottomBar>
@@ -70639,6 +70674,19 @@ function BottleApp() {
 
   const [roomCode, setRoomCode] = React.useState(null);
   const [creatingRoom, setCreatingRoom] = React.useState(false);
+  // A "Jatek inditasa" gomb eddig el, amig a halozat kesz nem lesz (lasd a
+  // Firebase-init `bohNetReady` jelzojet).
+  const [netReady, setNetReady] = React.useState(() => typeof window !== 'undefined' && !!window.bohNetReady);
+  React.useEffect(() => {
+    if (netReady) return;
+    if (typeof window.onBohNetReady === 'function') window.onBohNetReady(() => setNetReady(true));
+    else setNetReady(true);
+  }, []);
+  // A szoba-letrehozas alatt a dbMode-valtas ujratoltese HALASZTVA van.
+  React.useEffect(() => {
+    window.__bohBusy = creatingRoom;
+    if (!creatingRoom && window.__bohPendingReload) { window.__bohPendingReload = false; location.reload(); }
+  }, [creatingRoom]);
   // Melyik toltodo edeny jojjon? Minden szobanyitasnal ujra sorsolunk, hogy egy
   // ilyen rovid kepernyo ne kopjon el annak, aki sokat nyit szobat.
   const [roomArtVariant, setRoomArtVariant] = React.useState(() => Math.floor(Math.random() * BOH_ROOM_ART_COUNT));
@@ -70905,8 +70953,8 @@ function BottleApp() {
         {screen==='admin'    && <AdminScreen go={go} setTheme={handleSetTheme} currentTheme={appTheme} />}
         {screen==='create'   && <EventCreateScreen go={go} editId={editEventId} deepLink={_deepLink} />}
         {screen==='players'  && <PlayersScreen  go={go} players={players} setPlayers={setPlayers} />}
-        {screen==='games'    && <GamesScreen    go={go} players={players} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
-        {screen==='setup'    && <SetupScreen    go={go} players={players} selectedGames={selectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} />}
+        {screen==='games'    && <GamesScreen    go={go} players={players} selectedGames={selectedGames} setSelectedGames={setSelectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} netReady={netReady} />}
+        {screen==='setup'    && <SetupScreen    go={go} players={players} selectedGames={selectedGames} gameMeta={gameMeta} setGameMeta={setGameMeta} netReady={netReady} />}
         {screen==='play'     && <PlayScreen     go={go} players={players} setPlayers={setPlayers} selectedGames={selectedGames} roomCode={roomCode} gameMeta={gameMeta} setGameMeta={setGameMeta} setLastGameRound={setLastGameRound} setScoreHistory={setScoreHistory} />}
         {screen==='end'      && <EndScreen      go={go} players={players} resetGame={resetGame} lastRound={lastGameRound} scoreHistory={scoreHistory} />}
         {screen==='observer' && <ObserverScreen go={go} initialCode={observerInitCode || (!_initRoomConsumedRef.current && _initRoom ? (_initRoomConsumedRef.current = true, _initRoom) : '')} onJoinAsHost={goJoinAsHost} />}

@@ -1305,3 +1305,39 @@ Teszt: `node tests/bp_final_test.js` — 2 és 3 játékossal (a két naiv szab�
 bukó esetei), és a push-blokk egy **már bent lévő** értesítéssel nyit szobát.
 A javítás előtt mind az öt állítás bukik, a push-blokk épp a bejelentett
 szöveggel: „🏓 Következő meccs! | Sere vs Kecsi".
+
+## „Játék indítása" — a gomb megvárja a hálózatot (v10.337)
+Bejelentés: „ha túl gyorsan nyomom a játékmenet után a játék indítása gombot,
+beragad a szoba létrehozása képernyő. Valaminek a letöltése/betöltése nem
+történt meg."
+
+Két ok, és a **második** magyarázza a beragadást:
+
+1. A szobanyitás az **első Firestore-körforduló**. Indulás után pár tizedig a
+   csatorna még épül (persistence, long-polling felderítés), tehát a legelső
+   írás a leglassabb.
+2. **⚠️ A `config/dbMode` figyelő `location.reload()`-ot hív**, ha az eszköz
+   gyorsítótárazott teszt/éles beállítása más, mint a szerveren lévő. Ez a
+   pillanatkép a betöltés UTÁN pár tizeddel érkezik — pont abba az ablakba,
+   amikor a gyors felhasználó már a „Töltjük a szobát" képernyőn áll. Az
+   újratöltés **elvágja a folyamatban lévő szoba-írást**.
+
+A javítás három részből áll:
+- **`window.bohNetReady` + `onBohNetReady(cb)`** (a Firebase-init IIFE-ben).
+  Készre áll az első `config/dbMode` pillanatképnél (hibánál is), **vagy 8 mp
+  után**. Az időkorlát nem elhagyható: offline is el kell tudni indulni.
+- A **két „Játék indítása" gomb** (Játékok és Játékmenet) addig letiltva,
+  „Betöltés…" felirattal.
+- Az **újratöltés halasztott**, amíg a szoba-létrehozás fut (`window.__bohBusy`);
+  utána magától lefut (`__bohPendingReload`). A dbMode-váltás ritka, egy
+  folyamatban lévő parti-indítást nem szakíthat meg.
+
+**A `PrimaryButton` `disabled`-je eddig CSAK kozmetika volt**: elszürkítette a
+gombot és levette az `onClick`-et, de a DOM-ban a gomb aktív maradt — a
+billentyűzet és a képolvasó használhatónak látta. Most valódi `disabled` +
+`aria-disabled` megy ki. A `netready_test` 2. blokkja pont ezt fogja: a régi
+kódon a szürke gombra kattintva **elindult a parti**.
+
+Teszt: `node tests/netready_test.js`. A 3. blokk fogódzója egy **jelölő az
+ablakon**: ha az oldal újratöltődik, a jelölő eltűnik. Van hozzá kontroll-ág is
+— foglaltság nélkül tényleg újratölt, tehát a mérés nem üresen fut át.
