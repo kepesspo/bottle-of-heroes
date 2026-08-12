@@ -42,7 +42,13 @@ const hasRow = (p) => p.evaluate(() => /TOVÁBBI DNR/i.test(document.body.innerT
   console.log('\n===== FOOLDAL · KIKAPCSOLVA =====');
   p = await home(b, { dnrAppsEnabled: false });
   ok('dnrAppsEnabled:false -> NEM latszik', (await hasRow(p)) === false);
-  ok('a tobbi fooldal-elem megmaradt (Játék, Quick Game)', await p.evaluate(() => /Játék/.test(document.body.innerText) && /Quick Game/.test(document.body.innerText)));
+  // ⚠️ A feliratot a FORRASBOL kerdezzuk. Korabban bedrotozott „Quick Game" allt
+  // itt, a gomb viszont regota „Villám Játék" — a sor emiatt tartosan piros volt,
+  // holott a termek jol mukodott.
+  const quickLabel = await p.evaluate(() => t('quickGame'));
+  ok('a tobbi fooldal-elem megmaradt (Játék, ' + quickLabel + ')',
+     await p.evaluate((q) => /Játék/.test(document.body.innerText) && document.body.innerText.includes(q), quickLabel),
+     quickLabel);
   ok('a "Főképernyőre mentés" link megmaradt', await p.evaluate(() => /Főképernyőre mentés/.test(document.body.innerText)));
   ok('nincs JS hiba', p.__errs.filter(e => !/ServiceWorker/.test(e)).length === 0, p.__errs.join(' | '));
   await p.close();

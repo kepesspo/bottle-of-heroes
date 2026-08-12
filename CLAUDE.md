@@ -1517,3 +1517,23 @@ modal nem változhat — enélkül egy „mindent 620-ra vágok" regresszió is 
 játék felvételekor (v10.342) némán elpirult, pedig a termék jól működött. A
 szám mostantól a `GAMES` listából jön — ami változhat, azt a forrásból kell
 kérdezni.
+
+## Az Imposztorról lekerült a DNR exkluzív jelölés (v10.345)
+A jelölő a `GAMES[]` bejegyzésen a **`dnr:true`** mező — a `category` NEM
+változott, az marad `Csapat`. A jelölés két helyre hat, és mindkettő magától
+követi: a Szűrés „DNR Exkluzív" sora és a kártyán a ★ szalag.
+
+A kör innentől: **blackjack, kisebb, beerpong, powerhour, ovfj** (+ a `busz`,
+ami azonosítóval van bedrótozva).
+
+Ezt eddig **semmi nem őrizte**, tehát egy véletlen `dnr:true` észrevétlenül
+beszivárgott volna — a `gameorder_test` mostantól a teljes kört ellenőrzi.
+
+A `config/homeConfig.dnrAppsEnabled` kapcsolóhoz ennek semmi köze: az a főoldal
+alján lévő „TOVÁBBI DNR" sort kapcsolja.
+
+**A `dnr_toggle_test` egy tartósan piros sora is javult:** bedrótozott
+„Quick Game" feliratot keresett, a gomb viszont régóta „Villám Játék". A
+felirat mostantól a forrásból jön (`t('quickGame')`). Ez a harmadik ilyen néma
+piros sor ebben a menetben — a `wildcard_test` tartomány-gombja és a
+`gameorder_test` banner-elemzője után.

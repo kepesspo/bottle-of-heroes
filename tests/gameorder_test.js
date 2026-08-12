@@ -111,6 +111,20 @@ const soloNames = (p) => p.evaluate(() => {
     await p.close();
   }
 
+  // ─── A DNR EXKLUZIV LISTA ───
+  // A jelolo a GAMES bejegyzesen a `dnr:true` mezo (a `category` NEM valtozik).
+  // Ket helyre hat: a Szures „DNR Exkluziv" sora es a kartyan a szalag. Eddig
+  // semmi nem orizte, tehat egy veletlen `dnr:true` eszrevetlenul beszivarogna.
+  console.log('\n===== DNR EXKLUZÍV =====');
+  {
+    const p = await open(b, { seedCache: true });
+    const list = await p.evaluate(() => GAMES.filter(g => g.id === 'busz' || g.dnr).map(g => g.id).sort());
+    ok('a DNR exkluzív kör pontosan ez a hat játék',
+       list.join(',') === 'beerpong,blackjack,busz,kisebb,ovfj,powerhour', list.join(','));
+    ok('az Imposztor NINCS köztük (v10.345)', !list.includes('imposztor'), list.join(','));
+    await p.close();
+  }
+
   // ─── A JATEK-BANNEREK ───
   // A fejlecben a banner-kep jelenik meg; ha egy jateknak nincs, a tartalek
   // (ikon + szoveg) jon fel, ami ranezesre ugy hat, mintha rossz kep toltodne.
