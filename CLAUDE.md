@@ -1368,3 +1368,33 @@ Teszt: `node tests/nopoints_test.js`. Két dolog nélkül üresen futna át:
   „mindent elrejtő" regresszió is átmenne;
 - a **hajtó bizonyítása**: a kontrollban a bannernek FEL KELL jönnie, különben a
   „nincs banner" akkor is igaz lenne, ha a játék el sem indult volna.
+
+## 5 dolog: PÁROS játék licittel (v10.339)
+A soros játékos **licitál**: megmondja, hány odaillő szót vállal (3–8). Ha
+összejön, ő kap pontot és az ellenfele iszik — ha nem, fordítva. A játék
+`category`-ja `Egyéni` → **`Páros`**, tehát a `PlayScreen` sorsol ellenfelet.
+
+**⚠️ Az időablak `licit × PER_WORD`**, és a `PER_WORD` szándékosan úgy van
+beállítva, hogy **5-ös liciten pontosan a régi ablak** jöjjön ki (9 / 7 / 5 / 4
+mp). Alapértelmezett liciten a játék tehát változatlan — csak a licit mozdítja.
+
+**Miért arányos az idő, ha a licit így nem szorítja a játékost?** Mert magasabb
+liciten nem az IDŐ fogy el, hanem az ÖTLET: nyolc szerszámot mondani akkor is
+nehéz, ha van rá idő. A kockázat **tudás-alapú, nem tempó-alapú** — így extrém
+szinten sem válik játszhatatlanná. A `OTDOLOG_MIN_WINDOW = 4` alsó korlát kell:
+extrém szinten a 3-as licit 2,4 mp lenne, amibe bejelölni sem lehet.
+
+**A licit VAK döntés**: a kategória a licitálás alatt még satírozva van. Ha
+látszana, nem lenne tét — a játékos a kategóriát ismerve pontosan tudná, mennyit
+vállalhat.
+
+A jelölő-sor a licit szerint méreteződik (6 fölött 52 px és kisebb szám, hogy
+nyolc is kiférjen 360 px-en).
+
+Teszt: `node tests/otdolog_licit_test.js`. Az 1. blokk a `PER_WORD`-öt őrzi —
+ha valaki átírja, a „régi játék 5-ös liciten" ígéret némán elveszne.
+
+**A `gameorder_test` bannerelemzője javult**: sor helyett **bejegyzés**-alapú.
+A több sorba tördelt bejegyzések (a `kisebb` a `stakeOf` miatt) nyitó sorában
+nincs `banner:`, ezért a régi szűrő hiányzónak jelentette őket, holott ott a kép.
+Ez a teszt **v10.302 óta volt tartósan piros** emiatt.

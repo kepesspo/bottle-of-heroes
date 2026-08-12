@@ -123,9 +123,13 @@ const soloNames = (p) => p.evaluate(() => {
     const src = fs.readFileSync(path.join(root, 'app.src.html'), 'utf8');
     const from = src.indexOf('const GAMES = [');
     const body = src.slice(from, src.indexOf('\n];', from));
-    const rows = body.split('\n').filter(l => /^\s*\{ id:'/.test(l));
-    const noBanner = rows.filter(l => !/banner:/.test(l))
-      .map(l => (l.match(/id:'([^']+)'/) || [])[1]);
+    // ⚠️ BEJEGYZES-alapu bontas, nem sor-alapu. A tobb sorba tordelt bejegyzesek
+    // (pl. a `kisebb` a `stakeOf` miatt) nyito soran nincs `banner:` — a regi,
+    // soronkenti szuro ezert hianyzonak jelentette oket, holott ott a kep.
+    // Ez a teszt v10.302 ota volt tartosan piros emiatt.
+    const rows = body.split(/\n(?=\s*\{ id:')/).filter(x => /\{ id:'/.test(x));
+    const noBanner = rows.filter(x => !/banner:/.test(x))
+      .map(x => (x.match(/id:'([^']+)'/) || [])[1]);
     ok('minden játéknak van bannere', noBanner.length === 0,
        noBanner.length ? 'hiányzik: ' + noBanner.join(', ') : rows.length + ' játék');
 
