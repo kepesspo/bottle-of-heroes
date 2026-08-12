@@ -383,6 +383,18 @@
     /* ── Responsive layout ── */
     /* #root already set above */
 
+    /* Jatekvalaszto szurosor: Osszes | Torles | Veletlen | Szuro | DNR.
+       ⚠️ Ot felirat 390 px alatt NEM fer ki (a legrosszabb eset — szamlalos
+       „Szuro (2)" — 351 px min-contentet ker, egy 375 px-es telefon sora 343).
+       Ezert keskeny kepernyon a DNR a sor ALA kerul, teljes szelessegben; a
+       negy regi chip igy pontosan ugy all, ahogy a DNR gomb elott allt. */
+    .chipbar { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+    .chipbar > .chip-dnr { grid-column:1 / -1; }
+    @media (min-width:390px) {
+      .chipbar { grid-template-columns:repeat(4,1fr) auto; }
+      .chipbar > .chip-dnr { grid-column:auto; }
+    }
+
     .grid-players { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
     .grid-games   { display:grid; grid-template-columns:repeat(3,1fr); gap:16px 12px; }
 
@@ -35191,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.346';
+const APP_VERSION = 'v10.347';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -45720,6 +45732,21 @@ function StepDots({ active }) {
   );
 }
 
+// A DNR ket szine. ⚠️ NEM temafuggo, es ez szandekos: a jatekkartyan levo
+// „★ DNR EXKLUZIV" szalag mar ezt a parost viszi, a szurosor DNR gombja pedig
+// UGYANARRA mutat. Temabol szarmaztatva a gomb es a szalag minden temaban
+// elcsuszna egymastol. (Ugyanaz a szabaly, mint a Szures nehezseg-kartyainal
+// es a `BOH_TIMER_TONES`-nal: ahol a szin maga a jelentes, ott fix.)
+const DNR_INK  = '#0E0E18';
+const DNR_GOLD = '#FFD23F';
+
+// ⚠️ EGY forras arrol, melyik jatek DNR exkluziv. A jelolo a `GAMES[]`
+// bejegyzesen a `dnr:true` mezo; a `busz` azert log ki, mert azon nincs jelolo,
+// azonositoval van bedrotozva (CLAUDE.md v10.314). Ket felulet olvassa: a
+// Szures „DNR Exkluziv" sora es a szurosor DNR gombja — ha ket helyen allna a
+// felteteles kifejezes, egy uj DNR jatek az egyikbol kimaradna.
+function isDnrGame(g) { return !!g && (g.id === 'busz' || !!g.dnr); }
+
 function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, go, players, netReady = true }) {
   const [info, setInfo] = useState(null);
   const [sheet, setSheet] = useState(false);
@@ -45765,6 +45792,10 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   }, []);
   React.useEffect(() => { loadTemplates(); }, [loadTemplates]);
   const [activeFilters, setActiveFilters] = useState([]); // [] = show all
+  // DNR reflektor-mod: a lista helyen CSAK a DNR exkluziv jatekok allnak,
+  // kedvenc-soros (FavTile) alakban. Kolcsonosen kizaro a Szuressel — lasd a
+  // `toggleDnrMode` / `toggleFilter` parost.
+  const [dnrMode, setDnrMode] = useState(false);
 
   const allOn = selectedGames.length === GAMES.length;
   const anySelected = selectedGames.length > 0;
@@ -45821,7 +45852,12 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
     const n = 4 + Math.floor(Math.random()*4);
     setSelectedGames([...pool].sort(()=>Math.random()-.5).slice(0,n).map(g=>g.id));
   };
-  const toggleFilter = f => setActiveFilters(fs => fs.includes(f) ? fs.filter(x=>x!==f) : [...fs, f]);
+  // ⚠️ A ket DNR-belepo kizarja egymast. A Szures „DNR Exkluziv" sora
+  // kategorian belul szur es kombinalhato a nehezseggel; a DNR gomb reflektor,
+  // ami mindent elrejt. Egyszerre bekapcsolva fel-allapot lenne: szurt lista
+  // DNR fejleccel, vagy forditva.
+  const toggleFilter = f => { setDnrMode(false); setActiveFilters(fs => fs.includes(f) ? fs.filter(x=>x!==f) : [...fs, f]); };
+  const toggleDnrMode = () => { const next = !dnrMode; setDnrMode(next); if (next) setActiveFilters([]); };
 
   const SOLO_IDS = new Set(['busz','beerpong','powerhour','ovfj','farkasos','blackjack']);
 
@@ -45830,7 +45866,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
     const catFilters = activeFilters.filter(f => ['Egyéni','Páros','Csapat','DNR','Önálló'].includes(f));
     const diffFilters = activeFilters.filter(f => ['könnyű','közepes','nehéz'].includes(f));
     const catOk = catFilters.length === 0 || catFilters.some(f =>
-      f === 'DNR'    ? (g.id === 'busz' || g.dnr) :
+      f === 'DNR'    ? isDnrGame(g) :
       f === 'Önálló' ? SOLO_IDS.has(g.id) :
       g.category === f
     );
@@ -45876,11 +45912,14 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
       />
 
       <div className="screen-wide screen-pad" style={{ paddingTop:14, paddingBottom:8 }}>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8 }}>
+      {/* Az elrendezes a `.chipbar` osztalyban van (media query kell hozza) —
+          390 px-tol a DNR az otodik oszlop, alatta a sor ala kerul. */}
+      <div className="chipbar">
         <Chip label={t('allGames')} active={allOn} onClick={selectAll} />
         <Chip label={t('clearGames')} onClick={clearAll} />
         <Chip label={t('randomGames')} onClick={shuffle} tone="purple" icon={Icon.dice('#fff')} />
         <Chip label={hasFilter ? t('filterGames') + ' (' + activeFilters.length + ')' : t('filterGames')} onClick={() => setFilterSheet(true)} tone={hasFilter ? 'filter' : undefined} active={hasFilter} />
+        <Chip label="DNR" tone="dnr" active={dnrMode} onClick={toggleDnrMode} testId="dnr" className="chip-dnr" />
       </div>
       {hasFilter && (
         <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:8 }}>
@@ -45899,7 +45938,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
         <div className="screen-wide screen-pad" style={{ paddingTop:14, paddingBottom:100 }}>
 
         {/* ── Buli-sablonok ── */}
-        {(templates.length > 0 || anySelected) && (
+        {!dnrMode && (templates.length > 0 || anySelected) && (
           <div style={{ marginBottom:18 }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:10 }}>
               <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.12em' }}>Sablonok</span>
@@ -45941,7 +45980,7 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
         )}
 
         {/* ── Kedvencek szekció ── */}
-        {!hasFilter && (() => {
+        {!hasFilter && !dnrMode && (() => {
           const FAVS = ['beerpong','busz'];
           const favGames = FAVS.map(id => GAMES.find(g => g.id === id)).filter(Boolean);
           return (
@@ -45965,8 +46004,42 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
           );
         })()}
 
+        {/* ── DNR exkluzív szekció ──
+            A jatekok ugyanabban a szeles, kedvenc-soros alakban (`FavTile`)
+            allnak, mint a Kedvencek — nem racs-csempekent. A lista a
+            `visibleGames`-bol jon, tehat a rejtett es a hamarosan-erkezo
+            jatekokra vonatkozo szabalyok automatikusan ervenyesek maradnak. */}
+        {dnrMode && (() => {
+          const dnrGames = visibleGames.filter(isDnrGame);
+          return (
+            <div style={{ marginBottom:18 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                <span style={{ background:DNR_INK, color:DNR_GOLD, border:`1.25px solid ${DNR_GOLD}`, borderRadius:999, padding:'4px 10px 5px', fontFamily:T.font, fontWeight:900, fontSize:10, letterSpacing:'0.15em', whiteSpace:'nowrap' }}>★ DNR EXKLUZÍV</span>
+                <span style={{ flex:1 }} />
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:T.inkMute }}>{dnrGames.length} játék</span>
+              </div>
+              {dnrGames.length === 0 ? (
+                <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, textAlign:'center', padding:'18px 0' }}>Most nincs elérhető DNR exkluzív játék.</div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  {dnrGames.map(g => {
+                    const isSelected = selectedGames.includes(g.id);
+                    const locked = isLocked(g.id);
+                    const dim = locked || !!g.comingSoon || (anySelected && !isSelected);
+                    return (
+                      <FavTile key={g.id} g={g} selected={isSelected} dim={dim} locked={locked || !!g.comingSoon}
+                        onClick={() => { if (!g.comingSoon) toggle(g.id); }} onInfo={() => setInfo(g.id)}
+                        onLongPress={longPressFor(g.id)} />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* ── Csoportosított játékok ── */}
-        {[
+        {!dnrMode && [
           { key:'Egyéni', label:'Egyéni' },
           { key:'Páros',  label:'Páros'  },
           { key:'Csapat', label:'Csapat' },
@@ -46186,15 +46259,27 @@ const FILTER_DIFFS = [
   { k:'nehéz',   l:'Nehéz',   tone:'#DC4B4B', mouth:'M8.4 16.4c1-1.3 2.2-2 3.6-2s2.6.7 3.6 2' },
 ];
 
-function Chip({ label, active, onClick, tone, icon, disabled }) {
+function Chip({ label, active, onClick, tone, icon, disabled, testId, className }) {
   const isFilter = tone === 'filter';
-  const bg = disabled ? T.surfaceMuted : tone==='purple' ? T.purple : isFilter && active ? T.mint : active ? T.surface : T.surfaceMuted;
-  const fg = disabled ? T.inkMute : (tone==='purple' || (isFilter && active)) ? '#fff' : T.ink;
+  // ⚠️ A DNR hang szinei FIXEK (`DNR_INK` / `DNR_GOLD`) — ugyanaz a paros, amit
+  // a kartyan a „★ DNR EXKLUZIV" szalag visz. Ez a sor egyetlen SOTET chipje,
+  // ezert valik el a tobbitol minden temaban. Bekapcsolva megfordul (arany
+  // hatteren sotet felirat): igy a be/ki allapot nem csak arnyalatban ter el.
+  const isDnr = tone === 'dnr';
+  const bg = disabled ? T.surfaceMuted : isDnr ? (active ? DNR_GOLD : DNR_INK) : tone==='purple' ? T.purple : isFilter && active ? T.mint : active ? T.surface : T.surfaceMuted;
+  const fg = disabled ? T.inkMute : isDnr ? (active ? DNR_INK : DNR_GOLD) : (tone==='purple' || (isFilter && active)) ? '#fff' : T.ink;
   return (
-    <button onClick={disabled ? undefined : onClick} style={{
-      minHeight:44, padding:'0 6px', background:bg, color:fg, border:'none',
-      borderRadius:14, boxShadow: tone==='purple' ? '0 3px 0 rgba(124,92,196,0.4), 0 6px 16px rgba(124,58,237,0.25)' : isFilter && active ? `0 3px 0 ${T.mint}66, 0 6px 16px ${T.mint}40` : T.shadow,
-      fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13,
+    <button onClick={disabled ? undefined : onClick} data-chip={testId} className={className} aria-pressed={isDnr ? !!active : undefined} style={{
+      minHeight:44, padding: isDnr ? '0 9px' : '0 6px', background:bg, color:fg, border: isDnr ? `1.5px solid ${DNR_GOLD}` : 'none',
+      borderRadius:14, boxShadow: isDnr ? `0 3px 0 rgba(14,14,24,0.32), 0 6px 16px ${DNR_GOLD}55` : tone==='purple' ? '0 3px 0 rgba(124,92,196,0.4), 0 6px 16px rgba(124,58,237,0.25)' : isFilter && active ? `0 3px 0 ${T.mint}66, 0 6px 16px ${T.mint}40` : T.shadow,
+      fontFamily:T.font, fontWeight:T.weightTitle, fontSize: isDnr ? 12.5 : 13,
+      letterSpacing: isDnr ? '0.09em' : undefined,
+      // ⚠️ `nowrap` MINDEN chipre. Nelkule a racs `1fr` oszlopanak `auto`
+      // minimuma a leghosszabb SZO (a „Szuro (1)"-nel ~35 px), nem a teljes
+      // felirat — az oszlop tehat a felirat ala zsugorodik, es a szoveg ket
+      // sorba all a 44 px-es gombon. A `nowrap` a teljes feliratot teszi
+      // minimumma, igy a racs nem tudja osszenyomni.
+      whiteSpace:'nowrap',
       display:'flex', alignItems:'center', justifyContent:'center', gap:6,
       cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.7 : 1,
     }}>
@@ -46339,8 +46424,8 @@ function GameTile({ g, selected, dim, locked, onClick, onInfo, onLongPress }) {
           position:'absolute', bottom:-5, left:'50%',
           transform:'translateX(-50%) rotate(-3deg)',
           padding:'1px 8px 2px',
-          background:'#0E0E18', color:'#FFD23F',
-          border:'1.25px solid #FFD23F', borderRadius:999,
+          background:DNR_INK, color:DNR_GOLD,
+          border:`1.25px solid ${DNR_GOLD}`, borderRadius:999,
           fontFamily:T.font, fontWeight:900, fontSize:7.5,
           letterSpacing:'0.15em', boxShadow:'0 1.5px 4px rgba(14,14,24,0.3)',
           zIndex:3, whiteSpace:'nowrap', pointerEvents:'none',

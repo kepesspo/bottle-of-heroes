@@ -1542,3 +1542,55 @@ alján lévő „TOVÁBBI DNR" sort kapcsolja.
 felirat mostantól a forrásból jön (`t('quickGame')`). Ez a harmadik ilyen néma
 piros sor ebben a menetben — a `wildcard_test` tartomány-gombja és a
 `gameorder_test` banner-elemzője után.
+
+## DNR gomb a Szűrő mellett (v10.347)
+Ötödik chip a játékválasztó szűrősorán. Megnyomva a lista helyén **csak a DNR
+exkluzív játékok** állnak, és nem rács-csempeként, hanem a **Kedvencek széles
+sorai** (`FavTile`) alakjában.
+
+**A szín FIX, nem témafüggő** (`DNR_INK = '#0E0E18'`, `DNR_GOLD = '#FFD23F'`).
+A kártyán a „★ DNR EXKLUZÍV" szalag már ezt a párost viszi, a gomb pedig
+UGYANARRA mutat — témából származtatva a kettő minden témában elcsúszna
+egymástól. A szalag mostantól ugyanebből a két konstansból olvas. Ez a sor
+egyetlen sötét chipje, ezért válik el a többitől; bekapcsolva **megfordul**
+(arany háttéren sötét felirat), így a be/ki nem csak árnyalatban tér el.
+
+**Melyik játék DNR: egy forrás.** `isDnrGame(g)` = `g.id === 'busz' || g.dnr`
+(a `busz` azért lóg ki, mert azon nincs jelölő — v10.314). Két felület olvassa:
+a Szűrés „DNR Exkluzív" sora és az új gomb.
+
+**A Szűrés DNR sora MEGMARAD, és a kettő kizárja egymást.** Nem duplikáció:
+a szűrő kategórián belül szűr és **kombinálható a nehézséggel**, a gomb viszont
+reflektor — mindent elrejt, és másik alakban mutatja a játékokat. Egyszerre
+bekapcsolva fél-állapot lenne (szűrt lista DNR fejléccel), ezért a gomb törli a
+szűrőket, a szűrő pedig kikapcsolja a gombot.
+
+### ⚠️ Öt felirat nem fér ki egy sorba minden telefonon
+Mérve, nem ránézésre. A chipek min-content szélessége: `Összes 55 · Törlés 50 ·
+Véletlen 90 · Szűrő 47 · DNR 51` + 4 × 8 px rés. A **legrosszabb eset** a
+számlálós felirat: `Szűrő (2)` = 69 px (a szám mindegy), tehát **347 px**. A sor
+a képernyő − 32 px: 360 → 328 · 375 → 343 · **390 → 358** · 402 → 370.
+
+Ezért a `.chipbar` **390 px-től** teszi a DNR-t a Szűrő mellé; alatta a sor
+**alá** kerül, teljes szélességben (ott még feltűnőbb is, és a négy régi chip
+pontosan úgy áll, ahogy a gomb előtt állt).
+
+**⚠️ A hibás elrendezés nem lógott ki, és nem is vágódott le semmi — a felirat
+KETTÉTÖRT** („Szűrő" / „(1)") a 44 px-es gombon. A rács `1fr` oszlopának `auto`
+minimuma ugyanis a leghosszabb **szó**, nem a teljes felirat: tördelhető szöveg
+alatt az oszlop boldogan zsugorodik a felirat alá. Ezért kapott **minden chip
+`whiteSpace:'nowrap'`-ot** — ettől a min-content a teljes felirat lesz.
+
+A szűk keresztmetszet a **Véletlen** (90 px, a kockaikonnal): `1fr` oszlopok
+egyenlően osztoznak, tehát amit a Véletlen a saját részén felül elvisz, azt a
+másik háromtól veszi el. 390 px-en a Szűrő így 60 px-et kapott a kellő 69 helyett.
+
+Teszt: `node tests/dnr_button_test.js`. Két fogódzó, amit könnyű elrontani:
+- **a tördelés-detektor a szöveg SORAINAK számát nézi** (Range `getClientRects()`),
+  nem a doboz túlcsordulását — a `scrollWidth` alapú ellenőrzés a hibás verzión
+  is zöld volt (lemérve: `kilóg = 0 px`, miközben a felirat két sorban állt);
+- **a Szűrés lap sorára `#__g`-n KÍVÜL kell kattintani.** A kategória-fejléc
+  gombjának felirata szó szerint „Egyéni", és a DOM-ban előbb jön — egy sima
+  `querySelectorAll('button')` a szekciót csukja be a szűrő helyett. Az 5. blokk
+  első állítása pont ezen bukott, és a következő kettő ÚGY ment át, hogy soha
+  nem volt aktív szűrő.
