@@ -35182,7 +35182,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.335';
+const APP_VERSION = 'v10.336';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -44762,6 +44762,9 @@ const BP_TOURNAMENT_TYPES = [...BP_TOURNAMENT_TYPES_1, ...BP_TOURNAMENT_TYPES_2]
 
 function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
   const maxCups      = config.maxCups ?? 10;
+  // A donto sajat pohar-szama. Alapbol UGYANANNYI, mint a tobbi meccse, igy
+  // aki nem nyul hozza, semmit nem vesz eszre.
+  const finalCups    = config.finalCups ?? maxCups;
   const mode         = config.mode || 'egyeni';
   const tournament   = config.tournamentType || 'se';
   const groupAdvance = config.groupAdvance ?? 1;
@@ -44772,6 +44775,8 @@ function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
   const matchMinutes = config.matchMinutes ?? 5;
   const numCfg = [
     { key:'maxCups',       label:'Poharak száma',    val:maxCups,       min:4, max:16, step:2 },
+    { key:'finalCups',     label:'Poharak a döntőben', val:finalCups, min:4, max:16, step:2,
+      sub:'A döntő mindig egy meccs — visszavágó nélkül' },
 
     { key:'matchMinutes',  label:'Meccs hossza (perc)',val:matchMinutes, min:0, max:20, step:1 },
   ];
@@ -44810,7 +44815,10 @@ function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
         {/* Numeric settings */}
         {numCfg.map(s => (
           <div key={s.key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'none' }}>
-            <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{s.label}</span>
+            <div style={{ minWidth:0, paddingRight:10 }}>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{s.label}</div>
+              {s.sub && <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{s.sub}</div>}
+            </div>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
               <button onClick={() => setConfig(c => ({...c, [s.key]: Math.max(s.min,(c[s.key]??s.val)-s.step)}))} style={{ width:33, height:33, borderRadius:10, background:T.inkMute+'55', border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:'#D85F5C' }}>-</button>
               <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:18, color:T.ink, minWidth:30, textAlign:'center' }}>{s.val}</span>
@@ -48898,6 +48906,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   const joinUrl = roomCode ? (window.location.origin + window.location.pathname + '?room=' + roomCode) : '';
   const DRINKS_PER_LOSS = bpCfg.drinksPerLoss ?? 5;
   const MAX_CUPS = bpCfg.maxCups ?? 10;
+  const FINAL_CUPS = bpCfg.finalCups ?? MAX_CUPS;
   const VISSZAVAGO   = !!(bpCfg.visszavago);
   const TOURNAMENT = bpCfg.tournamentType || 'se';
   const GROUP_ADVANCE = bpCfg.groupAdvance ?? 1;
@@ -49275,6 +49284,9 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
       champion: champion ? { id: champion.id, name: champion.name, color: champion.color } : null,
       drinkMap,
     }});
+    // A bajnoksag lezarult: a fuggoben maradt ertesitesek TORLODNEK a szobabol.
+    // Nelkuluk a "Kovetkezo meccs!" ott maradna a dokumentumban.
+    if (champion) syncRoom(roomCode, { bpNotif: null, bpTimerAlert: null });
   }, [seRounds, seCurRound, seCurMatch, cups1, cups2, timerSecs, rrMatches, rrIdx, tsGroups, viewGroup, champion, rrDone, tsPhase, drinkMap]);
 
   React.useEffect(() => {
@@ -49784,10 +49796,44 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     }
   }
 
-  const isSEFinals = VISSZAVAGO && (
+  // FIGYELEM a nevre: az `isSEFinals` azt jelenti, hogy EGYENES KIESESES agban
+  // vagyunk ES be van kapcsolva a visszavago (minden meccs ket menetes). NEM
+  // azt, hogy eppen a dontot jatsszuk - az az `isSEFinalMatch` lent.
+  const seBracket = (
     TOURNAMENT === 'se' ||
     (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'se')
   );
+  const isSEFinals = VISSZAVAGO && seBracket;
+  // ⚠️ A DONTO felismerese: az az a meccs, ami UTAN mar nincs kivel jatszani.
+  // Ket naiv szabaly is megbukik rajta, mindketto valodi felallason:
+  //   • „egy meccs van a korben"  → 3 jatekosnal a 0. kor IS egy meccs (a
+  //     harmadik szabadkartyat kap), utana viszont meg jon a donto;
+  //   • „nincs kovetkezo kor"     → 2 jatekosnal a pakli MINDIG epit egy ures
+  //     (tbd) masodik kort, tehat a valodi donto is „nem utolso"-nak latszana.
+  // Ezert azt nezzuk, marad-e RAJTUK KIVUL barki jatekban: masik fuggoben levo
+  // meccs, vagy egy kesobbi korben varakozo (szabadkartyas) jatekos.
+  const isSEFinalMatch = (() => {
+    if (!seBracket || champion) return false;
+    const m = (seRounds[seCurRound] || [])[seCurMatch];
+    if (!m || !m.p1 || !m.p2) return false;
+    const inMatch = new Set([m.p1.id, m.p2.id]);
+    for (let r = 0; r < seRounds.length; r++) {
+      const round = seRounds[r] || [];
+      for (let i = 0; i < round.length; i++) {
+        if (r === seCurRound && i === seCurMatch) continue;
+        const x = round[i];
+        if (!x) continue;
+        if (!x.winner && !x.tbd && x.p1 && x.p2) return false;   // masik jatszando meccs
+        if (r > seCurRound) {                                     // varakozo jatekos
+          if (x.p1 && !inMatch.has(x.p1.id)) return false;
+          if (x.p2 && !inMatch.has(x.p2.id)) return false;
+        }
+      }
+    }
+    return true;
+  })();
+  // A dontonek sajat pohar-szama lehet.
+  const curMaxCups = isSEFinalMatch ? FINAL_CUPS : MAX_CUPS;
   const totalSERounds = seRounds.length > 1
     ? 1 + Math.ceil(Math.log2(Math.max(seRounds[1].length * 2, 2)))
     : seRounds.length > 0
@@ -49935,9 +49981,11 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
     const winnerP = cups1 !== cups2 ? (cups1 > cups2 ? currentMatch.p1 : currentMatch.p2) : null;
     const isRRMode = TOURNAMENT === 'rr' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'rr');
     const matchKey = isRRMode ? ('rr_' + rrIdx) : (seCurRound + '_' + seCurMatch);
-    const visszaApplies = VISSZAVAGO && (isSEFinals || isRRMode);
+    // A DONTO kimarad a ket menetbol - ott egy meccs dont.
+    const visszaApplies = VISSZAVAGO && ((isSEFinals && !isSEFinalMatch) || isRRMode);
     const isVissza = visszaApplies && visszavagoUsedRef.current.has(matchKey);
-    const visszaLabel = isVissza ? '⚔️ VISSZAVÁGÓ' : (visszaApplies ? '1. MECCS' : null);
+    const visszaLabel = isSEFinalMatch ? '🏆 DÖNTŐ'
+      : isVissza ? '⚔️ VISSZAVÁGÓ' : (visszaApplies ? '1. MECCS' : null);
 
     return (
       <div style={{ width:'100%', background:T.surface, borderRadius:22, padding:'16px 18px 18px', boxShadow:T.shadow }}>
@@ -49982,7 +50030,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
               {currentMatch.p1.img ? <img src={currentMatch.p1.img} style={{width:80,height:80,objectFit:'cover',borderRadius:'50%'}} /> : currentMatch.p1.name.charAt(0).toUpperCase()}
             </div>
             <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p1.name}</div>
-            <CupCounter value={cups1} onChange={setCups1} color={currentMatch.p1.color} max={MAX_CUPS} winning={cups1 > cups2} />
+            <CupCounter value={cups1} onChange={setCups1} color={currentMatch.p1.color} max={curMaxCups} winning={cups1 > cups2} />
           </div>
 
           {/* VS + QR */}
@@ -50016,7 +50064,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
               {currentMatch.p2.img ? <img src={currentMatch.p2.img} style={{width:80,height:80,objectFit:'cover',borderRadius:'50%'}} /> : currentMatch.p2.name.charAt(0).toUpperCase()}
             </div>
             <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p2.name}</div>
-            <CupCounter value={cups2} onChange={setCups2} color={currentMatch.p2.color} max={MAX_CUPS} winning={cups2 > cups1} />
+            <CupCounter value={cups2} onChange={setCups2} color={currentMatch.p2.color} max={curMaxCups} winning={cups2 > cups1} />
           </div>
         </div>
 
@@ -50045,7 +50093,9 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           <button onClick={() => {
             if (!canConfirm) return;
             const seKey = seCurRound + '_' + seCurMatch;
-            if (isSEFinals && !visszavagoUsedRef.current.has(seKey)) {
+            // A donto MINDIG egy meccs: nem bontjuk ket menetre akkor sem, ha a
+            // "Visszavago" be van kapcsolva.
+            if (isSEFinals && !isSEFinalMatch && !visszavagoUsedRef.current.has(seKey)) {
               // automatikus visszavágó — mentsük el az 1. eredményt, azonnal indul
               visszavagoUsedRef.current.add(seKey);
               setSeRounds(prev => {
@@ -69224,6 +69274,12 @@ function ObserverWatching({ code, observerName, onLeave }) {
 
   const [obsRoundPopup, setObsRoundPopup] = React.useState(null);
   const [obsGameEvent, setObsGameEvent] = React.useState(null);
+  // Az ELSO pillanatkep esemenyei REGIEK: a szobaban ott ul az utolso
+  // `bpNotif` / `gameEvent` / `roundEvent`, a `prev` viszont mountolaskor meg
+  // `null`, tehat a "valtozott-e?" feltetel igaz lenne. Igy minden megnyitas
+  // ujra elsutotte az utolso ertesitest - a bajnoksag VEGE utan is, amikor mar
+  // nincs kovetkezo meccs. Az elso pillanatkepnel csak megjegyezzuk oket.
+  const seenEvtRef = React.useRef(null);
   const prevGameIdxRef = React.useRef(null);
   React.useEffect(() => {
     const idx = room?.gameIdx ?? null;
@@ -69248,25 +69304,32 @@ function ObserverWatching({ code, observerName, onLeave }) {
               else if (p.drinks > pp.drinks) { setPulseId(p.id+':d'); setTimeout(()=>setPulseId(null),700); }
             });
           }
+          // Az elso pillanatkepnel csak jegyzunk, nem ertesitunk (lasd seenEvtRef).
+          const _evtTs = k => (data[k] && data[k].ts) || null;
+          const _first = seenEvtRef.current === null;
+          const _seen = _first ? {} : seenEvtRef.current;
+          const _fresh = k => !_first && _evtTs(k) !== null && _evtTs(k) !== _seen[k];
+          seenEvtRef.current = { roundEvent:_evtTs('roundEvent'), gameEvent:_evtTs('gameEvent'),
+                                 bpNotif:_evtTs('bpNotif'), bpTimerAlert:_evtTs('bpTimerAlert') };
           // Round popup event
-          if (data.roundEvent && (!prev?.roundEvent || data.roundEvent.ts !== prev.roundEvent.ts)) {
+          if (_fresh('roundEvent')) {
             setObsRoundPopup({ round: data.roundEvent.round, leaving: false });
             setTimeout(() => setObsRoundPopup(p => p ? {...p, leaving:true} : p), 1500);
             setTimeout(() => setObsRoundPopup(null), 2000);
           }
           // Game result event
-          if (data.gameEvent && (!prev?.gameEvent || data.gameEvent.ts !== prev.gameEvent.ts)) {
+          if (_fresh('gameEvent')) {
             setObsGameEvent(data.gameEvent);
             setTimeout(() => setObsGameEvent(null), 3500);
           }
           // Beer pong match notification
-          if (data.bpNotif && (!prev?.bpNotif || data.bpNotif.ts !== prev.bpNotif.ts)) {
+          if (_fresh('bpNotif')) {
             if (typeof window._bohShowNotif === 'function') {
               window._bohShowNotif('🏓 Következő meccs!', data.bpNotif.p1 + ' vs ' + data.bpNotif.p2);
             }
           }
           // Beer pong 1 perces riasztás
-          if (data.bpTimerAlert && (!prev?.bpTimerAlert || data.bpTimerAlert.ts !== prev.bpTimerAlert.ts)) {
+          if (_fresh('bpTimerAlert')) {
             if (typeof window._bohShowNotif === 'function') {
               const ta = data.bpTimerAlert;
               const curStr = ta.p1 && ta.p2 ? ta.p1 + ' vs ' + ta.p2 + ' mérkőzése 1 perc múlva véget ér.' : '1 perc múlva véget ér a mérkőzés.';

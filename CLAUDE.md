@@ -1269,3 +1269,39 @@ a `tapper_press_test` az avatar pozícióját méri, az újramountolt kép viszo
 UGYANOTT jelenik meg, tehát az a teszt a hibás verzión is átment. Itt a
 DOM-csomópontot jelöljük meg, és azt nézzük, megvan-e a ketyegés után — a hibás
 verzión **0 / 2** élte túl. A 2. blokk forrás-szinten őrzi a többi helyet.
+
+## Beer Pong: a DÖNTŐ, és a bajnokság utáni kísértet-push (v10.336)
+
+**A döntő mindig EGY meccs, és saját pohár-száma van.** A „Visszavágó" kapcsoló
+szövege szerint minden meccs két menetes — a megerősítő gomb viszont az egyenes
+kieséses ágban a **döntőt is** automatikusan két menetre bontotta (`isSEFinals`
+mellől hiányzott a döntő-kivétel). Új beállítás: `finalCups` (alapból =
+`maxCups`), és a döntő kimarad a két menetből.
+
+**⚠️ A döntő felismerése két naiv szabályt is megbuktat**, mindkettőt valódi
+felálláson — ezért van a `isSEFinalMatch` bejárása:
+- **„egy meccs van a körben"** → 3 játékosnál a **0. kör is** egy meccs (a
+  harmadik szabadkártyát kap), utána viszont még jön a döntő;
+- **„nincs következő kör"** → 2 játékosnál a bracket MINDIG épít egy üres
+  (`tbd`) második kört, tehát a valódi döntő is „nem utolsó"-nak látszana.
+
+A tényleges szabály: a döntő az a meccs, ami után **nincs kivel játszani** —
+nincs másik függőben lévő meccs, és nincs későbbi körben várakozó (szabadkártyás)
+játékos rajtuk kívül.
+
+**⚠️ A kísértet-push.** A néző-képernyő az **első pillanatképnél is** értesített:
+a feltétel `!prev?.bpNotif` volt, `prev` viszont a szoba React-állapota, ami
+mountoláskor még `null`. Így a szobában ÜLŐ, régi `bpNotif` **minden
+megnyitáskor újra elsült** — a bajnokság vége után is, amikor már nincs
+következő meccs. Ugyanez állt a `roundEvent` / `gameEvent` / `bpTimerAlert`
+eseményekre is (a régi eredmény-banner is felugrott).
+
+Innentől az első pillanatképnél csak **megjegyezzük** az időbélyegeket
+(`seenEvtRef`), és a bajnokság lezárásakor a két beerpong-esemény **törlődik is**
+a szobából. Aki új szoba-eseményt vezet be: az `_fresh(kulcs)` kapun menjen át,
+ne a `prev`-hez hasonlítson.
+
+Teszt: `node tests/bp_final_test.js` — 2 és 3 játékossal (a két naiv szabály
+bukó esetei), és a push-blokk egy **már bent lévő** értesítéssel nyit szobát.
+A javítás előtt mind az öt állítás bukik, a push-blokk épp a bejelentett
+szöveggel: „🏓 Következő meccs! | Sere vs Kecsi".
