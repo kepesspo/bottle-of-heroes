@@ -1180,3 +1180,59 @@ nem a konkrét oldal: aki a banneren nyertes, annak pontot kell kapnia és nem
 ihat. Három blokk: `collect` fordított körben, `collect` wildcard nélkül
 (kontroll), és a `mitval` — az **maradt legacy alak**, tehát az általánosított
 kaput méri. A javítás előtt mindhárom blokk bukik.
+
+## Időpárbaj: a saját telefonról is játszható (v10.334)
+Ha a host egy laptop, a játékot addig senki nem tudta játszani — a stopper csak
+a host képernyőjén volt. Most a szobához csatlakozott telefon kiválasztja, hogy
+ki ő (`IdoparbajObserverView`, ugyanaz az avataros „Ki vagy?" választó, mint a
+Tappernél), és onnan indít/állít.
+
+**⚠️ A stopper a TELEFONON fut, nem a hoston.** Ez a döntő különbség a
+Tapperhez képest: ott a telefon csak a nyomva tartás tényét küldi, és a hoston
+fut az óra. Itt a **mért idő maga a játék**, 0,1 mp felbontással — egy 100–300
+ms-os hálózati köridő indításnál ÉS megállításnál is torzítana, tehát ~0,5 mp-et
+hazudna. Ezért a telefon helyben mér, és **csak a kész eredmény** megy fel
+(`idoInput.<pid> = { st:'done', t, tok }`).
+
+Ugyanezért a telefon a **saját helyi állapotából** rajzol (`localRun`), nem a
+szoba fázisából: különben az „Indítás" után a „Stop" csak a pillanatkép
+visszaérésekor jelenne meg, és a mérés első negyed másodpercében nem lehetne
+megállítani. (Ugyanaz a lecke, mint a Blackjack optimista visszhangjánál.)
+
+Két dolog, ami a többi szinkron-játékból jön, és itt is kell:
+- **A párost a HOST küldi le** (`idoState.p1/p2`) — az ellenfelet a `PlayScreen`
+  véletlenszerűen sorsolja, a telefon nem tudja kitalálni (ez volt a Tapper
+  v10.319-es hibája);
+- **minden bemenet jelölőt visz** (`tok`), és a host `seenTokRef`-fel dobja a
+  már feldolgozottat. Enélkül ugyanaz a bemenet a következő pillanatképnél újra
+  lefutna, sőt a kör visszaértekor magától elsülne (`kisebbGuess.ts` mintája).
+
+A cél-lap **egy komponens** (`IdoparbajTargetCard`) — a host tábla és a telefon
+ugyanazt rajzolja.
+
+Teszt: `node tests/idoparbaj_phone_test.js` — két mountolt készülék (host tábla
++ telefon) ugyanarra a szobára, **250 ms-os mesterséges pillanatkép-késéssel**.
+A fő fogódzó: egy 1,5 mp-es tartás után a szobában is 1,5 mp áll, nem 2,0.
+
+## ⚠️ A `db` NEM látható az app szkriptjéből — a telefonos írások némán elhaltak (v10.334)
+A `var db = firebase.firestore()` a Firebase-init **IIFE-jében** ül, egy külön
+`<script>` blokkban. Az alkalmazás a `<script type="text/babel">` blokkban van,
+onnan a `db` egyszerűen nincs hatókörben.
+
+Öt helyen bare `db`-vel írtunk, mindegyik `typeof db === 'undefined'` őrzővel —
+**az őrző mindig igaz volt**, tehát a függvény visszatért, és a telefon írása
+nyom nélkül elveszett. **Nem volt hibaüzenet**, ez tette láthatatlanná.
+
+Mérve: a `TapperObserverView`-ban egy valódi lenyomás után a szoba
+`tapperInput` mezője `undefined` maradt. Érintett volt a **Tapper** (mindkét
+irány) és a **Kisebb/Nagyobb** telefonos tippje is.
+
+Ami MŰKÖDÖTT, és ezért nem tűnt fel: a `bjWrite` (Blackjack) és a `syncRoom` /
+`subscribeRoom` — azok `firebase.firestore()`-t hívnak közvetlenül, illetve az
+init-IIFE-n belül vannak. Ezért ment a Blackjack telefonról, a Tapper nem.
+
+Innentől minden szoba-írás a **`bohRoomRef(code)`**-on keresztül megy. Aki új
+telefonos írást ír, azt használja — bare `db`-t ne.
+
+Teszt: `idoparbaj_phone_test.js` 6. blokkja. A fogódzó a **hiba aláírása**:
+egyetlen `typeof db === 'undefined'` őrző sem maradhat a forrásban.

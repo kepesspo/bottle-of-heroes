@@ -105,12 +105,15 @@ const mountPlay = (meta) => `
     ok('a felirat "Milyen gyakran?"', /Milyen gyakran/.test(t));
     ok('a tartományok percben jelennek meg', /\d+–\d+/.test(t), (t.match(/\d+–\d+/g) || []).join(' '));
     await p.evaluate(() => {
-      const btn = [...document.querySelectorAll('#__g button')].find(x => x.innerText.trim() === '15–25');
+      // A tenyleges tartomanyok: 3–6 · 6–9 · 9–12 · 12–15 (WC_FREQ). A teszt
+      // korabban a soha nem letezett „15–25"-re kattintott, ezert VEGIG bukott
+      // — egy allandoan piros sor viszont elrejti a valodi regressziokat.
+      const btn = [...document.querySelectorAll('#__g button')].find(x => x.innerText.trim() === '12–15');
       if (btn) btn.click();
     });
     await p.waitForTimeout(500);
     const meta = await p.evaluate(() => ({ min: window.__meta.wildcardMin, max: window.__meta.wildcardMax }));
-    ok('a választás percekben mentődik', meta.min === 15 && meta.max === 25, JSON.stringify(meta));
+    ok('a választás percekben mentődik', meta.min === 12 && meta.max === 15, JSON.stringify(meta));
     ok('nincs JS hiba', p.__errs.length === 0, p.__errs.join(' | '));
     await p.close();
   }

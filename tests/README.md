@@ -66,6 +66,24 @@ driverrel klikkel: ismerős gombfeliratok prioritási sorrendben → ha a képer
 szövege két kattintás után sem változik, rács-cellákra vált (Collect, Memória
 típusú pályák). Ha `onAdvance` megérkezett, kiértékel.
 
+## `idoparbaj_phone_test.js` — Időpárbaj a saját telefonról
+
+Két mountolt készülék (host tábla + telefon) UGYANARRA a szobára, **250 ms-os
+mesterséges pillanatkép-késéssel**. A késés nem díszlet: nélküle a hibás
+megoldás is átmegy.
+
+Amit őriz:
+- a **mért idő a telefonon keletkezik** — egy 1,5 mp-es tartás után a szobában
+  is 1,5 mp áll, nem 2,0. Ha a hoston futna az óra, a hálózati köridő
+  indításnál és megállításnál is hozzáadódna;
+- a **„Stop" azonnal kint van**, még a pillanatkép visszaérése előtt (a telefon
+  a saját helyi állapotából rajzol, nem a szoba fázisából);
+- a **host tábláján NINCS „Stop"**, amíg a telefon mér — ott a `startRef` üres,
+  tehát szemetet könyvelne el;
+- a **`bohRoomRef`**: a `db` a Firebase-init IIFE-jében ül, az app
+  szkriptjéből nem látható. A fogódzó a hiba aláírása — egyetlen
+  `typeof db === 'undefined'` őrző sem maradhat a forrásban.
+
 ## `fbstub.js` — memóriabeli Firestore
 
 A compat SDK-t utánozza annyira, hogy a valódi hibák reprodukálódjanak.
