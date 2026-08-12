@@ -1518,13 +1518,18 @@ játék felvételekor (v10.342) némán elpirult, pedig a termék jól működö
 szám mostantól a `GAMES` listából jön — ami változhat, azt a forrásból kell
 kérdezni.
 
-## Az Imposztorról lekerült a DNR exkluzív jelölés (v10.345)
+## Az Imposztorról és a Kisebb/Nagyobbról lekerült a DNR jelölés (v10.345–346)
 A jelölő a `GAMES[]` bejegyzésen a **`dnr:true`** mező — a `category` NEM
-változott, az marad `Csapat`. A jelölés két helyre hat, és mindkettő magától
-követi: a Szűrés „DNR Exkluzív" sora és a kártyán a ★ szalag.
+változott, mindkettő marad `Csapat`, és a Kisebb/Nagyobb `observer:true`-ja sem
+mozdult (az a telefonos nézet, semmi köze a DNR-hez). A jelölés két helyre hat,
+és mindkettő magától követi: a Szűrés „DNR Exkluzív" sora és a kártyán a ★ szalag.
 
-A kör innentől: **blackjack, kisebb, beerpong, powerhour, ovfj** (+ a `busz`,
+A kör innentől: **blackjack, beerpong, powerhour, ovfj** (+ a `busz`,
 ami azonosítóval van bedrótozva).
+
+⚠️ A `kisebb` bejegyzés **többsoros** (a `stakeOf:(m)=>{ … }` miatt), tehát a
+`dnr:true` NEM a `{ id:'kisebb'` sorban ült — soralapú keresés elvétené. Ugyanaz
+az alak, amitől a `gameorder_test` régi, sor-alapú banner-elemzője elpirult.
 
 Ezt eddig **semmi nem őrizte**, tehát egy véletlen `dnr:true` észrevétlenül
 beszivárgott volna — a `gameorder_test` mostantól a teljes kört ellenőrzi.
