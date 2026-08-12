@@ -1,6 +1,11 @@
-// v10.347 — DNR gomb a Szűrő mellett, a játékok kedvenc-soros alakban
+// v10.347–352 — DNR gomb a Szűrő mellett, a játékok kedvenc-soros alakban
 //
-// Három dolgot őriz, és mindhárom külön elromolhat:
+// A 7. blokk a v10.352-é: a mód TÚLÉLI a képernyő-váltást. A `BottleApp`
+// feltételes rendereléssel vált, tehát a Játékmenetre lépve a GamesScreen
+// LEBOMLIK — enélkül a visszalépés csendben visszakapcsolta a DNR felületet
+// arra, aki épp kikapcsolta.
+//
+// Az alábbi három dolog a v10.347-é, és mindhárom külön elromolhat:
 //
 //  1. AZ ELRENDEZÉS. Öt felirat 390 px alatt NEM fér ki egy sorba (a legrosszabb
 //     eset — számlálós „Szűrő (2)" — 347 px-et kér, egy 375 px-es telefon sora
@@ -306,6 +311,100 @@ const listState = p => p.evaluate(() => {
          m.dnrW + ' / ' + m.rowW + ' px');
     }
     await p.close();
+  }
+
+  // ── 7. ⚠️ A MOD TULELI A KEPERNYO-VALTAST (v10.352) ──
+  // Bejelentes: „ha Jatekmenetrol visszalepek, mindig a DNR felulet jon be, nem
+  // pedig az, ahol kivalasztottam a jatekot."
+  // A `BottleApp` felteteles renderelessel valt (`{screen==='games' && …}`),
+  // tehat a Jatekmenetre lepve a GamesScreen LEBOMLIK — visszaterve uj peldany
+  // keletkezik, es a `dnrMode` az alapertelmezesevel indulna.
+  console.log('\n===== 7. VISSZALEPES A JATEKMENETROL =====');
+  {
+    const p = await b.newPage({ viewport: { width: 402, height: 1400 } });
+    p.__errs = []; p.on('pageerror', e => { if (!/ServiceWorker/.test(e.message)) p.__errs.push(e.message); });
+    await p.route('**://**', r => r.request().url().startsWith('file://') ? r.continue() : r.abort());
+    await p.addInitScript(stub);
+    await p.addInitScript(`try{localStorage.setItem('boh_onboarded','1');localStorage.setItem('boh_splash','0');localStorage.setItem('boh_theme','ice');}catch(e){}`);
+    await p.goto('file://' + ROOT + '/index.html', { waitUntil: 'domcontentloaded' });
+    await p.waitForTimeout(3400);
+
+    // ⚠️ A harness UGYANUGY valt, ahogy a BottleApp: felteteles rendereles,
+    // tehat a kepernyo tenyleg LEBOMLIK. (Egy `display:none` nem reprodukalna.)
+    await p.evaluate(() => {
+      const r = document.getElementById('root'); if (r) r.style.display = 'none';
+      const root = document.createElement('div'); root.id = '__g';
+      root.style.cssText = 'position:fixed;inset:0;z-index:1;display:flex;flex-direction:column;background:var(--app-bg)';
+      document.body.appendChild(root);
+      function H() {
+        const [screen, setScreen] = React.useState('games');
+        const [sel, setSel] = React.useState([]);
+        const [m, sm] = React.useState({ modes:['points'], difficulty:'mid' });
+        window.__go = setScreen;
+        return React.createElement(React.Fragment, null,
+          screen === 'games' && React.createElement(GamesScreen, { go: () => {}, selectedGames: sel,
+            setSelectedGames: setSel, gameMeta: m, setGameMeta: sm }),
+          screen === 'setup' && React.createElement('div', null, 'JÁTÉKMENET'));
+      }
+      ReactDOM.createRoot(root).render(React.createElement(H));
+    });
+    await p.waitForTimeout(1500);
+
+    const pressed = () => p.evaluate(() => {
+      const btn = document.querySelector('#__g button[data-chip="dnr"]');
+      return btn ? btn.getAttribute('aria-pressed') : 'NINCS';
+    });
+    ok(await pressed() === 'true', 'megnyitáskor a DNR felület (v10.348 változatlan)');
+
+    await dnrBtn(p).click();
+    await p.waitForTimeout(500);
+    ok(await pressed() === 'false', 'kikapcsoljuk — a teljes lista áll');
+    ok((await listState(p)).grids > 0, 'és tényleg a rácsos lista');
+
+    // el a Jatekmenetre, majd VISSZA
+    await p.evaluate(() => window.__go('setup'));
+    await p.waitForTimeout(600);
+    ok(await p.evaluate(() => /JÁTÉKMENET/.test(document.querySelector('#__g').innerText)),
+       'átléptünk a Játékmenetre (a képernyő lebomlott)');
+    await p.evaluate(() => window.__go('games'));
+    await p.waitForTimeout(900);
+    ok(await pressed() === 'false',
+       '⚠️ visszalépve NEM kapcsol vissza a DNR felület', await pressed());
+    ok((await listState(p)).grids > 0, 'a rácsos lista jött vissza, ahol a játékot kiválasztotta');
+
+    // a SZURO is kikapcsolja a modot — az emlekezetnek AZT is kovetnie kell
+    await dnrBtn(p).click(); await p.waitForTimeout(500);   // vissza DNR-re
+    ok(await pressed() === 'true', 'vissza a DNR felületre');
+    await applyFilter(p, 'Egyéni');
+    ok(await pressed() === 'false', 'a szűrő kikapcsolta a módot');
+    await p.evaluate(() => window.__go('setup'));
+    await p.waitForTimeout(500);
+    await p.evaluate(() => window.__go('games'));
+    await p.waitForTimeout(900);
+    ok(await pressed() === 'false', 'és ez a visszalépést is túléli', await pressed());
+
+    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+    await p.close();
+  }
+
+  // ── 7b. KONTROLL: FRISS indításnál MARAD a DNR alapértelmezés ──
+  // ⚠️ Enélkül egy „soha többé ne nyisson DNR-rel" regresszió is átmenne — az
+  // emlékezet szándékosan MODUL-szintű, nem localStorage.
+  console.log('\n===== 7b. KONTROLL — FRISS INDITAS =====');
+  {
+    const p = await open(b, 402);
+    ok(await p.evaluate(() => document.querySelector('#__g button[data-chip="dnr"]').getAttribute('aria-pressed')) === 'true',
+       'új oldalbetöltésnél megint a DNR felület nyílik');
+    await p.close();
+  }
+
+  // ── 7c. a harness hu marad a BottleApp-hoz ──
+  // Ha a BottleApp valaha MINDIG mountolva tartana a GamesScreen-t, a 7. blokk
+  // harness-e mast merne, mint a valosag.
+  {
+    const src = fs.readFileSync(ROOT + '/app.src.html', 'utf8');
+    ok(/screen==='games'\s*&&\s*<GamesScreen/.test(src),
+       'a BottleApp tényleg feltételesen rendereli a GamesScreen-t (ezért kell az emlékezet)');
   }
 
   await b.close();

@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.351';
+const APP_VERSION = 'v10.352';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -45750,6 +45750,16 @@ const DNR_GOLD = '#FFD23F';
 // felteteles kifejezes, egy uj DNR jatek az egyikbol kimaradna.
 function isDnrGame(g) { return !!g && (g.id === 'busz' || !!g.dnr); }
 
+// A DNR reflektor-mod kiindulo allapota (v10.348: a jatekvalaszto ezzel nyit).
+const DNR_MODE_DEFAULT = true;
+// ⚠️ MODUL-SZINTU emlekezet, mert a `BottleApp` a kepernyoket felteteles
+// renderelessel valtja: a Jatekmenetre lepve a `GamesScreen` LEBOMLIK, es
+// visszaterve uj peldany keletkezik. Enelkul a visszalepes csendben
+// visszakapcsolta a DNR felületet arra, aki epp kikapcsolta.
+// Nem `localStorage`: friss inditasnal maradjon a DNR az alapertelmezes —
+// tarolva egyetlen kikapcsolas utan soha tobbe nem nyilna azzal.
+let _dnrModeMemo = DNR_MODE_DEFAULT;
+
 function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, go, players, netReady = true }) {
   const [info, setInfo] = useState(null);
   const [sheet, setSheet] = useState(false);
@@ -45799,10 +45809,10 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   // kedvenc-soros (FavTile) alakban. Kolcsonosen kizaro a Szuressel — lasd a
   // `toggleDnrMode` / `toggleFilter` parost.
   // ⚠️ ALAPBOL BE (v10.348): a jatekvalaszto a DNR felulettel nyit, a teljes
-  // kinalathoz a gombot KI kell kapcsolni. A mod a kepernyo allapota, nem
-  // mentett beallitas — a `GamesScreen` kilepeskor lebomlik, tehat visszaterve
-  // megint a DNR felulet jon fel.
-  const [dnrMode, setDnrMode] = useState(true);
+  // kinalathoz a gombot KI kell kapcsolni. A kiindulo ertek a MODUL-SZINTU
+  // emlekezetbol jon (v10.352), kulonben a Jatekmenetrol visszalepve — ahol a
+  // kepernyo lebomlik es ujra mountolodik — visszakapcsolna magat.
+  const [dnrMode, setDnrMode] = useState(_dnrModeMemo);
 
   const allOn = selectedGames.length === GAMES.length;
   const anySelected = selectedGames.length > 0;
@@ -45863,8 +45873,8 @@ function GamesScreen({ selectedGames, setSelectedGames, gameMeta, setGameMeta, g
   // kategorian belul szur es kombinalhato a nehezseggel; a DNR gomb reflektor,
   // ami mindent elrejt. Egyszerre bekapcsolva fel-allapot lenne: szurt lista
   // DNR fejleccel, vagy forditva.
-  const toggleFilter = f => { setDnrMode(false); setActiveFilters(fs => fs.includes(f) ? fs.filter(x=>x!==f) : [...fs, f]); };
-  const toggleDnrMode = () => { const next = !dnrMode; setDnrMode(next); if (next) setActiveFilters([]); };
+  const toggleFilter = f => { _dnrModeMemo = false; setDnrMode(false); setActiveFilters(fs => fs.includes(f) ? fs.filter(x=>x!==f) : [...fs, f]); };
+  const toggleDnrMode = () => { const next = !dnrMode; _dnrModeMemo = next; setDnrMode(next); if (next) setActiveFilters([]); };
 
   const SOLO_IDS = new Set(['busz','beerpong','powerhour','ovfj','farkasos','blackjack']);
 

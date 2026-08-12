@@ -1711,3 +1711,34 @@ Két dolog, ami a rajzban számít:
 ellenőrizte, mostantól az `img:`-eket is. Egy hiányzó vagy elgépelt ikon-kulcs
 ugyanis **némán** az emoji-tartalékra esik vissza — ránézésre szándékos
 döntésnek látszik, nem hibának. Mind a 46 játék mindkét fájlja megvan.
+
+## A DNR mód túléli a képernyő-váltást (v10.352)
+Bejelentés: „ha Játékmenetről visszalépek, akkor mindig a DNR felület jön be,
+nem pedig az, ahol kiválasztottam a játékot."
+
+**⚠️ Az ok a `BottleApp` feltételes renderelése:**
+`{screen==='games' && <GamesScreen …/>}` — a Játékmenetre lépve a képernyő
+**lebomlik**, visszatérve új példány keletkezik, a `dnrMode` pedig az
+alapértelmezésével indul (v10.348 óta `true`). Vagyis a felhasználó kikapcsolta
+a módot, kiválasztotta a játékokat, és a visszalépés csendben visszakapcsolta.
+
+A javítás **modul-szintű emlékezet** (`_dnrModeMemo`), és ez a választás
+szándékos:
+- **modul-szintű** — friss indításnál marad a DNR alapértelmezés (v10.348), a
+  parti közbeni oda-vissza lépés viszont megőrzi, amit a felhasználó beállított;
+- **NEM `localStorage`** — ott tárolva egyetlen kikapcsolás után soha többé nem
+  nyílna a DNR felülettel, ami visszacsinálná a v10.348-at.
+
+A kiinduló érték egy helyen áll (`DNR_MODE_DEFAULT`), és a memo is ebből indul —
+két külön `true` könnyen elcsúszna egymástól. **A `toggleFilter` is írja** a
+memót: a szűrő ugyanúgy kikapcsolja a módot, tehát a visszalépésnek azt is
+követnie kell.
+
+Teszt: `dnr_button_test.js` 7. blokk. Három fogódzó:
+- a harness **ugyanúgy vált**, ahogy a `BottleApp` (feltételes renderelés,
+  tehát tényleg lebomlik) — egy `display:none` nem reprodukálná a hibát;
+- **7b. kontroll**: friss oldalbetöltésnél megint a DNR felület nyílik —
+  enélkül egy „soha többé ne nyisson DNR-rel" regresszió is átmenne;
+- **7c.**: forrás-szinten ellenőrzi, hogy a `BottleApp` tényleg feltételesen
+  rendereli a `GamesScreen`-t — ha ez megváltozna, a harness mást mérne, mint
+  a valóság.
