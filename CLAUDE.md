@@ -1440,3 +1440,35 @@ kioszt három kortyot — és semmi visszajelzést nem kap róla. A kapu ezért
 mostantól `!trackScores && !res.penalty`: a **játék**-eredményeket nyeli el, a
 **büntetést** átengedi, mert az ténylegesen megtörtént és ténylegesen ír a
 játékosokra.
+
+## Új játék: „Ne ugyanazt!" (v10.342)
+Páros, de **kooperatív**: ketten közösen játszanak. Három körben egyszerre
+mondanak egy-egy szót a témára, úgy, hogy NE ugyanazt. Egyszer sem egyeztek →
+**mindketten pont**; ahányszor egyeztek, **annyi kortyot isznak** (0–3).
+
+**⚠️ A JÁTÉK A TÉMÁK SZŰKSÉGÉN ÁLL VAGY BUKIK.** „Állatok"-nál két ember
+gyakorlatilag soha nem mond ugyanazt: mindig pont járna, nincs tét. Ezért mind a
+**40 téma szűk** — 3–8 kézenfekvő válasz („Piros gyümölcs", „Sakkfigura",
+„Úszásnem"). Ilyenkor a játék arról szól, hogy **szándékosan a kevésbé
+kézenfekvőt mondod**, mert a másik is a kézenfekvőre gondol. **Új téma
+felvételénél EZ a szabály**, nem az, hogy „legyen érdekes" — a
+`neugyanazt_test` 4. blokkja ezért kifejezetten tág gyűjtőfogalmakra szűr.
+
+**⚠️ Az egyidejűség a játék másik fele.** Ha az egyik hangosan kimondja előbb, a
+másik triviálisan kikerüli — nincs játék. Ezért 3-2-1 visszaszámlálás van, és a
+host utána jelzi, hogy egyeztek-e. Ez ugyanaz, ahogy élőben játsszák; a
+telefonos, rejtett beadás később jöhet rá.
+
+Egy meccs **három KÜLÖNBÖZŐ** témát kap (`gameIdx * 3 + i`), tehát egy hosszabb
+estén sem jön vissza ugyanaz a hármas.
+
+**Amit új játéknál könnyű elfelejteni** (mindkettőbe belefutottam):
+- a `PlayScreen` a Páros játékokhoz **kézi „Vesztettem / Nyertem!" gombokat**
+  rak ki, hacsak az azonosító nincs a kizárás-listán. Aki maga könyvel, oda
+  kell írja magát, különben két, egymásnak ellentmondó út vezet a ponthoz;
+- a `gameorder_test` **megköveteli a `banner:` mezőt** és a fájl létezését. A
+  `symbol` mezőt viszont a kód **sehol nem olvassa** (mind a 46 bejegyzésen
+  halott adat), az `img`-nek pedig emoji-tartaléka van — új játékhoz elég a
+  banner.
+
+Teszt: `node tests/neugyanazt_test.js`.
