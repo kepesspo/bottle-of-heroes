@@ -29,14 +29,20 @@ const PL = [{ id:'a', name:'Sere',  color:'#E07A5F', points:0, drinks:0 },
             { id:'b', name:'Kecsi', color:'#4FC2A0', points:0, drinks:0 },
             { id:'c', name:'Vivi',  color:'#A78BFA', points:0, drinks:0 }];
 
-async function open(b, effect) {
+// `fixRandom`: a Kviz osszekeveri a valaszokat, ezert kivulrol nem tudhato,
+// melyik betu a helyes. `Math.random = 0.5` mellett a forrasbeli `a[0]` marad az
+// „A" opcio — ugyanaz a fogodzo, amit a `quiz_test` hasznal. Csak a kviz-blokkban
+// kapcsoljuk be: a wildcard sorsolasa is `Math.random`-ot hasznal, es a tobbi
+// blokkban nem akarjuk befolyasolni.
+async function open(b, effect, fixRandom) {
   const p = await b.newPage({ viewport: { width: 402, height: 1000 } });
   p.__errs = [];
   p.on('pageerror', e => { if (!/ServiceWorker/.test(e.message)) p.__errs.push(e.message); });
   await p.route('**://**', r => r.request().url().startsWith('file://') ? r.continue() : r.abort());
   await p.addInitScript(stub);
   await p.addInitScript(`try{localStorage.setItem('boh_onboarded','1');localStorage.setItem('boh_splash','0');}catch(e){}
-    ${effect ? `window.__wildcardTestEffect=${JSON.stringify(effect)}; window.__wildcardTestDelay=400;` : ''}`);
+    ${effect ? `window.__wildcardTestEffect=${JSON.stringify(effect)}; window.__wildcardTestDelay=400;` : ''}
+    ${fixRandom ? 'Math.random = function(){ return 0.5; };' : ''}`);
   await p.goto('file://' + ROOT + '/index.html', { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(3200);
   return p;
@@ -140,6 +146,38 @@ const driveMitval = async (p) => {
 
 // A Kovi gomb commitalja a kort (pendingCommit) — a konyveles ELOTTE meg nincs
 // a players tombben.
+// KVIZ: helyes valasz -> „Bankolom" -> egy korty kiosztasa -> „Mentés".
+// Ez a `confirmGift` ag — VALODI konyveles (`onAdvance(drinkMap, {kihivo:1})`).
+// ⚠️ A kviz elso valasza a forrasban az a[0], ezert azt a betut nyomjuk.
+const driveQuiz = async (p) => {
+  // A `QUIZ_DB` a komponens TORZSEBEN ul, tehat kivulrol nem lathato — a helyes
+  // valasz viszont mindig az „A" opcio (a forrasban `a[0]`), ugyanaz a fogodzo,
+  // amit a `quiz_test` is hasznal.
+  const hit = await p.evaluate(() => {
+    const btn = [...document.querySelectorAll('#__p button')]
+      .find(x => /^A\n/.test(x.innerText || ''));
+    if (!btn) return null;
+    btn.click(); return (btn.innerText || '').replace('\n', ' ');
+  });
+  if (!hit) return false;
+  await p.waitForTimeout(900);
+  const bank = await p.evaluate(() => {
+    const b = [...document.querySelectorAll('#__p button')].find(x => /Bankolom/.test(x.innerText || ''));
+    if (!b) return false; b.click(); return true;
+  });
+  if (!bank) return false;
+  await p.waitForTimeout(900);
+  await p.evaluate(() => {
+    const plus = [...document.querySelectorAll('#__p button[aria-label="Egy korttyal több"]')];
+    if (plus[0]) plus[0].click();
+  });
+  await p.waitForTimeout(400);
+  return p.evaluate(() => {
+    const b = [...document.querySelectorAll('#__p button')].find(x => /Mentés/.test(x.innerText || ''));
+    if (!b) return false; b.click(); return true;
+  });
+};
+
 const commit = async (p) => {
   await p.evaluate(() => {
     const x = [...document.querySelectorAll('#__p button')].find(y => /Kövi/.test(y.textContent || ''));
@@ -217,6 +255,44 @@ function agree(sides, before, after, label) {
   const after3 = await players(p);
   console.log('  banner:', JSON.stringify(s3), ' könyvelés:', JSON.stringify(after3));
   agree(s3, before3, after3, 'mitval');
+  ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+  await p.close();
+
+  // ── 4. KVIZ ajandek-kiosztas, FORDITOTT kor (v10.354) ──
+  // ⚠️ Ez volt a masik legacy alak VALODI konyvelessel: `confirmGift` kortyot
+  // osztott ES pontot adott, a bannert viszont `playerName:null`-lal kuldte —
+  // a konyveles megfordult, a banner nem.
+  console.log('\n===== 4. KVIZ AJANDEK — FORDITOTT KOR =====');
+  p = await open(b, 'reverse', true);
+  await mount(p, 'quiz', true);
+  await p.waitForTimeout(1400);
+  ok(await waitWc(p), 'a „Fordított kör" wildcard aktív');
+  const before4 = await players(p);
+  ok(await driveQuiz(p), 'a kör lezárult (bankolás + korty kiosztása)');
+  await p.waitForTimeout(400);
+  const s4 = await bannerSides(p, names);
+  await commit(p);
+  const after4 = await players(p);
+  console.log('  banner:', JSON.stringify(s4), ' könyvelés:', JSON.stringify(after4));
+  agree(s4, before4, after4, 'quiz');
+  ok(s4.win.length > 0 && s4.lose.length > 0,
+     'a banner mindkét oldalt megnevezi (nem üres legacy alak)', JSON.stringify(s4));
+  ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+  await p.close();
+
+  // ── 5. KVIZ ajandek wildcard NELKUL (kontroll) ──
+  console.log('\n===== 5. KVIZ AJANDEK — WILDCARD NELKUL (kontroll) =====');
+  p = await open(b, null, true);
+  await mount(p, 'quiz', false);
+  await p.waitForTimeout(1400);
+  const before5 = await players(p);
+  ok(await driveQuiz(p), 'a kör lezárult');
+  await p.waitForTimeout(400);
+  const s5 = await bannerSides(p, names);
+  await commit(p);
+  const after5 = await players(p);
+  console.log('  banner:', JSON.stringify(s5), ' könyvelés:', JSON.stringify(after5));
+  agree(s5, before5, after5, 'quiz/kontroll');
   ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
   await p.close();
 

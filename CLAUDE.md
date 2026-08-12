@@ -1774,3 +1774,40 @@ A sor-fogódzó: ⚠️ a sor `innerText`-je az avatar kezdőbetűjével indul
 („S\nSere"), tehát a `startsWith(név)` a belső név-divet találja meg, nem a
 kattintható sort — a teszt ezért `display:flex` + 14 px sarok + *tartalmazza* a
 nevet alapján keres.
+
+## ⚠️ „Fordított kör": nem volt banner-hiba a Kvízben — halott kód volt (v10.354)
+Feltételeztem, hogy a Kvíz `confirmGift`-je a v10.333-as családba tartozik:
+valódi könyvelést küld, a bannert viszont LEGACY alakban (`playerName:null`),
+tehát fordított körben a könyvelés megfordul, a banner nem.
+
+**A mérés megcáfolta:** a `wc_reverse_test` új Kvíz-blokkja a RÉGI kódon is
+átment. Az ok: a játékban **két** ajándék-megerősítő függvény volt, és a
+felhasználó a másikat éri el.
+- `confirmGifts` (**többes szám**) — ez van gombra kötve, és **már** a teljes
+  `winners`/`losers` alakot küldi (v10.318 óta);
+- `confirmGift` (egyes szám) — **semmi nem hívta**. Sőt az `openGiftPool` sem,
+  tehát a `giftPool` mindig `null` volt: az egész fürt elérhetetlen volt.
+
+Ezért nem javítás lett belőle, hanem **kivezetés** (mint a v10.340): a
+`giftPool` állapot + `openGiftPool` + `giveOneDrink` + `takeOneDrink` +
+`confirmGift`. A viselkedés nem változott — nem volt elérhető.
+
+**⚠️ Egy hívó bennmaradt a reset-effektben** (`setGiftPool(null)`), és ezt a
+MEGLÉVŐ `quiz_test` kapta el: a játék `ErrorBoundary`-ra futott
+(„setGiftPool is not defined"). Érdemes tudni, hogy ez **nem látszott „JS
+hibaként"** — a határoló elnyelte, tehát a `pageerror`-figyelő néma maradt, és
+csak a teszt saját állításai buktak el.
+
+### A tíz legacy hívási hely — mérve
+A forrásban tíz `onResult({… playerName:null …})` van. **Nyolc valódi no-op**
+(„Mindenki hibátlan!", „Döntetlen!", „Senki nem rontott!"…): ott üres a
+könyvelés, tehát nincs mit megfordítani, és a nem-üres testvérük már az új
+alakot küldi. A kilencedik a most kivezetett halott kód.
+
+**A tizedik az Ország-Város, és az MÁS eset** — lásd lent.
+
+A `wc_reverse_test` 4–5. blokkja marad: az a LIVE ágat (`confirmGifts`) méri,
+fordított körben és wildcard nélkül is, és a kettő pontos tükre egymásnak.
+A Kvíz összekeveri a válaszokat, ezért a blokk `Math.random = 0.5`-tel indul
+(a forrásbeli `a[0]` így marad az „A" opció) — **csak** ebben a két blokkban,
+mert a wildcard sorsolása is `Math.random`-ot használ.

@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.353';
+const APP_VERSION = 'v10.354';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -62747,7 +62747,6 @@ function QuizGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHide
   const [correct, setCorrect] = React.useState(false);
   const [distributeTarget, setDistributeTarget] = React.useState(null);
   const [gifts, setGifts] = React.useState({});
-  const [giftPool, setGiftPool] = React.useState(null); // {pool, assigned:{}}
 
   const currentQ = allQs[qIdx % allQs.length];
 
@@ -62758,7 +62757,7 @@ function QuizGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHide
     setChosen(null); setCorrect(false); setPhase('question');
   }, [qIdx, gameIdx]);
 
-  React.useEffect(() => { setStreak(0); setQIdx(0); setGiftPool(null); setGifts({}); setDistributeTarget(null); }, [gameIdx]);
+  React.useEffect(() => { setStreak(0); setQIdx(0); setGifts({}); setDistributeTarget(null); }, [gameIdx]);
 
 
 
@@ -62800,31 +62799,12 @@ function QuizGame({ gameIdx, challenger, players, onAdvance, onResult, onSetHide
     setQIdx(i => i + 1);
   };
 
-  const openGiftPool = () => {
-    const others = players.filter(p => p.id !== challenger?.id);
-    const assigned = {};
-    others.forEach(p => { assigned[p.id] = 0; });
-    setGiftPool({ pool: kortyok, assigned });
-  };
-
-  const giveOneDrink = (pid) => {
-    setGiftPool(g => g.pool <= 0 ? g : { pool: g.pool-1, assigned: {...g.assigned, [pid]: (g.assigned[pid]||0)+1} });
-  };
-  const takeOneDrink = (pid) => {
-    setGiftPool(g => (g.assigned[pid]||0) <= 0 ? g : { pool: g.pool+1, assigned: {...g.assigned, [pid]: g.assigned[pid]-1} });
-  };
-  const confirmGift = () => {
-    if (!giftPool) return;
-    const drinkMap = {};
-    Object.entries(giftPool.assigned).forEach(([pid,n]) => { if(n>0) drinkMap[pid]=n; });
-    if (onAdvance) onAdvance(drinkMap, { [challenger?.id]: 1 });
-    const names = Object.entries(giftPool.assigned)
-      .filter(([,n])=>n>0)
-      .map(([pid,n]) => { const p=players.find(x=>x.id===pid); return `${p?.name||'?'} iszik ${n} kortyt`; });
-    if (onResult) onResult({ correct: false, playerName: null, drinks: 0, subtitle: names.join(' · ') || 'Kiosztva!' });
-    setGiftPool(null);
-    setPhase('done');
-  };
+  // A regi ajandek-kioszto (`giftPool` + `openGiftPool` + `giveOneDrink` +
+  // `takeOneDrink` + `confirmGift`) KIKERULT (v10.354): az `openGiftPool`-t
+  // semmi nem hivta, tehat a `giftPool` mindig `null` volt, es vele az egesz
+  // furt elerhetetlen. A jatekban hasznalt kioszto a `confirmGifts` (tobbes
+  // szam) lentebb — az a KOZOS `PlayerDrinkRow`-ra epul (v10.315), es a teljes
+  // `winners`/`losers` alakot kuldi (v10.318).
 
   const distribute = (pid) => {
     if (onAdvance) onAdvance({[pid]: kortyok}, { [challenger?.id]: 1 });
