@@ -1341,3 +1341,30 @@ kódon a szürke gombra kattintva **elindult a parti**.
 Teszt: `node tests/netready_test.js`. A 3. blokk fogódzója egy **jelölő az
 ablakon**: ha az oldal újratöltődik, a jelölő eltűnik. Van hozzá kontroll-ág is
 — foglaltság nélkül tényleg újratölt, tehát a mérés nem üresen fut át.
+
+## Pontgyűjtés nélkül: nincs banner, Állás fül és Büntetés (v10.338)
+A „Pontgyűjtés" mód (`gameMeta.modes` → `'points'`) kikapcsolva a `trackScores`
+hamis, és a **könyvelés meg sem történik**: az `advance` / `advancePaired` /
+`advanceTeam` / `advanceLoverseny` mind változatlanul hagyja a játékosokat —
+se pont, se korty nem kerül fel.
+
+Három felület viszont úgy viselkedett, mintha kerülne:
+- a **result banner** „+1 pont"-ot és korty-számot hirdetett;
+- a **MENÜ → Állás** fül végig nullákat mutatott;
+- **⚠️ a Büntetés gomb TÉNYLEG írt a játékosokra.** A `givePenalty` nem nézi a
+  `trackScores`-t, tehát pontgyűjtés nélkül a büntetés volt az **egyetlen**, ami
+  számolt. Ez nem csak zavaró volt: csendben adatot keletkeztetett egy olyan
+  partiban, ahol a játékok maguk semmit nem könyvelnek.
+
+A banner kapuja az **`onResult` elején** van, nem lentebb: így a hang, a konfetti
+és a nézőknek küldött `gameEvent` is elmarad. A wildcard-sáv **„Szabályszegő?"**
+gombja ugyanazt a `PenaltyModal`-t nyitja, ezért az is kimarad.
+
+A játékos-hozzáadás után a menü az Állás fülre ugrott — pontgyűjtés nélkül az
+nem létezik, ott a Szerkesztés a célállomás.
+
+Teszt: `node tests/nopoints_test.js`. Két dolog nélkül üresen futna át:
+- a **kontroll-blokk** (pontgyűjtéssel mindhárom felület ott van) — enélkül egy
+  „mindent elrejtő" regresszió is átmenne;
+- a **hajtó bizonyítása**: a kontrollban a bannernek FEL KELL jönnie, különben a
+  „nincs banner" akkor is igaz lenne, ha a játék el sem indult volna.

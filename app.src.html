@@ -35212,7 +35212,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.337';
+const APP_VERSION = 'v10.338';
 
 // ── App-wide design ('classic' | 'playful') — global store fed by Firebase config/homeDesign ──
 let _appDesign = 'classic'; // Egy dizájn — a playful mód megszűnt, minden felület a közös stílust használja
@@ -63365,6 +63365,11 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
 
   const onResult = (res) => {
     if (!res) { setGameResult(null); return; }
+    // Pontgyujtes nelkul nincs mit hirdetni: a `trackScores` hamis, tehat a
+    // konyveles meg sem tortenik. A banner "+1 pont"-ot es korty-szamot igerne,
+    // amibol semmi nem kerul fel. A kapu ITT van, es nem lentebb: igy a hang, a
+    // konfetti es a nezoknek kuldott `gameEvent` is elmarad.
+    if (!trackScores) { setGameResult(null); return; }
     let r = res;
     // Fordított kör: nyertes ↔ vesztes csere a bannerben (a nyertes iszik, a vesztes pontoz).
     // BUNTETESRE NEM VONATKOZIK: ott a szabalyszego nyertesnek latszana. Lasd patch_10_271.py
@@ -63666,9 +63671,13 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           <div style={{ display:'flex', alignItems:'center', gap:10, background: T.surface, border:'none', borderLeft: `4px solid ${T.yellow}`, borderRadius:14, padding:'7px 12px', boxShadow: '0 3px 12px rgba(20,30,50,0.10)', animation:'popIn .3s cubic-bezier(.2,.9,.3,1.2)' }}>
             <span style={{ fontSize:22, flexShrink:0, lineHeight:1 }}>{activeWildcard.emoji}</span>
             <div onClick={() => setRoundPopup({ round: activeWildcard.round, wildcard: activeWildcard, showRound: false, leaving: false })} style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:12, lineHeight:1.3, color:T.ink, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden', cursor:'pointer' }}>{activeWildcard.text}</div>
+            {/* Ugyanazt a `PenaltyModal`-t nyitja, mint a MENU -> Buntetes,
+                tehat pontgyujtes nelkul ugyanugy kimarad. */}
+            {trackScores && (
             <button onClick={() => setWcPunishOpen(true)} style={{ flexShrink:0, border:'none', borderRadius:10, background: T.ink, color: inkIsLight() ? (T.yellowText||T.yellow) : T.yellow, fontFamily:T.font, fontWeight:900, fontSize:11.5, padding: '8px 10px', cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
               <BohIcon name="beer" size={13} />Szabályszegő?
             </button>
+            )}
           </div>
         </div>
       )}
@@ -64313,7 +64322,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
             {/* Sticky tab bar */}
             <div style={{ position:'sticky', top:0, zIndex:2, background:T.surface, padding:'0 14px 10px' }}>
               <div style={{ display:'flex', background:T.bgSoft, borderRadius:14, padding:5, gap:4 }}>
-                {[['állás',t('score')],['szerkesztés','Szerkesztés'],['vezérlés',t('controls')]].map(([tab,label]) => (
+                {[...(trackScores ? [['állás',t('score')]] : []), ['szerkesztés','Szerkesztés'], ['vezérlés',t('controls')]].map(([tab,label]) => (
                   <button key={tab} onClick={() => setMenuTab(tab)} style={{
                     flex:1, padding:'11px 0', border:'none', borderRadius:10, cursor:'pointer',
                     fontFamily:T.font, fontWeight:800, fontSize:14,
@@ -64329,12 +64338,14 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
             {/* Tab contents — height = vezérlés content, állás scrolls inside */}
             <div style={{ position:'relative', padding:'0 14px 8px' }}>
               {/* ÁLLÁS — absolute, scrollable, same height as vezérlés */}
+              {trackScores && (
               <div style={{ visibility: menuTab==='állás' ? 'visible' : 'hidden', position:'absolute', top:0, left:14, right:14, bottom:0, overflowY:'auto' }}>
                 <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                   {mSorted.map((p,i) => <LeaderRow key={p.id||i} p={p} rank={i+1} maxScore={mMaxScore} showScores={true} overLimit={isOverLimit(p)} />)}
                   <div style={{ height:8 }} />
                 </div>
               </div>
+              )}
 
               {/* SORREND */}
               {menuTab==='szerkesztés' && (
@@ -64402,12 +64413,18 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                     fogadás, bármi) — az itt kiosztott korty ugyanoda kerül, mint a
                     játékban szerzett. */}
                 <div style={{ display:'flex', gap:8 }}>
+                  {/* Pontgyujtes nelkul a buntetes lenne az EGYETLEN, ami tenyleg
+                      felkerul a jatekosokra (a `givePenalty` nem nezi a
+                      `trackScores`-t) - miközben a jatekok maguk semmit nem
+                      konyvelnek. Ezert itt nincs gomb. */}
+                  {trackScores && (
                   <button onClick={() => { setShowMenu(false); setPenaltyOpen(true); }}
                     style={{ flex:1, height:76, border:'none', borderRadius:18, background:'#7C5CC41f', color:'#7C5CC4',
                       fontFamily:T.font, fontWeight:800, fontSize:12, cursor:'pointer',
                       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6 }}>
                     <BohIcon name="beer" size={21} /><span>Büntetés</span>
                   </button>
+                  )}
                   <button onClick={() => { undoLast(); setShowMenu(false); }} disabled={!undoRef.current}
                     style={{ flex:1, height:76, border:'none', borderRadius:18,
                       background: undoRef.current ? T.bgSoft : T.surfaceMuted,
@@ -64457,7 +64474,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                             if (e.key==='Enter' && menuAddName.trim()) {
                               const newP = { id:Date.now().toString(), name:menuAddName.trim(), drinks:0, points:0, color:PLAYER_COLORS[players.length%PLAYER_COLORS.length] };
                               setPlayers(prev => { const next=[...prev,newP]; if (roomCode && typeof syncRoom==='function') syncRoom(roomCode,{players:next}); return next; });
-                              setPendingCommit(null); setMenuAddName(''); setMenuAddOpen(false); setMenuTab('állás');
+                              setPendingCommit(null); setMenuAddName(''); setMenuAddOpen(false); setMenuTab(trackScores ? 'állás' : 'szerkesztés');
                             }
                           }}
                           placeholder="Játékos neve…"
@@ -64467,7 +64484,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                           <button onClick={() => {
                             const newP = { id:Date.now().toString(), name:menuAddName.trim(), drinks:0, points:0, color:PLAYER_COLORS[players.length%PLAYER_COLORS.length] };
                             setPlayers(prev => { const next=[...prev,newP]; if (roomCode && typeof syncRoom==='function') syncRoom(roomCode,{players:next}); return next; });
-                            setPendingCommit(null); setMenuAddName(''); setMenuAddOpen(false); setMenuTab('állás');
+                            setPendingCommit(null); setMenuAddName(''); setMenuAddOpen(false); setMenuTab(trackScores ? 'állás' : 'szerkesztés');
                           }} style={{ flexShrink:0, padding:'0 18px', height:46, borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:700, fontSize:14, cursor:'pointer' }}>Kész</button>
                         ) : (
                           <button onClick={() => { setMenuAddOpen(false); setMenuAddName(''); }} style={{ flexShrink:0, width:46, height:46, borderRadius:14, border:'none', background:T.bgSoft, color:T.inkSoft, fontFamily:T.font, fontWeight:700, fontSize:18, display:'grid', placeItems:'center', cursor:'pointer' }}>✕</button>
@@ -64481,7 +64498,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
                               const _bsAv = _bsAid ? CHAR_AVATARS.find(a=>a.id===_bsAid) : null;
                               const newP = { id:Date.now().toString(), name:pr.nickname||pr.name, drinks:0, points:0, color:pr.color||PLAYER_COLORS[players.length%PLAYER_COLORS.length], profileId:pr.id, avatarId:_bsAid, img:pr.img||(_bsAv?_bsAv.img:null) };
                               setPlayers(prev => { const next=[...prev,newP]; if (roomCode && typeof syncRoom==='function') syncRoom(roomCode,{players:next}); return next; });
-                              setPendingCommit(null); setMenuAddOpen(false); setMenuTab('állás');
+                              setPendingCommit(null); setMenuAddOpen(false); setMenuTab(trackScores ? 'állás' : 'szerkesztés');
                             }} style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px 7px 7px', borderRadius:20, border:'none', background:T.bgSoft, cursor:'pointer', flexShrink:0 }}>
                               <div style={{ width:26, height:26, borderRadius:'50%', background:pr.color||T.mint, display:'grid', placeItems:'center', overflow:'hidden', flexShrink:0 }}>
                                 {(() => { const _aid = pr.avatarId || PRESET_PLAYERS.find(p=>p.id===pr.id)?.avatarId; const _im = pr.img || (_aid ? CHAR_AVATARS.find(a=>a.id===_aid)?.img : null); return _im ? <img src={_im} style={{ width:26, height:26, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:'#fff' }}>{(pr.name||'?').charAt(0).toUpperCase()}</span>; })()}
