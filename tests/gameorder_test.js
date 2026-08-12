@@ -157,14 +157,29 @@ const soloNames = (p) => p.evaluate(() => {
        noBanner.length ? 'hiányzik: ' + noBanner.join(', ') : rows.length + ' játék');
 
     // a hivatkozott fajlok tenyleg megvannak — egy elgepelt kulcs csendben
-    // ugyanoda vezetne, mint a hianyzo banner
-    const keys = [...body.matchAll(/banner:IMGS\['([^']+)'\]/g)].map(m => m[1]);
-    const missing = [...new Set(keys)].filter(k => {
+    // ugyanoda vezetne, mint a hianyzo banner.
+    // ⚠️ Az `img` (jatek-ikon) UGYANIGY: ha a fajl hianyzik vagy a kulcs
+    // elgepelt, a kartya az EMOJI-tartalekot rajzolja — az pedig ranezesre
+    // szandekos dontesnek latszik, nem hibanak.
+    const fileOf = (k) => {
       const m = src.match(new RegExp("'" + k.replace('.', '\\.') + "':\\s*'([^']+)'"));
-      return !m || !fs.existsSync(path.join(root, m[1]));
-    });
-    ok('minden hivatkozott banner-fájl létezik', missing.length === 0,
-       missing.length ? 'nincs meg: ' + missing.join(', ') : keys.length + ' hivatkozás');
+      return m ? m[1] : null;
+    };
+    for (const [field, label] of [['banner', 'banner'], ['img', 'ikon']]) {
+      const keys = [...body.matchAll(new RegExp(field + ":IMGS\\['([^']+)'\\]", 'g'))].map(m => m[1]);
+      const missing = [...new Set(keys)].filter(k => {
+        const f = fileOf(k);
+        return !f || !fs.existsSync(path.join(root, f));
+      });
+      ok('minden hivatkozott ' + label + '-fájl létezik', missing.length === 0,
+         missing.length ? 'nincs meg: ' + missing.join(', ') : keys.length + ' hivatkozás');
+    }
+
+    // A „Ne ugyanazt!" ikonja a BANNER rajza — nem az emoji-tartalek (v10.351).
+    const nu = rows.find(x => /id:'neugyanazt'/.test(x)) || '';
+    ok('a „Ne ugyanazt!" saját ikont visz (nem emoji-tartalék)',
+       /img:IMGS\['neugyanazt_icon\.png'\]/.test(nu),
+       (nu.match(/img:[^,]+/) || ['nincs img mező'])[0]);
   }
 
   await b.close();

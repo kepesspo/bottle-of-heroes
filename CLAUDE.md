@@ -1688,3 +1688,26 @@ Ezért a teszt kontrollja nem lehet másik játék: **futásidőben visszaadja**
 
 Teszt: `node tests/otdolog_licit_test.js` (7 blokk: időablak, licit-választó,
 nincs plafon, teljesített/bukott licit, óra + jelölő-rács, nincs kézi gomb).
+
+## „Ne ugyanazt!": saját ikon a banner rajzából (v10.351)
+A játék `img` mező nélkül volt felvéve, tehát a kártyán az **emoji-tartalék**
+(🙊) látszott — más rajz, mint a banner két buborékja. Innentől a két felület
+ugyanazt a képet viszi.
+
+**⚠️ Az ikon nem a bannerből van kivágva.** Ott a rajz mindössze **127×93 px**;
+egy 512-es ikonná nagyítva (4× fölött) elmosódna, miközben a többi 45 játék
+ikonja éles 512-es rajz. A `make_neugyanazt_icon.py` **újrarajzolja** ugyanazokkal
+a **mért** arányokkal és színekkel (`#1A2A4A` / `#F08060`, 6 px vonal a banner
+léptékében), ikon-felbontáson — így a két rajz nem tud elcsúszni egymástól.
+A generátor a repóban marad: ha a banner változik, ebből kell újrafuttatni.
+
+Két dolog, ami a rajzban számít:
+- **a korall buborék a sötét FÖLÉ kerül** (a fehér töltése eltakarja a sötét
+  buborék jobb alsó sarkát) — fordított sorrenddel más kép jön ki;
+- **a farkak tömörek**, nem körvonalasak, és a buborék *előtt* rajzolódnak, hogy
+  a fehér töltés levágja a felső végüket.
+
+**A `gameorder_test` asset-őre kibővült:** eddig csak a `banner:` hivatkozásokat
+ellenőrizte, mostantól az `img:`-eket is. Egy hiányzó vagy elgépelt ikon-kulcs
+ugyanis **némán** az emoji-tartalékra esik vissza — ránézésre szándékos
+döntésnek látszik, nem hibának. Mind a 46 játék mindkét fájlja megvan.
