@@ -1811,3 +1811,54 @@ fordított körben és wildcard nélkül is, és a kettő pontos tükre egymásn
 A Kvíz összekeveri a válaszokat, ezért a blokk `Math.random = 0.5`-tel indul
 (a forrásbeli `a[0]` így marad az „A" opció) — **csak** ebben a két blokkban,
 mert a wildcard sorsolása is `Math.random`-ot használ.
+
+## NEW jelölő + öt új páros játék (v10.355–)
+A jelölő a `GAMES[]` bejegyzésen az **`isNew:true`** mező — ugyanaz a minta,
+mint a `dnr:true` (v10.314). Két helyre hat, és mindkettő magától követi:
+a kártyán a **★ NEW** szalag, és a Szűrés **„Új játékok"** sora (`f === 'NEW'`).
+
+**⚠️ A szín FIX** (`NEW_PINK = '#FF4D6D'`), nem témafüggő: az „ez új" ugyanazt
+jelenti minden témában — ugyanaz a szabály, mint a DNR párosnál.
+
+**⚠️ A NEW és a DNR szalag EGY helyen áll** (a kártya alján), ezért a kettő
+kizárja egymást: `!isDnrGame(g) && isNewGame(g)`. Ha egy játék valaha mindkettő
+lenne, a DNR nyer — az márka-jelzés, a NEW csak időbeli. A
+`newgames_test` 1. blokkja külön méri, hogy nincs ilyen játék.
+
+### Az ikonok és a bannerek EGY forrásból
+Az ikon a `make_new_icons.py`-ból jön (512×512, a többi ikon stílusában), a
+**banner PEDIG AZ IKONBÓL** (`make_banners.py`) — így a kártya és a fejléc rajza
+nem tud elcsúszni egymástól. A generátor két mért tanulsága:
+- **a 20 px-es kontúr MINDKÉT oldalon eszi a szélességet**: egy 66 px-es ujjból
+  csak 26 px fehér mag marad, ami 32 px-es kártya-ikonon 1,6 px — összemosódik.
+  Ezért lett a kézen két *vastag* ujj négy vékony helyett;
+- **a farok/tail mindig ELŐSZÖR, tömören**, a buborék fehér töltése vágja le a
+  végét (ugyanaz a minta, mint a „Ne ugyanazt!" ikonnál).
+
+A `make_banners.py` a projekt saját Nunito woff2-jéből instanciál 900-as súlyt
+(`fontTools` kell hozzá). Ezzel a **„Ne ugyanazt!" bannere is újragenerálódott**
+— az volt az egyetlen, ami DejaVu Sans-szal készült, és kilógott a sorból.
+
+### Chicken (v10.355)
+Felváltva nyomtok; minden nyomás +1 kortyot rak a kalapba. Van egy **rejtett
+robbanás-pont**: aki azt a nyomást teszi, issza az EGÉSZ kalapot. Aki előbb
+passzol, a kalap **felét** issza — a pont mindkét esetben a másiké.
+
+**⚠️ A robbanás-pont a kör ELEJÉN dől el** (`boomRef`), nem nyomásonként
+sorsolunk. Nyomásonkénti sorsolással a kockázat NEM nőne a kalappal, és a
+passzolás döntése értelmét vesztené — pont az veszne el, amitől ez „push your
+luck".
+
+**Üres kalapnál nincs passz**: nulla kalappal a „passzolok" ingyen pont lenne a
+másiknak, döntés nélkül.
+
+**⚠️ A számok NYERSEN mennek ki mindkét csatornán** — az `onResult` `drinks`-ét
+és az `onAdvance` térképét is a `PlayScreen` szorozza (`diffDrinks * wcMult`).
+Ha a játék is szorozna, duplán menne fel (v10.299 Lóverseny-lecke). A
+`newgames_test` 5. blokkja ezt méri: nehéz szinten a 3-as kalap 9 — **nem 3 és
+nem 27**.
+
+Teszt: `node tests/newgames_test.js`. A banner-szám kiolvasásánál egy csapda:
+**a fejléc-korong is „KORTY"-ot ír** („1–7 KORTY"), és a DOM-ban előbb jön —
+naivan szedve a szám a tartomány felső vége lenne (mérve: 7 a 3 helyett). A
+teszt ezért kihagyja azt, ami előtt gondolatjel áll.
