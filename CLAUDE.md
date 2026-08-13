@@ -1905,3 +1905,34 @@ Nyers számokkal a szöveg mást mondana, mint amennyi felkerül.
 
 Teszt: `node tests/newgames_test.js` (13 blokk). Minden játéknál a fogódzó a
 **banner ÉS a könyvelés egyezése**, nem külön a kettő.
+
+## A közös BohTimer bekötése (v10.358)
+A `BohTimer` v10.329 óta készen állt, de sokáig **csak két helyen** ment
+(Ötdolog sáv, Busz pill). A többi játék saját gyűrűt rajzolt — mind ugyanazt
+csinálta, csak másképp nézett ki, és **76–100 px magasságot evett** a játék
+tartalma elől. Ez a három maradt, és mind a három átállt:
+
+| játék | régi | új |
+|---|---|---|
+| Csak Egy Szó | 100 px gyűrű | 30 px sáv |
+| Ritmus Játék | 76 px gyűrű a fejléc-sorban | 30 px sáv a sor ALATT |
+| Tabu Szó | 84 px gyűrű + „másodperc" felirat | 30 px sáv |
+
+(A negyedik, a Finger It gyűrűje az Ujjösszeg-átírással már eltűnt — v10.356.)
+
+**⚠️ A PlayScreen fejléc-gyűrűje NEM időzítő**, hanem a KÖR-számláló
+(`strokeDasharray={circOuter}`) — ahhoz nem nyúlunk, és a `#__p [role="timer"]`
+szelektor nem is találja meg.
+
+**⚠️ A Ritmusnál a gyűrű egy HÁROM ELEMŰ sor közepén ült** (játékos-pirula ·
+gyűrű · pont-pirula). Egy 30 px-es, teljes szélességű sáv nem fér abba a sorba,
+ezért a sor kételeművé vált, és a sáv a sor **alá** került. A `space-between`
+így is helyes: a két pirula a két szélre megy.
+
+A Tabunál a „másodperc" felirat is kikerült — a sáv maga írja ki a
+mértékegységet (`12 mp / 30 mp`).
+
+Teszt: `node tests/bohtimer_test.js` utolsó blokkja. A fogódzó nem a kinézet,
+hanem **két állítás együtt**: van `[role="timer"]` 30 px-en, ÉS a játék
+törzsében **nem maradt `stroke-dasharray`-es kör** — enélkül egy visszatett
+gyűrű a sáv mellett észrevétlen maradna.

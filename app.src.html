@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.357';
+const APP_VERSION = 'v10.358';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -62225,8 +62225,6 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
     }
   };
 
-  const pct = (timeLeft / 15) * 100;
-  const circumference = 2 * Math.PI * 44;
   const timerPhase = phase === 'guessing' || phase === 'guessing2';
 
   return (
@@ -62316,13 +62314,9 @@ function CsakEgySzoGame({ gameIdx, challenger, opponent, onAdvance, onResult }) 
       {/* Timer + always-visible Kitalálta button */}
       {timerPhase && (
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12, width:'100%' }}>
-          <svg width={100} height={100} style={{ flexShrink:0 }}>
-            <circle cx={50} cy={50} r={44} fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth={8} />
-            <circle cx={50} cy={50} r={44} fill="none" stroke={timeLeft<=5?T.coral:T.mint} strokeWidth={8}
-              strokeDasharray={circumference} strokeDashoffset={circumference*(1-pct/100)}
-              strokeLinecap="round" transform="rotate(-90 50 50)" style={{ transition:'stroke-dashoffset .9s linear' }}/>
-            <text x={50} y={55} textAnchor="middle" fontFamily={T.font} fontWeight={900} fontSize={28} fill={timeLeft<=5?T.coral:T.ink}>{timeLeft}</text>
-          </svg>
+          {/* A KOZOS visszaszamlalo (v10.329): 30 px, vizszintes. A regi 100 px-es
+              gyuru ennyivel tobbet vett el a szo es a gomb elol. */}
+          <BohTimer variant="bar" total={15} left={timeLeft} />
           <button onClick={() => commitResult(true, phase === 'guessing2')} style={{ width:'100%', padding:'16px', background:T.mint, color:'#fff', border:'none', borderRadius:16, fontFamily:T.font, fontWeight:800, fontSize:15, cursor:'pointer', boxShadow:T.shadowLift }}>
             Kitalálta! ✓ — +1 pont mindkettőnek
           </button>
@@ -67221,8 +67215,6 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
       '#F4B8A8','#A8D8C8','#F4CCA8','#C8B8E0',
       '#C8D4F0','#C8B8E0','#C8D4F0','#A8D8C8',
     ];
-    const rT = 20, circT = 2 * Math.PI * rT;
-    const timerPctT = timeLeft / DURATION;
     return (
       <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
         {/* Ki jatszik · mennyi ido van · hany pont — harom kulon elem, mert
@@ -67234,14 +67226,6 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
             <span style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink,
                            overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentPlayer?.name}</span>
           </div>
-          <svg width={76} height={76} viewBox="0 0 48 48" style={{ flexShrink:0 }}>
-            <circle cx={24} cy={24} r={rT} fill="none" stroke="rgba(20,30,50,0.1)" strokeWidth={3.5}/>
-            <circle cx={24} cy={24} r={rT} fill="none" stroke={timeLeft <= 5 ? T.coral : T.mint} strokeWidth={3.5}
-              strokeDasharray={circT} strokeDashoffset={circT * (1 - timerPctT)}
-              strokeLinecap="round" transform="rotate(-90 24 24)" style={{transition:'stroke-dashoffset 0.1s, stroke 0.3s'}}/>
-            <text x={24} y={25} textAnchor="middle" fontFamily={T.font} fontWeight={900} fontSize={15} fill={timeLeft <= 5 ? T.coral : T.ink}>{timeLeft}</text>
-            <text x={24} y={34} textAnchor="middle" fontFamily={T.font} fontWeight={800} fontSize={7} fill={T.inkSoft}>mp</text>
-          </svg>
           <div style={{ display:'flex', alignItems:'center', gap:7, background:T.surface, borderRadius:16,
                         padding:'9px 14px', boxShadow:T.shadowPill, flexShrink:0 }}>
             <BohIcon name="star" size={16} />
@@ -67251,6 +67235,10 @@ function RitmusGame({ gameIdx, players, challenger, opponent, onAdvance, onResul
             </div>
           </div>
         </div>
+        {/* ⚠️ A KOZOS visszaszamlalo a SOR ALATT all, nem benne: a 30 px-es sav
+            teljes szelessegu, es a haromelemu sorban (jatekos | ora | pont)
+            osszenyomta volna a ket pirulat. */}
+        <BohTimer variant="bar" total={DURATION} left={timeLeft} />
         {/* FIX: entire cell is a <button> for full touch area */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10, width:'100%' }}>
           {gridPositions.map((_, i) => {
@@ -68045,7 +68033,6 @@ function TabuGame({ gameIdx, challenger, opponent, onAdvance, onResult, difficul
     </div>
   );
 
-  const timerPct = timeLeft / TOTAL;
   const r = 20, circ = 2 * Math.PI * r;
 
   return (
@@ -68054,20 +68041,9 @@ function TabuGame({ gameIdx, challenger, opponent, onAdvance, onResult, difficul
           (v10.310): fixen "1 KORTY A TET"-et irt, miközben a fejlec-korong a
           nehezseggel felszorzott valos erteket mutatja (nehez szinten 3), tehat
           a ketto ellentmondott egymasnak. A tet a fejlecben van, egy helyen. */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:12 }}>
-        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0 }}>
-          <svg width={84} height={84} viewBox="0 0 54 54">
-            <circle cx={27} cy={27} r={r} fill="none" stroke={T.inkMute+'33'} strokeWidth={4}/>
-            <circle cx={27} cy={27} r={r} fill="none" stroke={timeLeft<=5?T.coral:T.blue} strokeWidth={4}
-              strokeDasharray={circ} strokeDashoffset={circ*(1-timerPct)}
-              strokeLinecap="round" transform="rotate(-90 27 27)" style={{transition:'stroke-dashoffset .1s linear'}}/>
-            <text x={27} y={33} textAnchor="middle" fontFamily={T.font} fontWeight={900} fontSize={19} fill={timeLeft<=5?T.coral:T.ink}>{phase==='done'?'⏰':timeLeft}</text>
-          </svg>
-          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.inkSoft }}>
-            {phase==='done' ? 'Idő lejárt!' : 'másodperc'}
-          </span>
-        </div>
-      </div>
+      {/* A KOZOS visszaszamlalo (v10.329). A „másodperc" felirat kikerult: a
+          sav maga irja ki a mertekegyseget („12 mp / 30 mp"). */}
+      <BohTimer variant="bar" total={TOTAL} left={phase === 'done' ? 0 : timeLeft} />
       {/* Main card */}
       <div style={{ background:'#1B2340', borderRadius:22, padding:'22px 20px 18px', width:'100%' }}>
         <div style={{ fontFamily:T.font, fontWeight:900, fontSize:44, color:'#fff', textAlign:'center', marginBottom:20, lineHeight:1.1 }}>{q.word}</div>

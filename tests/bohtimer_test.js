@@ -152,6 +152,60 @@ const mount = (p, items) => p.evaluate((its) => {
   ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
   await p.close();
 
+  // ── A BEKOTOTT JATEKOK (v10.358) ──
+  // A `BohTimer` v10.329 ota kesz volt, de sokaig csak KET helyen ment. Ez a
+  // blokk azt orzi, hogy a tobbi jatek se essen vissza sajat gyurure.
+  // ⚠️ A PlayScreen fejlec-gyuruje NEM idozito, hanem a KOR-szamlalo — azt a
+  // `#__p [role="timer"]` szelektor nem is talalja meg.
+  console.log('\n===== A BEKOTOTT JATEKOK =====');
+  for (const [gid, label] of [['csakegyszó','Csak Egy Szó'], ['ritmus','Ritmus'], ['tabu','Tabu']]) {
+    const p = await b.newPage({ viewport: { width: 402, height: 900 } });
+    const errs = []; p.on('pageerror', e => { if (!/ServiceWorker/.test(e.message)) errs.push(e.message); });
+    await p.route('**://**', r => r.request().url().startsWith('file://') ? r.continue() : r.abort());
+    await p.addInitScript(stub);
+    await p.addInitScript(`try{localStorage.setItem('boh_onboarded','1');localStorage.setItem('boh_splash','0');}catch(e){}`);
+    await p.goto('file://' + ROOT + '/index.html', { waitUntil: 'domcontentloaded' });
+    await p.waitForTimeout(3200);
+    await p.evaluate((g) => {
+      const r0 = document.getElementById('root'); if (r0) r0.style.display = 'none';
+      const root = document.createElement('div'); root.id = '__p';
+      root.style.cssText = 'position:fixed;inset:0;z-index:9;display:flex;flex-direction:column;overflow:auto';
+      document.body.appendChild(root);
+      const PL = [{ id:'a', name:'Sere', color:'#E07A5F', points:0, drinks:0 },
+                  { id:'b', name:'Luca', color:'#4FC2A0', points:0, drinks:0 },
+                  { id:'c', name:'Vivi', color:'#A78BFA', points:0, drinks:0 }];
+      function H(){ const [ps,setPs]=React.useState(PL);
+        return React.createElement(PlayScreen, { go:()=>{}, players:ps, setPlayers:setPs,
+          selectedGames:[g], roomCode:null, gameMeta:{modes:['points'],difficulty:'easy'},
+          setGameMeta:()=>{}, setScoreHistory:()=>{}, setLastGameRound:()=>{} }); }
+      ReactDOM.createRoot(root).render(React.createElement(H));
+    }, gid);
+    await p.waitForTimeout(2200);
+    for (let i = 0; i < 4; i++) {
+      if (await p.evaluate(() => !!document.querySelector('#__p [role="timer"]'))) break;
+      await p.evaluate(() => {
+        const b2 = [...document.querySelectorAll('#__p button')]
+          .find(x => /Kezd|Indít|Start|Mehet|Felfed|Megvan|Tovább|Rajta/i.test(x.textContent||''));
+        b2 && b2.click();
+      });
+      await p.waitForTimeout(1100);
+    }
+    const m = await p.evaluate(() => {
+      const t = document.querySelector('#__p [role="timer"]');
+      // a jatek TORZSEBEN nem maradhat gyuru-idozito (`stroke-dasharray`-es kor)
+      const rings = [...document.querySelectorAll('#__p svg circle')]
+        .filter(c => c.getAttribute('stroke-dasharray')).length;
+      return { has: !!t, h: t ? Math.round(t.getBoundingClientRect().height) : null,
+               w: t ? Math.round(t.getBoundingClientRect().width) : null, rings };
+    });
+    ok(m.has, label + ': a KÖZÖS BohTimer-t használja');
+    ok(m.h === 30, label + ': 30 px magas (BOH_TIMER_H)', m.h + ' px');
+    ok(m.w > 200, label + ': vízszintes, széles', m.w + ' px');
+    ok(m.rings === 0, label + ': nem maradt saját gyűrű-időzítő', m.rings);
+    ok(errs.length === 0, label + ': nincs JS hiba', errs.join(' | '));
+    await p.close();
+  }
+
   await b.close();
   console.log(fail ? '\n❌ ' + fail + ' HIBA' : '\n✅ MINDEN ELLENORZES RENDBEN');
   process.exit(fail ? 1 : 0);
