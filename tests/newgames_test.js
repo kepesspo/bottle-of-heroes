@@ -20,7 +20,7 @@ const ok = (c, l, e) => { console.log((c ? '  OK   ' : '  HIBA ') + l + (e !== u
 
 // Az ÚJ játékok köre. Ha új kerül be, ITT is át kell vezetni — különben a
 // 2. blokk elbukik, és nem csendben marad ki a szűrőből.
-const NEW_IDS = ['chicken'];
+const NEW_IDS = ['chicken', 'fingerit'];
 
 const PL = [{ id:'a', name:'Sere', color:'#E07A5F', points:0, drinks:0 },
             { id:'b', name:'Luca', color:'#4FC2A0', points:0, drinks:0 }];
@@ -235,6 +235,42 @@ const commit = async (p) => { await tap(p, /Kövi/); await p.waitForTimeout(1400
     ok(manual.length === 0, 'nincs „Vesztettem / Nyertem!" gomb', manual.join(' | ') || 'egy sem');
     ok(await p.evaluate(() => (SCENARIOS.chicken.cta || []).length) === 0,
        'mert a `cta` üres — a játék maga könyvel');
+    await p.close();
+  }
+
+  // ── 7. UJJOSSZEG (a regi Finger It) ──
+  // ⚠️ Az `id` MARAD `fingerit`: ahhoz tapad a jatek-statisztika es a
+  // jatszottsagi sorrend. Uj id-vel az eddigi szamlalo elveszne.
+  console.log('\n===== 7. UJJOSSZEG =====');
+  {
+    const p = await open(b);
+    const g = await p.evaluate(() => { const x = GAMES.find(y => y.id === 'fingerit');
+      return { name:x.name, cat:x.category, isNew:!!x.isNew }; });
+    ok(g.cat === 'Páros', 'a Finger It PÁROS játék lett', g.cat);
+    ok(g.name === 'Ujjösszeg', 'és a neve Ujjösszeg', g.name);
+    ok(g.isNew === true, 'NEW jelölővel', g.isNew);
+    ok(await p.evaluate(() => typeof FingeritGame === 'undefined'),
+       'a régi Csapat-komponens kikerült (halott kód lett volna)');
+
+    await mountGame(p, 'fingerit', 'easy');
+    await p.waitForTimeout(2000);
+    // ⚠️ Az innerText a RENDERELT szoveget adja, a fejlec pedig `uppercase` —
+    // ezert kis/nagybetu-fuggetlenul keresunk.
+    ok(/kör/i.test(await txt(p)) && /ujjat/i.test(await txt(p)), 'ott a szabály', (await txt(p)).slice(0, 90));
+    ok(/összeg/i.test(await txt(p)) && !/tévesztett/i.test(await txt(p)),
+       'és a felső felirat is az ÚJ játékról szól', (await txt(p)).slice(0, 60));
+    ok(await tap(p, /Indítás/), 'elindul a visszaszámlálás');
+    await p.waitForTimeout(3600);   // 3-2-1 + MOST
+    ok(/Ki találta el/.test(await txt(p)), 'a visszaszámlálás után jön az értékelés', (await txt(p)).slice(0, 90));
+    ok(await tap(p, /^Luca$/), 'az ellenfél talált');
+    await p.waitForTimeout(700);
+    const s7 = await bannerSides(p);
+    ok(s7.win.join() === 'Luca' && s7.lose.join() === 'Sere',
+       'aki eltalálta, az nyer — a másik iszik', JSON.stringify(s7));
+    await commit(p);
+    ok(JSON.stringify(await state(p)) === JSON.stringify([{n:'Sere',pt:0,dr:1},{n:'Luca',pt:1,dr:0}]),
+       'a könyvelés EGYEZIK a bannerrel', JSON.stringify(await state(p)));
+    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
     await p.close();
   }
 
