@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.358';
+const APP_VERSION = 'v10.359';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -36056,7 +36056,7 @@ const GAMES = [
   { id:'csakegyszó', stake:[1,1], name:'Csak Egy Szó',         difficulty:'könnyű',  category:'Páros',  emoji:'💬', symbol:IMGS['csakegyszo_symbol.png'], img:IMGS['csakegyszo_icon.png'], banner:IMGS['csakegyszo_banner.png'], color:'#10B981', desc:'Egy szót kell egyetlen szóval elmagyaráznod a párodnak 15 mp alatt. Ha kitalálja, mindketten pontot kapnak — ha nem, mindketten isznak.' },
   { id:'igazhamis', stake:[1,1], roundTime:'fast',  name:'Igaz Hamis',            difficulty:'könnyű',  category:'Egyéni', emoji:'🤔', symbol:IMGS['igazhamis_symbol.png'], img:IMGS['igazhamis_icon.png'], banner:IMGS['igazhamis_banner.png'], color:'#06B6D4', desc:'A játékban egy állítás fog megjelenni és el kell dönteni, hogy az igaz, vagy hamis. Ha úgy ítéled meg hogy az állítás igaz, akkor az idő lejárta előtt ezt közölnöd kell a többi játékossal akik ez alapján tudjuk eldönteni, hogy jól válaszoltál-e. Ha nem jó a válaszod akkor sajnos innod kell.' },
   { id:'powerhour', stake:null, name:'Power Hour',            difficulty:'nehéz',   category:'Csapat', emoji:'⚡', symbol:null, img:IMGS['powerhour_icon.png'], banner:IMGS['powerhour_banner.png'], color:'#F59E0B', dnr:true, desc:'Spotify zenék 20 másodpercenként váltanak — 60 percen át. Percenként Super Mario hangjelzés: igyál egyet. Aki túléli az igazi hős!' },
-  { id:'ovfj', stake:null, name:'Ország-Város', difficulty:'közepes', category:'Csapat', emoji:'🌍', symbol:null, img:IMGS['ovfj_icon.png'], banner:IMGS['ovfj_banner.png'], dnr:true, color:'#22C55E', desc:'Betűsorsolás, mindenki a saját telefonján tölti ki a 8 kategóriát. Aki elsőként kész, a többieknek +10 mp marad. Szavazás dönt — minden érvényes szó 1 pont.' },
+  { id:'ovfj', stake:null, name:'Ország-Város', difficulty:'közepes', category:'Csapat', emoji:'🌍', symbol:null, img:IMGS['ovfj_icon.png'], banner:IMGS['ovfj_banner.png'], dnr:true, color:'#22C55E', desc:'Betűsorsolás, mindenki a saját telefonján tölti ki a 8 kategóriát. A kör végén a pontkülönbség a korty — de legfeljebb 5 egy körben. Aki elsőként kész, a többieknek +10 mp marad. Szavazás dönt — minden érvényes szó 1 pont.' },
   { id:'hajime', stake:[1,3],    roundTime:'mid',  name:'Hajime',                difficulty:'nehéz',   category:'Csapat', emoji:'😆', symbol:IMGS['hajime_symbol.png'], img:IMGS['hajime_icon.png'], banner:IMGS['hajime_banner.png'], color:'#FACC15', desc:'Számolj helyesen! El kell kezdeni számolni 1-től és ha 5-tel vagy 7-tel osztható a szám vagy szerepel benne az 5 vagy a 7 akkor "hajime"-t kell mondani. Aki eltéveszti az iszik. Egy plusz csavar: minden "hajime" után megfordul a kör.' },
   { id:'kopapir', stake:[1,3],   roundTime:'mid',  name:'Kő Papír Olló',         difficulty:'nehéz',   category:'Páros', emoji:'✊', symbol:IMGS['kopapir_symbol.png'], img:IMGS['kopapir_icon.png'], banner:IMGS['kopapir_banner.png'], color:'#7C3AED', desc:'Annyi kört kell játszani ahány játékos van. Kell egy kezdő ember aki kihivja a mellette ülőt, ezt a játék választja ki. Ha te nyersz akkor ő iszik és az ő mellette ülővel kell játszania. Ha te vesztesz akkor a te melletted ülővel kell játszanod. Ha döntetlen akkor mind a ketten isztok.' },
   { id:'szolánc', stake:[1,3],   name:'Szólánc',              difficulty:'közepes', category:'Csapat', emoji:'🔗', symbol:IMGS['szolanc_symbol.png'], img:IMGS['szolanc_icon.png'], banner:IMGS['szolanc_banner.png'], color:'#F59E0B', desc:'Minden körben egy szóval több villog fel a képernyőn. Sorrendben vissza kell koppintani a szavakat. Aki elront, iszik — a többiek pontot kapnak. Ha a sor eléri a 12 szót, mindenki nyer egy pontot.' },
@@ -59425,7 +59425,12 @@ function OVFJStandings({ players, roundScores, cumScores, myPid, final }) {
 }
 
 // ═══════════════ ORSZÁG-VÁROS — host nézet ═══════════════
-function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta }) {
+// Korty-plafon JATEKOSONKENT ES KORONKENT. ⚠️ A jatek a teljes pontkulonbseget
+// osztana ki kortyban, ami tobb valasznal egy korben husz is lehet — amig semmi
+// nem kerult fel, ez nem latszott (v10.359).
+const OVFJ_MAX_DRINKS = 5;
+
+function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta, onLiveDrinkUpdate, drinkMult = 1 }) {
   const totalRounds = gameMeta?.ovfjConfig?.rounds ?? 5;
   const roundTime = gameMeta?.ovfjConfig?.roundTime === undefined ? 90 : gameMeta.ovfjConfig.roundTime;
   const waitFullTime = !!gameMeta?.ovfjConfig?.waitFullTime;
@@ -59611,17 +59616,36 @@ function OVFJGame({ players, gameIdx, onAdvance, onResult, roomCode, gameMeta })
     const nc = {...cumScores};
     Object.entries(rs).forEach(([pid, s]) => { nc[pid] = (nc[pid]||0) + s; });
     setCumScores(nc);
+    const maxRs = Math.max(0, ...Object.values(rs));
+    // A korty a pontkulonbseg — de PLAFONNAL. A `OVFJ_MAX_DRINKS` nelkul egy
+    // sok valaszos kor husz kortyot is adhatna egy emberre.
+    const drinkParts = pl.filter(p => claimedPids.has(p.id))
+      .map(p => ({ p, drinks: Math.min(OVFJ_MAX_DRINKS, maxRs - (rs[p.id]||0)) }))
+      .filter(({drinks}) => drinks > 0)
+      .sort((a,b) => b.drinks - a.drinks);
+
+    // ⚠️ A KONYVELES (v10.359). Eddig SEMMI nem kerult fel: a banner kortyot
+    // igert, de a szam nem jutott el a `players[].drinks` mezoig, tehat a parti
+    // vegi statisztikaba sem. A jatek sajat, belso korokben megy, ezert az
+    // `onAdvance` (ami kort leptet) nem hasznalhato — az `onLiveDrinkUpdate` a
+    // dokumentalt ut a jatek KOZBENI konyvelesre (Kisebb/Nagyobb, v10.317).
+    // Az NEM szoroz, ezert ITT kell felszorozni.
+    if (drinkParts.length > 0 && typeof onLiveDrinkUpdate === 'function') {
+      const dm = {};
+      drinkParts.forEach(({p, drinks}) => { dm[p.id] = drinks * drinkMult; });
+      onLiveDrinkUpdate(dm);
+    }
+
     if (onResult) {
-      const maxRs = Math.max(0, ...Object.values(rs));
-      // Nincs kortyplafon, és ez SZÁNDÉKOS: a teljes pontkülönbség korty. Több
-      // válasznál ez egy körben húsz is lehet — aki sokkal kevesebbet írt,
-      // sokkal többet iszik. Ez a tét, nem hiba.
-      const drinkParts = pl.filter(p => claimedPids.has(p.id))
-        .map(p => ({ p, drinks: maxRs - (rs[p.id]||0) }))
-        .filter(({drinks}) => drinks > 0)
-        .sort((a,b) => b.drinks - a.drinks);
       if (drinkParts.length > 0) {
-        const subtitle = drinkParts.map(({p,drinks}) => `${p.name}: ${drinks} korty`).join(' · ');
+        // ⚠️ A feliratban a MAR FELSZORZOTT szam all: ez kezi szoveg, nem megy
+        // at az `onResult` szorzojan. Nyersen hagyva nehez szinten mast mondana,
+        // mint amennyi felkerult (ugyanaz, mint az Ultimatum `loseNote`-jánál).
+        const subtitle = drinkParts.map(({p,drinks}) => `${p.name}: ${drinks * drinkMult} korty`).join(' · ');
+        // ⚠️ A LEGACY alak (nev nelkul) SZANDEKOS es marad. A konyveles az
+        // `onLiveDrinkUpdate`-en megy, amit a „Fordított kör" wildcard NEM
+        // fordit meg. `winners`/`losers`-t kuldve a banner megfordulna, a
+        // konyveles nem — pont az az ellentmondas, amit a v10.333/354 javitott.
         onResult({ correct: false, playerName: null, drinks: drinkParts[0].drinks, subtitle });
       } else {
         onResult({ correct: true, playerName: null, drinks: 0, subtitle: 'Mindenki ugyanannyit kapott!' });
@@ -61309,7 +61333,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'mutasd') return <MutasdGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'matek') return <MatekGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
   if (gameId === 'reakcio') return <ReakcioGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} onAdvance={onAdvance} onResult={onResult} />;
-   if (gameId === 'ovfj') return <OVFJGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onResult={onResult} />;
+   if (gameId === 'ovfj') return <OVFJGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} drinkMult={drinkMult} />;
    if (gameId === 'emojikv') return <EmojiKvizGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
    if (gameId === 'mitval') return <MitValasztanalGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} difficulty={gameMeta?.difficulty} />;
   return null;

@@ -1936,3 +1936,39 @@ Teszt: `node tests/bohtimer_test.js` utolsó blokkja. A fogódzó nem a kinézet
 hanem **két állítás együtt**: van `[role="timer"]` 30 px-en, ÉS a játék
 törzsében **nem maradt `stroke-dasharray`-es kör** — enélkül egy visszatett
 gyűrű a sáv mellett észrevétlen maradna.
+
+## ⚠️ Ország-Város: a kortyok VÉGRE felkerülnek, plafonnal (v10.359)
+**Az eredeti hiba mérve volt, nem feltételezve.** Egy végigjátszott körben a
+banner ezt írta: „Alfa: 3 korty", `drinks: 3`-mal — a játék viszont **egyetlen
+könyvelő hívást sem küldött**. Se `onAdvance` valódi térképpel, se
+`onLiveDrinkUpdate`; a `onAdvance({})` egyszer futott, a legvégén, ÜRESEN.
+Vagyis az Ország-Város kortyai **soha nem kerültek fel** a `players[].drinks`
+mezőre, tehát a parti végi statisztikába sem — miközben a banner végig azt
+mondta, hogy valaki iszik.
+
+**A csatorna az `onLiveDrinkUpdate`**, mint a Kisebb/Nagyobbnál (v10.317): az a
+dokumentált út a játék KÖZBENI könyvelésre. A játék saját, belső körökben megy,
+tehát az `onAdvance` (ami kört léptet) nem használható rá. A komponens eddig
+egyik propot sem kapta meg — a `GameContent` bekötése is bővült.
+
+**A plafon tulajdonosi döntés** (`OVFJ_MAX_DRINKS = 5`, játékosonként és
+körönként). A régi kód-megjegyzés szerint „a teljes pontkülönbség korty… több
+válasznál ez egy körben húsz is lehet" — amíg semmi nem került fel, ez nem
+látszott; élesítve viszont brutális lenne.
+
+**⚠️ HÁROM helyen kell UGYANANNAK a számnak lennie**, különben a banner mást
+mond, mint amennyi felkerül:
+- a **könyvelés** → `n * drinkMult` (az `onLiveDrinkUpdate` NEM szoroz)
+- a **banner száma** → `n` (az `onResult` MAGA szoroz)
+- a **felirat számai** → `n * drinkMult` (kézi szöveg, nem megy át a szorzón)
+
+**⚠️ A legacy `playerName:null` alak SZÁNDÉKOSAN MARAD.** A könyvelés az
+`onLiveDrinkUpdate`-en megy, amit a „Fordított kör" wildcard **nem fordít meg**.
+`winners`/`losers`-t küldve a BANNER megfordulna, a KÖNYVELÉS nem — pont az az
+ellentmondás, amit a v10.333 és a v10.354 javított. Ez a tizedik legacy hívási
+hely, és az egyetlen, amelyik nem nő ki belőle.
+
+Teszt: `node tests/ovfj_drinks_test.js`. **A fogódzó a JÁTÉKOS-ÁLLAPOT, nem a
+banner** — a banner a hibás verzión is helyesen írta ki a számot, pont ez tette
+láthatatlanná. Ellenőrizve: a könyvelést kivéve mindhárom mérő blokk elbukik,
+`dr: 0`-val (az eredeti tünet).
