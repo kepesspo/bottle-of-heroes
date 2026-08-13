@@ -1972,3 +1972,48 @@ Teszt: `node tests/ovfj_drinks_test.js`. **A fogódzó a JÁTÉKOS-ÁLLAPOT, nem
 banner** — a banner a hibás verzión is helyesen írta ki a számot, pont ez tette
 láthatatlanná. Ellenőrizve: a könyvelést kivéve mindhárom mérő blokk elbukik,
 `dr: 0`-val (az eredeti tünet).
+
+## Új csapatjáték: „Csendes árverés" (v10.360)
+Az app kisorsol egy nyereményt, és mindenki **titokban** licitál 0–6 kortyot.
+A legmagasabb licit nyer — és annyit is iszik, amennyit ígért.
+
+**⚠️ A titkosság a játék fele.** Aki látja a másik számát, csak rátesz egyet —
+akkor nincs döntés, csak sorrend. Ezért megy körbe a telefon: átadó-lap →
+„Én vagyok" → léptető → „Kész", és a következő átadó-lap **semmit nem mutat**
+az előzőből. A haladás-pirulák is csak neveket írnak ki, számot soha.
+A léptető ezért **nem** a közös `PlayerDrinkRow`: az a sor a TELJES mezőnyt
+mutatja egyszerre, itt viszont pontosan egy embert szabad. A felfedésen viszont
+már az a sor jön (`readOnly`), a nyertesen `meta` chippel.
+
+**⚠️ A díjak MONDATOK, nem kód.** A `PlayScreen` nem tárol kör-közi állapotot,
+tehát egy „a következő körben nem iszol" hatást az app nem tudna érvényesíteni —
+a társaság tartatja be. **Új díj felvételénél EZ a szabály**: magában érthető
+legyen, és a társaság maga be tudja tartatni. (Ezért nincs köztük „duplán ér a
+pontod" — azt csak az app tudná megcsinálni.)
+
+**⚠️ A nyertes a banner ISZIK oldalán áll.** Elsőre fordítottnak látszik, de
+pontosan ezt ígérte: annyit iszik, amennyit licitált. Amit *nyert*, az a
+`loseNote`-ban áll („Nyeremény: …"). **A játék pontot nem oszt** — mint az
+Ultimátum: a nyeremény maga a jutalom.
+
+Két szélső eset, ami a szabályból következik:
+- **döntetlen** — az összes legmagasabb licitáló nyer, és mind isszák a sajátjukat;
+- **mindenki 0** — a nyeremény elvész, és senki nem iszik. Ez a játék egyetlen
+  valódi no-opja, ezért ott a legacy `playerName:null` banner-alak a helyes
+  (nincs mit megfordítania a „Fordított kör" wildcardnak — v10.354).
+
+A számok **nyersen** mennek ki mindkét csatornán (a `PlayScreen` szoroz); a
+`drinkMult` csak a léptető és a sor **kijelzését** skálázza. Ha a játék is
+szorozna, nehéz szinten 2-es licitből 18 lenne 6 helyett (v10.299-lecke).
+
+Teszt: `node tests/newgames_test.js` 14–17. blokk. A 14. fogódzója a
+**szivárgás-mérés**: a második játékos léptetőjénél a teljes játéktér szövegében
+nem szerepelhet az első licitje.
+
+**⚠️ A „Ki rontott?" panelt a Csapat játékoknál NEM a `cta: []` zárja ki.**
+Az csak a Páros „Vesztettem / Nyertem!" gombpárra hat; a csapat-panelt a
+`PlayScreen` hosszú **id-listája** kapcsolja ki (`sohanem`, `ovfj`, `collect`,
+`memoria`… mind ott van). Az árverés első végigjátszásán ott állt a panel a
+játék alatt — az `advanceLoverseny`-t hívja, tehát egy második, ellentmondó út
+vezetett a könyveléshez. **Új, maga-könyvelő csapatjátéknál MINDKETTŐT be kell
+állítani.** A `newgames_test` 14. blokkja ezt külön méri.

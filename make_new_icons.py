@@ -129,7 +129,25 @@ def icon_mennyi(path):
     im.save(path); return path
 
 
+# ── 6. CSENDES ÁRVERÉS — kalapács + ütőblokk ───────────────────────────────
+def icon_arveres(path):
+    im, d = new()
+    # ⚠️ A kalapacs FERDE, ezert kulon retegen keszul es ugy forgatjuk. Egyenesen
+    # rajzolva „polc"-nak latszik, nem arveresi kalapacsnak (merve: 32 px-en a
+    # vizszintes fej es a nyel egyetlen T-alakka olvadt).
+    lay = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+    ld = ImageDraw.Draw(lay)
+    ld.rounded_rectangle([120, 96, 372, 196], radius=42, fill=AMBER, outline=INK, width=W)   # fej
+    ld.rounded_rectangle([222, 186, 274, 372], radius=26, fill=WHITE, outline=INK, width=W)  # nyel
+    lay = lay.rotate(-32, resample=Image.BICUBIC, center=(246, 150))
+    im.alpha_composite(lay)
+    # uto-blokk (soundboard) — ez all egyenesen, ez adja a „lecsapas" alapot
+    d.rounded_rectangle([96, 388, 416, 452], radius=28, fill=WHITE, outline=INK, width=W)
+    im.save(path); return path
+
+
 ICONS = [
+    ('arveres',   icon_arveres),
     ('chicken',   icon_chicken),
     ('fingerit',  icon_fingerit),
     ('igennem',   icon_igennem),
