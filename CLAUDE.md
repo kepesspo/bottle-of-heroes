@@ -1862,3 +1862,46 @@ Teszt: `node tests/newgames_test.js`. A banner-szám kiolvasásánál egy csapda
 **a fejléc-korong is „KORTY"-ot ír** („1–7 KORTY"), és a DOM-ban előbb jön —
 naivan szedve a szám a tartomány felső vége lenne (mérve: 7 a 3 helyett). A
 teszt ezért kihagyja azt, ami előtt gondolatjel áll.
+
+### Ujjösszeg — a Finger It átalakítása (v10.356)
+A régi Finger It **csapatjáték** volt. Az új a klasszikus **Morra** páros
+változata: ketten egyszerre mutattok 0–5 ujjat, és közben bemondjátok, mit
+tippeltek a **közös összegre**. Aki eltalálta, pontot kap; három találat nélküli
+kör után mindketten isztok egyet.
+
+**⚠️ Az egyidejűség a játék fele.** Ha az egyik előbb mondja be a tippjét, a
+másik triviálisan igazodik hozzá — nincs blöff. Ezért 3-2-1 visszaszámlálás van,
+és a host UTÁNA jelzi, ki talált (ugyanaz a minta, mint a „Ne ugyanazt!"-nál).
+
+**Az `id` MARAD `fingerit`:** ahhoz tapad a `game_stats/fingerit.playCount` és
+a játszottsági sorrend. Új azonosítóval az eddigi számláló elveszne, és a játék
+hátra kerülne a listában. A régi `FingeritGame` (185 sor) kikerült.
+
+**⚠️ A `SCENARIOS`-ban MÁR VOLT egy `fingerit` bejegyzés** („Finger it — ki
+tévesztett?"), és **a későbbi kulcs nyer** a JS objektum-literálban: az új
+felirat ezért nem látszott. A régit ki kellett venni, nem újat hozzáadni. Ezt a
+teszt kiírása leplezte le, nem egy állítás — érdemes a kiírásokat elolvasni.
+
+### Igen–Nem, Ultimátum, Mennyi? (v10.357)
+- **Igen–Nem** — kooperatív: az egyik látja a szót, a másik 10 igen/nem
+  kérdésből találgat. Megvan → **mindkettő pont**; elfogytak → **mindkettő
+  iszik**. A szóbank a **meglévő `MUTASD_SZAVAK`** (konkrét főnevek) — új bank
+  helyett egy forrást használunk. A szó indulás előtt satírozva van, különben a
+  kérdező belelátna.
+- **Ultimátum** — 6 korty a kalapban, az egyik ajánlatot tesz, a másik elfogadja
+  vagy elutasítja. **⚠️ Az elutasítás KÖZÖS bukás** (mindketten a felét isszák),
+  nem büntetés: ha csak az ajánlattevő inna, a másiknak MINDIG megérné
+  visszautasítani, és nem lenne miről alkudni. Ez a játék **nem oszt pontot** —
+  tisztán korty-alku.
+- **Mennyi?** — szám-kérdés, a közelebbi tipp nyer. **⚠️ Az app NEM kéri be a két
+  tippet:** két szám-mező a hoston lassú és hibázós, a számokat pedig úgyis
+  hangosan mondjátok. Az app felfedi a választ, és utána jelölitek, ki volt
+  közelebb (ugyanaz a minta, mint az Ujjösszegnél). A 36 kérdés mind **kerek,
+  ellenőrizhető tény** — vitatható válasznál a kör vitába fulladna.
+
+**Az Ultimátum `loseNote`-ja MÁR SZORZOTT számokat ír** (`n * drinkMult`),
+mert a két játékos eltérő mennyiséget iszik, és a banner egyetlen számot mutat.
+Nyers számokkal a szöveg mást mondana, mint amennyi felkerül.
+
+Teszt: `node tests/newgames_test.js` (13 blokk). Minden játéknál a fogódzó a
+**banner ÉS a könyvelés egyezése**, nem külön a kettő.

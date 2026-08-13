@@ -20,7 +20,7 @@ const ok = (c, l, e) => { console.log((c ? '  OK   ' : '  HIBA ') + l + (e !== u
 
 // Az ÚJ játékok köre. Ha új kerül be, ITT is át kell vezetni — különben a
 // 2. blokk elbukik, és nem csendben marad ki a szűrőből.
-const NEW_IDS = ['chicken', 'fingerit'];
+const NEW_IDS = ['chicken', 'fingerit', 'igennem', 'ultimatum', 'mennyi'];
 
 const PL = [{ id:'a', name:'Sere', color:'#E07A5F', points:0, drinks:0 },
             { id:'b', name:'Luca', color:'#4FC2A0', points:0, drinks:0 }];
@@ -271,6 +271,121 @@ const commit = async (p) => { await tap(p, /Kövi/); await p.waitForTimeout(1400
     ok(JSON.stringify(await state(p)) === JSON.stringify([{n:'Sere',pt:0,dr:1},{n:'Luca',pt:1,dr:0}]),
        'a könyvelés EGYEZIK a bannerrel', JSON.stringify(await state(p)));
     ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+    await p.close();
+  }
+
+  // ── 8. IGEN–NEM (kooperativ) ──
+  console.log('\n===== 8. IGEN–NEM =====');
+  {
+    const p = await open(b);
+    await mountGame(p, 'igennem', 'easy');
+    await p.waitForTimeout(2000);
+    // ⚠️ A szo REJTVE van indulas elott: a kerdezo kulonben belelathatna.
+    const hidden = await p.evaluate(() => [...document.querySelectorAll('#__p div')]
+      .some(d => /repeating-linear-gradient/.test(d.style.background || '')));
+    ok(hidden, 'indulás előtt a szó satírozva van');
+    await tap(p, /Felfed/); await p.waitForTimeout(600);
+    ok(!(await p.evaluate(() => [...document.querySelectorAll('#__p div')]
+      .some(d => /repeating-linear-gradient/.test(d.style.background || '')))), 'indítás után látszik');
+    ok(/10 KÉRDÉS MARADT|10/.test(await txt(p)), 'tíz kérdés a keret', (await txt(p)).slice(0, 90));
+    await tap(p, /Elment egy kérdés/); await p.waitForTimeout(400);
+    ok(/9/.test(await txt(p)), 'a számláló lép', (await txt(p)).slice(0, 90));
+    await tap(p, /Kitalálta/); await p.waitForTimeout(700);
+    const s8 = await bannerSides(p);
+    ok(s8.win.sort().join(',') === 'Luca,Sere' && s8.lose.length === 0,
+       'KÖZÖSEN nyernek — nincs vesztes oldal', JSON.stringify(s8));
+    await commit(p);
+    ok(JSON.stringify(await state(p)) === JSON.stringify([{n:'Sere',pt:1,dr:0},{n:'Luca',pt:1,dr:0}]),
+       'mindkettő pontot kap', JSON.stringify(await state(p)));
+    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+    await p.close();
+  }
+
+  // ── 9. IGEN–NEM: elfogynak a kerdesek ──
+  console.log('\n===== 9. IGEN–NEM — ELFOGYOTT =====');
+  {
+    const p = await open(b);
+    await mountGame(p, 'igennem', 'easy');
+    await p.waitForTimeout(2000);
+    await tap(p, /Felfed/); await p.waitForTimeout(500);
+    for (let i = 0; i < 10; i++) { await tap(p, /Elment egy kérdés/); await p.waitForTimeout(230); }
+    await p.waitForTimeout(700);
+    const s9 = await bannerSides(p);
+    ok(s9.lose.sort().join(',') === 'Luca,Sere' && s9.win.length === 0,
+       'a tizedik kérdés után KÖZÖSEN isznak', JSON.stringify(s9));
+    await commit(p);
+    ok(JSON.stringify(await state(p)) === JSON.stringify([{n:'Sere',pt:0,dr:1},{n:'Luca',pt:0,dr:1}]),
+       'mindkettőre egy korty kerül', JSON.stringify(await state(p)));
+    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+    await p.close();
+  }
+
+  // ── 10. ULTIMATUM: elfogadas ──
+  console.log('\n===== 10. ULTIMATUM — ELFOGADVA =====');
+  {
+    const p = await open(b);
+    await mountGame(p, 'ultimatum', 'easy');
+    await p.waitForTimeout(2000);
+    ok(/A KALAPBAN/i.test(await txt(p)) && /6/.test(await txt(p)), 'hat korty a kalapban', (await txt(p)).slice(0, 70));
+    // az ajanlat: 2 az ellenfelnek (alapbol 3, egyszer lefele)
+    await p.evaluate(() => { const b=[...document.querySelectorAll('#__p button')]
+      .find(x=>x.getAttribute('aria-label')==='Eggyel kevesebb'); b&&b.click(); });
+    await p.waitForTimeout(400);
+    await tap(p, /Ez az ajánlatom/); await p.waitForTimeout(600);
+    ok(/Elfogadom/.test(await txt(p)), 'az ellenfél dönthet', (await txt(p)).slice(0, 90));
+    await tap(p, /Elfogadom/); await p.waitForTimeout(700);
+    await commit(p);
+    ok(JSON.stringify(await state(p)) === JSON.stringify([{n:'Sere',pt:0,dr:4},{n:'Luca',pt:0,dr:2}]),
+       'az ajánlat szerint isznak (4 / 2)', JSON.stringify(await state(p)));
+    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+    await p.close();
+  }
+
+  // ── 11. ULTIMATUM: elutasitas -> KOZOS bukas ──
+  // ⚠️ Ha csak az ajanlattevo inna, mindig megerne visszautasitani.
+  console.log('\n===== 11. ULTIMATUM — ELUTASITVA =====');
+  {
+    const p = await open(b);
+    await mountGame(p, 'ultimatum', 'easy');
+    await p.waitForTimeout(2000);
+    await tap(p, /Ez az ajánlatom/); await p.waitForTimeout(600);
+    await tap(p, /Elutasítom/); await p.waitForTimeout(700);
+    await commit(p);
+    ok(JSON.stringify(await state(p)) === JSON.stringify([{n:'Sere',pt:0,dr:3},{n:'Luca',pt:0,dr:3}]),
+       'MINDKETTEN a kalap felét isszák (3 / 3)', JSON.stringify(await state(p)));
+    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+    await p.close();
+  }
+
+  // ── 12. MENNYI? ──
+  console.log('\n===== 12. MENNYI? =====');
+  {
+    const p = await open(b);
+    await mountGame(p, 'mennyi', 'easy');
+    await p.waitForTimeout(2000);
+    ok(/A KÉRDÉS/i.test(await txt(p)), 'ott a kérdés', (await txt(p)).slice(0, 80));
+    ok(!/A HELYES VÁLASZ/i.test(await txt(p)), 'a válasz még REJTVE — különben nincs mit tippelni');
+    await tap(p, /Felfedés/); await p.waitForTimeout(600);
+    ok(/A HELYES VÁLASZ/i.test(await txt(p)), 'felfedés után látszik', (await txt(p)).slice(0, 120));
+    ok(await tap(p, /^Luca$/), 'meg lehet jelölni, ki volt közelebb');
+    await p.waitForTimeout(700);
+    const s12 = await bannerSides(p);
+    ok(s12.win.join() === 'Luca' && s12.lose.join() === 'Sere',
+       'a közelebbi nyer, a másik iszik', JSON.stringify(s12));
+    await commit(p);
+    ok(JSON.stringify(await state(p)) === JSON.stringify([{n:'Sere',pt:0,dr:1},{n:'Luca',pt:1,dr:0}]),
+       'a könyvelés EGYEZIK a bannerrel', JSON.stringify(await state(p)));
+    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+    await p.close();
+  }
+
+  // ── 13. Mind az ot uj jatek MAGA konyvel (ures cta) ──
+  console.log('\n===== 13. NINCS KEZI GOMB EGYIKNEL SEM =====');
+  {
+    const p = await open(b);
+    const ctas = await p.evaluate((ids) => ids.map(id => ({ id, n: ((SCENARIOS[id]||{}).cta||[]).length })), NEW_IDS);
+    const bad = ctas.filter(x => x.n !== 0);
+    ok(bad.length === 0, 'mind az öt új játék `cta`-ja üres', bad.map(x=>x.id).join(', ') || 'egy sem');
     await p.close();
   }
 
