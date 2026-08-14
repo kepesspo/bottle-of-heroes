@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.370';
+const APP_VERSION = 'v10.371';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -68001,8 +68001,10 @@ function MeduzaGame({ players, onAdvance, onResult, gameMeta, drinkMult = 1 }) {
         advancedRef.current = true;
         const drinkers = players.filter(p => newTotal[p.id]>0);
         if (drinkers.length===0) onResult && onResult({ correct:true, playerName:null, drinks:0, subtitle:'Senki sem nézett össze! ✨' });
-        else onResult && onResult({ losers: drinkers, loseNote: drinkers.map(p=>`${p.name} ${newTotal[p.id]*drinkMult}🍺`).join(', ') });
-        onAdvance && onAdvance(newTotal, {});
+        // ABSZOLUT (v10.370): az összenézések száma MAGA a korty — se nehézség,
+        // se wildcard nem szorozza (mint a Hajime/Kéz csere).
+        else onResult && onResult({ losers: drinkers, absolute:true, loseNote: drinkers.map(p=>`${p.name} ${newTotal[p.id]}🍺`).join(', ') });
+        onAdvance && onAdvance(newTotal, {}, { absolute:true });
       }
       return;
     }
@@ -68019,7 +68021,7 @@ function MeduzaGame({ players, onAdvance, onResult, gameMeta, drinkMult = 1 }) {
       <div style={{ flex:1, background:T.surface, borderRadius:14, padding:'10px 14px', textAlign:'center', boxShadow:T.shadow }}>
         <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>Össz korty</div>
         <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color: Object.values(totalDrinks).reduce((s,v)=>s+v,0)>0 ? T.coral : T.inkMute }}>
-          {Object.values(totalDrinks).reduce((s,v)=>s+v,0) * drinkMult}
+          {Object.values(totalDrinks).reduce((s,v)=>s+v,0)}
         </div>
       </div>
     </div>
@@ -68058,7 +68060,7 @@ function MeduzaGame({ players, onAdvance, onResult, gameMeta, drinkMult = 1 }) {
         players={players}
         onFinish={confirmRound}
         title={round >= TOTAL_ROUNDS ? 'Utolsó kör — ki iszik?' : `${round}. kör — ki nézett össze?`}
-        drinkMult={drinkMult}
+        drinkMult={1}
       />
     </div>
   );

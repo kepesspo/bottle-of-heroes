@@ -107,6 +107,59 @@ async function play(p, game, diff, map) {
     }
   }
 
+  // 3. MEDÚZA — szintén abszolút (v10.371): az összenézés száma = a korty.
+  // Egy körre állítva (`meduzaConfig.rounds:1`), NEHÉZ szinten Sere 2 / Kecsi 1
+  // összenézés → drinks 2/1 (NEM 6/3).
+  console.log('\n===== MEDÚZA — NEHÉZ, abszolút =====');
+  {
+    const p = await open(b);
+    await p.evaluate(() => {
+      const r = document.getElementById('root'); if (r) r.style.display = 'none';
+      const old = document.getElementById('__p'); if (old) old.remove();
+      const root = document.createElement('div'); root.id = '__p';
+      root.style.cssText = 'position:fixed;inset:0;z-index:1;display:flex;flex-direction:column;background:#EAF2FB';
+      document.body.appendChild(root);
+      function H() {
+        const [ps, setPs] = React.useState([
+          { id: 'a', name: 'Sere', color: '#E07A5F', points: 0, drinks: 0 },
+          { id: 'b', name: 'Kecsi', color: '#4FC2A0', points: 0, drinks: 0 },
+          { id: 'c', name: 'Vivi', color: '#A78BFA', points: 0, drinks: 0 }]);
+        window.__players = ps;
+        return React.createElement(PlayScreen, { go: () => {}, players: ps, setPlayers: setPs, selectedGames: ['meduza'],
+          roomCode: null, setGameMeta: () => {}, setScoreHistory: () => {}, setLastGameRound: () => {},
+          gameMeta: { modes: ['points', 'drinks'], difficulty: 'hard', meduzaConfig: { rounds: 1 } } });
+      }
+      ReactDOM.createRoot(root).render(React.createElement(H));
+    });
+    await p.waitForTimeout(2200);
+    await p.evaluate(() => { const btn = [...document.querySelectorAll('#__p button')].find(x => /Start/.test(x.textContent || '')); if (btn) btn.click(); });
+    await p.waitForTimeout(3900);
+    await p.evaluate(() => {
+      for (const [name, n] of Object.entries({ Sere: 2, Kecsi: 1 })) {
+        const rows = [...document.querySelectorAll('#__p div')].filter(d =>
+          (d.textContent || '').includes(name) && d.querySelector('button[aria-label="Egy korttyal több"]'));
+        rows.sort((a, b) => a.textContent.length - b.textContent.length);
+        const plus = rows[0].querySelector('button[aria-label="Egy korttyal több"]');
+        for (let i = 0; i < n; i++) plus.click();
+      }
+    });
+    await p.waitForTimeout(300);
+    await p.evaluate(() => { const b2 = [...document.querySelectorAll('#__p button')].find(x => /korty kiosztva/.test(x.textContent || '')); if (b2) b2.click(); });
+    await p.waitForTimeout(1400);
+    const banner = await bannerTxt(p);
+    await p.evaluate(() => { const el = [...document.querySelectorAll('div')].find(d => d.style && d.style.zIndex === '250'); if (el) el.click(); });
+    await p.waitForTimeout(400);
+    await p.evaluate(() => { const b2 = [...document.querySelectorAll('#__p button')].find(x => /Kövi/i.test(x.textContent || '')); if (b2) b2.click(); });
+    await p.waitForTimeout(1800);
+    const st = await stateOf(p);
+    const sere = st.find(x => x.n === 'Sere'), kecsi = st.find(x => x.n === 'Kecsi');
+    ok(sere.d === 2, '⚠️ Sere 2 összenézése = 2 korty (NEM 6 — nincs ×nehézség)', sere.d);
+    ok(kecsi.d === 1, 'Kecsi 1 összenézése = 1 korty', kecsi.d);
+    ok(/Sere 2/.test(banner) && /Kecsi 1/.test(banner), 'a banner a valós kortyot írja', (banner.match(/Sere \d[^,]*/) || ['nincs'])[0]);
+    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+    await p.close();
+  }
+
   await b.close();
   console.log(fail ? '\n❌ ' + fail + ' HIBA' : '\n✅ MINDEN ELLENORZES RENDBEN');
   process.exit(fail ? 1 : 0);
