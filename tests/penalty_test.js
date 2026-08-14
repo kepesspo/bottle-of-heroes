@@ -65,17 +65,18 @@ const ok = (cond, name, extra) => {
   await p.waitForTimeout(900);
   const menuTxt = await p.evaluate(() => document.body.innerText.replace(/\s+/g, ' '));
   ok(!/Koccint/i.test(menuTxt), 'a Koccintó eltűnt a menüből');
-  // v10.216 óta a Vissza/Újra/Kövi mellett egységes ikon+szöveg gomb — a
-  // gomb szövege önmagában "Büntetés" (a sheet CÍME a hosszabb "Büntetés — ki igyon?")
-  const penaltyBtnText = await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => (x.innerText || '').trim() === 'Büntetés'); return b ? b.innerText.trim() : null; });
-  ok(penaltyBtnText === 'Büntetés', 'a Büntetés gomb korty-kiosztót ígér', penaltyBtnText);
+  // v10.216 óta a Vissza/Újra/Kövi mellett egységes ikon+szöveg gomb — a gomb
+  // szövege önmagában "Osztás" (v10.368: régen „Büntetés", de pontot is oszthat,
+  // ezért semleges szó); a korty-módú sheet CÍME „Ki igyon?".
+  const penaltyBtnText = await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => (x.innerText || '').trim() === 'Osztás'); return b ? b.innerText.trim() : null; });
+  ok(penaltyBtnText === 'Osztás', 'a MENÜ „Osztás" gombja megnyitja a kiosztót', penaltyBtnText);
 
   console.log('\n===== KORTY KIOSZTÁSA =====');
-  await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => (x.innerText || '').trim() === 'Büntetés'); if (b) b.click(); });
+  await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => (x.innerText || '').trim() === 'Osztás'); if (b) b.click(); });
   await p.waitForTimeout(1100);
 
   const clicked = await p.evaluate(() => {
-    const titleEl = [...document.querySelectorAll('*')].find(e => (e.textContent || '').trim() === 'Büntetés — ki igyon?');
+    const titleEl = [...document.querySelectorAll('*')].find(e => (e.textContent || '').trim() === 'Ki igyon?');
     let sheet = titleEl;
     while (sheet && !/Senki sem iszik|korty kiosztva/.test(sheet.textContent || '')) sheet = sheet.parentElement;
     if (!sheet) return 'nincs lap';
@@ -107,7 +108,7 @@ const ok = (cond, name, extra) => {
 
   const state = await p.evaluate(() => window.__players.map(x => x.name + ':' + x.drinks).join(','));
   ok(state === 'Sere:2,Kecsi:1,Vivi:0', 'a korty rákerült a játékosokra', state);
-  ok(await p.evaluate(() => !document.body.innerText.includes('Büntetés — ki igyon?')), 'a lap bezárult');
+  ok(await p.evaluate(() => !document.body.innerText.includes('Ki igyon?')), 'a lap bezárult');
   const banner = await p.evaluate(() => document.body.innerText);
   // v10.263: az uj banner nem "Inni kell!"-t ir, hanem az ivok sorat — es
   // fejenkent mas osszegnel (drinks:0) NEM ir ki szamot, csak a jegyzetet.
@@ -146,10 +147,10 @@ const ok = (cond, name, extra) => {
   await p2.waitForTimeout(2400);
   await p2.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /MENÜ/i.test(x.innerText || '')); if (b) b.click(); });
   await p2.waitForTimeout(800);
-  await p2.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => (x.innerText || '').trim() === 'Büntetés'); if (b) b.click(); });
+  await p2.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => (x.innerText || '').trim() === 'Osztás'); if (b) b.click(); });
   await p2.waitForTimeout(1000);
   const geo = await p2.evaluate(() => {
-    const titleEl = [...document.querySelectorAll('*')].find(e => (e.textContent || '').trim() === 'Büntetés — ki igyon?');
+    const titleEl = [...document.querySelectorAll('*')].find(e => (e.textContent || '').trim() === 'Ki igyon?');
     const scrollArea = [...document.querySelectorAll('div')].find(d => getComputedStyle(d).overflowY === 'auto' && d.contains(titleEl.parentElement.nextSibling || d));
     const names = ['Sere','Kecsi','Vivi','Luca','Tóth','Márk','Dani','KKK','Balázs','Gyula','Bacsi','BB'];
     const visible = names.filter(n => {

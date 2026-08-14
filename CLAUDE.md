@@ -760,7 +760,12 @@ modal saját címet ad („Ki kap pontot?") — a hívó „…ki igyon?" felira
 ellentmondana. Ami **nem** változott: a szám mindkét ágban ABSZOLÚT, se a
 nehézség, se a wildcard nem szorozza (`docs/buntetes.md` 1. csapda).
 
-Mindkét belépő (MENÜ → Büntetés, Wildcard → „Szabályszegő?") átadja a típust.
+Mindkét belépő átadja a típust. **A MENÜ-gomb neve v10.368 óta „Osztás"**
+(régen „Büntetés") — mivel pontot is lehet vele adni, a „büntetés" szó
+félrevezető volt; a korty-módú modal címe ezért „Ki igyon?" (a pont-módúé
+változatlanul „Ki kap pontot?"). A Wildcard-belépő marad „Szabályszegő?".
+⚠️ Öt teszt a régi feliratra kattintott (`penalty_test`, `penalty_unified_test`,
+`diffmult_test`, `gamectrl_test`, `nopoints_test`) — mind átállt „Osztás"-ra.
 
 **⚠️ A banner a TÉNYLEGES pontot mutatja (v10.367).** Korábban a nyertes-oldali
 szám bedrótozva `+1` (dupla körben `+2`) volt — a `wcPts` a wildcard-effektből

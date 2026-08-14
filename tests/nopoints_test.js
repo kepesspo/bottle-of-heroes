@@ -92,7 +92,7 @@ const playErem = async (p) => {
   await openMenu(p); await p.waitForTimeout(700);
   const ctl = await menuBtns(p);
   ok(ctl.some(x => /^Állás$/.test(x)), 'van „Állás" fül', ctl.filter(x => x.length < 14).join(' | '));
-  ok(ctl.some(x => /Büntetés/.test(x)), 'van „Büntetés" gomb');
+  ok(ctl.some(x => /Osztás/.test(x)), 'van „Osztás" gomb');
   // ⚠️ Ez a sor teszi ERTELMESSE a 3. blokkot: bizonyitja, hogy a hajto
   // tenyleg vegigjatssza a kort. Nelkule a „nincs banner" akkor is atmenne,
   // ha a jatek el sem indult volna.
@@ -110,7 +110,7 @@ const playErem = async (p) => {
   await openMenu(p); await p.waitForTimeout(700);
   const off = await menuBtns(p);
   ok(!off.some(x => /^Állás$/.test(x)), 'NINCS „Állás" fül', off.filter(x => x.length < 14).join(' | '));
-  ok(!off.some(x => /Büntetés/.test(x)), 'NINCS „Büntetés" gomb a menüben', off.filter(x => /Bünt/.test(x)).join(','));
+  ok(!off.some(x => /Osztás/.test(x)), 'NINCS „Osztás" gomb a menüben', off.filter(x => /Oszt/.test(x)).join(','));
   ok(off.some(x => /Szerkesztés/.test(x)) && off.some(x => /Vezérlés/i.test(x)),
      'a másik két fül viszont megmaradt', off.filter(x => x.length < 14).join(' | '));
   ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
@@ -141,11 +141,11 @@ const playErem = async (p) => {
   await p.waitForTimeout(1500);
   await openMenu(p); await p.waitForTimeout(700);
   const clicked = await p.evaluate(() => {
-    const x = [...document.querySelectorAll('button')].find(y => /Büntetés/.test(y.textContent || ''));
+    const x = [...document.querySelectorAll('button')].find(y => /^Osztás$/.test((y.textContent || '').trim()));
     if (!x) return 'nincs gomb';
     x.click(); return 'kattintva';
   });
-  ok(clicked === 'nincs gomb', 'a MENÜBEN nincs Büntetés gomb', clicked);
+  ok(clicked === 'nincs gomb', 'a MENÜBEN nincs „Osztás" gomb', clicked);
   await p.waitForTimeout(600);
   const acc = await p.evaluate(() => (window.__players || []).map(x => x.points + '/' + x.drinks).join(' '));
   ok(acc === '0/0 0/0 0/0', 'a menün keresztül semmi nem került fel', acc);

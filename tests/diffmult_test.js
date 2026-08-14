@@ -118,12 +118,12 @@ const kortyok = p => p.evaluate(() => (window.__players || []).map(x => x.drinks
     });
     await p.waitForTimeout(600);
     await p.evaluate(() => {
-      const b = [...document.querySelectorAll('button,div')].find(x => (x.innerText || '').trim() === 'Büntetés');
+      const b = [...document.querySelectorAll('button,div')].find(x => (x.innerText || '').trim() === 'Osztás');
       if (b) b.click();
     });
     await p.waitForTimeout(700);
     const modal = await p.evaluate(() => {
-      const m = [...document.querySelectorAll('div')].find(d => /Büntetés — ki igyon/.test(d.innerText || '') && d.style && d.style.maxWidth === '340px');
+      const m = [...document.querySelectorAll('div')].find(d => /Ki igyon\?/.test(d.innerText || '') && d.style && d.style.maxWidth === '340px');
       if (m) { m.id = '__modal'; return true; }
       return false;
     });

@@ -60,7 +60,7 @@ async function nyisdMegAVezerlest(p, roomCode) {
 
 const olvas = p => p.evaluate(() => {
   const btns = [...document.querySelectorAll('button')];
-  const NEV = /^(Büntetés|Vissza|Újra|Következő)$/;
+  const NEV = /^(Osztás|Vissza|Újra|Következő)$/;
   const akcio = btns
     .filter(x => NEV.test((x.innerText || '').trim()))
     .map(x => { const r = x.getBoundingClientRect();

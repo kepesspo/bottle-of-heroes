@@ -127,7 +127,7 @@ const confirmModal = async (p) => {
 async function openMenuPenalty(p) {
   await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => /MENÜ/i.test(x.innerText || '')); if (b) b.click(); });
   await p.waitForTimeout(900);
-  await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => (x.innerText || '').trim() === 'Büntetés'); if (b) b.click(); });
+  await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => (x.innerText || '').trim() === 'Osztás'); if (b) b.click(); });
   await p.waitForTimeout(900);
 }
 async function openWcPenalty(p) {
