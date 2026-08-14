@@ -104,7 +104,8 @@ async function arveresBid(p, list, before) {
     await tap(p, /Én vagyok/); await p.waitForTimeout(400);
     for (let k = 0; k < list[i]; k++) { await step(p, true); await p.waitForTimeout(120); }
     if (before && i === 1) await before();
-    await tap(p, /^Kész/); await p.waitForTimeout(500);
+    // Az utolso jatekosnal „Kész — felfedés", elotte „Következő →" (v10.361).
+    await tap(p, /^Kész|^Következő/); await p.waitForTimeout(500);
   }
   await p.waitForTimeout(900);
 }
@@ -499,14 +500,62 @@ async function arveresBid(p, list, before) {
     await tap(p, /Én vagyok/); await p.waitForTimeout(400);
     await step(p, true); await step(p, true); await p.waitForTimeout(300);
     ok(/\b6\b/.test(await txt(p)), 'a léptető a MÁR SZORZOTT számot mutatja (2 → 6)', (await txt(p)).slice(0, 120));
-    await tap(p, /^Kész/); await p.waitForTimeout(500);
+    await tap(p, /^Kész|^Következő/); await p.waitForTimeout(500);
     await tap(p, /Én vagyok/); await p.waitForTimeout(400);
-    await tap(p, /^Kész/); await p.waitForTimeout(1200);
+    await tap(p, /^Kész|^Következő/); await p.waitForTimeout(1200);
     const s = await bannerSides(p);
     ok(s.drinks === 6, 'a banner is 6-ot ír', s.drinks);
     await commit(p);
     ok(JSON.stringify(await state(p)) === JSON.stringify([{n:'Sere',pt:0,dr:6},{n:'Luca',pt:0,dr:0}]),
        'és pontosan 6 kerül fel — nem 2 és nem 18', JSON.stringify(await state(p)));
+    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+    await p.close();
+  }
+
+  // ── 18. ARVERES: NINCS PLAFON, es a felepitmeny a kozos (v10.361) ──
+  // ⚠️ A plafon-mentesseg fogodzoja nem a `+` gomb `disabled` allapota, hanem
+  // hogy a szam TENYLEG novekszik — egy `Math.min(...)` a `step`-ben letiltas
+  // NELKUL is megallitana, es a gomb-alapu ellenorzes atmenne rajta.
+  console.log('\n===== 18. ARVERES — NINCS LICIT-PLAFON =====');
+  {
+    const p = await open(b);
+    await mountGame(p, 'arveres', 'easy');
+    await p.waitForTimeout(2000);
+    await tap(p, /Licitálás indul/); await p.waitForTimeout(500);
+    await tap(p, /Én vagyok/); await p.waitForTimeout(400);
+    for (let i = 0; i < 12; i++) { await step(p, true); await p.waitForTimeout(90); }
+    const t = await txt(p);
+    ok(/\b12\b/.test(t), '12 kattintás után 12 áll a léptetőn — nincs 6-os plafon',
+       (t.match(/licited\?\s*(\d+)/i) || t.match(/\b1?\d\b/) || ['—'])[0]);
+    ok(await p.evaluate(() => {
+      const b2 = document.querySelector('#__p button[aria-label="Egy korttyal több"]');
+      return !!b2 && !b2.disabled;
+    }), 'és a „+" gomb sem tiltódik le');
+
+    // A fejlec-korong NEM igerhet tartomanyt, ha nincs felso hatar: `stake:null`
+    // eseten a korszamlalo all ott (v10.276 „hatartalan halmozok").
+    ok(await p.evaluate(() => (GAMES.find(g => g.id === 'arveres') || {}).stake === null),
+       '⚠️ a `stake` null — a korong nem ígérhet felső határt',
+       JSON.stringify(await p.evaluate(() => (GAMES.find(g => g.id === 'arveres') || {}).stake)));
+    // ⚠️ Nem a fejléc ELŐTTI szövegre szűrünk: a léptető címkéje
+    // `textTransform:'uppercase'`, tehát az `innerText`-ben „HÁNY KORTY" áll —
+    // egy „a címkéig vágom" fogódzó ezen csendben elhasal. A tartomány ALAKJÁRA
+    // kell szűrni, és külön ellenőrizni, hogy a körszámláló ott van.
+    ok(!/\d+\s*[–-]\s*\d+\s*KORTY/i.test(t), 'a fejlécben nincs „N–M KORTY" tartomány',
+       (t.match(/\d+\s*[–-]\s*\d+\s*KORTY/i) || ['nincs ilyen'])[0]);
+    ok(/KÖR/.test(t), '…helyette a körszámláló áll ott', t.slice(0, 30));
+
+    // ⚠️ A FEKETE gomb kikerult: az app sehol nem hasznal tomor sotet
+    // elsodleges gombot. A fogodzo a SZAMITOTT hatter — a `PrimaryButton`
+    // menta gradienst tesz ki, a regi `bigBtn(T.ink)` tomor sotetet.
+    const btnBg = await p.evaluate(() => {
+      const b2 = [...document.querySelectorAll('#__p button')].find(x => /Kész|Következő/.test(x.textContent || ''));
+      return b2 ? getComputedStyle(b2).backgroundImage + ' | ' + getComputedStyle(b2).backgroundColor : null;
+    });
+    ok(!!btnBg && /gradient/.test(btnBg), 'az elsődleges gomb a közös PrimaryButton (gradiens, nem tömör fekete)', btnBg);
+
+    // A nev-CHIPSOR helyett a Loverseny jelzo-sora: „N/M" halado jelzes.
+    ok(/\b1\/2\b/.test(t), 'ott a Lóverseny-féle „N/M" haladásjelző', (t.match(/\d\/\d/) || ['—'])[0]);
     ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
     await p.close();
   }

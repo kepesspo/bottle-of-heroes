@@ -2006,6 +2006,38 @@ A számok **nyersen** mennek ki mindkét csatornán (a `PlayScreen` szoroz); a
 `drinkMult` csak a léptető és a sor **kijelzését** skálázza. Ha a játék is
 szorozna, nehéz szinten 2-es licitből 18 lenne 6 helyett (v10.299-lecke).
 
+### Nincs licit-plafon, és ez a fejlécet is átírja (v10.361)
+Az `ARVERES_MAX_BID = 6` **megszűnt** — a licit addig megy, ameddig vállalják.
+Ebből **következik** a fejléc-korong változása: `stake:[0,6]` → **`stake:null`**.
+Felső határ nélkül nincs igaz tartomány, amit a korong kiírhatna, ezért ott a
+**körszámláló** áll (a v10.276-os „határtalan halmozók" csoportja). A kettő
+együtt mozog: aki visszahozná a tartományt, előbb a plafont hozza vissza — és a
+`stake_test` `VART_NULL` listáját is igazítsa.
+
+**A fekete gomb kikerült.** Az app sehol nem használ tömör sötét elsődleges
+gombot; az akció mindenhol a közös `PrimaryButton`. Két helyen állt: „Én vagyok
+&lt;név&gt;" és „Licitálás indul".
+
+**A név-chipsor helyett a Lóverseny játékos-jelző sora** (avatar + név + haladó
+pöttyök + „N/M"). A régi hat pirula nem mondta meg, hányadiknál tartunk, és sok
+játékosnál két sorba tört. Ugyaninnen jön a **léptető alakja** is: 52×52-es −/+
+és közöttük a széles, színkódolt tét-kártya.
+
+**⚠️ A három tét-szín EGY forrásból jön** (`STAKE_TONE_BG`), és a Lóverseny is
+erre állt át — két kézzel írt másolat pontosan az a fajta elcsúszás, amiből a
+korty-sornál négy változat lett (v10.291). A Lóverseny **hívása** változatlan
+(nyers `amount`), tehát ott a renderelés bitre ugyanaz.
+
+**A két játék szándékosan MÁS számot ad a kártyának:** a Lóverseny a nyers tétet
+(a szorzót a léptető alatti mondat írja ki — v10.299), az árverés a már szorzott
+számot (ott nincs ilyen mondat, és a felfedés `PlayerDrinkRow`-ja is szorzottan
+mutat — nyersen a két képernyő mást mondana ugyanarról a licitről).
+
+Teszt: `newgames_test` 18. blokk. **A plafon-mentesség fogódzója nem a `+` gomb
+`disabled` állapota, hanem hogy a szám tényleg nő** — egy `Math.min(...)` a
+`step`-ben letiltás NÉLKÜL is megállítaná, és a gomb-alapú ellenőrzés átmenne
+rajta.
+
 Teszt: `node tests/newgames_test.js` 14–17. blokk. A 14. fogódzója a
 **szivárgás-mérés**: a második játékos léptetőjénél a teljes játéktér szövegében
 nem szerepelhet az első licitje.

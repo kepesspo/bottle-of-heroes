@@ -118,7 +118,10 @@ async function setup(p, gameId, opts) {
   // v10.302: a kisebb is KIKERULT — a tet felso hatarat a pakli szabja meg.
   // v10.315: a ritmus is KIKERULT — a vesztes a pontkulonbseget issza, a pont
   // 0-ra van vagva, tehat a plafon a nem-csapda felvillanasok szama.
-  const VART_NULL = ['beerpong','blackjack','busz','farkasos',
+  // v10.361: az `arveres` BEKERULT — a licitnek nincs felso hatara (tulajdonosi
+  // dontes), tehat a korong nem tud igaz tartomanyt igerni. Ha valaha visszajon
+  // a plafon, ez a sor ES a `GAMES[].stake` egyutt mozog.
+  const VART_NULL = ['arveres','beerpong','blackjack','busz','farkasos',
                      'meduza','ovfj','powerhour','ringfire','utveszto'].sort();
   ok(decl.nulls.slice().sort().join(',') === VART_NULL.join(','),
      'pontosan a várt játékok deklarálnak null tétet', decl.nulls.slice().sort().join(', '));
