@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.366';
+const APP_VERSION = 'v10.367';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -64437,8 +64437,13 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     if (kind === 'point') {
       // A pontot kapok a banner NYERTES oldalara kerulnek — a `drinks:0` miatt
       // a szam-oszlop nem ir korty-szamot.
+      // ⚠️ A `winPoints` a TENYLEGES pont: egyforma osztasnal a szam (a banner
+      // „+N PONT"-ot ir), fejenkent MASNAL `null` — akkor nincs egy igaz szam,
+      // a banner elrejti a metrikat, es a jegyzet sorolja fel nevenkent
+      // (kulonben a bedrotozott „+1" hazudna — ezt jelezte a bejelentes).
       onResult({ winners: touched, drinks: 0, penalty: true,
-                 winNote: uniform ? `+${amounts[0]} pont` : '', loseNote: note });
+                 winPoints: uniform ? amounts[0] : null,
+                 winNote: '', loseNote: note });
     } else {
       onResult({
         losers: touched,
@@ -64968,12 +64973,20 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           // konyveles. A `wcPts` a banner sajat effektjebol jon, hogy egy
           // regi (mar lezart) banner ne kapja meg egy ujabb kor szorzojat.
           const wcPts = gameResult.effect === 'double' ? 2 : 1;
-          const value = kind === 'win' ? '+' + wcPts : String(drinks);
+          // ⚠️ Buntetes/jutalom pont-eredmeny: a TENYLEGES pontot mutatjuk
+          // (`winPoints`), nem a bedrotozott +1/+2-t. Ha `winPoints === null`
+          // (fejenkent MAS: Kecsi 5, Luca 2), nincs egy igaz szam → elrejtjuk a
+          // metrikat, es a jegyzet sorolja fel nevenkent. A bejelentett hiba:
+          // ilyenkor a fejlec „+1 PONT"-ot irt, holott tobbet osztottunk.
+          const hasWinPoints = gameResult.winPoints !== undefined;
+          const winPts = hasWinPoints ? gameResult.winPoints : wcPts;
+          const winMetricHidden = hasWinPoints && gameResult.winPoints == null;
+          const value = kind === 'win' ? '+' + (winPts == null ? '' : winPts) : String(drinks);
           const unit = kind === 'win' ? 'PONT' : 'KORTY';
           // Ha fejenkent MAS az osszeg (Buntetes, Sohanem, Fingerit), a jatek
           // drinks:0-t kuld, es a jegyzet sorolja fel nevenkent. Ilyenkor nincs
           // mit kiirni a szam-oszlopba — a "0 KORTY" hazugsag lenne.
-          const showMetric = kind === 'win' || drinks > 0;
+          const showMetric = kind === 'win' ? !winMetricHidden : drinks > 0;
           const kickerEl = (
             <span style={{ fontFamily:T.font, fontWeight:900, fontSize: soloCard ? 10.5 : 9.5, letterSpacing:'0.16em', textTransform:'uppercase', lineHeight:1, color:col }}>{kicker}</span>
           );

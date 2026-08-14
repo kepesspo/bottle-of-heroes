@@ -762,6 +762,16 @@ nehézség, se a wildcard nem szorozza (`docs/buntetes.md` 1. csapda).
 
 Mindkét belépő (MENÜ → Büntetés, Wildcard → „Szabályszegő?") átadja a típust.
 
+**⚠️ A banner a TÉNYLEGES pontot mutatja (v10.367).** Korábban a nyertes-oldali
+szám bedrótozva `+1` (dupla körben `+2`) volt — a `wcPts` a wildcard-effektből
+jött, nem a kiosztott pontból. Pont-büntetésnél ez hazudott: Kecsi 5 / Luca 2
+kiosztásnál a fejléc „+1 PONT"-ot írt, a valós bontás csak a jegyzetben volt.
+Innentől a `givePenalty` pont-ága **`winPoints`** mezőt küld: egyforma osztásnál
+a szám (a banner „+N PONT"-ot ír), fejenként MÁSnál `null` — akkor a banner
+**elrejti a metrikát**, és a jegyzet sorolja fel nevenként (Kecsi 5⭐, Luca 2⭐).
+A normál győzelem (nincs `winPoints`) változatlanul a `wcPts`-t mutatja.
+Teszt: `penalty_unified_test.js` 9a/9b blokk.
+
 ## 🌪 Szélvihar (Busz) — mikor sül el (v10.320)
 A lánc ellenőrizve, `node tests/szelvihar_test.js`. Négy feltételnek EGYSZERRE
 kell teljesülnie, különben csendben nem történik semmi:

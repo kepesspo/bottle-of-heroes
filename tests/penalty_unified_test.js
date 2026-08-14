@@ -81,7 +81,7 @@ async function mount(p, { diff, wcEffect, nyolcJatekos, game }) {
 //    (zIndex 60) szukitunk, kulonben a hatter lapjat vezerelnenk.
 const findCard = () => {
   const ov = [...document.querySelectorAll('div')].filter(d => d.style && d.style.zIndex === '60')
-    .find(d => [...d.querySelectorAll('button')].some(x => /korty kiosztva|Senki sem iszik/.test(x.innerText || '')));
+    .find(d => [...d.querySelectorAll('button')].some(x => /korty kiosztva|Senki sem iszik|pont kiosztva|Senki sem kap pontot/.test(x.innerText || '')));
   return ov ? ov.firstElementChild : null;
 };
 const modalInfo = p => p.evaluate(() => {
@@ -140,6 +140,22 @@ const bannerText = p => p.evaluate(() => {
   return el ? (el.innerText || '').replace(/\s+/g, ' ').trim() : '';
 });
 const drinksOf = p => p.evaluate(() => window.__players.map(x => x.name + ':' + x.drinks).join(','));
+const pointsOf = p => p.evaluate(() => window.__players.map(x => x.name + ':' + x.points).join(','));
+// A modalban a KORTY/PONT szegmens „Pont" gombjara kattint.
+const switchToPoint = p => p.evaluate(() => {
+  const card = window.__findCard();
+  const btn = card && [...card.querySelectorAll('button')].find(x => (x.textContent || '').trim() === 'Pont');
+  if (btn) { btn.click(); return true; } return false;
+});
+// Pont modban a zaro gomb felirata „N pont kiosztva".
+const confirmPoint = async (p) => {
+  await p.evaluate(() => {
+    const card = window.__findCard();
+    const btn = card && [...card.querySelectorAll('button')].find(x => /pont kiosztva/.test(x.innerText || ''));
+    if (btn) btn.click();
+  });
+  await p.waitForTimeout(1000);
+};
 
 (async () => {
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
@@ -311,6 +327,35 @@ const drinksOf = p => p.evaluate(() => window.__players.map(x => x.name + ':' + 
   ok(osszSum(koviUtan) > osszSum(buntetesUtan),
      'és a játék nyereménye is RÁJÖTT (nem helyette)',
      osszSum(buntetesUtan) + ' → ' + osszSum(koviUtan));
+
+  // ── 9. PONT-BÜNTETÉS: a banner a TÉNYLEGES pontot mutassa (v10.367) ──
+  // Bejelentett hiba: fejenként más pontnál (Kecsi 5, Luca 2) a fejléc „+1 PONT"-ot
+  // írt, a valós bontás csak az alsó jegyzetben volt.
+  console.log('\n===== 9a. PONT-BÜNTETÉS — FEJENKÉNT MÁS: nincs hamis „+1 PONT" =====');
+  await mount(p, { diff: 'easy', game: 'szerencse' });
+  await p.evaluate(() => { const pop = [...document.querySelectorAll('div')].find(d => d.style && d.style.zIndex === '9998'); if (pop) pop.click(); });
+  await p.waitForTimeout(400);
+  await openMenuPenalty(p);
+  ok(await switchToPoint(p), 'a modalban átváltható PONT módra');
+  await p.waitForTimeout(200);
+  ok(await assignInModal(p, { Sere: 3, Kecsi: 1 }) === 'ok', 'fejenként más pont kiosztható (Sere 3, Kecsi 1)');
+  await confirmPoint(p);
+  const b9 = await bannerText(p);
+  ok(!/\+1\s*PONT/i.test(b9), '⚠️ NINCS hamis „+1 PONT" a fejlécben', (b9.match(/\+\d+\s*PONT/i) || ['nincs +N PONT'])[0]);
+  ok(/Sere 3/.test(b9) && /Kecsi 1/.test(b9), 'a banner névenként sorolja fel (Sere 3, Kecsi 1)', (b9.match(/Sere \d.{0,16}/) || ['nincs'])[0]);
+  ok(/Sere:3/.test(await pointsOf(p)) && /Kecsi:1/.test(await pointsOf(p)), 'és a pont tényleg felkerült', await pointsOf(p));
+
+  console.log('\n===== 9b. PONT-BÜNTETÉS — AZONOS: a fejléc a valós számot írja =====');
+  await mount(p, { diff: 'easy', game: 'szerencse' });
+  await p.evaluate(() => { const pop = [...document.querySelectorAll('div')].find(d => d.style && d.style.zIndex === '9998'); if (pop) pop.click(); });
+  await p.waitForTimeout(400);
+  await openMenuPenalty(p);
+  await switchToPoint(p); await p.waitForTimeout(200);
+  ok(await assignInModal(p, { Sere: 3, Kecsi: 3 }) === 'ok', 'azonos pont kiosztható (Sere 3, Kecsi 3)');
+  await confirmPoint(p);
+  const b9b = await bannerText(p);
+  ok(/\+3\s*PONT/i.test(b9b), '⚠️ a fejléc „+3 PONT"-ot ír (nem +1)', (b9b.match(/\+\d+\s*PONT/i) || ['nincs'])[0]);
+  ok(/Sere:3/.test(await pointsOf(p)) && /Kecsi:3/.test(await pointsOf(p)), 'és mindkettő +3 pontot kapott', await pointsOf(p));
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
