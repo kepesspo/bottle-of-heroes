@@ -186,6 +186,17 @@ Hol számolódik és hogyan jut le:
 Egy felület, ami KIMARAD, és nem véletlenül:
 - **Büntetés** (`PenaltyModal`) — abszolút, se nehézség, se wildcard nem szorozza
   (`docs/buntetes.md` 1. csapda, `penalty` jelző az `onResult`-ban)
+- **Hajime, Kéz csere** — abszolút (v10.370): a korty MAGA a hibaszám, se
+  nehézség, se wildcard nem szorozza, és a „Fordított kör" sem fordít rajta.
+  A jelző az **`absolute:true`**: az `onResult`-ban (banner) ÉS az
+  `advanceLoverseny` `opts.absolute`-jában (könyvelés). Emiatt a `stake` is
+  `null` (a fejléc-korong nem ígérhet skálázott tartományt — a fejlécben a
+  körszámláló áll). ⚠️ Audit-hiba volt (v10.370 előtt): a banner „3 KORTY"-ot
+  írt, miközben a vesztes a hibaszáma × nehézség-et itta (Sere 3 hiba → 9 korty).
+  Teszt: `hajime_kezcsere_test.js`.
+- **Medúza** — NEM abszolút: marad a nehézség-szorzó, csak a záró banner
+  `loseNote`-ja és az „Össz korty" kijelző kapott `× drinkMult`-ot (v10.370),
+  hogy egyezzen a könyveléssel (előtte nyers számot írt, nehéz szinten alulmondott).
 
 A **Lóverseny v10.299-ig szintén kivétel volt** (`scale=1`) — már nem az, lásd lent.
 

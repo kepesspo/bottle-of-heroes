@@ -120,7 +120,10 @@ async function setup(p, gameId, opts) {
   // 0-ra van vagva, tehat a plafon a nem-csapda felvillanasok szama.
   // v10.363: az `arveres` mint kulon jatek MEGSZUNT — a Csendes arveres beolvadt
   // a wildcard-rendszerbe (licit-wildcard), tehat nincs tobbe a GAMES-ben.
-  const VART_NULL = ['beerpong','blackjack','busz','farkasos',
+  // v10.370: a `hajime` es a `kezcsere` is BEKERULT — a korty MAGA a hibaszam
+  // (abszolut, nehezseg NELKUL), tehat a fejlec-korong nem igerhet skalazott
+  // tartomanyt; a fejlecben a korszamlalo all.
+  const VART_NULL = ['beerpong','blackjack','busz','farkasos','hajime','kezcsere',
                      'meduza','ovfj','powerhour','ringfire','utveszto'].sort();
   ok(decl.nulls.slice().sort().join(',') === VART_NULL.join(','),
      'pontosan a várt játékok deklarálnak null tétet', decl.nulls.slice().sort().join(', '));
