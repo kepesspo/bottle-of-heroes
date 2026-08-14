@@ -44,6 +44,15 @@ const step = (p, more) => p.evaluate(lab => {
   const b = document.querySelector('#__p button[aria-label="' + lab + '"]');
   if (!b) return false; b.click(); return true;
 }, more ? 'Egy korttyal több' : 'Egy korttyal kevesebb');
+// A `variant='pick'` sor egy kattinthato DIV (display:flex, cursor:pointer), nem
+// gomb — a legrovidebb ilyen, ami tartalmazza a nevet, maga a sor.
+const clickRow = (p, name) => p.evaluate(nm => {
+  const cands = [...document.querySelectorAll('#__p div')].filter(d => {
+    const s = getComputedStyle(d);
+    return s.cursor === 'pointer' && s.display === 'flex' && (d.textContent || '').includes(nm);
+  }).sort((a, b) => a.textContent.length - b.textContent.length);
+  if (!cands[0]) return false; cands[0].click(); return true;
+}, name);
 
 // Vegigviszi a korbeadós licitet. `list` = licit jatekosonkent, sorrendben.
 // A vegen a felfedesen allunk (a „Bezar" gombot a hivo nyomja).
@@ -191,6 +200,47 @@ async function bid(p, list) {
     ok(sere && sere.drinks === 2, 'és issza a licitjét is (2)', sere && sere.drinks);
     const t = await txt(p);
     ok(!/🎁/.test(t), '⚠️ a pont-díj NEM kerül a tartós sávba (nincs mit megjegyezni)', /🎁/.test(t));
+    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+    await p.close();
+  }
+
+  // ── 5. CÉLZÓ DÍJ (Átok): a nyertes kiválaszt valakit, a sáv mutatja ──
+  // A felfedés után „Kire száll?" → célpont-választó (a KÖZÖS PlayerDrinkRow
+  // pick-sora) → a tartós sávban „Sere → Luca — Átok…".
+  console.log('\n===== 5. ÁTOK — célpont-választás =====');
+  {
+    const p = await open(b, 'auction');
+    const pIdx = await p.evaluate(() => ARVERES_DIJAK.findIndex(d => d.target));
+    await p.evaluate(({ pl, pIdx }) => {
+      window.__auctionPrizeIndex = pIdx;   // „Átok" (target:true)
+      const r0 = document.getElementById('root'); if (r0) r0.style.display = 'none';
+      const root = document.createElement('div'); root.id = '__p';
+      root.style.cssText = 'position:fixed;inset:0;z-index:9;display:flex;flex-direction:column;overflow:auto';
+      document.body.appendChild(root);
+      function H() {
+        const [ps, setPs] = React.useState(pl); window.__players = ps;
+        return React.createElement(PlayScreen, { go:()=>{}, players:ps, setPlayers:setPs,
+          selectedGames:['busz'], roomCode:null,
+          gameMeta:{ modes:['points','drinks','wildcard'], difficulty:'easy', wildcardMin:1, wildcardMax:1 },
+          setGameMeta:()=>{}, setScoreHistory:()=>{}, setLastGameRound:()=>{} });
+      }
+      ReactDOM.createRoot(root).render(React.createElement(H));
+    }, { pl: PL, pIdx });
+    await p.waitForFunction(() => /Licitálás indul/.test(document.getElementById('__p')?.innerText || ''), { timeout: 4000 }).catch(() => {});
+    ok(pIdx >= 0, 'a „Átok" díj megvan (target:true)', pIdx);
+    await bid(p, [3, 1]);             // Sere 3, Luca 1 → Sere nyer
+    const rev = await txt(p);
+    ok(/Most válaszd ki, kire száll/.test(rev), 'a felfedés a célpont-választásra hív', /Most válaszd/.test(rev));
+    await tap(p, /Kire száll/); await p.waitForTimeout(300);
+    const tp = await txt(p);
+    ok(/Sere átka — kire száll/.test(tp), 'megjelenik a célpont-választó (Sere átka — kire száll?)', tp.slice(0, 40));
+    ok(await clickRow(p, 'Luca'), 'a Luca sorra lehet koppintani (pick-sor)');
+    await p.waitForTimeout(200);
+    await tap(p, /Megvan/); await p.waitForTimeout(400);
+    const t = await txt(p);
+    ok(/🎁/.test(t) && /Sere\s*→\s*Luca/.test(t), '⚠️ a sávban „Sere → Luca" áll (a célpont)', (t.match(/Sere\s*→\s*Luca/) || ['nincs'])[0]);
+    const sere = await p.evaluate(() => (window.__players || []).find(x => x.name === 'Sere'));
+    ok(sere && sere.drinks === 3, 'a nyertes issza a licitjét (3)', sere && sere.drinks);
     ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
     await p.close();
   }

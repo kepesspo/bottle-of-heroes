@@ -2142,3 +2142,20 @@ Amit könnyű elrontani:
 
 Teszt: `auction_wildcard_test.js` 4. blokk — a pont-díj +3 pontot ad, a nyertes
 issza a licitet is, és NINCS tartós sáv.
+
+### Célzó díj: az „Átok" célpontot választ (v10.365)
+Az „Átok" díjon a **`target: true`** mező jelzi, hogy a nyertes kiválaszt valakit.
+A felfedés után az `AuctionOverlay` egy `'target'` fázisba lép: a **közös
+`PlayerDrinkRow` `variant='pick'`** sorával (a Kategória is ezt használja — *ne
+írj újat*) a nyertes rákoppint egy játékosra (magára nem — `others` szűri ki).
+A célpont a `finishAuction`-ön át a `activePrizes` bejegyzésbe kerül
+(`target: <név>`), és a tartós sáv **„🎁 Sere → Luca — Átok…"** alakban mutatja.
+
+Két dolog, amit könnyű elrontani:
+- **Döntetlennél MINDEN nyertes külön célpontot választ** — a `tgtIdx` lépteti a
+  `winners`-t, a `targets` (winnerId → név) gyűjti; csak az utolsó után `onFinish`.
+- **A célpont NÉV, nem id** kerül a sávba (a sáv csak kiír, nem hivatkozik
+  játékos-objektumra) — így egy időközbeni játékos-változás sem szállasztja el.
+
+Teszt: `auction_wildcard_test.js` 5. blokk — az Átok díjnál a felfedés a
+választásra hív, a pick-sorra koppintva a sávban „Sere → Luca" áll.

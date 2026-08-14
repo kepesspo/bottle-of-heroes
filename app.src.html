@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.364';
+const APP_VERSION = 'v10.365';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -51492,7 +51492,7 @@ const ARVERES_DIJAK = [
   { text: 'Kitalálsz egy szabályt a következő körre — mindenkire vonatkozik.' },
   { text: 'A következő körben feleannyit iszol, mint amennyit kapnál.' },
   { text: 'Egyszer visszadobhatsz egy kortyot annak, aki adta.' },
-  { text: 'Átok: válassz valakit — a következő körben DUPLÁN issza a kortyot, amit kap.' },
+  { text: 'Átok: a következő körben DUPLÁN issza a kortyot, amit kap.', target: true },
   { text: 'Kapsz 1 pontot.', points: 1 },
   { text: 'Kapsz 3 pontot.', points: 3 },
 ];
@@ -51520,11 +51520,16 @@ function ArveresDijCard({ dij, compact }) {
 // a nyers licit megy vissza (v10.299 Loverseny-lecke).
 function AuctionOverlay({ players, prize, drinkMult = 1, onFinish }) {
   const pl = (players || []).filter(Boolean);
-  const [phase, setPhase] = React.useState('intro');   // 'intro' | 'bid' | 'reveal'
+  const [phase, setPhase] = React.useState('intro');   // 'intro' | 'bid' | 'reveal' | 'target'
   const [idx, setIdx] = React.useState(0);
   const [open, setOpen] = React.useState(false);       // latja-e mar a leptetot
   const [bid, setBid] = React.useState(0);
   const [bids, setBids] = React.useState({});
+  // Celzo dijnal (Atok) a nyertes kivalaszt valakit. Dontetlennel MINDEN nyertes
+  // sorban valaszt egy celpontot (`tgtIdx` lepteti), a `targets` gyujti (nev).
+  const [tgtIdx, setTgtIdx] = React.useState(0);
+  const [tgtChoice, setTgtChoice] = React.useState(null);
+  const [targets, setTargets] = React.useState({});
 
   const wrap = { display:'flex', flexDirection:'column', alignItems:'center', gap:14, width:'100%' };
   const shell = (title, body) => (
@@ -51636,9 +51641,45 @@ function AuctionOverlay({ players, prize, drinkMult = 1, onFinish }) {
     );
   }
 
-  // reveal
   const top = Math.max(0, ...pl.map(p => bids[p.id] || 0));
   const winners = top > 0 ? pl.filter(p => (bids[p.id] || 0) === top) : [];
+
+  // ── celpont-valaszto (Atok) ──
+  if (phase === 'target') {
+    const curW = winners[tgtIdx];
+    if (!curW) return null;
+    const others = pl.filter(p => p.id !== curW.id);   // sajat magadra nem szall az atok
+    const last = tgtIdx === winners.length - 1;
+    const confirm = () => {
+      if (!tgtChoice) return;
+      const tName = (pl.find(p => p.id === tgtChoice) || {}).name || '';
+      const nextTargets = { ...targets, [curW.id]: tName };
+      setTargets(nextTargets);
+      if (last) onFinish && onFinish({ winners, top, prize, targets: nextTargets });
+      else { setTgtIdx(tgtIdx + 1); setTgtChoice(null); }
+    };
+    return shell('Csendes árverés — WILDCARD',
+      <div style={wrap}>
+        <ArveresDijCard dij={prize} compact />
+        <div style={{ width:'100%', fontFamily:T.font, fontWeight:T.weightTitle, fontSize:15, color:T.ink,
+                      textAlign:'center' }}>
+          <strong style={{ fontWeight:900 }}>{curW.name}</strong> átka — kire száll?
+          {winners.length > 1 && <span style={{ color:T.inkSoft, fontWeight:700, fontSize:12 }}> ({tgtIdx + 1}/{winners.length})</span>}
+        </div>
+        <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:6 }}>
+          {others.map(p => (
+            <PlayerDrinkRow key={p.id} p={p} variant="pick" selected={tgtChoice === p.id}
+              onPick={() => setTgtChoice(p.id)} />
+          ))}
+        </div>
+        <PrimaryButton onClick={confirm} disabled={!tgtChoice}>
+          {last ? 'Megvan — bezár' : 'Következő átok →'}
+        </PrimaryButton>
+      </div>
+    );
+  }
+
+  // reveal
   const sorted = [...pl].sort((a, b) => (bids[b.id] || 0) - (bids[a.id] || 0));
   return shell('Csendes árverés — WILDCARD',
     <div style={wrap}>
@@ -51657,9 +51698,14 @@ function AuctionOverlay({ players, prize, drinkMult = 1, onFinish }) {
         {top <= 0 ? 'Senki nem licitált, a nyeremény elveszett.'
           : (prize && prize.points)
             ? 'A nyeremény a legmagasabb licité — és annyit is iszik. A pontot rögtön meg is kapja.'
-            : 'A nyeremény a legmagasabb licité — és annyit is iszik. A jelző fent marad, amíg fel nem használják.'}
+            : (prize && prize.target)
+              ? 'A nyeremény a legmagasabb licité — és annyit is iszik. Most válaszd ki, kire száll!'
+              : 'A nyeremény a legmagasabb licité — és annyit is iszik. A jelző fent marad, amíg fel nem használják.'}
       </div>
-      <PrimaryButton onClick={() => onFinish && onFinish({ winners, top, prize })}>Bezár</PrimaryButton>
+      <PrimaryButton onClick={() => {
+        if (prize && prize.target && winners.length) { setTgtIdx(0); setTgtChoice(null); setPhase('target'); }
+        else onFinish && onFinish({ winners, top, prize });
+      }}>{(prize && prize.target && winners.length) ? 'Kire száll?' : 'Bezár'}</PrimaryButton>
     </div>
   );
 }
@@ -64429,8 +64475,10 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     // Pont-dij: mar jovairtuk, nincs mit megjegyezni. Mondat-dij: a savba.
     if (prize.points) return;
     const base = Date.now();
+    const tgt = res.targets || {};
     setActivePrizes(prev => [...prev, ...winners.map((p, i) => ({
       id: base + '_' + p.id + '_' + i, name: p.name, color: p.color, prize: prize.text || '',
+      target: tgt[p.id] || null,   // celzo dij (Atok): kire szall
     }))]);
   };
   const usePrize = (id) => setActivePrizes(prev => prev.filter(x => x.id !== id));
@@ -64590,7 +64638,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
             <div key={pr.id} style={{ display:'flex', alignItems:'center', gap:10, background:T.surface, borderLeft:`4px solid ${pr.color || T.mint}`, borderRadius:14, padding:'7px 12px', boxShadow:'0 3px 12px rgba(20,30,50,0.10)' }}>
               <span style={{ fontSize:18, flexShrink:0, lineHeight:1 }}>🎁</span>
               <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontSize:12, lineHeight:1.3, color:T.ink }}>
-                <strong style={{ fontWeight:900 }}>{pr.name}</strong>
+                <strong style={{ fontWeight:900 }}>{pr.name}{pr.target ? ' → ' + pr.target : ''}</strong>
                 <span style={{ color:T.inkSoft }}> — {pr.prize}</span>
               </div>
               <button onClick={() => usePrize(pr.id)} style={{ flexShrink:0, border:`1.5px solid ${T.inkMute}40`, borderRadius:10, background:T.surface, color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:11, padding:'7px 10px', cursor:'pointer' }}>
