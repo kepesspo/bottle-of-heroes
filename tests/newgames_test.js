@@ -20,7 +20,7 @@ const ok = (c, l, e) => { console.log((c ? '  OK   ' : '  HIBA ') + l + (e !== u
 
 // Az ÚJ játékok köre. Ha új kerül be, ITT is át kell vezetni — különben a
 // 2. blokk elbukik, és nem csendben marad ki a szűrőből.
-const NEW_IDS = ['chicken', 'fingerit', 'igennem', 'ultimatum', 'mennyi', 'arveres'];
+const NEW_IDS = ['chicken', 'fingerit', 'igennem', 'ultimatum', 'mennyi'];
 
 const PL = [{ id:'a', name:'Sere', color:'#E07A5F', points:0, drinks:0 },
             { id:'b', name:'Luca', color:'#4FC2A0', points:0, drinks:0 }];
@@ -94,21 +94,6 @@ const step = (p, more) => p.evaluate(lab => {
   const b = document.querySelector('#__p button[aria-label="' + lab + '"]');
   if (!b) return false; b.click(); return true;
 }, more ? 'Egy korttyal több' : 'Egy korttyal kevesebb');
-
-// Vegigviszi a korbeadós licitet. `list` = licit jatekosonkent, sorrendben.
-// A `before` visszahivas a MASODIK jatekos leptetojenel sul el — ott merjuk,
-// hogy az elozo licit tenyleg nem latszik.
-async function arveresBid(p, list, before) {
-  await tap(p, /Licitálás indul/); await p.waitForTimeout(500);
-  for (let i = 0; i < list.length; i++) {
-    await tap(p, /Én vagyok/); await p.waitForTimeout(400);
-    for (let k = 0; k < list[i]; k++) { await step(p, true); await p.waitForTimeout(120); }
-    if (before && i === 1) await before();
-    // Az utolso jatekosnal „Kész — felfedés", elotte „Következő →" (v10.361).
-    await tap(p, /^Kész|^Következő/); await p.waitForTimeout(500);
-  }
-  await p.waitForTimeout(900);
-}
 
 (async () => {
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
@@ -411,159 +396,6 @@ async function arveresBid(p, list, before) {
     await p.close();
   }
 
-  // ── 14. CSENDES ARVERES: a legmagasabb licit nyer — ES ISSZA ──
-  // ⚠️ A nyertes a banner ISZIK oldalan all, es ez szandekos: pontosan annyit
-  // iszik, amennyit igert. A nyeremenyt a `loseNote` mondja ki. Pont NINCS.
-  console.log('\n===== 14. ARVERES — A LEGMAGASABB LICIT =====');
-  {
-    const p = await open(b);
-    await mountGame(p, 'arveres', 'easy');
-    await p.waitForTimeout(2000);
-    const t0 = await txt(p);
-    ok(/A NYEREMÉNY/i.test(t0), 'a nyeremény kint van, mielőtt bárki licitálna', t0.slice(0, 80));
-    // ⚠️ MERVE: az elso vegigjatszason ott allt a „KI RONTOTT?" panel. Az
-    // `advanceLoverseny`-t hivja, tehat MASODIK, ellentmondo utat nyit a
-    // konyveleshez. A Csapat jatekoknal ezt NEM a `cta: []` zarja ki (az csak a
-    // Paros par gombjaira hat), hanem a `PlayScreen` id-listaja — egy uj,
-    // maga-konyvelo csapatjateknal MINDKETTOT be kell allitani.
-    ok(!/KI RONTOTT/i.test(t0), 'nincs „Ki rontott?" panel — a játék maga könyvel', t0.slice(0, 200));
-
-    // ⚠️ A TITKOSSAG A JATEK FELE: a masodik jatekos NEM lathatja az elso
-    // szamat. Sere 5-ot igert; ha az barhol latszik, a licit ertelmet veszti.
-    let leaked = null;
-    await arveresBid(p, [5, 2], async () => {
-      leaked = await p.evaluate(() => (document.getElementById('__p').innerText || '').replace(/\s+/g, ' '));
-    });
-    ok(leaked !== null && !/\b5\b/.test(leaked), 'a második licitálásnál az első száma NEM látszik', leaked);
-    ok(/Luca/.test(leaked || ''), '…de az látszik, hogy most Luca licitál', (leaked || '').slice(0, 90));
-
-    const t = await txt(p);
-    ok(/NYERT/.test(t), 'a felfedésen ott a nyertes jelölés', t.slice(0, 140));
-    ok(/Nyeremény:/.test(t), 'és a banner kiírja, mit nyert', (t.match(/Nyeremény:[^·]{0,50}/) || ['—'])[0]);
-    const s = await bannerSides(p);
-    ok(s.lose.join() === 'Sere' && s.win.length === 0,
-       'a legtöbbet ígérő iszik, és nincs „nyertes" oldal', JSON.stringify(s));
-    ok(s.drinks === 5, 'annyit iszik, amennyit ígért (5)', s.drinks);
-    await commit(p);
-    ok(JSON.stringify(await state(p)) === JSON.stringify([{n:'Sere',pt:0,dr:5},{n:'Luca',pt:0,dr:0}]),
-       '⚠️ a könyvelés EGYEZIK a bannerrel — és PONT SENKINEK nem jár', JSON.stringify(await state(p)));
-    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
-    await p.close();
-  }
-
-  // ── 15. ARVERES: dontetlen — mindketten nyernek, mindketten isznak ──
-  console.log('\n===== 15. ARVERES — DONTETLEN =====');
-  {
-    const p = await open(b);
-    await mountGame(p, 'arveres', 'easy');
-    await p.waitForTimeout(2000);
-    await arveresBid(p, [3, 3]);
-    const s = await bannerSides(p);
-    ok(s.lose.sort().join() === 'Luca,Sere', 'azonos licitnél MINDKETTEN nyernek — és isznak', JSON.stringify(s));
-    ok(s.drinks === 3, 'fejenként a saját licitjük (3)', s.drinks);
-    await commit(p);
-    ok(JSON.stringify(await state(p)) === JSON.stringify([{n:'Sere',pt:0,dr:3},{n:'Luca',pt:0,dr:3}]),
-       'a könyvelés EGYEZIK a bannerrel', JSON.stringify(await state(p)));
-    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
-    await p.close();
-  }
-
-  // ── 16. ARVERES: mindenki 0 — a nyeremeny elvesz ──
-  // Ez a jatek egyetlen VALODI no-opja: nincs mit konyvelni, tehat a legacy
-  // banner-alak itt helyes (v10.354).
-  console.log('\n===== 16. ARVERES — SENKI NEM LICITAL =====');
-  {
-    const p = await open(b);
-    await mountGame(p, 'arveres', 'easy');
-    await p.waitForTimeout(2000);
-    await arveresBid(p, [0, 0]);
-    const t = await txt(p);
-    ok(/Senki nem licitált/.test(t), 'a banner kimondja, hogy elveszett a nyeremény', t.slice(0, 120));
-    ok(!/NYERT/.test(t), 'és nincs nyertes jelölés', t.slice(0, 120));
-    await commit(p);
-    ok(JSON.stringify(await state(p)) === JSON.stringify([{n:'Sere',pt:0,dr:0},{n:'Luca',pt:0,dr:0}]),
-       'senki nem iszik és senki nem kap pontot', JSON.stringify(await state(p)));
-    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
-    await p.close();
-  }
-
-  // ── 17. ARVERES: a nehezseg szoroz — EGYSZER ──
-  // ⚠️ A jatek NYERS szamot kuld mindket csatornan; ha maga is szorozna, nehéz
-  // szinten 2 licitbol 18 lenne 6 helyett (v10.299 Loverseny-lecke).
-  console.log('\n===== 17. ARVERES — A NEHEZSEG SZORZOJA =====');
-  {
-    const p = await open(b);
-    await mountGame(p, 'arveres', 'hard');   // ×3
-    await p.waitForTimeout(2000);
-    // A lepteto a KIJELZETT szamot skalazza: 2 kattintas 6-ot ir ki.
-    await tap(p, /Licitálás indul/); await p.waitForTimeout(500);
-    await tap(p, /Én vagyok/); await p.waitForTimeout(400);
-    await step(p, true); await step(p, true); await p.waitForTimeout(300);
-    ok(/\b6\b/.test(await txt(p)), 'a léptető a MÁR SZORZOTT számot mutatja (2 → 6)', (await txt(p)).slice(0, 120));
-    await tap(p, /^Kész|^Következő/); await p.waitForTimeout(500);
-    await tap(p, /Én vagyok/); await p.waitForTimeout(400);
-    await tap(p, /^Kész|^Következő/); await p.waitForTimeout(1200);
-    const s = await bannerSides(p);
-    ok(s.drinks === 6, 'a banner is 6-ot ír', s.drinks);
-    await commit(p);
-    ok(JSON.stringify(await state(p)) === JSON.stringify([{n:'Sere',pt:0,dr:6},{n:'Luca',pt:0,dr:0}]),
-       'és pontosan 6 kerül fel — nem 2 és nem 18', JSON.stringify(await state(p)));
-    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
-    await p.close();
-  }
-
-  // ── 18. ARVERES: NINCS PLAFON, es a felepitmeny a kozos (v10.361) ──
-  // ⚠️ A plafon-mentesseg fogodzoja nem a `+` gomb `disabled` allapota, hanem
-  // hogy a szam TENYLEG novekszik — egy `Math.min(...)` a `step`-ben letiltas
-  // NELKUL is megallitana, es a gomb-alapu ellenorzes atmenne rajta.
-  console.log('\n===== 18. ARVERES — NINCS LICIT-PLAFON =====');
-  {
-    const p = await open(b);
-    await mountGame(p, 'arveres', 'easy');
-    await p.waitForTimeout(2000);
-    await tap(p, /Licitálás indul/); await p.waitForTimeout(500);
-    await tap(p, /Én vagyok/); await p.waitForTimeout(400);
-    for (let i = 0; i < 12; i++) { await step(p, true); await p.waitForTimeout(90); }
-    const t = await txt(p);
-    ok(/\b12\b/.test(t), '12 kattintás után 12 áll a léptetőn — nincs 6-os plafon',
-       (t.match(/licited\?\s*(\d+)/i) || t.match(/\b1?\d\b/) || ['—'])[0]);
-    ok(await p.evaluate(() => {
-      const b2 = document.querySelector('#__p button[aria-label="Egy korttyal több"]');
-      return !!b2 && !b2.disabled;
-    }), 'és a „+" gomb sem tiltódik le');
-
-    // A fejlec-korong NEM igerhet tartomanyt, ha nincs felso hatar: a `stake`
-    // ezert `null` marad. Helyette (v10.362) a korty-korong `∞` jelet mutat —
-    // az pontosan azt mondja, ami igaz: a licit korlatlan. NEM korszamlalo.
-    ok(await p.evaluate(() => (GAMES.find(g => g.id === 'arveres') || {}).stake === null),
-       '⚠️ a `stake` null — a korong nem ígérhet felső határt',
-       JSON.stringify(await p.evaluate(() => (GAMES.find(g => g.id === 'arveres') || {}).stake)));
-    ok(await p.evaluate(() => (GAMES.find(g => g.id === 'arveres') || {}).stakeInfinite === true),
-       'és a `stakeInfinite` jelző igaz — ez viszi a korty-korongot az ∞-jellel');
-    // ⚠️ Nem a fejléc ELŐTTI szövegre szűrünk: a léptető címkéje
-    // `textTransform:'uppercase'`, tehát az `innerText`-ben „HÁNY KORTY" áll —
-    // egy „a címkéig vágom" fogódzó ezen csendben elhasal. A tartomány ALAKJÁRA
-    // kell szűrni, és külön ellenőrizni, hogy az ∞-korty-korong áll ott.
-    ok(!/\d+\s*[–-]\s*\d+\s*KORTY/i.test(t), 'a fejlécben nincs „N–M KORTY" tartomány',
-       (t.match(/\d+\s*[–-]\s*\d+\s*KORTY/i) || ['nincs ilyen'])[0]);
-    ok(/∞/.test(t), '…helyette az ∞ korty-korong áll ott (korlátlan tét)', t.slice(0, 30));
-    ok(!/KÖR\s*\n?\s*\d/.test(t), 'és a körszámláló már NINCS a fejlécben',
-       (t.match(/KÖR\s*\n?\s*\d/) || ['nincs'])[0]);
-
-    // ⚠️ A FEKETE gomb kikerult: az app sehol nem hasznal tomor sotet
-    // elsodleges gombot. A fogodzo a SZAMITOTT hatter — a `PrimaryButton`
-    // menta gradienst tesz ki, a regi `bigBtn(T.ink)` tomor sotetet.
-    const btnBg = await p.evaluate(() => {
-      const b2 = [...document.querySelectorAll('#__p button')].find(x => /Kész|Következő/.test(x.textContent || ''));
-      return b2 ? getComputedStyle(b2).backgroundImage + ' | ' + getComputedStyle(b2).backgroundColor : null;
-    });
-    ok(!!btnBg && /gradient/.test(btnBg), 'az elsődleges gomb a közös PrimaryButton (gradiens, nem tömör fekete)', btnBg);
-
-    // A nev-CHIPSOR helyett a Loverseny jelzo-sora: „N/M" halado jelzes.
-    ok(/\b1\/2\b/.test(t), 'ott a Lóverseny-féle „N/M" haladásjelző', (t.match(/\d\/\d/) || ['—'])[0]);
-    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
-    await p.close();
-  }
 
   await b.close();
   console.log(fail ? '\n❌ ' + fail + ' HIBA' : '\n✅ MINDEN ELLENORZES RENDBEN');

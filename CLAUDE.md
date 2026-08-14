@@ -1974,6 +1974,12 @@ láthatatlanná. Ellenőrizve: a könyvelést kivéve mindhárom mérő blokk el
 `dr: 0`-val (az eredeti tünet).
 
 ## Új csapatjáték: „Csendes árverés" (v10.360)
+> **⚠️ ELAVULT (v10.363): a Csendes árverés mint különálló JÁTÉK MEGSZŰNT — a
+> licit-mechanika beolvadt a wildcard-rendszerbe (lásd „Licit-wildcard" lentebb).
+> A `arveres` már nincs a `GAMES`-ben. Az alábbi három szakasz (v10.360/361/362)
+> a régi különálló játékot írja le, historikus okból marad meg. A licit-UI és az
+> `ARVERES_DIJAK` viszont ÉL — az `AuctionOverlay`-ben.**
+
 Az app kisorsol egy nyereményt, és mindenki **titokban** licitál 0–6 kortyot.
 A legmagasabb licit nyer — és annyit is iszik, amennyit ígért.
 
@@ -2068,3 +2074,45 @@ mondja, ami igaz, tartomány-hazugság nélkül.
 
 Teszt: `newgames_test` 18. blokk — a `stakeInfinite` igaz, a fejlécben `∞` áll,
 NINCS „N–M KORTY" tartomány ÉS nincs körszámláló.
+> **⚠️ Ez a `stakeInfinite`/∞ megoldás a v10.363-mal KIKERÜLT** (a játék megszűnt).
+> Ha valaha visszatérne, a fenti a recept.
+
+## Licit-wildcard: a Csendes árverés beolvadt a wildcardba (v10.363)
+Tulajdonosi döntés: a Csendes árverés mint **külön játék megszűnt**, és a
+licit-mechanika **wildcard** lett. Az ok kettős: (1) a wildcardok maguk is
+kör-módosító *mondatok* (a 14-ből 11 tisztán társasági szabály), tehát az árverés
+díjai ugyanabba a családba tartoznak; (2) a wildcardnak **már van** tartós, látható
+sávja (`activeWildcard`) — pont az, ami az árverésből hiányzott, és amitől a
+nyeremény elfelejtődött. Így a wildcard is gazdagabb: mostantól nemcsak *kapsz*
+egy szabályt, hanem **megveheted** kortyért egy előnyt.
+
+**A mechanika.** Új wildcard `effect:'auction'` (🔨) a poolban. Amikor a
+wildcard-időzítő ezt sorsolja, az `applyWildcard` **nem** állít tartós szabály-
+sávot és nincs reverse/double/lucky — helyette megnyitja az **`AuctionOverlay`**-t
+(a régi licit-UI, „add körbe a telefont", titkos licitek, a díj a
+`ARVERES_DIJAK`-ból). Ugyanúgy az **átmenetnél** jön, mint a popup (nem vágja el a
+játékot); SOLO játéknál (Busz, Power Hour) rögtön, mert ott nincs átmenet.
+
+**A felejtés megoldása: `activePrizes`.** A licit `onFinish`-e a `PlayScreen`
+`finishAuction`-jébe fut: a nyertes(ek) **issza(k)** a licitet (`top × diffDrinks`
+— a wildcard-szorzó itt nem játszik, mert AZ maga a wildcard), és a díj bekerül egy
+**tartós személyes sávba** (`🎁 <név> — <díj>`), amit a **„Felhasználva"** gomb
+vesz ki. **Több díj is állhat egyszerre** (külön licitekből) — ezért lista, nem az
+egyszemélyes `activeWildcard`.
+
+Három dolog, amit könnyű elrontani:
+- **A licit NYERS számot ad vissza** (`top`), a szorzást a `finishAuction` végzi —
+  ha az overlay is szorozna, duplán menne fel (v10.299 Lóverseny-lecke).
+- **Az `applyWildcard` és az átmenet-horog KÜLÖN ágazik** `effect:'auction'`-re:
+  előbbi a SOLO (azonnali) esetet, utóbbi a normál (átmenetnél) esetet nyitja. Ha
+  csak az egyiket vezeted be, az egyik pálya-típuson néma marad.
+- **Döntetlennél több nyertes** van: mind isznak, és mind kapnak egy-egy díj-sávot.
+
+Ami MEGSZŰNT a v10.360–362-ből: az `arveres` `GAMES`/`SCENARIOS` bejegyzés, a
+render-switch, az `ArveresGame` (→ `AuctionOverlay`), a `stakeInfinite`/∞ fejléc.
+Ami MEGMARADT: `ARVERES_DIJAK`, `ArveresDijCard`, a licit/felfedés UI.
+
+Teszt: `node tests/auction_wildcard_test.js` — forrás-invariánsok (auction-wildcard
+van, `arveres` játék nincs), a licit-kontraktus (`AuctionOverlay` → a legmagasabb
+licit nyer), és az integráció (SOLO játékon nyit, a nyertes iszik `× nehézség`, a
+tartós sáv megjelenik és a „Felhasználva" kiveszi).
