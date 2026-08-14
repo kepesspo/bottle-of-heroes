@@ -2174,3 +2174,28 @@ Két dolog, amit könnyű elrontani:
 
 Teszt: `auction_wildcard_test.js` 5. blokk — az Átok díjnál a felfedés a
 választásra hív, a pick-sorra koppintva a sávban „Sere → Luca" áll.
+
+## „Minden körben" wildcard-teszt kapcsoló (v10.369)
+A wildcard alapból **időzítővel** jön (6–9 percenként), ezért egy rövid teszt-
+partiban elő sem jön. A Játékmenet → Wildcard → **„🧪 Minden körben (teszt)"**
+kapcsoló a `gameMeta`-ba `wildcardEveryRound:true`-t tesz — ilyenkor **NEM az
+időzítő** hoz wildcardot, hanem **minden körváltás** (a `commitRound` átmenet-
+horgában), determinisztikusan. A sorsolás, az effektek (dupla/fordított/szerencse)
+és a **licit-árverés** is így gyorsan tesztelhető.
+
+- **`pickWildcard`** kiemelve (közös az időzítővel és a körváltással) — a `pool`
+  kihagyja az aktívat, és tiszteli a `__wildcardTestEffect` forced-effektet.
+- Az **időzítő kimarad**, ha a mód aktív (`if (!wildcardOn || wildcardEveryRound)
+  return;`), különben KÉT forrás hozna wildcardot.
+- A körváltásnál `applyWildcard(wc, true)` — **popupNow**: rögtön mutatjuk, a
+  körszámláló helyett. Auction-wildcardnál az overlay nyílik (mint máskor is).
+- A gyakoriság-választó bekapcsolva **ki van szürkítve** (nem számít), és a
+  numerikus tartomány `sel`-je is figyeli a flaget.
+
+⚠️ A flag **sima boolean** — lemehet a Firestore-ba (`gameMeta` → `createRoom`),
+nem callback (v10.297 csapda).
+
+Teszt: `node tests/wildcard_every_test.js` — everyRound módban egy szerencse-kör
+UTÁN ott a „Dupla kör" sáv; a **kontroll** blokk (everyRound nélkül, perces
+időzítő) ugyanazt játssza, és NEM jön wildcard — enélkül az 1. blokk akkor is
+átmenne, ha a wildcard máshonnan jönne.

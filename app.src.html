@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.368';
+const APP_VERSION = 'v10.369';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -46591,15 +46591,28 @@ function GameSettingsContent({ meta, setMeta, onDone, go, group }) {
                 </div>
                 <InfoBox id={m.id} text={m.info} />
                 {m.id === 'wildcard' && on && (
-                  <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:8, padding:'10px 12px', background:T.surfaceMuted, borderRadius:12 }}>
-                    <span style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkSoft, flex:1 }}>Milyen gyakran?<br /><span style={{ fontWeight:700, fontSize:11, color:T.inkMute }}>percenként</span></span>
-                    <div style={{ display:'flex', gap:4 }}>
-                      {WILDCARD_RANGES.map(n => {
-                        const sel = (meta.wildcardMin || 6) === n.lo;
-                        return <button key={n.lo} onClick={() => setMeta({...meta, wildcardMin:n.lo, wildcardMax:n.hi})} style={{ width:52, padding:'8px 0', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background: sel?T.mint:T.surface, color: sel?'#fff':T.inkSoft, transition:'all .15s' }}>{n.label}</button>;
-                      })}
+                  <React.Fragment>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:8, padding:'10px 12px', background:T.surfaceMuted, borderRadius:12, opacity: meta.wildcardEveryRound ? 0.5 : 1 }}>
+                      <span style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkSoft, flex:1 }}>Milyen gyakran?<br /><span style={{ fontWeight:700, fontSize:11, color:T.inkMute }}>percenként</span></span>
+                      <div style={{ display:'flex', gap:4 }}>
+                        {WILDCARD_RANGES.map(n => {
+                          const sel = !meta.wildcardEveryRound && (meta.wildcardMin || 6) === n.lo;
+                          return <button key={n.lo} onClick={() => setMeta({...meta, wildcardMin:n.lo, wildcardMax:n.hi, wildcardEveryRound:false})} style={{ width:52, padding:'8px 0', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background: sel?T.mint:T.surface, color: sel?'#fff':T.inkSoft, transition:'all .15s' }}>{n.label}</button>;
+                        })}
+                      </div>
                     </div>
-                  </div>
+                    {/* 🧪 Teszt-kapcsolo: minden korvaltasnal jon egy wildcard (az
+                        idozito helyett). Bekapcsolva a gyakorisag-valaszto ki van
+                        szurkitve, mert nem szamit. */}
+                    <button onClick={() => setMeta({...meta, wildcardEveryRound: !meta.wildcardEveryRound})}
+                      style={{ width:'100%', marginTop:6, padding:'9px 12px', borderRadius:12, border:'none', cursor:'pointer',
+                               display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+                               fontFamily:T.font, fontWeight:800, fontSize:12.5,
+                               background: meta.wildcardEveryRound ? T.coral : T.surfaceMuted,
+                               color: meta.wildcardEveryRound ? '#fff' : T.inkSoft, transition:'all .15s' }}>
+                      🧪 Minden körben {meta.wildcardEveryRound ? '— BE (teszt)' : '(teszt)'}
+                    </button>
+                  </React.Fragment>
                 )}
               </div>
             );
@@ -63777,28 +63790,33 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     if (popupNow) setTimeout(() => showWcPopup(wc), wc.effect === 'lucky' ? 900 : 0);
     else pendingWcRef.current = wc;
   }, [setPlayers, showWcPopup, openAuction]);
+  // Egy wildcard KISORSOLASA (az idozito ES a „minden korben" mod is ezt hivja).
+  // A `pool` kihagyja az EPPEN aktivat. Teszt-fogodzo: egy konkret effekt
+  // kikenyszeritese (`__wildcardTestEffect`) — a teljes listara is ranezunk,
+  // hogy a forced effekt PINNELVE maradjon (ugyanaz a minta, mint a `fire`-ben volt).
+  const pickWildcard = React.useCallback(() => {
+    const cur = activeWcRef.current;
+    const pool = (cur && WILDCARDS.length > 1) ? WILDCARDS.filter(w => w.text !== cur.text) : WILDCARDS;
+    if (!pool.length) return null;
+    const forced = (typeof window !== 'undefined' && window.__wildcardTestEffect)
+      ? (pool.find(w => w.effect === window.__wildcardTestEffect)
+         || WILDCARDS.find(w => w.effect === window.__wildcardTestEffect)) : null;
+    return forced || pool[Math.floor(Math.random() * pool.length)];
+  }, []);
+  // ⚠️ „Minden korben" (teszt) modban NEM az idozito hoz wildcardot, hanem a
+  // korvaltas (lasd `commitRound`) — igy determinisztikus, es a licit-arverest is
+  // gyorsan lehet tesztelni. Ilyenkor az idozito kimarad.
+  const wildcardEveryRound = wildcardOn && !!gameMeta?.wildcardEveryRound;
   React.useEffect(() => {
-    if (!wildcardOn) return;
+    if (!wildcardOn || wildcardEveryRound) return;
     const lo = Math.max(1, gameMeta?.wildcardMin || 6);
     const hi = Math.max(lo, gameMeta?.wildcardMax || 9);
     let timer = null;
     const fire = () => {
-      const cur = activeWcRef.current;
-      const pool = (cur && WILDCARDS.length > 1) ? WILDCARDS.filter(w => w.text !== cur.text) : WILDCARDS;
-      if (!pool.length) return;
-      // Teszt-fogodzo: egy konkret effekt kikenyszeritese (`'reverse'`, `'double'`…).
-      // A wildcard 6–9 PERCENKENT sul el, tehat egy teszt-partiban elo sem jonne —
-      // ugyanaz a minta, mint a `__szelviharTestDelay` / `__groupDrinkTestDelay`.
-      // A `pool` kihagyja az EPPEN aktivat, tehat egy ujraiditesnel a kikenyszeritett
-      // effekt nem lenne benne — a teszt kozben magatol atvaltana masra. Ezert a
-      // teljes listara is ranezunk: forced effekt PINNELVE marad.
-      const forced = (typeof window !== 'undefined' && window.__wildcardTestEffect)
-        ? (pool.find(w => w.effect === window.__wildcardTestEffect)
-           || WILDCARDS.find(w => w.effect === window.__wildcardTestEffect)) : null;
-      const wc = forced || pool[Math.floor(Math.random() * pool.length)];
+      const wc = pickWildcard();
       // A szabaly azonnal eletbe lep; a popup viszont csak akkor jon rogton,
       // ha magaban futo jatek megy (ott nincs atmenet, amire varni lehetne).
-      applyWildcard(wc, soloNowRef.current);
+      if (wc) applyWildcard(wc, soloNowRef.current);
     };
     const schedule = () => {
       const ms = (typeof window !== 'undefined' && typeof window.__wildcardTestDelay === 'number')
@@ -63807,7 +63825,7 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     };
     schedule();
     return () => { if (timer) clearTimeout(timer); };
-  }, [wildcardOn, gameMeta?.wildcardMin, gameMeta?.wildcardMax]);
+  }, [wildcardOn, wildcardEveryRound, gameMeta?.wildcardMin, gameMeta?.wildcardMax]);
   const [wcPunishOpen, setWcPunishOpen] = useState(false);
   const [hydrationPopup, setHydrationPopup] = useState(null); // {countdown, dismissable}
   const hydrationIntervalRef = React.useRef(null);
@@ -64161,6 +64179,11 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
         // vagja el a jatekot.
         if (queuedWc.effect === 'auction') openAuction();
         else showWcPopup(queuedWc);
+      } else if (wildcardEveryRound && newRound > round) {
+        // „Minden korben" (teszt) mod: itt, a korvaltasnal sorsolunk EGY wildcardot,
+        // es rogton meg is mutatjuk (popupNow=true) — a korszamlalo helyett.
+        const wc = pickWildcard();
+        if (wc) applyWildcard(wc, true);
       } else if (newRound > round) {
         const showCounter = gameMeta?.showRoundCounter !== false;
         // A wildcardot mar nem a korszam hozza, hanem az idozito (lasd fentebb).
