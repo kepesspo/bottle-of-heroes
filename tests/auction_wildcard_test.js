@@ -82,6 +82,9 @@ async function bid(p, list) {
       has5:      ARVERES_DIJAK.some(d => /5 kortyot/.test(d.text)),
       has10:     ARVERES_DIJAK.some(d => /10 kortyot/.test(d.text)),
       hasAtok:   ARVERES_DIJAK.some(d => /Átok/.test(d.text)),
+      hasNema:   ARVERES_DIJAK.some(d => /Néma átok/.test(d.text) && d.target),
+      hasMind:   ARVERES_DIJAK.some(d => /minden korty az övé/.test(d.text) && d.target),
+      nTargets:  ARVERES_DIJAK.filter(d => d.target).length,
       p1:        ARVERES_DIJAK.some(d => d.points === 1),
       p3:        ARVERES_DIJAK.some(d => d.points === 3),
     }));
@@ -91,7 +94,7 @@ async function bid(p, list) {
     ok(inv.overlay, 'az `AuctionOverlay` komponens létezik');
     ok(inv.objects, 'a nyeremények OBJEKTUMOK ({text, points?})', inv.len);
     ok(inv.has5 && inv.has10, 'megvan az 5 és a 10 kortyos kiosztás díja');
-    ok(inv.hasAtok, 'megvan az „Átok" díj');
+    ok(inv.hasAtok && inv.hasNema && inv.hasMind, 'megvan mindhárom célzó átok (dupla, néma, minden korty)', inv.nTargets + ' célzó díj');
     ok(inv.p1 && inv.p3, 'megvan a +1 és a +3 pont díj (points mezővel)');
     ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
     await p.close();
