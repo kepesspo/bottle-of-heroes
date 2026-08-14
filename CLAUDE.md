@@ -190,13 +190,19 @@ Egy felület, ami KIMARAD, és nem véletlenül:
   hibaszám / összenézés-szám, se nehézség, se wildcard nem szorozza, és a
   „Fordított kör" sem fordít rajta. A jelző az **`absolute:true`**: az
   `onResult`-ban (banner) ÉS az `advanceLoverseny` `opts.absolute`-jában
-  (könyvelés). Emiatt a `stake` mind a háromnál `null` (a fejléc-korong nem
-  ígérhet skálázott tartományt — a fejlécben a körszámláló áll). A Medúza
-  kör közbeni `DrinkDistributor`-a is `drinkMult={1}`-gyel megy (nyers).
-  ⚠️ Audit-hiba volt: a banner „3 KORTY"-ot írt, miközben a vesztes a hibaszáma
-  × nehézség-et itta (Sere 3 hiba → 9 korty nehéz szinten). Ezek a
-  „számold-és-idd" játékok — a szám maga a korty. Teszt: `hajime_kezcsere_test.js`
-  (mindhárom, nehéz szinten).
+  (könyvelés). A Medúza kör közbeni `DrinkDistributor`-a is `drinkMult={1}`-gyel
+  megy (nyers). ⚠️ Audit-hiba volt: a banner „3 KORTY"-ot írt, miközben a vesztes
+  a hibaszáma × nehézség-et itta (Sere 3 hiba → 9 korty nehéz szinten). Ezek a
+  „számold-és-idd" játékok — a szám maga a korty. Teszt: `hajime_kezcsere_test.js`.
+
+**Fejléc-korong: `stakeAbsolute` FIX korong (v10.372).** A három abszolút játék
+mégis kap korty-korongot, de **fixet**: `stake:[1,5], stakeAbsolute:true`. A
+`stakeAbsolute` a `stakeMult`-ot 1-re állítja (a nehézség/wildcard NEM szorozza a
+korongot — nehéz szinten IS „1–5 KORTY"), a tone semleges (`T.inkMute`, nem a
+difficulty-tone), és az info-lap külön jegyzetet ad. Az **Útvesztő** viszont
+NEM abszolút (a vesztes `csapda-korty + 2` × nehézség), így NORMÁL skálázott
+korongot kapott: `stake:[2,8]` → nehéz szinten „6–24 KORTY". A `stake_test`
+VART_NULL listáján innentől csak a DNR/solo játékok maradnak.
 
 A **Lóverseny v10.299-ig szintén kivétel volt** (`scale=1`) — már nem az, lásd lent.
 

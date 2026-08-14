@@ -120,11 +120,11 @@ async function setup(p, gameId, opts) {
   // 0-ra van vagva, tehat a plafon a nem-csapda felvillanasok szama.
   // v10.363: az `arveres` mint kulon jatek MEGSZUNT — a Csendes arveres beolvadt
   // a wildcard-rendszerbe (licit-wildcard), tehat nincs tobbe a GAMES-ben.
-  // v10.370: a `hajime` es a `kezcsere` is BEKERULT — a korty MAGA a hibaszam
-  // (abszolut, nehezseg NELKUL), tehat a fejlec-korong nem igerhet skalazott
-  // tartomanyt; a fejlecben a korszamlalo all.
-  const VART_NULL = ['beerpong','blackjack','busz','farkasos','hajime','kezcsere',
-                     'meduza','ovfj','powerhour','ringfire','utveszto'].sort();
+  // v10.372: a Hajime / Kez csere / Meduza kapott FIX (stakeAbsolute) korongot,
+  // az Utveszto pedig NORMAL skalazott korongot — tehat mar egyiknek sincs null
+  // teteje. A null-listan a DNR/solo jatekok maradnak (nincs egyszeru tartomany).
+  const VART_NULL = ['beerpong','blackjack','busz','farkasos',
+                     'ovfj','powerhour','ringfire'].sort();
   ok(decl.nulls.slice().sort().join(',') === VART_NULL.join(','),
      'pontosan a várt játékok deklarálnak null tétet', decl.nulls.slice().sort().join(', '));
 
@@ -149,11 +149,12 @@ async function setup(p, gameId, opts) {
     const c = await readCap(p);
     ok(c && c.num === `1–${r}`, `Kártyacsata ${r} kör: 1–${r} korty`, c && c.num);
   }
-  // A hataratlan halmozoknal NINCS korong — inkabb semmi, mint rossz szam
-  for (const gid of ['meduza', 'utveszto']) {
-    await setup(p, gid, { diff: 'hard' });
-    ok(await readCap(p) === null, `${gid}: nincs korong (nincs valódi felső határ)`);
-  }
+  // v10.372: a Meduza FIX (abszolut) korongot kap — 1–5, a nehezseg NEM szorozza
+  // (hard szinten IS 1–5). Az Utveszto NORMAL skalazott: 2–8 alap, hard (×3) -> 6–24.
+  await setup(p, 'meduza', { diff: 'hard' });
+  ok((await readCap(p) || {}).num === '1–5', 'Medúza: fix 1–5 korong (abszolút, nehézség NEM szorozza)', (await readCap(p) || {}).num);
+  await setup(p, 'utveszto', { diff: 'hard' });
+  ok((await readCap(p) || {}).num === '6–24', 'Útvesztő: 2–8 alap × nehéz (3) = 6–24', (await readCap(p) || {}).num);
   // Ritmus (v10.315): VAN korong. A felso hatart a jatek sajat idozitese adja
   // (900→380 ms lathatosag, 150→60 ms res), csokkentve a csapdak aranyaval.
   // A korong es a `ritmusMaxDrinks` UGYANABBOL a fuggvenybol dolgozik — ha a
