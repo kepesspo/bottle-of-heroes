@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.361';
+const APP_VERSION = 'v10.362';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -36055,7 +36055,7 @@ const GAMES = [
   { id:'igennem', stake:[1,1], roundTime:'mid', name:'Igen–Nem',            difficulty:'közepes', category:'Páros', emoji:'❓', isNew:true, img:IMGS['igennem_icon.png'], banner:IMGS['igennem_banner.png'], color:'#4FC2A0', desc:'Az egyik játékos lát egy szót, a másik legfeljebb 10 IGEN/NEM kérdéssel próbálja kitalálni. Közösen játszotok: ha megvan a szó, mindketten pontot kaptok — ha elfogynak a kérdések, mindketten isztok. A kérdező nem tippelhet a végtelenségig, ezért a jó kérdés többet ér, mint a szerencse.' },
   { id:'ultimatum', stake:[1,6], roundTime:'fast', name:'Ultimátum',          difficulty:'közepes', category:'Páros', emoji:'⚖️', isNew:true, img:IMGS['ultimatum_icon.png'], banner:IMGS['ultimatum_banner.png'], color:'#F5B93B', desc:'Hat korty van a kalapban. Az egyik játékos ajánlatot tesz, hogy ki mennyit igyon belőle — a másik pedig elfogadja vagy elutasítja. Ha elfogadja, úgy isszátok, ahogy az ajánlat szól. Ha elutasítja, mindketten a kalap felét isszátok. Nem az számít, mi az igazságos, hanem hogy mit fogadnak el.' },
   { id:'mennyi', stake:[1,1], roundTime:'fast', name:'Mennyi?',              difficulty:'közepes', category:'Páros', emoji:'📏', isNew:true, img:IMGS['mennyi_icon.png'], banner:IMGS['mennyi_banner.png'], color:'#5BA0DB', desc:'Jön egy szám-kérdés, amit senki nem tud pontosan. Mindketten bemondtok egy tippet, aztán az app felfedi a választ. Aki közelebb volt, pontot kap — a másik iszik. Nem tudni kell, hanem jól saccolni.' },
-  { id:'arveres', stake:null, roundTime:'mid', name:'Csendes árverés',   difficulty:'közepes', category:'Csapat', emoji:'🔨', isNew:true, img:IMGS['arveres_icon.png'], banner:IMGS['arveres_banner.png'], color:'#F5B93B', desc:'Az app kisorsol egy nyereményt — például hogy a következő két körben nem kell innod. Mindenki TITOKBAN licitál: a telefon körbemegy, és senki nem látja a többiek számát. Felső határ nincs — addig mehet a licit, ameddig vállaljátok. A legmagasabb licit nyeri a nyereményt, és annyit iszik, amennyit ígért. Ha mindenki nullát ad, a nyeremény elvész. Pont nincs — a nyeremény maga a tét.' },
+  { id:'arveres', stake:null, stakeInfinite:true, roundTime:'mid', name:'Csendes árverés',   difficulty:'közepes', category:'Csapat', emoji:'🔨', isNew:true, img:IMGS['arveres_icon.png'], banner:IMGS['arveres_banner.png'], color:'#F5B93B', desc:'Az app kisorsol egy nyereményt — például hogy a következő két körben nem kell innod. Mindenki TITOKBAN licitál: a telefon körbemegy, és senki nem látja a többiek számát. Felső határ nincs — addig mehet a licit, ameddig vállaljátok. A legmagasabb licit nyeri a nyereményt, és annyit iszik, amennyit ígért. Ha mindenki nullát ad, a nyeremény elvész. Pont nincs — a nyeremény maga a tét.' },
   { id:'csakegyszó', stake:[1,1], name:'Csak Egy Szó',         difficulty:'könnyű',  category:'Páros',  emoji:'💬', symbol:IMGS['csakegyszo_symbol.png'], img:IMGS['csakegyszo_icon.png'], banner:IMGS['csakegyszo_banner.png'], color:'#10B981', desc:'Egy szót kell egyetlen szóval elmagyaráznod a párodnak 15 mp alatt. Ha kitalálja, mindketten pontot kapnak — ha nem, mindketten isznak.' },
   { id:'igazhamis', stake:[1,1], roundTime:'fast',  name:'Igaz Hamis',            difficulty:'könnyű',  category:'Egyéni', emoji:'🤔', symbol:IMGS['igazhamis_symbol.png'], img:IMGS['igazhamis_icon.png'], banner:IMGS['igazhamis_banner.png'], color:'#06B6D4', desc:'A játékban egy állítás fog megjelenni és el kell dönteni, hogy az igaz, vagy hamis. Ha úgy ítéled meg hogy az állítás igaz, akkor az idő lejárta előtt ezt közölnöd kell a többi játékossal akik ez alapján tudjuk eldönteni, hogy jól válaszoltál-e. Ha nem jó a válaszod akkor sajnos innod kell.' },
   { id:'powerhour', stake:null, name:'Power Hour',            difficulty:'nehéz',   category:'Csapat', emoji:'⚡', symbol:null, img:IMGS['powerhour_icon.png'], banner:IMGS['powerhour_banner.png'], color:'#F59E0B', dnr:true, desc:'Spotify zenék 20 másodpercenként váltanak — 60 percen át. Percenként Super Mario hangjelzés: igyál egyet. Aki túléli az igazi hős!' },
@@ -64192,6 +64192,11 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   const stakeLo = stakeBase ? stakeBase[0] * stakeMult : 0;
   const stakeHi = stakeBase ? stakeBase[1] * stakeMult : 0;
   const stakeText = !stakeBase ? null : (stakeLo === stakeHi ? String(stakeLo) : stakeLo + '–' + stakeHi);
+  // ⚠️ A licitnek nincs felso hatara (Csendes arveres), tehat a korong nem tud
+  // igaz TARTOMANYT kiirni — de a korszamlalo helyett a korty-korong `∞` jele
+  // pontosan azt mondja, ami igaz: a tet korlatlan. A nehezseg-tone marad
+  // (a nyertes tenylegesen `licit × drinkMult`-ot iszik), csak a szam vegtelen.
+  const stakeInfinite = trackScores && !!currentGame?.stakeInfinite;
   const [stakeInfo, setStakeInfo] = useState(false);
 
   const onResult = (res) => {
@@ -64432,16 +64437,21 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
           // eppen beallitott tetet. Az elo ertek azert bukott, mert a fejlecben
           // mast igert, mint amennyit a jatekos vegul ivott: a vesztes a sajat
           // tetjen felul a nyertesek kalapjabol is kap.
-          if (stakeText) {
-            const displayValue = stakeText;
+          if (stakeText || stakeInfinite) {
+            const displayValue = stakeInfinite ? '∞' : stakeText;
+            // A vegtelen korong NEM kattinthato: nincs `stakeBase`, tehat a
+            // DifficultyInfoSheet `stakeBase[0]`-ja elszallna. A tet-magyarazat
+            // ugyis a jatekban all (a lepteto alatt).
+            const clickable = !!stakeText && !stakeInfinite;
             const toneStake = wcMult > 1 ? T.yellow : diffMeta.tone;
             // Hosszabb tartomanynal ("10–12") kisebb szamot hasznalunk, hogy
-            // ne feszuljon neki a 44 px-es belso koronak.
-            const stakeFs = String(displayValue).length > 3 ? 14 : String(displayValue).length > 2 ? 16 : 19;
+            // ne feszuljon neki a 44 px-es belso koronak. A `∞` glif rovid,
+            // ezert nagyobbra vehetjuk.
+            const stakeFs = stakeInfinite ? 24 : String(displayValue).length > 3 ? 14 : String(displayValue).length > 2 ? 16 : 19;
             return (
-              <div onClick={() => stakeText && setStakeInfo(true)}
-                   title={stakeText ? `${diffMeta.label} ×${stakeMult}` : ''}
-                   style={{ position:'relative', width:54, height:54, flexShrink:0, cursor: stakeText ? 'pointer' : 'default',
+              <div onClick={() => clickable && setStakeInfo(true)}
+                   title={clickable ? `${diffMeta.label} ×${stakeMult}` : ''}
+                   style={{ position:'relative', width:54, height:54, flexShrink:0, cursor: clickable ? 'pointer' : 'default',
                             filter:'drop-shadow(0 2px 0 rgba(20,30,50,0.10)) drop-shadow(0 2px 6px rgba(20,30,50,0.14))' }}>
                 <svg viewBox="0 0 54 54" style={{ position:'absolute', inset:0, width:'100%', height:'100%' }}>
                   <circle cx="27" cy="27" r="25" fill="none" stroke={toneStake} strokeWidth="4" />

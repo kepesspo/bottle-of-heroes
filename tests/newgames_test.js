@@ -532,18 +532,23 @@ async function arveresBid(p, list, before) {
       return !!b2 && !b2.disabled;
     }), 'és a „+" gomb sem tiltódik le');
 
-    // A fejlec-korong NEM igerhet tartomanyt, ha nincs felso hatar: `stake:null`
-    // eseten a korszamlalo all ott (v10.276 „hatartalan halmozok").
+    // A fejlec-korong NEM igerhet tartomanyt, ha nincs felso hatar: a `stake`
+    // ezert `null` marad. Helyette (v10.362) a korty-korong `∞` jelet mutat —
+    // az pontosan azt mondja, ami igaz: a licit korlatlan. NEM korszamlalo.
     ok(await p.evaluate(() => (GAMES.find(g => g.id === 'arveres') || {}).stake === null),
        '⚠️ a `stake` null — a korong nem ígérhet felső határt',
        JSON.stringify(await p.evaluate(() => (GAMES.find(g => g.id === 'arveres') || {}).stake)));
+    ok(await p.evaluate(() => (GAMES.find(g => g.id === 'arveres') || {}).stakeInfinite === true),
+       'és a `stakeInfinite` jelző igaz — ez viszi a korty-korongot az ∞-jellel');
     // ⚠️ Nem a fejléc ELŐTTI szövegre szűrünk: a léptető címkéje
     // `textTransform:'uppercase'`, tehát az `innerText`-ben „HÁNY KORTY" áll —
     // egy „a címkéig vágom" fogódzó ezen csendben elhasal. A tartomány ALAKJÁRA
-    // kell szűrni, és külön ellenőrizni, hogy a körszámláló ott van.
+    // kell szűrni, és külön ellenőrizni, hogy az ∞-korty-korong áll ott.
     ok(!/\d+\s*[–-]\s*\d+\s*KORTY/i.test(t), 'a fejlécben nincs „N–M KORTY" tartomány',
        (t.match(/\d+\s*[–-]\s*\d+\s*KORTY/i) || ['nincs ilyen'])[0]);
-    ok(/KÖR/.test(t), '…helyette a körszámláló áll ott', t.slice(0, 30));
+    ok(/∞/.test(t), '…helyette az ∞ korty-korong áll ott (korlátlan tét)', t.slice(0, 30));
+    ok(!/KÖR\s*\n?\s*\d/.test(t), 'és a körszámláló már NINCS a fejlécben',
+       (t.match(/KÖR\s*\n?\s*\d/) || ['nincs'])[0]);
 
     // ⚠️ A FEKETE gomb kikerult: az app sehol nem hasznal tomor sotet
     // elsodleges gombot. A fogodzo a SZAMITOTT hatter — a `PrimaryButton`

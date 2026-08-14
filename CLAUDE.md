@@ -2009,10 +2009,10 @@ szorozna, nehéz szinten 2-es licitből 18 lenne 6 helyett (v10.299-lecke).
 ### Nincs licit-plafon, és ez a fejlécet is átírja (v10.361)
 Az `ARVERES_MAX_BID = 6` **megszűnt** — a licit addig megy, ameddig vállalják.
 Ebből **következik** a fejléc-korong változása: `stake:[0,6]` → **`stake:null`**.
-Felső határ nélkül nincs igaz tartomány, amit a korong kiírhatna, ezért ott a
-**körszámláló** áll (a v10.276-os „határtalan halmozók" csoportja). A kettő
-együtt mozog: aki visszahozná a tartományt, előbb a plafont hozza vissza — és a
-`stake_test` `VART_NULL` listáját is igazítsa.
+Felső határ nélkül nincs igaz tartomány, amit a korong kiírhatna. Eleinte (v10.361)
+ott a **körszámláló** állt — de **v10.362 óta** az `∞` korty-korong (lásd lent).
+A `stake` továbbra is `null`; aki tartományt hozna vissza, előbb a plafont hozza
+vissza — és a `stake_test` `VART_NULL` listáját is igazítsa.
 
 **A fekete gomb kikerült.** Az app sehol nem használ tömör sötét elsődleges
 gombot; az akció mindenhol a közös `PrimaryButton`. Két helyen állt: „Én vagyok
@@ -2049,3 +2049,22 @@ Az csak a Páros „Vesztettem / Nyertem!" gombpárra hat; a csapat-panelt a
 játék alatt — az `advanceLoverseny`-t hívja, tehát egy második, ellentmondó út
 vezetett a könyveléshez. **Új, maga-könyvelő csapatjátéknál MINDKETTŐT be kell
 állítani.** A `newgames_test` 14. blokkja ezt külön méri.
+
+### A fejlécben ∞ korty-korong, nem körszámláló (v10.362)
+A v10.361 a plafon nélküli licit miatt **körszámlálót** tett a fejlécbe. Ez nem a
+korty-tétet mutatta, holott a játék tétje korty. Tulajdonosi kérés: **legyen
+korty-korong**, és a korlátlanságot az **`∞` jel** fejezze ki — ez pontosan azt
+mondja, ami igaz, tartomány-hazugság nélkül.
+
+- A jelző a `GAMES[]` bejegyzésen a **`stakeInfinite:true`** mező (a `stake`
+  **marad `null`** — a `stake_test` `VART_NULL` és a `newgames_test:537` erre
+  épül; egy hamis `stake` pár tartományt ígérne).
+- A fejléc a korty-korong ágán rajzol (`stakeText || stakeInfinite`), az érték
+  `∞`, a nehézség-tone **marad** (a nyertes tényleg `licit × drinkMult`-ot iszik,
+  csak a plafon végtelen).
+- **⚠️ Az ∞-korong NEM kattintható:** nincs `stakeBase`, tehát a
+  `DifficultyInfoSheet` `stakeBase[0]`-ja elszállna. A tét-magyarázat a játékban,
+  a léptető alatt áll.
+
+Teszt: `newgames_test` 18. blokk — a `stakeInfinite` igaz, a fejlécben `∞` áll,
+NINCS „N–M KORTY" tartomány ÉS nincs körszámláló.
