@@ -2116,3 +2116,29 @@ Teszt: `node tests/auction_wildcard_test.js` — forrás-invariánsok (auction-w
 van, `arveres` játék nincs), a licit-kontraktus (`AuctionOverlay` → a legmagasabb
 licit nyer), és az integráció (SOLO játékon nyit, a nyertes iszik `× nehézség`, a
 tartós sáv megjelenik és a „Felhasználva" kiveszi).
+
+### A nyeremény-bank OBJEKTUM, és van gépi (pont) díj (v10.364)
+Az `ARVERES_DIJAK` string helyett **objektum-lista** (`{ text, points? }`), és
+13 díjra bővült (új: 5/10 kortyos kiosztás, „Átok" — a másik dupláz a Kövi
+körben, +1 és +3 pont).
+
+**⚠️ Két díj-TÍPUS, két útvonal a `finishAuction`-ben:**
+- **Mondat-díj** (a többség) — a társaság tartatja be → a **tartós díj-sávba**
+  kerül (`activePrizes`), a „Felhasználva" veszi ki.
+- **Pont-díj** (`points` mező) — **KIVÉTEL**: a pontot CSAK az app tudja adni (a
+  társaság nem ír kézzel a táblára), ezért a `finishAuction` **azonnal jóváírja**
+  a nyertes(ek)nek, és **NEM** teszi a sávba (nincs mit megjegyezni). Ez az
+  egyetlen gépi hatású díj — minden más mondat.
+
+Amit könnyű elrontani:
+- **A nyertes MINDIG issza a licitjét**, a díj típusától függetlenül (fizet a
+  nyereményért). A pont-díjnál tehát iszik ÉS pontot kap.
+- **Pont-díj csak `trackScores` mellett sorsolódik** (`openAuction` szűri) —
+  különben a nyertes fizetne, de a pont sehol nem számítana.
+- **Új díj felvételénél**: ha a társaság be tudja tartatni → csak `text`. Ha
+  csak az app tudja (pont) → `points` mező. Egyéb gépi hatás (pl. kör-közi
+  „feleannyit iszol") NEM kódolható — az marad mondat (a `PlayScreen` nem tárol
+  kör-közi állapotot, v10.360).
+
+Teszt: `auction_wildcard_test.js` 4. blokk — a pont-díj +3 pontot ad, a nyertes
+issza a licitet is, és NINCS tartós sáv.

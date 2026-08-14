@@ -68,13 +68,22 @@ async function bid(p, list) {
       noGame:    !GAMES.some(g => g.id === 'arveres'),
       noScenario: !('arveres' in SCENARIOS),
       overlay:   typeof AuctionOverlay === 'function',
-      prizes:    Array.isArray(ARVERES_DIJAK) && ARVERES_DIJAK.length >= 8,
+      objects:   Array.isArray(ARVERES_DIJAK) && ARVERES_DIJAK.every(d => d && typeof d.text === 'string'),
+      len:       ARVERES_DIJAK.length,
+      has5:      ARVERES_DIJAK.some(d => /5 kortyot/.test(d.text)),
+      has10:     ARVERES_DIJAK.some(d => /10 kortyot/.test(d.text)),
+      hasAtok:   ARVERES_DIJAK.some(d => /Átok/.test(d.text)),
+      p1:        ARVERES_DIJAK.some(d => d.points === 1),
+      p3:        ARVERES_DIJAK.some(d => d.points === 3),
     }));
     ok(inv.wcAuction, 'a WILDCARDS tartalmaz `effect:\'auction\'`-t');
     ok(inv.noGame, '⚠️ az `arveres` mint JATEK eltűnt a GAMES-ből');
     ok(inv.noScenario, 'és a SCENARIOS-ból is');
     ok(inv.overlay, 'az `AuctionOverlay` komponens létezik');
-    ok(inv.prizes, 'a nyeremény-bank (ARVERES_DIJAK) megmaradt', (await p.evaluate(()=>ARVERES_DIJAK.length)));
+    ok(inv.objects, 'a nyeremények OBJEKTUMOK ({text, points?})', inv.len);
+    ok(inv.has5 && inv.has10, 'megvan az 5 és a 10 kortyos kiosztás díja');
+    ok(inv.hasAtok, 'megvan az „Átok" díj');
+    ok(inv.p1 && inv.p3, 'megvan a +1 és a +3 pont díj (points mezővel)');
     ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
     await p.close();
   }
@@ -91,7 +100,7 @@ async function bid(p, list) {
       document.body.appendChild(root);
       window.__res = null;
       ReactDOM.createRoot(root).render(React.createElement(AuctionOverlay, {
-        players: pl, prize: 'TESZT-DÍJ', drinkMult: 1,
+        players: pl, prize: { text: 'TESZT-DÍJ' }, drinkMult: 1,
         onFinish: (r) => { window.__res = { top: r.top, win: r.winners.map(x => x.name), prize: r.prize }; },
       }));
     }, PL);
@@ -116,6 +125,7 @@ async function bid(p, list) {
   for (const [diff, mult] of [['easy', 1], ['hard', 3]]) {
     const p = await open(b, 'auction');
     await p.evaluate(({ pl, diff }) => {
+      window.__auctionPrizeIndex = 0;   // MONDAT-díj (index 0) → tartós sávba kerül
       const r0 = document.getElementById('root'); if (r0) r0.style.display = 'none';
       const root = document.createElement('div'); root.id = '__p';
       root.style.cssText = 'position:fixed;inset:0;z-index:9;display:flex;flex-direction:column;overflow:auto';
@@ -145,6 +155,43 @@ async function bid(p, list) {
     const t2 = await txt(p);
     ok(!/🎁/.test(t2), `[${diff}] a „Felhasználva" kiveszi a sávot`, /🎁/.test(t2));
     ok(p.__errs.length === 0, `[${diff}] nincs JS hiba`, p.__errs.join(' | '));
+    await p.close();
+  }
+
+  // ── 4. PONT-DÍJ: az app AZONNAL jóváírja, és NEM kerül a sávba ──
+  // A „Kapsz 3 pontot" díjnál a nyertes issza a licitet ÉS +3 pontot kap; mivel
+  // nincs mit megjegyezni, a tartós sáv NEM jelenik meg.
+  console.log('\n===== 4. PONT-DÍJ — azonnal jóváír, nincs sáv =====');
+  {
+    const p = await open(b, 'auction');
+    const pIdx = await p.evaluate(() => ARVERES_DIJAK.findIndex(d => d.points === 3));
+    await p.evaluate(({ pl, pIdx }) => {
+      window.__auctionPrizeIndex = pIdx;   // „Kapsz 3 pontot" (points:3)
+      const r0 = document.getElementById('root'); if (r0) r0.style.display = 'none';
+      const root = document.createElement('div'); root.id = '__p';
+      root.style.cssText = 'position:fixed;inset:0;z-index:9;display:flex;flex-direction:column;overflow:auto';
+      document.body.appendChild(root);
+      function H() {
+        const [ps, setPs] = React.useState(pl); window.__players = ps;
+        return React.createElement(PlayScreen, { go:()=>{}, players:ps, setPlayers:setPs,
+          selectedGames:['busz'], roomCode:null,
+          gameMeta:{ modes:['points','drinks','wildcard'], difficulty:'easy', wildcardMin:1, wildcardMax:1 },
+          setGameMeta:()=>{}, setScoreHistory:()=>{}, setLastGameRound:()=>{} });
+      }
+      ReactDOM.createRoot(root).render(React.createElement(H));
+    }, { pl: PL, pIdx });
+    await p.waitForFunction(() => /Licitálás indul/.test(document.getElementById('__p')?.innerText || ''), { timeout: 4000 }).catch(() => {});
+    ok(pIdx >= 0, 'a „Kapsz 3 pontot" díj megvan', pIdx);
+    await bid(p, [2, 1]);             // Sere 2, Luca 1 → Sere nyer, top 2
+    const rev = await txt(p);
+    ok(/rögtön meg is kapja/.test(rev), 'a felfedés szerint a pontot rögtön megkapja', /rögtön/.test(rev));
+    await tap(p, /^Bezár/); await p.waitForTimeout(400);
+    const sere = await p.evaluate(() => (window.__players || []).find(x => x.name === 'Sere'));
+    ok(sere && sere.points === 3, 'a nyertes +3 PONTOT kapott', sere && sere.points);
+    ok(sere && sere.drinks === 2, 'és issza a licitjét is (2)', sere && sere.drinks);
+    const t = await txt(p);
+    ok(!/🎁/.test(t), '⚠️ a pont-díj NEM kerül a tartós sávba (nincs mit megjegyezni)', /🎁/.test(t));
+    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
     await p.close();
   }
 

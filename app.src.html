@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.363';
+const APP_VERSION = 'v10.364';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -51474,15 +51474,27 @@ function UltimatumGame({ gameIdx, challenger, opponent, onAdvance, onResult, dri
 const STAKE_TONE_BG = (n) => n <= 2 ? '#C9E8D2' : n <= 4 ? '#F5E0AC' : '#F2C4C4';
 const STAKE_TONE_INK = '#1A2A4A';
 
+// A dijak OBJEKTUMOK: { text, points? }.
+// - A legtobb TISZTA MONDAT (a tarsasag tartatja be) → a tartos nyeremeny-savba
+//   kerul, amit a „Felhasznalva" gomb vesz ki.
+// - A `points` mezos dijak KIVETELEK: a pontot CSAK az app tudja adni (a tarsasag
+//   nem tud kezzel a tablara pontot irni), ezert a `finishAuction` AZONNAL
+//   jovairja a nyertesnek, es NEM teszi a savba (nincs mit megjegyezni).
+//   Ez az egyetlen gepi hatasu dij — minden mas mondat.
 const ARVERES_DIJAK = [
-  'A következő két körben nem kell innod.',
-  'Kioszthatsz 3 kortyot — bárkinek, ahogy akarod.',
-  'Egyszer bárkit megkérhetsz, hogy igyon helyetted.',
-  'A következő játékot kihagyhatod.',
-  'A következő körben te választod ki, ki játszik.',
-  'Kitalálsz egy szabályt a következő körre — mindenkire vonatkozik.',
-  'A következő körben feleannyit iszol, mint amennyit kapnál.',
-  'Egyszer visszadobhatsz egy kortyot annak, aki adta.',
+  { text: 'A következő két körben nem kell innod.' },
+  { text: 'Kioszthatsz 3 kortyot — bárkinek, ahogy akarod.' },
+  { text: 'Kioszthatsz 5 kortyot — bárkinek, ahogy akarod.' },
+  { text: 'Kioszthatsz 10 kortyot — bárkinek, ahogy akarod.' },
+  { text: 'Egyszer bárkit megkérhetsz, hogy igyon helyetted.' },
+  { text: 'A következő játékot kihagyhatod.' },
+  { text: 'A következő körben te választod ki, ki játszik.' },
+  { text: 'Kitalálsz egy szabályt a következő körre — mindenkire vonatkozik.' },
+  { text: 'A következő körben feleannyit iszol, mint amennyit kapnál.' },
+  { text: 'Egyszer visszadobhatsz egy kortyot annak, aki adta.' },
+  { text: 'Átok: válassz valakit — a következő körben DUPLÁN issza a kortyot, amit kap.' },
+  { text: 'Kapsz 1 pontot.', points: 1 },
+  { text: 'Kapsz 3 pontot.', points: 3 },
 ];
 
 // Modul-szintu, mert a jatek torzseben minden ujrarendereles ujramountolna
@@ -51494,7 +51506,7 @@ function ArveresDijCard({ dij, compact }) {
       <div style={{ fontFamily:T.font, fontSize:11, fontWeight:800, color:T.inkMute,
                     textTransform:'uppercase', letterSpacing:'0.12em' }}>A nyeremény</div>
       <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize: compact ? 16 : 20,
-                    color:T.ink, lineHeight:1.25, marginTop:6 }}>{dij}</div>
+                    color:T.ink, lineHeight:1.25, marginTop:6 }}>{typeof dij === 'string' ? dij : (dij && dij.text) || ''}</div>
     </div>
   );
 }
@@ -51642,8 +51654,10 @@ function AuctionOverlay({ players, prize, drinkMult = 1, onFinish }) {
         })}
       </div>
       <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', lineHeight:1.5 }}>
-        {top > 0 ? 'A nyeremény a legmagasabb licité — és annyit is iszik. A jelző fent marad, amíg fel nem használják.'
-                 : 'Senki nem licitált, a nyeremény elveszett.'}
+        {top <= 0 ? 'Senki nem licitált, a nyeremény elveszett.'
+          : (prize && prize.points)
+            ? 'A nyeremény a legmagasabb licité — és annyit is iszik. A pontot rögtön meg is kapja.'
+            : 'A nyeremény a legmagasabb licité — és annyit is iszik. A jelző fent marad, amíg fel nem használják.'}
       </div>
       <PrimaryButton onClick={() => onFinish && onFinish({ winners, top, prize })}>Bezár</PrimaryButton>
     </div>
@@ -63672,14 +63686,23 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
   // A licit-wildcard NEM allit tartos szabalyt es nincs gepi effektje: egy
   // TITKOS nyereményt sorsol, es megnyitja a licit-overlayt. A dijat itt huzzuk
   // (veletlen, az elozot kerulve), hogy minden nyitas mas legyen.
-  const lastPrizeRef = React.useRef(-1);
+  const lastPrizeRef = React.useRef(null);
   const openAuction = React.useCallback(() => {
-    let i = Math.floor(Math.random() * ARVERES_DIJAK.length);
-    if (ARVERES_DIJAK.length > 1 && i === lastPrizeRef.current) i = (i + 1) % ARVERES_DIJAK.length;
-    lastPrizeRef.current = i;
     if (typeof window.bohSound === 'function') window.bohSound('wildcard');
-    setAuction({ prize: ARVERES_DIJAK[i] });
-  }, []);
+    // Teszt-fogodzo: egy konkret dij (index az ARVERES_DIJAK-ba) kikenyszeritese.
+    if (typeof window !== 'undefined' && typeof window.__auctionPrizeIndex === 'number') {
+      setAuction({ prize: ARVERES_DIJAK[window.__auctionPrizeIndex] }); return;
+    }
+    // Pont-dij csak akkor sorsolhato, ha van pontgyujtes — kulonben a nyertes
+    // fizetne (issza a licitet), de a pont sehol nem szamitodna.
+    const pool = ARVERES_DIJAK.filter(d => !d.points || trackScores);
+    let pick = pool[Math.floor(Math.random() * pool.length)];
+    if (pool.length > 1 && pick.text === lastPrizeRef.current) {
+      pick = pool[(pool.indexOf(pick) + 1) % pool.length];
+    }
+    lastPrizeRef.current = pick.text;
+    setAuction({ prize: pick });
+  }, [trackScores]);
 
   const applyWildcard = React.useCallback((wc, popupNow) => {
     // ⚠️ A licit-wildcard kulon ut: nincs tartos szabaly-sav, nincs reverse/
@@ -64383,22 +64406,31 @@ function PlayScreen({ players, setPlayers, selectedGames, go, roomCode, gameMeta
     givePenalty(assigned, { note: kind === 'point' ? 'Jutalom' : 'Büntetés', kind });
   };
 
-  // A licit-overlay „Bezár" gombja ide fut: a nyertes(ek) issza(k) a licitet
-  // (nehezseggel szorozva, mint minden korty-forras — a wildcard-szorzo itt nem
-  // jatszik, mert AZ MAGA a wildcard), es a nyeremeny bekerul a tartos savba.
-  // Dontetlennel tobb nyertes van: mind isznak, es mind kapnak nyeremeny-jelzot.
+  // A licit-overlay „Bezár" gombja ide fut. A nyertes(ek) MINDIG issza(k) a
+  // licitet (nehezseggel szorozva, mint minden korty-forras — a wildcard-szorzo
+  // itt nem jatszik, mert AZ MAGA a wildcard). A DIJ ketfele lehet:
+  //   * `points` mezos → az app AZONNAL jovairja a pontot (a tarsasag nem tud
+  //     kezzel pontot adni), es NEM kerul a savba (nincs mit megjegyezni);
+  //   * egyebkent MONDAT → bekerul a tartos nyeremeny-savba, a tarsasag tartatja.
+  // Dontetlennel tobb nyertes van: mind isznak, es mind kapnak (pontot vagy savot).
   const finishAuction = (res) => {
     setAuction(null);
     const winners = (res && res.winners) || [];
     if (!winners.length || !res || res.top <= 0) return;  // senki nem licitalt → a nyeremeny elveszett
+    const prize = res.prize || {};
     const scaled = res.top * diffDrinks;
+    const givePoints = prize.points && trackScores ? prize.points : 0;
     const winIds = new Set(winners.map(p => p.id));
-    const upd = playersRef.current.map(p => winIds.has(p.id) ? { ...p, drinks: (p.drinks || 0) + scaled } : p);
+    const upd = playersRef.current.map(p => winIds.has(p.id)
+      ? { ...p, drinks: (p.drinks || 0) + scaled, points: (p.points || 0) + givePoints }
+      : p);
     setPlayers(upd);
     if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { players: upd, turn, gameIdx, round });
+    // Pont-dij: mar jovairtuk, nincs mit megjegyezni. Mondat-dij: a savba.
+    if (prize.points) return;
     const base = Date.now();
     setActivePrizes(prev => [...prev, ...winners.map((p, i) => ({
-      id: base + '_' + p.id + '_' + i, name: p.name, color: p.color, prize: res.prize,
+      id: base + '_' + p.id + '_' + i, name: p.name, color: p.color, prize: prize.text || '',
     }))]);
   };
   const usePrize = (id) => setActivePrizes(prev => prev.filter(x => x.id !== id));
