@@ -1,15 +1,15 @@
-// v10.375 — Mindenki Iszik: FORRÓ KRUMPLI (push-your-luck)
+// v10.375 — Mindenki Iszik: KI VELE? (koccintás)
 //
-// A régi passzív „az app kisorsol valakit, iszik egyet" megszűnt. Az új mechanika:
-// egy kezdő + 1 kortyos krumpli; a holder MEGISSZA az aktuális mennyiséget (kör
-// vége) vagy PASSZOLJA a kövinek +1 kortyval. Az utolsó játékosnál — mielőtt
-// visszaérne a kezdőhöz — muszáj meginni. Max = létszám.
+// A régi passzív „az app kisorsol valakit, egyedül iszik egyet" megszűnt. Az új
+// mechanika: a sorsolt játékos KIVÁLASZT egy társat, és KOCCINTANAK — mindketten
+// isznak egyet. Nincs lezárás-gond, tisztán szociális csavar.
 //
 // Fogódzók:
-//  1) a tét minden passzal +1 (nehéz szinten ×3 a KIJELZÉS, de a könyvelés raw×nehézség)
-//  2) az utolsó holdernél NINCS „Passzolom" gomb (körbeért → forced)
-//  3) a könyvelés a HOLDER-re megy, a helyes (skálázott) kortyszámmal
-//  4) NYERS szám → a PlayScreen szoroz: nehéz szinten a 3. holder 3 raw = 9 korty
+//  1) a partner-választó a KÖZÖS PlayerDrinkRow variant='pick' (aria a szó nélkül) —
+//     a sorsolt maga NEM választható (csak a többiek)
+//  2) a koccintás gomb TILTOTT, amíg nincs partner
+//  3) koccintás → MINDKETTEN isznak, a helyes (skálázott) kortyszámmal
+//  4) NYERS szám → a PlayScreen szoroz: nehéz szinten fejenként 1 raw = 3 korty
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const ROOT = '/home/user/bottle-of-heroes';
@@ -37,29 +37,41 @@ const mount = (p, diff) => p.evaluate((diff) => {
   ReactDOM.createRoot(root).render(React.createElement(H));
 }, diff);
 
-const potShown = p => p.evaluate(() => {
-  const el = [...document.querySelectorAll('#__p div')].find(d => /A forró krumpli/i.test(d.textContent || '') && d.parentElement);
-  // a nagy szám a "A forró krumpli" kártyán belül
-  const card = el && el.closest('div');
-  const m = (document.getElementById('__p').innerText || '').match(/A forró krumpli\s+🥔?\s*(\d+)/i);
-  return m ? +m[1] : null;
+// A koccintás gomb (nem a „Kövi" footer, nem a picker-sor)
+const clinkBtn = p => p.evaluate(() => [...document.querySelectorAll('#__p button')]
+  .find(x => /Koccintás|Megiszom/.test(x.textContent || '')));
+const clinkDisabled = p => p.evaluate(() => {
+  const b = [...document.querySelectorAll('#__p button')].find(x => /Koccintás|Megiszom/.test(x.textContent || ''));
+  return b ? b.disabled : null;
 });
-const clickBtn = (p, re) => p.evaluate((reSrc) => {
-  const re = new RegExp(reSrc);
-  const b = [...document.querySelectorAll('#__p button')].find(x => re.test(x.textContent || ''));
-  if (b) { b.click(); return true; } return false;
-}, re.source);
-const hasPass = p => p.evaluate(() => [...document.querySelectorAll('#__p button')].some(x => /Passzolom/.test(x.textContent || '')));
+const clickClink = p => p.evaluate(() => {
+  const b = [...document.querySelectorAll('#__p button')].find(x => /Koccintás|Megiszom/.test(x.textContent || ''));
+  if (b && !b.disabled) { b.click(); return true; } return false;
+});
+// A picker-sorok: PlayerDrinkRow variant='pick' — kattintható div-ek a nevekkel
+const pickPartner = (p, name) => p.evaluate((name) => {
+  // a „Kivel koccintasz?" cím alatti sorok; a sor egy div, benne a név
+  // ⚠️ a sor innerText-je az avatar kezdőbetűjével indul („KKecsi"), ezért
+  // *tartalmazza* a nevet, nem startsWith (v10.353 fogódzó). A kattintható SOR
+  // a display:flex + cursor:pointer div.
+  const rows = [...document.querySelectorAll('#__p div')].filter(d => {
+    const t = (d.textContent || '');
+    return t.includes(name) && d.style && d.style.cursor === 'pointer' && d.style.display === 'flex';
+  });
+  rows.sort((a, b) => a.textContent.length - b.textContent.length);
+  if (rows[0]) { rows[0].click(); return true; } return false;
+}, name);
 const stateOf = p => p.evaluate(() => (window.__players || []).map(x => ({ n: x.name, d: x.drinks, pt: x.points })));
 const bannerTxt = p => p.evaluate(() => { const el = [...document.querySelectorAll('div')].find(d => d.style && d.style.zIndex === '250'); return el ? (el.innerText || '').replace(/\s+/g, ' ').trim() : ''; });
+const clickKovi = p => p.evaluate(() => { const b = [...document.querySelectorAll('#__p button')].find(x => /Kövi/i.test(x.textContent || '')); if (b) b.click(); });
 
 (async () => {
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
 
-  // ── 1. NEHÉZ, két passz után a 3. holder iszik: 3 raw × 3 = 9 korty ──
-  console.log('\n===== 1. FORRÓ KRUMPLI — passz nő, holder iszik (nehéz, ×3) =====');
+  // ── 1. NEHÉZ: Sere (sorsolt) koccint Kecsivel → mindketten 1 raw × 3 = 3 korty ──
+  console.log('\n===== 1. KI VELE? — koccintás, mindketten isznak (nehéz, ×3) =====');
   {
-    const p = await b.newPage({ viewport: { width: 402, height: 900 } });
+    const p = await b.newPage({ viewport: { width: 402, height: 950 } });
     p.__errs = [];
     p.on('pageerror', e => { if (!/ServiceWorker/.test(e.message)) p.__errs.push(e.message); });
     await p.route('**://**', r => r.request().url().startsWith('file://') ? r.continue() : r.abort());
@@ -70,59 +82,31 @@ const bannerTxt = p => p.evaluate(() => { const el = [...document.querySelectorA
     await mount(p, 'hard');
     await p.waitForTimeout(2200);
 
-    ok(await potShown(p) === 3, 'induláskor a krumpli 1 raw × 3 = 3 korty', await potShown(p));
-    ok(await hasPass(p), 'az első holdernél VAN „Passzolom" gomb');
+    // a sorsolt = list[0] = Sere; a picker a többi 3-at mutatja, Sere-t NEM
+    const pickerNames = await p.evaluate(() => {
+      const hdr = [...document.querySelectorAll('#__p div')].find(d => /Kivel koccintasz/i.test(d.textContent || ''));
+      return document.getElementById('__p').innerText;
+    });
+    ok(/Kivel koccintasz/i.test(pickerNames), 'megjelenik a „Kivel koccintasz?" választó');
 
-    await clickBtn(p, /Passzolom/); await p.waitForTimeout(200);
-    ok(await potShown(p) === 6, 'egy passz után 2 raw × 3 = 6 korty', await potShown(p));
+    ok(await clinkDisabled(p) === true, '⚠️ a koccintás gomb TILTOTT, amíg nincs partner');
 
-    await clickBtn(p, /Passzolom/); await p.waitForTimeout(200);
-    ok(await potShown(p) === 9, 'két passz után 3 raw × 3 = 9 korty', await potShown(p));
-    ok(await hasPass(p), 'a 3. holder (4 főnél) még passzolhat');
+    ok(await pickPartner(p, 'Kecsi'), 'a Kecsi sorára lehet koppintani (picker)');
+    await p.waitForTimeout(250);
+    ok(await clinkDisabled(p) === false, 'partner után a gomb aktív');
 
-    // a 3. holder iszik
-    await clickBtn(p, /Megiszom/); await p.waitForTimeout(1400);
+    await clickClink(p); await p.waitForTimeout(1400);
     const banner = await bannerTxt(p);
-    // banner minimalize + Kövi
     await p.evaluate(() => { const el = [...document.querySelectorAll('div')].find(d => d.style && d.style.zIndex === '250'); if (el) el.click(); });
     await p.waitForTimeout(300);
-    await clickBtn(p, /Kövi/i); await p.waitForTimeout(1600);
+    await clickKovi(p); await p.waitForTimeout(1600);
     const st = await stateOf(p);
-    // startIdx = gameIdx(0) % 4 = 0 → Sere; +2 passz → holder = Vivi (index 2)
-    const vivi = st.find(x => x.n === 'Vivi');
-    ok(vivi && vivi.d === 9, '⚠️ a holder (Vivi) 3 raw × 3 = 9 kortyot kapott a könyvelésben', vivi && vivi.d);
-    ok(st.filter(x => x.d > 0).length === 1, 'csak EGY ember ivott', st.filter(x => x.d > 0).map(x => x.n).join(','));
-    ok(/9\s*KORTY/i.test(banner), 'a banner „9 KORTY" metrikát mutat', (banner.match(/\d+\s*KORTY/i) || ['nincs'])[0]);
-    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
-    await p.close();
-  }
-
-  // ── 2. KÖNNYŰ, végig passz → az utolsó holder FORCED (nincs passz), max = létszám ──
-  console.log('\n===== 2. KÖRBEÉR — az utolsó holder muszáj iszik (könnyű, max=4) =====');
-  {
-    const p = await b.newPage({ viewport: { width: 402, height: 900 } });
-    p.__errs = [];
-    p.on('pageerror', e => { if (!/ServiceWorker/.test(e.message)) p.__errs.push(e.message); });
-    await p.route('**://**', r => r.request().url().startsWith('file://') ? r.continue() : r.abort());
-    await p.addInitScript(stub);
-    await p.addInitScript(`try{localStorage.setItem('boh_onboarded','1');localStorage.setItem('boh_splash','0');}catch(e){}`);
-    await p.goto('file://' + ROOT + '/index.html', { waitUntil: 'domcontentloaded' });
-    await p.waitForTimeout(3000);
-    await mount(p, 'easy');
-    await p.waitForTimeout(2200);
-
-    // 3× passz → 4. (utolsó) holder
-    for (let i = 0; i < 3; i++) { await clickBtn(p, /Passzolom/); await p.waitForTimeout(180); }
-    ok(await potShown(p) === 4, 'a 4. holdernél a krumpli 4 korty (max = létszám)', await potShown(p));
-    ok(!(await hasPass(p)), '⚠️ az utolsó holdernél NINCS „Passzolom" gomb (körbeért)');
-
-    await clickBtn(p, /Megiszom/); await p.waitForTimeout(1400);
-    await p.evaluate(() => { const el = [...document.querySelectorAll('div')].find(d => d.style && d.style.zIndex === '250'); if (el) el.click(); });
-    await p.waitForTimeout(300);
-    await clickBtn(p, /Kövi/i); await p.waitForTimeout(1600);
-    const st = await stateOf(p);
-    const robi = st.find(x => x.n === 'Robi'); // index 3, az utolsó
-    ok(robi && robi.d === 4, 'a kényszerített utolsó holder (Robi) 4 kortyot ivott', robi && robi.d);
+    const sere = st.find(x => x.n === 'Sere'), kecsi = st.find(x => x.n === 'Kecsi');
+    ok(sere && sere.d === 3, '⚠️ a sorsolt (Sere) 1 raw × 3 = 3 kortyot ivott', sere && sere.d);
+    ok(kecsi && kecsi.d === 3, 'a partner (Kecsi) is 3 kortyot ivott', kecsi && kecsi.d);
+    ok(st.filter(x => x.d > 0).length === 2, 'pontosan KETTEN ittak', st.filter(x => x.d > 0).map(x => x.n).join(','));
+    ok(st.every(x => x.pt === 0), 'senki nem kap pontot (tisztán korty)', st.map(x => x.pt).join(','));
+    ok(/3\s*KORTY/i.test(banner), 'a banner „3 KORTY" metrikát mutat', (banner.match(/\d+\s*KORTY/i) || ['nincs'])[0]);
     ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
     await p.close();
   }

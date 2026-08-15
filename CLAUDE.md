@@ -2248,35 +2248,34 @@ a szót, az imposztor „TE VAGY AZ IMPOSZTOR"-t — és fordítva NEM), a kész
 és a teljes szavazás → könyvelés (imposztor lebukik → 3 korty, a helyes szavazók
 +1 pont).
 
-## Mindenki Iszik: FORRÓ KRUMPLI (v10.375)
-A régi „Mindenki Iszik" **passzív** volt: az app kisorsolt egy nevet, aki ivott
-egyet — nulla döntés, a CLAUDE.md (v10.340) is a leggyengébb/fölösleges játékként
-tartotta számon. Az új mechanika **push-your-luck**: kezdő + **1 kortyos forró
-krumpli**. Aki nála van, két gomb közül választ:
-- **Megiszom** — issza az AKTUÁLIS mennyiséget, és **vége a körnek**;
-- **Passzolom** — a mennyiség **+1**, a krumpli a **kövihez** kerül.
+## Mindenki Iszik: KI VELE? — koccintás (v10.375)
+A régi „Mindenki Iszik" **passzív** volt: az app kisorsolt egy nevet, aki egyedül
+ivott egyet — nulla döntés, a CLAUDE.md (v10.340) is a leggyengébb/fölösleges
+játékként tartotta számon. Az új mechanika **szociális csavar**: a sorsolt játékos
+**kiválaszt egy társat**, és **koccintanak** — mindketten isznak egyet. Nincs
+lezárás-gond (nem halmoz, nem passzol tovább), tisztán társasági fordulat.
 
-**⚠️ A lezárás: a krumpli EGY kört mehet.** Az UTOLSÓ játékosnál — aki már csak a
-kezdőnek passzolhatná vissza — **nincs „Passzolom" gomb**, muszáj meginni. Így a
-maximum a **létszám** (6 főnél 6 korty, `holderIdx === N-1` → `forced`), NEM
-végtelen. A `startIdx = gameIdx % N`, a holder = `list[(startIdx + holderIdx) % N]`,
-az összeg = `holderIdx + 1` (raw).
+- a sorsolt = `list[gameIdx % N]`, a választó a **többieket** mutatja (magát NEM);
+- a koccintás gomb **tiltott**, amíg nincs partner (egyedül — egy fő — nincs
+  választó, ott a sorsolt egyedül iszik).
+
+**⚠️ A partner-választó a KÖZÖS `PlayerDrinkRow` `variant='pick'` sora** — nem új
+markup (a Kategória is ezt használja; *ne írj újat*, v10.291).
 
 **⚠️ A szám NYERSEN megy ki mindkét csatornán** — a PlayScreen szoroz
 (`diffDrinks * wcMult`), az `onResult` `drinks`-ét ÉS az `onAdvance` térképét is.
-A `drinkMult` CSAK a kijelzést skálázza (`shown = amount * drinkMult`) — ha a
-játék is szorozna, duplán menne fel (v10.299 Lóverseny-lecke). Nehéz szinten a
-3. holder 3 raw = **9 korty**, nem 3 és nem 27.
+Fejenként **1 raw korty**; a `drinkMult` CSAK a kijelzést skálázza — ha a játék
+is szorozna, duplán menne fel (v10.299 Lóverseny-lecke). Nehéz szinten fejenként
+1 raw = **3 korty**.
 
-**A fejléc-korong tartományt mutat**: `stakeOf:(m,c)=>[1, Math.max(1,c)]` — a felső
-határ a **játékosszám** (a `stakeOf` második paramétere, mint a Lóversenynél),
-felszorozva a nehézséggel. A régi `stake:[1,1]` fix „1 KORTY"-ot ígért.
+A fejléc-korong **fix `[1,1]`** (× nehézség) — mindketten ugyanannyit isznak.
 
 A játék **pontot nem oszt** (mint az Ultimátum, az Árverés) — tisztán korty.
-Egyetlen loser (`winners:[], losers:[holder]`), tehát a banner egy „N KORTY"
-metrikát mutat; a „Fordított kör" wildcard a `winners`/`losers` + `dm` páron
-egyszerre fordít (v10.333).
+A két ivó a banner ISZIK oldalán (`winners:[], losers:[sorsolt, partner]`),
+egyforma osztás → egy „N KORTY" metrika; a „Fordított kör" wildcard a
+`winners`/`losers` + `dm` páron egyszerre fordít (v10.333).
 
-Teszt: `node tests/mindenki_test.js` — a tét minden passzal +1 (nehéz szinten a
-kijelzés ×3), az utolsó holdernél nincs passz-gomb (körbeért), és a könyvelés a
-holderre megy a helyes skálázott számmal (3 raw × 3 = 9).
+Teszt: `node tests/mindenki_test.js` — a koccintás gomb tiltott partner nélkül,
+a picker a sorsoltat kihagyja, és koccintás után KETTEN isznak a helyes skálázott
+számmal (nehéz: 3/3). ⚠️ A picker-sor innerText-je az avatar kezdőbetűjével indul
+(„KKecsi"), ezért *tartalmazza* a nevet, nem `startsWith` (v10.353 fogódzó).
