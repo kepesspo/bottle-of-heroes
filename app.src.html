@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.374';
+const APP_VERSION = 'v10.375';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -36045,7 +36045,7 @@ const GAMES = [
   { id:'sohanem', stake:[1,1],   roundTime:'mid',  name:'Én még soha',           difficulty:'közepes', category:'Csapat', emoji:'🙅', symbol:IMGS['sohanem_symbol.png'], img:IMGS['sohanem_icon.png'], banner:IMGS['sohanem_banner.png'], color:'#D946EF', desc:'Jön egy állítás és ha az igaz rád akkor innod kell, ha nem igaz rád akkor nem kell.' },
   { id:'collect', stake:[1,3], stakeOf:(m)=>[1, COLLECT_MAX_POT[m?.collectConfig?.gridSize ?? 4] ?? 10],   roundTime:'mid',  name:'Collect and Boom',      difficulty:'közepes', category:'Csapat', emoji:'💣', symbol:IMGS['collect_symbol.png'], img:IMGS['collect_icon.png'], banner:IMGS['collect_banner.png'], color:'#0EA5E9', desc:'Az app kisorsol egy játékost aki el fogja kezdeni a kört. A játéktábláról ki kell választania egy cellát. Utána a tőle jobbra ülő fog választani egyet, addig választanak a játékosok ameddig egy bombát találnak — ekkor a játék véget ért és az addig összegyűjtött egységet kell meginnia a vesztesnek.' },
   { id:'kivagyok', stake:[1,1],  roundTime:'fast',  name:'Ki Vagyok Én',          difficulty:'közepes', category:'Egyéni', emoji:'🕵️', symbol:IMGS['kivagyok_symbol.png'], img:IMGS['kivagyok_icon.png'], banner:IMGS['kivagyok_banner.png'], color:'#F472B6', desc:'Az app mutat egy híresség fotóját és ki kell találni ki van a képen. Ebben a játékban csak egy játékos vesz részt. Ha pontosan meg tudja mondani a híresség életkorát vagy foglalkozását akkor kioszthat egy piát.' },
-  { id:'mindenki', stake:[1,1],  roundTime:'fast',  name:'Mindenki Iszik',difficulty:'könnyű',  category:'Csapat', emoji:'🍻', symbol:IMGS['mindenki_symbol.png'], img:IMGS['mindenki_icon.png'], banner:IMGS['mindenki_banner.png'], color:'#F4C95A', desc:'A játék kiválaszt egy játékost akinek innia kell. Ezt az app sorsolja ki, ha elfogyta az emberek akkor előről megy a kör.' },
+  { id:'mindenki', stake:[1,1], stakeOf:(m,c)=>[1, Math.max(1, c||1)], roundTime:'fast',  name:'Mindenki Iszik',difficulty:'könnyű',  category:'Csapat', emoji:'🍻', symbol:IMGS['mindenki_symbol.png'], img:IMGS['mindenki_icon.png'], banner:IMGS['mindenki_banner.png'], color:'#F4C95A', desc:'Forró krumpli: az app kisorsol egy kezdőt és egy 1 kortyos krumplit. Aki nála van, megissza az aktuális mennyiséget, vagy passzolja a kövinek +1 kortyval. Az utolsónál — mielőtt visszaérne a kezdőhöz — muszáj meginni. Max a létszám.' },
   { id:'beerpong', stake:null, roundTime:'slow',  name:'Beer Pong Torna',         difficulty:'könnyű',  category:'Csapat', emoji:'🏓', symbol:null, img:IMGS['beerpong_icon.png'], banner:IMGS['beerpong_banner.png'], color:'#3B82F6', dnr:true, observer:true, desc:'Egyéni kieséses beer pong torna. Az app generálja a sorsolást, te döntöd el ki nyert — a vesztes annyi kortyt iszik, amennyi a pohár-különbség. Az utolsó ember állva marad a bajnok!' },
   { id:'idopárbaj', observer:true, stake:[1,1], name:'Időpárbaj',            difficulty:'könnyű',  category:'Páros',  emoji:'⏱️', symbol:IMGS['idoparbaj_symbol.png'], img:IMGS['idoparbaj_icon.png'], banner:IMGS['idoparbaj_banner.png'], color:'#6366F1', desc:'Az app elrejt egy véletlenszerű időt 1–30 mp között. Indítsd el a stoppert, majd állítsd le a lehető legközelebb a titkos célhoz. Aki messzebb jár, az iszik.' },
   { id:'neugyanazt', stake:[0,3], roundTime:'fast', name:'Ne ugyanazt!',       difficulty:'könnyű',  category:'Páros',  emoji:'🙊', img:IMGS['neugyanazt_icon.png'], banner:IMGS['neugyanazt_banner.png'], color:'#7C5CC4', desc:'Páros játék: ketten KÖZÖSEN játszotok. Kaptok egy szűk témát, és három körben egyszerre mondtok rá egy-egy szót — úgy, hogy NE ugyanazt. Ha egyszer sem egyeztek, mindketten pontot kaptok; ahányszor egyeztek, annyi kortyot isztok. A trükk: a másik is a kézenfekvő szóra gondol.' },
@@ -51220,61 +51220,118 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 }
 
 
-function MindenkiGame({ gameIdx, players, onAdvance, onResult }) {
+// ═══════════════ Mindenki Iszik — FORRÓ KRUMPLI (v10.375) ═══════════════
+// CSAPAT, push-your-luck. Az app kisorsol egy kezdőt és egy 1 kortyos „forró
+// krumplit". Aki nála van: MEGISSZA az aktuális mennyiséget (kör vége), vagy
+// PASSZOLJA a mellette ülőnek — ekkor a mennyiség +1. A krumpli EGY kört mehet:
+// az UTOLSÓ játékosnál (aki már csak a kezdőnek passzolhatná vissza) muszáj
+// meginni. Így a maximum a LÉTSZÁM (6 főnél 6 korty), NEM végtelen.
+//
+// A régi passzív „az app kisorsol valakit, iszik egyet" megszűnt: az csak egy
+// nevet és egy fix kortyot mutatott, döntés nélkül.
+//
+// ⚠️ NYERS szám megy ki mindkét csatornán — a PlayScreen szoroz (`diffDrinks *
+// wcMult`), az `onResult` `drinks`-ét és az `onAdvance` térképét is. A
+// `drinkMult` CSAK a kijelzést skálázza (v10.299 Lóverseny-lecke).
+function MindenkiGame({ gameIdx, players, onAdvance, onResult, drinkMult = 1 }) {
+  const list = players && players.length ? players : [];
+  const N = list.length;
+  const startIdx = N ? gameIdx % N : 0;
+  const [holderIdx, setHolderIdx] = React.useState(0);   // 0..N-1 a passz-sorban
+  const [phase, setPhase] = React.useState('run');       // 'run' | 'done'
   const doneRef = React.useRef(false);
 
-  const list = players && players.length ? players : [];
-  const current = list.length ? list[gameIdx % list.length] : null;
-
   React.useEffect(() => {
-    doneRef.current = false;
-    if (!current) return;
-    // setTimeout(0) ensures this fires after PlayScreen's useEffect resets pendingCommit
-    const t = setTimeout(() => {
-      const dm = { [current.id]: 1 };
-      onAdvance && onAdvance(dm);
-      onResult && onResult({ correct: false, playerName: current.name, drinks: 1, subtitle: `${current.name} iszik egyet` });
-      doneRef.current = true;
-    }, 0);
-    return () => clearTimeout(t);
+    setHolderIdx(0); setPhase('run'); doneRef.current = false;
   }, [gameIdx]);
 
-  if (!current) return null;
+  if (!N) return null;
+
+  const holder = list[(startIdx + holderIdx) % N];
+  const amount = holderIdx + 1;                 // NYERS korty (1..N)
+  const forced = holderIdx >= N - 1;            // az utolsó — nem passzolhat vissza a kezdőnek
+  const shown = amount * drinkMult;
+
+  const drink = () => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    setPhase('done');
+    const note = forced
+      ? `A forró krumpli körbeért — ${holder.name} issza meg.`
+      : `${holder.name} megitta a forró krumplit.`;
+    onResult && onResult({ winners: [], losers: [holder], drinks: amount, loseNote: note });
+    onAdvance && onAdvance({ [holder.id]: amount });
+  };
+
+  const pass = () => {
+    if (phase !== 'run' || forced) return;
+    setHolderIdx(i => i + 1);
+  };
+
+  if (phase === 'done') {
+    return (
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, width:'100%', padding:'32px 0' }}>
+        <div style={{ fontSize:60, lineHeight:1 }}>🥔</div>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:19, color:T.ink, textAlign:'center' }}>
+          {holder.name} itta meg a {shown} kortyot!
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16, width:'100%' }}>
-      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10, padding:'16px 0 8px' }}>
-        <div style={{ position:'relative' }}>
-          <PlayerAvatar player={current} size={120} boxShadow={`0 8px 32px ${current.color}66`} />
-          <div style={{position:'absolute', bottom:4, right:4, width:32, height:32, borderRadius:'50%', background:'#fff', display:'grid', placeItems:'center', boxShadow:'0 2px 8px rgba(0,0,0,0.15)'}}><BohIcon name="beer" size={17} /></div>
+      {/* A KRUMPLI — ez a tét, minden passzal +1 */}
+      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'16px 18px 18px', textAlign:'center', boxShadow:T.shadow, boxSizing:'border-box' }}>
+        <div style={{ fontFamily:T.font, fontSize:11.5, fontWeight:800, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.12em' }}>A forró krumpli</div>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginTop:4 }}>
+          <span style={{ fontSize:34, lineHeight:1 }}>🥔</span>
+          <span style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:52, color:T.coral, lineHeight:1 }}>{shown}</span>
+          <BohIcon name="beer" size={26} />
         </div>
-        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:32, color:T.ink }}>{current.name}</div>
-        <div style={{ fontFamily:T.font, fontSize:15, color:T.coral, fontWeight:700 }}>{t('mindenkiYourTurn')}</div>
       </div>
 
-      {/* Player queue */}
-      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 16px', boxShadow:T.shadow }}>
-        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:10 }}>{t('mindenkiOrder')}</div>
+      {/* KI van nála */}
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+        <PlayerAvatar player={holder} size={96} boxShadow={`0 8px 28px ${holder.color}55`} />
+        <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:26, color:T.ink }}>{holder.name}</div>
+        <div style={{ fontFamily:T.font, fontSize:14, color:T.coral, fontWeight:700, textAlign:'center' }}>
+          {forced ? 'Körbeért — muszáj meginnod!' : 'Nálad a forró krumpli!'}
+        </div>
+      </div>
+
+      {/* Akciók */}
+      <button onClick={drink} style={{ width:'100%', maxWidth:320, padding:'16px', borderRadius:18, background:T.coral, border:'none', cursor:'pointer', boxShadow:`0 6px 20px ${T.coral}44`, fontFamily:T.font, fontWeight:800, fontSize:17, color:'#fff' }}>
+        Megiszom — {shown} 🍺
+      </button>
+      {!forced && (
+        <button onClick={pass} style={{ width:'100%', maxWidth:320, padding:'14px', borderRadius:18, background:'transparent', border:`2px solid ${T.ink}22`, cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:15, color:T.inkSoft }}>
+          Passzolom — +1 korty a kövinek ({(amount + 1) * drinkMult} 🍺)
+        </button>
+      )}
+
+      {/* Passz-sor: hol jár a krumpli */}
+      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 16px', boxShadow:T.shadow, boxSizing:'border-box' }}>
+        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:10 }}>Passz-sor</div>
         <div style={{ display:'flex', gap:8, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
-          {list.map((p, i) => {
-            const relIdx = ((i - (gameIdx % list.length)) % list.length + list.length) % list.length;
-            const active = relIdx === 0;
-            const soon = relIdx === 1;
+          {list.map((_, k) => {
+            const p = list[(startIdx + k) % N];
+            const active = k === holderIdx;
+            const passed = k < holderIdx;
             return (
-              <div key={p.id} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, flexShrink:0 }}>
+              <div key={p.id} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, flexShrink:0, opacity: passed ? 0.4 : 1 }}>
                 <div style={{
                   width:44, height:44, borderRadius:'50%',
                   background: active ? p.color : `${p.color}55`,
-                  display:'grid', placeItems:'center',
-                  fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff',
+                  display:'grid', placeItems:'center', overflow:'hidden',
                   border: active ? `3px solid ${p.color}` : '3px solid transparent',
                   outline: active ? `3px solid ${p.color}44` : 'none',
-                  transition:'all .2s', overflow:'hidden',
+                  transition:'all .2s',
                 }}>
                   {p.img ? <img src={p.img} style={{ width:44, height:44, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff' }}>{p.name.charAt(0).toUpperCase()}</span>}
                 </div>
                 <div style={{ fontFamily:T.font, fontSize:11, fontWeight: active ? 700 : 500, color: active ? T.ink : T.inkSoft }}>
-                  {active ? p.name.split(' ')[0] : soon ? 'Kövi' : ''}
+                  {active ? p.name.split(' ')[0] : k === 0 ? 'Start' : ''}
                 </div>
               </div>
             );
@@ -61714,7 +61771,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'loverseny') return <LóversenyGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onUnready={onUnready} onResult={onResult} drinkMult={drinkMult} />;
   if (gameId === 'szerencse') return <SzerencsekerékGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kivagyok') return <KivagyokGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
-  if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'mindenki') return <MindenkiGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} drinkMult={drinkMult} />;
   if (gameId === 'igazhamis') return <IgazHamisGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'farkasos') return <FarkasosGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'meduza') return <MeduzaGame key={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} drinkMult={drinkMult} />;

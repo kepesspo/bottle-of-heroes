@@ -2247,3 +2247,36 @@ a szerepek titkossága (imposztor word=null), a telefon helyes szerepe (a csapat
 a szót, az imposztor „TE VAGY AZ IMPOSZTOR"-t — és fordítva NEM), a kész-jelzés,
 és a teljes szavazás → könyvelés (imposztor lebukik → 3 korty, a helyes szavazók
 +1 pont).
+
+## Mindenki Iszik: FORRÓ KRUMPLI (v10.375)
+A régi „Mindenki Iszik" **passzív** volt: az app kisorsolt egy nevet, aki ivott
+egyet — nulla döntés, a CLAUDE.md (v10.340) is a leggyengébb/fölösleges játékként
+tartotta számon. Az új mechanika **push-your-luck**: kezdő + **1 kortyos forró
+krumpli**. Aki nála van, két gomb közül választ:
+- **Megiszom** — issza az AKTUÁLIS mennyiséget, és **vége a körnek**;
+- **Passzolom** — a mennyiség **+1**, a krumpli a **kövihez** kerül.
+
+**⚠️ A lezárás: a krumpli EGY kört mehet.** Az UTOLSÓ játékosnál — aki már csak a
+kezdőnek passzolhatná vissza — **nincs „Passzolom" gomb**, muszáj meginni. Így a
+maximum a **létszám** (6 főnél 6 korty, `holderIdx === N-1` → `forced`), NEM
+végtelen. A `startIdx = gameIdx % N`, a holder = `list[(startIdx + holderIdx) % N]`,
+az összeg = `holderIdx + 1` (raw).
+
+**⚠️ A szám NYERSEN megy ki mindkét csatornán** — a PlayScreen szoroz
+(`diffDrinks * wcMult`), az `onResult` `drinks`-ét ÉS az `onAdvance` térképét is.
+A `drinkMult` CSAK a kijelzést skálázza (`shown = amount * drinkMult`) — ha a
+játék is szorozna, duplán menne fel (v10.299 Lóverseny-lecke). Nehéz szinten a
+3. holder 3 raw = **9 korty**, nem 3 és nem 27.
+
+**A fejléc-korong tartományt mutat**: `stakeOf:(m,c)=>[1, Math.max(1,c)]` — a felső
+határ a **játékosszám** (a `stakeOf` második paramétere, mint a Lóversenynél),
+felszorozva a nehézséggel. A régi `stake:[1,1]` fix „1 KORTY"-ot ígért.
+
+A játék **pontot nem oszt** (mint az Ultimátum, az Árverés) — tisztán korty.
+Egyetlen loser (`winners:[], losers:[holder]`), tehát a banner egy „N KORTY"
+metrikát mutat; a „Fordított kör" wildcard a `winners`/`losers` + `dm` páron
+egyszerre fordít (v10.333).
+
+Teszt: `node tests/mindenki_test.js` — a tét minden passzal +1 (nehéz szinten a
+kijelzés ×3), az utolsó holdernél nincs passz-gomb (körbeért), és a könyvelés a
+holderre megy a helyes skálázott számmal (3 raw × 3 = 9).
