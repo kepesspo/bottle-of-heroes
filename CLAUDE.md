@@ -2216,3 +2216,34 @@ Teszt: `node tests/wildcard_every_test.js` — everyRound módban egy szerencse-
 UTÁN ott a „Dupla kör" sáv; a **kontroll** blokk (everyRound nélkül, perces
 időzítő) ugyanazt játssza, és NEM jön wildcard — enélkül az 1. blokk akkor is
 átmenne, ha a wildcard máshonnan jönne.
+
+## Imposztor: telefonról is játszható — titkos szerep + szavazás (v10.374)
+Eddig körbeadós volt (egy host-telefon). Mostantól **minden telefon a SAJÁT
+szerepét látja** (nincs körbeadás), és onnan is szavaz — a host koordinál.
+Offline (nincs `roomCode`) marad a régi körbeadós flow; online (`roomCode`) az új.
+
+**⚠️ A titkos szerep egy KÖZÖS szoba-dokumentumon megy át.** A biztonság kulcsa,
+hogy a globális `impState` CSAK a fázist viszi, az imposztor kilétét NEM. A
+szerepek **per-player** mezőben mennek le: `impRole.<pid> = { imp, word }` — az
+imposztor `word:null`-t kap, a csapat a szót. Minden telefon a `impRole[myPid]`-t
+olvassa. (Bizalmi modell: elvileg a DB-ben más mezője is olvasható, de az app
+többi része is így működik — a tulajdonos döntése volt.)
+
+Három dolog, amit könnyű elrontani:
+- **A map-mezők törléséhez `null` kell**, nem `{}` — a `syncRoom` MERGE-el, egy
+  üres map nem törölné az előző kör `impReady`/`impVote`-ját (v10.297 mintája).
+- **A `bookResult` KÖZÖS** (offline utolsó szavazat ÉS az online „mindenki
+  szavazott" ág is ezt hívja) — a `resultFiredRef` védi a dupla könyveléstől.
+  A szavazatok a hostnál `voter.id → megszavazott INDEX` alakra konvertálódnak.
+- **Az `observerName` külön effekttel állítja a `selId`-t** — a `useState`
+  initializer csak egyszer fut, tehát a csatlakozott név nem választaná ki a
+  játékost. Enélkül a telefon a „Ki vagy?" választónál ragadna.
+
+A host koordinátor a felfedésnél/szavazásnál a haladást mutatja (`N/M kész`,
+`N/M szavazott`) + gomb a következő fázisra; az eredmény a nagy képernyőn jön.
+
+Teszt: `node tests/imposztor_online_test.js` — host + telefon EGY szobán:
+a szerepek titkossága (imposztor word=null), a telefon helyes szerepe (a csapat
+a szót, az imposztor „TE VAGY AZ IMPOSZTOR"-t — és fordítva NEM), a kész-jelzés,
+és a teljes szavazás → könyvelés (imposztor lebukik → 3 korty, a helyes szavazók
++1 pont).

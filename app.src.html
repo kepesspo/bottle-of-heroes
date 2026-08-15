@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.373';
+const APP_VERSION = 'v10.374';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -36013,7 +36013,7 @@ const utvesztoEffect = t => [t.korty ? `+${t.korty} korty` : null, `+${t.delay} 
 const GAMES = [
   { id:'blackjack', observer:true, stake:null, roundTime:'slow',  name:'Blackjack',             difficulty:'közepes', category:'Csapat', emoji:'🂡', symbol:IMGS['blackjack_icon.png'], img:IMGS['blackjack_icon.png'], banner:IMGS['blackjack_banner.png'], dnr:true, color:'#1a6b3c', desc:'Csatlakozz a telefonoddal, tegyél tétet kortyokban, és játssz az osztó (a host) ellen! Hit, Stand vagy Double Down — aki veszít, megissza a tétjét, aki nyer, kiosztja. Blackjack másfélszeresét ér!' },
   { id:'busz', observer:true, stake:null,      roundTime:'slow',  name:'Busz',                  difficulty:'nehéz',   category:'Csapat', emoji:'🚌', symbol:IMGS['busz_symbol.png'], img:IMGS['busz_icon.png'], banner:IMGS['busz_banner.png'], color:'#F4A04A', desc:'A piramis kártyasor aljától indulva fordítják fel sorban a lapokat. Akinek megegyezik a lapja az aktuális kártyával, kioszthat annyi kortyt amennyit ér a sor. Az utolsó helyen állók buszoznak: kisebb-nagyobb tippeket kell mondani egy 6 lapos sorra — ha rontasz, előről kezded és iszol.' },
-  { id:'imposztor', stake:[2,3], roundTime:'mid',  name:'Imposztor',               difficulty:'közepes', category:'Csapat', emoji:'🕵️', symbol:IMGS['imposztor_symbol.png'], img:IMGS['imposztor_icon.png'], banner:IMGS['imposztor_banner.png'], color:'#6366F1', desc:'Valaki köztetek az Imposztor! Mindenki kap egy titkos szerepet — csak az Imposztor nem tudja a titkos szót. Adjatok tippeket a szóra, a csoport szavazzon, ki a besúgó!' },
+  { id:'imposztor', observer:true, stake:[2,3], roundTime:'mid',  name:'Imposztor',               difficulty:'közepes', category:'Csapat', emoji:'🕵️', symbol:IMGS['imposztor_symbol.png'], img:IMGS['imposztor_icon.png'], banner:IMGS['imposztor_banner.png'], color:'#6366F1', desc:'Valaki köztetek az Imposztor! Mindenki kap egy titkos szerepet — csak az Imposztor nem tudja a titkos szót. Adjatok tippeket a szóra, a csoport szavazzon, ki a besúgó!' },
   { id:'memoria', stake:[1,1],   roundTime:'mid',  name:'Memória',               difficulty:'nehéz',   category:'Csapat', emoji:'🧩', symbol:IMGS['memoria_symbol.png'], img:IMGS['memoria_icon.png'], banner:IMGS['memoria_banner.png'], color:'#22D096', desc:'Klasszikus memória emoji lapokkal. Felváltva fordítsatok le lapokat — aki párt talál, pontot szerez és folytathatja. Aki a végén egy párt sem talált, iszik egyet.' },
   { id:'erem', stake:[1,1],      roundTime:'fast',  name:'Érem dobás',            difficulty:'könnyű',  category:'Páros',  emoji:'🪙', symbol:IMGS['erem_symbol.png'], img:IMGS['erem_icon.png'], banner:IMGS['erem_banner.png'], color:'#F4C95A', desc:'Az app kiválaszt egy játékost aki kihivhat valakit hogy játsszon vele. A két játékosnak választani kell a Fej és az Írás között. Ez után a kihívó feldobja az érmét és amelyik oldalára esik az a játékos nyert és a másiknak innia kell.' },
   { id:'ticktak', stake:[1,1],   roundTime:'fast',  name:'Tick Tak',              difficulty:'közepes', category:'Csapat', emoji:'⏰', symbol:IMGS['ticktak_symbol.png'], img:IMGS['ticktak_icon.png'], banner:IMGS['ticktak_banner.png'], color:'#FF6B6B', desc:'A játék inditásával elindul egy számláló a háttérben, ekkor el kell kezdeni körbeadni egy tárgyat a játékosok között. Mikor az időzitő megszólal annál az embernél akinél épp az adott tárgy van ő vesztett és neki kell a büntetést meginnia.' },
@@ -54182,7 +54182,8 @@ const IMPOSZTOR_SZAVAK_SHUFFLED = (() => {
   return a;
 })();
 
-function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
+function ImposztorGame({ gameIdx, players, onAdvance, onResult, roomCode }) {
+  const online = !!roomCode;
   const [impostorIndices, setImpostorIndices] = useState([]);
   const [startIdx, setStartIdx] = useState(0); // körönként random kezdőjátékos
   const [wordIdx, setWordIdx] = useState(0);
@@ -54229,6 +54230,115 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
   }, [timerEnd]);
 
   const word = IMPOSZTOR_SZAVAK_SHUFFLED[wordIdx];
+
+  // ── KÖZÖS könyvelés — az offline utolsó szavazat ÉS az online is ezt hívja.
+  // `nv`: voter.id → a megszavazott játékos INDEXE.
+  const bookResult = React.useCallback((nv) => {
+    if (resultFiredRef.current) return;
+    resultFiredRef.current = true;
+    const vc = {};
+    Object.values(nv).forEach(idx => { if (idx != null) vc[idx] = (vc[idx] || 0) + 1; });
+    const top = Object.entries(vc).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const topIdx = parseInt(top);
+    const isFound = impostorIndices.includes(topIdx);
+    const impostors = impostorIndices.map(idx => players[idx]);
+    const dm = {}, pm = {};
+    if (isFound) {
+      impostors.forEach(imp => { dm[imp.id] = 3; });
+      players.forEach((p) => { if (impostorIndices.includes(nv[p.id])) pm[p.id] = 1; });
+    } else {
+      impostors.forEach(imp => { pm[imp.id] = 1; });
+      players.forEach((p, i) => { if (!impostorIndices.includes(i)) dm[p.id] = 2; });
+    }
+    const correctVoters = isFound ? players.filter((p) => impostorIndices.includes(nv[p.id])) : [];
+    setTimeout(() => {
+      if (isFound) onResult && onResult({ winners: correctVoters, losers: impostors, drinks: 3, winNote: '+1 pont', loseNote: 'Lebukott 🕵️' });
+      else onResult && onResult({ winners: impostors, losers: players.filter((p, i) => !impostorIndices.includes(i)), drinks: 2, winNote: 'Megúszta · +1 pont' });
+      onAdvance && onAdvance(dm, pm);
+    }, 900);
+  }, [impostorIndices, players, onResult, onAdvance]);
+
+  // ── ONLINE: telefonos szerep-felfedés és szavazás ──────────────────────────
+  const [readySet, setReadySet] = React.useState(() => new Set());
+  // Szerepek LE: per-player mező (mindenki csak a sajátját nézi a telefonján).
+  // A globális `impState` NEM viszi az imposztor kilétét — azt csak a saját
+  // `imp` mező árulja el, amit a játékos a saját telefonján lát.
+  React.useEffect(() => {
+    if (!online || !impostorIndices.length || typeof syncRoom !== 'function') return;
+    const roles = {};
+    players.forEach((p, i) => { const imp = impostorIndices.includes(i); roles[p.id] = { imp, word: imp ? null : word }; });
+    // ⚠️ `null` a törléshez (merge-nél a `{}` NEM törölné az előző kör jelzéseit).
+    syncRoom(roomCode, { impRole: roles, impReady: null, impVote: null });
+    setReadySet(new Set()); setVotes({});
+  }, [online, gameIdx, impostorIndices.join(',')]);
+  // A fázist külön szinkronizáljuk (a telefonok ezt követik).
+  React.useEffect(() => {
+    if (!online || typeof syncRoom !== 'function') return;
+    syncRoom(roomCode, { impState: { gameIdx, phase } });
+  }, [online, phase, gameIdx]);
+  // A telefonok bemenete (kész-jelzés + szavazat) FELOLVASVA.
+  React.useEffect(() => {
+    if (!online || typeof subscribeRoom !== 'function') return;
+    const unsub = subscribeRoom(roomCode, data => {
+      if (!data) return;
+      if (data.impReady) setReadySet(new Set(Object.keys(data.impReady).filter(k => data.impReady[k])));
+      if (data.impVote) {
+        const nv = {};
+        Object.entries(data.impVote).forEach(([voterId, votedId]) => {
+          const idx = players.findIndex(p => p.id === votedId);
+          if (idx >= 0) nv[voterId] = idx;
+        });
+        setVotes(nv);
+      }
+    });
+    return typeof unsub === 'function' ? unsub : undefined;
+  }, [online, roomCode, players.length]);
+  // Ha ONLINE és mindenki szavazott → eredmény (a host is nyomhatja korábban).
+  React.useEffect(() => {
+    if (!online || phase !== 'vote') return;
+    if (Object.keys(votes).length >= players.length && players.length > 0) {
+      setPhase('result'); bookResult(votes);
+    }
+  }, [online, phase, votes, players.length, bookResult]);
+
+  // ── HOST KOORDINÁTOR (online) — a felfedés/szavazás a telefonokon megy ──
+  if (online && (phase === 'reveal' || phase === 'vote')) {
+    const isReveal = phase === 'reveal';
+    const done = isReveal ? readySet.size : Object.keys(votes).length;
+    const allDone = done >= players.length && players.length > 0;
+    return (
+      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:12, alignItems:'center' }}>
+        <div style={{ width:'100%', background:T.ink, borderRadius:16, padding:'16px', textAlign:'center' }}>
+          <div style={{ fontSize:30, lineHeight:1, marginBottom:6 }}>{isReveal ? '📱' : '🗳️'}</div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff' }}>
+            {isReveal ? 'Nézzétek meg a szerepeteket a telefonotokon!' : 'Szavazzatok a telefonon — ki az imposztor?'}
+          </div>
+          <div style={{ fontFamily:T.font, fontSize:12.5, color:'rgba(255,255,255,0.7)', marginTop:6, lineHeight:1.5 }}>
+            {isReveal ? 'Aki tudja a szót, mondjon rá tippet — csak az imposztor nem ismeri.' : 'Mindenki válasszon egy nevet a telefonján.'}
+          </div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color: allDone ? T.mint : '#fff', marginTop:10 }}>
+            {done}<span style={{ fontSize:13, color:'rgba(255,255,255,0.6)', fontWeight:600 }}>/{players.length} {isReveal ? 'kész' : 'szavazott'}</span>
+          </div>
+        </div>
+        <div style={{ width:'100%', display:'flex', flexWrap:'wrap', gap:6, justifyContent:'center' }}>
+          {players.map(p => {
+            const ok = isReveal ? readySet.has(p.id) : (votes[p.id] !== undefined);
+            return (
+              <div key={p.id} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 10px', borderRadius:999, background: ok ? T.mintSoft : T.surfaceMuted }}>
+                <PlayerAvatar player={p} size={22} />
+                <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color: ok ? T.mintDeep || T.mint : T.inkSoft }}>{p.name}{ok ? ' ✓' : ''}</span>
+              </div>
+            );
+          })}
+        </div>
+        {isReveal ? (
+          <PrimaryButton onClick={() => setPhase('vote')}>{allDone ? 'Mindenki látta — Szavazás' : 'Jöhet a szavazás →'}</PrimaryButton>
+        ) : (
+          <PrimaryButton onClick={() => { setPhase('result'); bookResult(votes); }}>{allDone ? 'Eredmény' : `Eredmény most (${done}/${players.length})`}</PrimaryButton>
+        )}
+      </div>
+    );
+  }
 
   if (phase === 'reveal') {
     const pl = ord[revealStep];
@@ -54375,30 +54485,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult }) {
                     setVoteStep(voteStep+1);
                   } else {
                     setPhase('result');
-                    if (!resultFiredRef.current) {
-                      resultFiredRef.current = true;
-                      const vc = {};
-                      Object.values(nv).forEach(idx => { vc[idx] = (vc[idx]||0)+1; });
-                      const top = Object.entries(vc).sort((a,b)=>b[1]-a[1])[0]?.[0];
-                      const topIdx = parseInt(top);
-                      const isFound = impostorIndices.includes(topIdx);
-                      const impostors = impostorIndices.map(idx => players[idx]);
-                      const dm = {};
-                      const pm = {};
-                      if (isFound) {
-                        impostors.forEach(imp => { dm[imp.id] = 3; });
-                        players.forEach((p, i) => { if (impostorIndices.includes(nv[p.id])) pm[p.id] = 1; });
-                      } else {
-                        impostors.forEach(imp => { pm[imp.id] = 1; });
-                        players.forEach((p, i) => { if (!impostorIndices.includes(i)) dm[p.id] = 2; });
-                      }
-                      const correctVoters = isFound ? players.filter((p,i) => impostorIndices.includes(nv[p.id])) : [];
-                      setTimeout(() => {
-                        if (isFound) onResult && onResult({ winners: correctVoters, losers:impostors, drinks:3, winNote:'+1 pont', loseNote:'Lebukott 🕵️' });
-                        else onResult && onResult({ winners:impostors, losers: players.filter((p,i)=>!impostorIndices.includes(i)), drinks:2, winNote:'Megúszta · +1 pont' });
-                        onAdvance && onAdvance(dm, pm);
-                      }, 900);
-                    }
+                    bookResult(nv);   // KÖZÖS könyvelés (offline ÉS online)
                   }
                 }, 400);
               }} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, padding:'8px 14px', border:`2px solid ${picked ? T.coral : 'transparent'}`, background: picked ? `${T.coral}18` : T.surfaceMuted, borderRadius:14, cursor: (alreadyVoted||!voteReady) ? 'default' : 'pointer', opacity: !voteReady ? 0.35 : 1 }}>
@@ -61620,7 +61707,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'beerpong') return <BeerPongGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} initialBpState={null} onSetHideFooter={onSetHideFooter} onSetBpEnded={onSetBpEnded} />;
   if (gameId === 'blackjack') return <BlackjackGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onLiveDrinkUpdate={onLiveDrinkUpdate} onSetBuszSwitch={onSetBuszSwitch} />;
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onSetBuszSwitch={onSetBuszSwitch} />;
-  if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} />;
+  if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} roomCode={roomCode} />;
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} gameMeta={gameMeta} roomCode={roomCode} drinkMult={drinkMult} />;
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
@@ -70253,6 +70340,117 @@ function IdoparbajObserverView({ code, room, observerName }) {
   );
 }
 
+// ── Imposztor telefon-nézet (v10.374): minden telefon a SAJÁT szerepét látja
+//    (nincs körbeadás), és onnan is szavaz. A host koordinál. A szerep a
+//    per-player `impRole` mezőből jön; a globális `impState` csak a fázist viszi.
+function ImposztorObserverView({ code, room, observerName }) {
+  const st = room.impState || null;
+  const phase = (st && st.phase) || 'reveal';
+  const gameIdx = st ? st.gameIdx : (room.gameIdx || 0);
+  const roomPlayers = room.players || [];
+  const roles = room.impRole || {};
+
+  const [selId, setSelId] = React.useState(() => (roomPlayers.find(p => p && p.name === observerName) || {}).id || null);
+  // Ha van bejelentkezett név (observerName), az kiválasztja a játékost — így a
+  // csatlakozott telefon rögtön a saját szerepét látja, „Ki vagy?" nélkül.
+  React.useEffect(() => {
+    if (!observerName) return;
+    const m = roomPlayers.find(p => p && p.name === observerName);
+    if (m && m.id !== selId) setSelId(m.id);
+  }, [observerName]);
+  const [hold, setHold] = React.useState(false);      // nyomva-tartás a szerep megnézéséhez
+  const [seen, setSeen] = React.useState(false);      // látta-e már a szerepét
+  React.useEffect(() => { setHold(false); setSeen(false); }, [gameIdx]);
+
+  const me = roomPlayers.find(p => p.id === selId) || null;
+  const myRole = me ? roles[me.id] : null;
+  const myVote = me && room.impVote ? room.impVote[me.id] : null;
+  const iAmReady = me && room.impReady ? !!room.impReady[me.id] : false;
+
+  const write = (patch) => { const ref = bohRoomRef(code); if (ref) ref.update(patch).catch(() => {}); };
+  const markReady = () => { if (me) { setSeen(true); write({ ['impReady.' + me.id]: true }); } };
+  const castVote = (pid) => { if (me) write({ ['impVote.' + me.id]: pid }); };
+
+  const shell = (body) => (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:14, background:T.bg, padding:'18px 16px', overflow:'auto' }}>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.1em' }}>🕵️ Imposztor · {code}</div>
+      {body}
+    </div>
+  );
+
+  // "Ki vagy?" — avataros választó
+  if (!me) return shell(
+    <div style={{ width:'100%', maxWidth:360, display:'flex', flexDirection:'column', gap:8 }}>
+      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft, textAlign:'center', marginBottom:4 }}>Ki vagy?</div>
+      {roomPlayers.map(p => (
+        <button key={p.id} onClick={() => setSelId(p.id)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', border:'none', borderRadius:14, background:T.surface, boxShadow:T.shadow, cursor:'pointer' }}>
+          <PlayerAvatar player={p} size={34} />
+          <span style={{ flex:1, textAlign:'left', fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{p.name}</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.inkMute} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      ))}
+    </div>
+  );
+
+  if (!st) return shell(<div style={{ marginTop:40, fontFamily:T.font, fontSize:14, color:T.inkMute }}>Várakozás a játékra…</div>);
+
+  // FELFEDÉS — nyomva tartva látszik a szerep, „Megvan" jelzi a hostnak
+  if (phase === 'reveal') {
+    if (!myRole) return shell(<div style={{ marginTop:40, fontFamily:T.font, fontSize:14, color:T.inkMute }}>Osztás folyamatban…</div>);
+    return shell(
+      <div style={{ width:'100%', maxWidth:360, display:'flex', flexDirection:'column', gap:12, alignItems:'center' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}><PlayerAvatar player={me} size={28} /><span style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>{me.name}</span></div>
+        <div style={{ width:'100%', minHeight:150, background:T.ink, borderRadius:20, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, padding:'20px 16px', textAlign:'center' }}>
+          {hold ? (
+            myRole.imp ? (
+              <React.Fragment>
+                <div style={{ fontSize:40 }}>🕵️</div>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:'#FF6B6B' }}>TE VAGY AZ IMPOSZTOR</div>
+                <div style={{ fontFamily:T.font, fontSize:12.5, color:'rgba(255,255,255,0.6)' }}>Nem tudod a szót — blöffölj!</div>
+              </React.Fragment>
+            ) : (
+              <React.Fragment>
+                <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.55)', letterSpacing:'0.1em' }}>A TITKOS SZÓ</div>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color:'#fff' }}>{myRole.word}</div>
+              </React.Fragment>
+            )
+          ) : (
+            <div style={{ fontFamily:T.font, fontSize:13, color:'rgba(255,255,255,0.5)' }}>Tartsd lenyomva a szereped megnézéséhez</div>
+          )}
+        </div>
+        <button onPointerDown={e => { e.preventDefault(); setHold(true); setSeen(true); }} onPointerUp={() => setHold(false)} onPointerLeave={() => setHold(false)}
+          style={{ width:'100%', padding:'14px', background:T.mint, border:'none', borderRadius:14, color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:16, cursor:'pointer', userSelect:'none', WebkitUserSelect:'none' }}>
+          👁 Nyomd a szerepedhez
+        </button>
+        <PrimaryButton onClick={markReady} disabled={!seen}>{iAmReady ? 'Kész ✓ — várd a többieket' : 'Megvan, kész'}</PrimaryButton>
+      </div>
+    );
+  }
+
+  // SZAVAZÁS
+  if (phase === 'vote') {
+    return shell(
+      <div style={{ width:'100%', maxWidth:360, display:'flex', flexDirection:'column', gap:10 }}>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink, textAlign:'center' }}>Ki az imposztor?</div>
+        {roomPlayers.filter(p => p.id !== me.id).map(p => {
+          const picked = myVote === p.id;
+          return (
+            <button key={p.id} onClick={() => castVote(p.id)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', border:`2px solid ${picked ? T.coral : 'transparent'}`, borderRadius:14, background: picked ? `${T.coral}18` : T.surface, boxShadow:T.shadow, cursor:'pointer' }}>
+              <PlayerAvatar player={p} size={34} />
+              <span style={{ flex:1, textAlign:'left', fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{p.name}</span>
+              {picked && <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.coral }}>SZAVAZTÁL</span>}
+            </button>
+          );
+        })}
+        {myVote && <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, textAlign:'center' }}>Módosíthatod, amíg a host le nem zárja.</div>}
+      </div>
+    );
+  }
+
+  // EREDMÉNY
+  return shell(<div style={{ marginTop:40, fontFamily:T.font, fontWeight:800, fontSize:16, color:T.ink, textAlign:'center' }}>Nézd a nagy képernyőt — jön az eredmény! 🕵️</div>);
+}
+
 function TapperObserverView({ code, room, observerName }) {
   const gameIdx = room.gameIdx || 0;
   const p1 = room.players?.[0] || null;
@@ -70445,6 +70643,7 @@ function ObserverWatching({ code, observerName, onLeave }) {
   if (_ovCurG === 'ovfj') return <OVFJObserverView room={room} code={code} myName={observerName} onLeave={onLeave} />;
   if (_ovCurG === 'tapper') return <TapperObserverView code={code} room={room} observerName={observerName} />;
   if (_ovCurG === 'idopárbaj') return <IdoparbajObserverView code={code} room={room} observerName={observerName} />;
+  if (_ovCurG === 'imposztor') return <ImposztorObserverView code={code} room={room} observerName={observerName} />;
   if (_ovCurG === 'kisebb') return <KisebbObserverView code={code} room={room} observerName={observerName} />;
   if (_ovCurG === 'blackjack') return <BlackjackObserverView room={room} code={code} onLeave={onLeave} />;
     if (room.buszState || (room.selectedGames||[]).includes('busz')) {
