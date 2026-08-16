@@ -2279,3 +2279,49 @@ Teszt: `node tests/mindenki_test.js` — a koccintás gomb tiltott partner nélk
 a picker a sorsoltat kihagyja, és koccintás után KETTEN isznak a helyes skálázott
 számmal (nehéz: 3/3). ⚠️ A picker-sor innerText-je az avatar kezdőbetűjével indul
 („KKecsi"), ezért *tartalmazza* a nevet, nem `startsWith` (v10.353 fogódzó).
+
+## Beer Pong 2.0: izolált duplikátum a fejlesztéshez (v10.376)
+Tulajdonosi döntés: a Beer Pong új funkcióit (telefonos eredmény-beküldés,
+párhuzamos asztalok, helyosztók) NE a meglévő `beerpong`-on fejlesszük, hanem egy
+**különálló duplikátumon** — így a bevált Beer Pong Torna stabil és érintetlen
+marad, bármi történik a 2.0-val.
+
+**A `beerpong2` a `beerpong` teljes, IZOLÁLT másolata.** Külön komponens-stack,
+külön config-kulcs, külön szoba-mező — semmi mutálható állapotot nem oszt a
+régivel:
+
+| réteg | régi | 2.0 |
+|---|---|---|
+| játék-komponens | `BeerPongGame` | `BeerPong2Game` |
+| beállító lap | `BeerPongConfigSheet` | `BeerPong2ConfigSheet` |
+| tábló | `BeerPongTableau` | `BeerPong2Tableau` |
+| observer | `BeerPongObserverView` | `BeerPong2ObserverView` |
+| `gameMeta` kulcs | `beerpongConfig` | `beerpong2Config` |
+| szoba-mező | `bpState`/`bpNotif`/`bpTimerAlert` | `bp2State`/`bp2Notif`/`bp2TimerAlert` |
+
+**Ami SZÁNDÉKOSAN közös (read-only, nem mutál):** `BeerPongConfetti`,
+`CupCounter`, `BpObsPlayerChip` (modul-szintű chip — mindkét observer használja),
+`BP_TOURNAMENT_TYPES*`, és a `game:'beerpong'` string a `saveTournament`-ben (így
+a 2.0 tornák is a MEGLÉVŐ statisztikába/előzménybe folynak, nem hasad ketté).
+
+**Bekötés négy helyen:** a `GAMES` bejegyzés (`id:'beerpong2'`, `dnr:true`, a
+`beerpong` ikon/banner újrahasznosítva), a `GAME_CONFIG_DEFS` registry, a
+`GameContent` dispatch, és az observer-diszpécser (`room.bp2State &&
+_curGameId2 === 'beerpong2'`).
+
+⚠️ **A duplikáláskor a `BpObsPlayerChip` (modul-szintű helper) a tabló és az
+observer KÖZÖTT ült** (a régi 69712. sor), ezért a tabló-tartomány másolása
+véletlenül duplikálta — `VarRedeclaration` build-hibát adott. A helper KÖZÖS
+marad (egy definíció, mindkét observer hívja); ha újra duplikálsz BP-t, a
+tartományból ezt hagyd ki.
+
+⚠️ **A `beerpong2` `dnr:true`, tehát a DNR/NEW szalag KIZÁRJA egymást** — NEM
+kaphat `isNew:true`-t is (a `newgames_test` 1. blokkja bukna). Két teszt
+hardcode-olt listáját bővíteni kellett: `stake_test` `VART_NULL` és
+`gameorder_test` DNR-köre (mindkettőben `beerpong2` a helyére került).
+
+Teszt: `node tests/beerpong2_test.js` — a 2.0 végigjátszható és bajnokot hirdet
+(a bajnok pontot kap), a 2.0 `bp2State`-et ír és `bpState`-et NEM, a régi
+fordítva (`bpState`, nem `bp2State`), és a 2.0 observer a `bp2State`-ből rajzol.
+A `bp_final_test` (a RÉGI Beer Pong) változatlanul zöld — ez a bizonyíték, hogy
+a meglévő nem sérült.

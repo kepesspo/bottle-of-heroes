@@ -125,8 +125,8 @@ const soloNames = (p) => p.evaluate(() => {
   {
     const p = await open(b, { seedCache: true });
     const list = await p.evaluate(() => GAMES.filter(g => g.id === 'busz' || g.dnr).map(g => g.id).sort());
-    ok('a DNR exkluzív kör pontosan ez az öt játék',
-       list.join(',') === 'beerpong,blackjack,busz,ovfj,powerhour', list.join(','));
+    ok('a DNR exkluzív kör pontosan ez a hat játék',
+       list.join(',') === 'beerpong,beerpong2,blackjack,busz,ovfj,powerhour', list.join(','));
     ok('az Imposztor NINCS köztük (v10.345)', !list.includes('imposztor'), list.join(','));
     // ⚠️ A `kisebb` bejegyzes TOBBSOROS (`stakeOf:(m)=>{ … }`), tehat a jelolo
     // nem a `{ id:'kisebb'` sorban ult — soralapu kereses elvetne.

@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.375';
+const APP_VERSION = 'v10.376';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -36047,6 +36047,11 @@ const GAMES = [
   { id:'kivagyok', stake:[1,1],  roundTime:'fast',  name:'Ki Vagyok Én',          difficulty:'közepes', category:'Egyéni', emoji:'🕵️', symbol:IMGS['kivagyok_symbol.png'], img:IMGS['kivagyok_icon.png'], banner:IMGS['kivagyok_banner.png'], color:'#F472B6', desc:'Az app mutat egy híresség fotóját és ki kell találni ki van a képen. Ebben a játékban csak egy játékos vesz részt. Ha pontosan meg tudja mondani a híresség életkorát vagy foglalkozását akkor kioszthat egy piát.' },
   { id:'mindenki', stake:[1,1], roundTime:'fast',  name:'Mindenki Iszik',difficulty:'könnyű',  category:'Csapat', emoji:'🍻', symbol:IMGS['mindenki_symbol.png'], img:IMGS['mindenki_icon.png'], banner:IMGS['mindenki_banner.png'], color:'#F4C95A', desc:'Ki vele? Az app kisorsol egy játékost, ő kiválaszt egy társat, és koccintanak — mindketten isznak egyet.' },
   { id:'beerpong', stake:null, roundTime:'slow',  name:'Beer Pong Torna',         difficulty:'könnyű',  category:'Csapat', emoji:'🏓', symbol:null, img:IMGS['beerpong_icon.png'], banner:IMGS['beerpong_banner.png'], color:'#3B82F6', dnr:true, observer:true, desc:'Egyéni kieséses beer pong torna. Az app generálja a sorsolást, te döntöd el ki nyert — a vesztes annyi kortyt iszik, amennyi a pohár-különbség. Az utolsó ember állva marad a bajnok!' },
+  // Beer Pong 2.0 — a Beer Pong Torna izolált duplikátuma. Itt fejlesztjük az új
+  // funkciókat (telefonos beküldés, párhuzamos asztalok, helyosztók), hogy a
+  // meglévő Beer Pong Torna érintetlen és stabil maradjon. Saját komponens-stack
+  // (BeerPong2*), saját config-kulcs (beerpong2Config) és szoba-mező (bp2State).
+  { id:'beerpong2', stake:null, roundTime:'slow', name:'Beer Pong 2.0',           difficulty:'könnyű',  category:'Csapat', emoji:'🏓', symbol:null, img:IMGS['beerpong_icon.png'], banner:IMGS['beerpong_banner.png'], color:'#2563EB', dnr:true, observer:true, desc:'Beer Pong torna — új generáció. Ugyanaz a stabil alap, mint a Beer Pong Torna, de erre épülnek az új funkciók: telefonos eredmény-beküldés, párhuzamos asztalok és helyosztók.' },
   { id:'idopárbaj', observer:true, stake:[1,1], name:'Időpárbaj',            difficulty:'könnyű',  category:'Páros',  emoji:'⏱️', symbol:IMGS['idoparbaj_symbol.png'], img:IMGS['idoparbaj_icon.png'], banner:IMGS['idoparbaj_banner.png'], color:'#6366F1', desc:'Az app elrejt egy véletlenszerű időt 1–30 mp között. Indítsd el a stoppert, majd állítsd le a lehető legközelebb a titkos célhoz. Aki messzebb jár, az iszik.' },
   { id:'neugyanazt', stake:[0,3], roundTime:'fast', name:'Ne ugyanazt!',       difficulty:'könnyű',  category:'Páros',  emoji:'🙊', img:IMGS['neugyanazt_icon.png'], banner:IMGS['neugyanazt_banner.png'], color:'#7C5CC4', desc:'Páros játék: ketten KÖZÖSEN játszotok. Kaptok egy szűk témát, és három körben egyszerre mondtok rá egy-egy szót — úgy, hogy NE ugyanazt. Ha egyszer sem egyeztek, mindketten pontot kaptok; ahányszor egyeztek, annyi kortyot isztok. A trükk: a másik is a kézenfekvő szóra gondol.' },
   { id:'chicken', stake:[1,7], roundTime:'fast', name:'Chicken',            difficulty:'közepes', category:'Páros',  emoji:'💣', isNew:true, img:IMGS['chicken_icon.png'], banner:IMGS['chicken_banner.png'], color:'#E0544B', desc:'Páros bátorság-próba. Felváltva nyomjátok a gombot — minden nyomás egy kortyot rak a kalapba. Van egy rejtett robbanás-pont: aki azt a nyomást teszi, megissza az EGÉSZ kalapot, és a másik kap pontot. Bármikor passzolhatsz: akkor csak a kalap felét iszod, de a pont a másiké. Minél tovább mész, annál nagyobb a tét.' },
@@ -44899,6 +44904,188 @@ function BeerPongConfigSheet({ config, setConfig, onClose, playerCount }) {
     </SheetOverlay>
   );
 }
+
+// ═══════════════ BEER PONG 2.0 — BEÁLLÍTÁS (duplikátum, v10.376) ═══════════════
+function BeerPong2ConfigSheet({ config, setConfig, onClose, playerCount }) {
+  const maxCups      = config.maxCups ?? 10;
+  // A donto sajat pohar-szama. Alapbol UGYANANNYI, mint a tobbi meccse, igy
+  // aki nem nyul hozza, semmit nem vesz eszre.
+  const finalCups    = config.finalCups ?? maxCups;
+  const mode         = config.mode || 'egyeni';
+  const tournament   = config.tournamentType || 'se';
+  const groupAdvance = config.groupAdvance ?? 1;
+  const numGroups = config.numGroups ?? 2;
+
+  const isTwo = tournament.startsWith('grp_');
+
+  const matchMinutes = config.matchMinutes ?? 5;
+  const numCfg = [
+    { key:'maxCups',       label:'Poharak száma',    val:maxCups,       min:4, max:16, step:2 },
+    { key:'finalCups',     label:'Poharak a döntőben', val:finalCups, min:4, max:16, step:2,
+      sub:'A döntő mindig egy meccs — visszavágó nélkül' },
+
+    { key:'matchMinutes',  label:'Meccs hossza (perc)',val:matchMinutes, min:0, max:20, step:1 },
+  ];
+
+  return (
+    <SheetOverlay onClose={onClose} title="Beer Pong beállítások" footer={
+      <button onClick={onClose} style={{ width:'100%', padding:'15px', borderRadius:16, background:T.mint, border:'none', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)' }}>{t('busDoneBtn')}</button>
+    }>
+      <div style={{ padding:'0 18px 8px', display:'flex', flexDirection:'column' }}>
+
+
+        {/* Bajnokság neve */}
+        <input
+          value={config.tournamentName || ''}
+          onChange={e => setConfig(c => ({...c, tournamentName: e.target.value.slice(0,32)}))}
+          placeholder="Bajnokság neve (pl. Nyári Kupa 2026)"
+          style={{
+            width:'100%', boxSizing:'border-box',
+            background:T.bgSoft, border:'1.5px solid rgba(26,42,74,0.10)', borderRadius:14,
+            padding:'12px 14px', fontFamily:T.font, fontWeight:800,
+            fontSize:15, color:T.ink, outline:'none', marginBottom:4, marginTop:16,
+          }}
+        />
+
+        {/* Mode */}
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin:'16px 0 8px' }}>{t('gameModeSection')}</div>
+        <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4 }}>
+          {[{key:'egyeni',label:'Egyéni',imgKey:'szures-egyeni'},{key:'csapat',label:'Csapat',imgKey:'szures-csapat'}].map(m => (
+            <button key={m.key} onClick={() => setConfig(c => ({...c, mode:m.key}))} style={{ flex:1, padding:'11px 6px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background: mode===m.key?T.mint:'transparent', color:mode===m.key?'#fff':T.inkSoft, boxShadow:mode===m.key?'0 2px 7px -1px rgba(79,194,160,0.5)':'none', transition:'all .15s', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+              <img src={IMGS[m.imgKey]} style={{ width:18, height:18, objectFit:'contain', filter: mode===m.key ? 'brightness(0) invert(1)' : 'none', opacity: mode===m.key ? 1 : 0.55 }} />
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Numeric settings */}
+        {numCfg.map(s => (
+          <div key={s.key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'none' }}>
+            <div style={{ minWidth:0, paddingRight:10 }}>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{s.label}</div>
+              {s.sub && <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{s.sub}</div>}
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <button onClick={() => setConfig(c => ({...c, [s.key]: Math.max(s.min,(c[s.key]??s.val)-s.step)}))} style={{ width:33, height:33, borderRadius:10, background:T.inkMute+'55', border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:'#D85F5C' }}>-</button>
+              <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:18, color:T.ink, minWidth:30, textAlign:'center' }}>{s.val}</span>
+              <button onClick={() => setConfig(c => ({...c, [s.key]: Math.min(s.max,(c[s.key]??s.val)+s.step)}))} style={{ width:33, height:33, borderRadius:10, background:T.inkMute+'55', border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:T.mintDeep }}>+</button>
+            </div>
+          </div>
+        ))}
+
+        {/* Tournament type — two-stage selector */}
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.13em', textTransform:'uppercase', color:T.inkSoft, margin:'16px 0 8px' }}>Bajnokság típusa</div>
+        {/* Stage toggle */}
+        <div style={{ display:'flex', background:T.surfaceMuted, padding:5, borderRadius:14, gap:4, marginBottom:10 }}>
+          {[{key:'1', label:'1 lépcsős'},{key:'2', label:'2 lépcsős'}].map(s => {
+            const active = s.key === '1' ? !tournament.startsWith('grp_') : tournament.startsWith('grp_');
+            const grpDisabled = s.key === '2' && playerCount < 99 && playerCount < 4;
+            return (
+              <button key={s.key} disabled={grpDisabled} onClick={() => {
+                if (grpDisabled) return;
+                if (s.key === '1' && tournament.startsWith('grp_')) setConfig(c => ({...c, tournamentType:'se'}));
+                if (s.key === '2' && !tournament.startsWith('grp_')) setConfig(c => ({...c, tournamentType:'grp_rr_se'}));
+              }} style={{ flex:1, padding:'11px 6px', borderRadius:10, border:'none', cursor: grpDisabled ? 'not-allowed' : 'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, background: active?T.mint:'transparent', color:active?'#fff':T.inkSoft, boxShadow:active?'0 2px 7px -1px rgba(79,194,160,0.5)':'none', transition:'all .15s', opacity: grpDisabled ? 0.4 : 1 }}>
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+        {/* 1-stage options */}
+        {!tournament.startsWith('grp_') && (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {BP_TOURNAMENT_TYPES_1.map(t => {
+              const on = tournament === t.key;
+              return (
+                <button key={t.key} onClick={() => setConfig(c => ({...c, tournamentType:t.key}))}
+                  style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 14px', borderRadius:15, cursor:'pointer', border: on?'1.5px solid '+T.mint:'1.5px solid '+T.inkMute+'28', background: on?T.mintSoft:T.surface, marginBottom:0, textAlign:'left' }}>
+                  <img src={IMGS[t.imgKey]} style={{ width:28, height:28, objectFit:'contain', opacity: on ? 1 : 0.45 }} />
+                  <div>
+                    <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color: on ? T.mint : T.ink }}>{t.label}</div>
+                    <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{t.desc}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {/* 2-stage options */}
+        {tournament.startsWith('grp_') && (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {BP_TOURNAMENT_TYPES_2.map(t => {
+              const on = tournament === t.key;
+              return (
+                <button key={t.key} onClick={() => setConfig(c => ({...c, tournamentType:t.key}))}
+                  style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 14px', borderRadius:15, cursor:'pointer', border: on?'1.5px solid '+T.mint:'1.5px solid '+T.inkMute+'28', background: on?T.mintSoft:T.surface, marginBottom:0, textAlign:'left' }}>
+                  <img src={IMGS[t.imgKey]} style={{ width:28, height:28, objectFit:'contain', opacity: on ? 1 : 0.45 }} />
+                  <div>
+                    <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color: on ? T.mint : T.ink }}>{t.label}</div>
+                    <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{t.desc}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Group settings (two-stage only) */}
+        {isTwo && (
+          <>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'none' }}>
+            <div>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>Csoportok száma</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>Hány csoportra osztja szét a játékosokat</div>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <button onClick={() => setConfig(c => ({...c, numGroups: Math.max(2,(c.numGroups??2)-1)}))} style={{ width:33, height:33, borderRadius:10, background:T.inkMute+'55', border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:'#D85F5C' }}>-</button>
+              <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:18, color:T.ink, minWidth:30, textAlign:'center' }}>{numGroups}</span>
+              <button onClick={() => setConfig(c => ({...c, numGroups: Math.min(8,(c.numGroups??2)+1)}))} style={{ width:33, height:33, borderRadius:10, background:T.inkMute+'55', border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:T.mintDeep }}>+</button>
+            </div>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'none' }}>
+            <div>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>Továbbjutók/csoport</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>Hányan jutnak tovább a főszakaszra</div>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <button onClick={() => setConfig(c => ({...c, groupAdvance: Math.max(1,(c.groupAdvance??1)-1)}))} style={{ width:33, height:33, borderRadius:10, background:T.inkMute+'55', border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:'#D85F5C' }}>-</button>
+              <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:18, color:T.ink, minWidth:30, textAlign:'center' }}>{groupAdvance}</span>
+              <button onClick={() => setConfig(c => ({...c, groupAdvance: Math.min(3,(c.groupAdvance??1)+1)}))} style={{ width:33, height:33, borderRadius:10, background:T.inkMute+'55', border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:T.mintDeep }}>+</button>
+            </div>
+          </div>
+          </>
+        )}
+
+        {/* Visszavágó toggle — SE, körmérkőzés és grp-döntők */}
+        {(!tournament.startsWith('grp_') ? (tournament === 'se' || tournament === 'rr') : true) && (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'none' }}>
+            <div>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{t('rematchLabel')}</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>Minden meccs két menetes — az összesített pohárszám dönt (1x/meccs)</div>
+            </div>
+            <Toggle on={config.visszavago??false} onChange={() => setConfig(c => ({...c, visszavago: !(c.visszavago ?? false)}))} />
+          </div>
+        )}
+
+        {/* Körmérkőzés kör-szám — hányszor játsszon mindenki mindenkivel (1-5) */}
+        {(tournament === 'rr' || tournament.startsWith('grp_rr_')) && (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'none' }}>
+            <div>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>Hány kör</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>Hányszor játsszon mindenki mindenkivel a körmérkőzésben</div>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <button onClick={() => setConfig(c => ({...c, rrLegs: Math.max(1,(c.rrLegs??1)-1)}))} style={{ width:33, height:33, borderRadius:10, background:T.inkMute+'55', border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:'#D85F5C' }}>-</button>
+              <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:18, color:T.ink, minWidth:30, textAlign:'center' }}>{config.rrLegs??1}</span>
+              <button onClick={() => setConfig(c => ({...c, rrLegs: Math.min(5,(c.rrLegs??1)+1)}))} style={{ width:33, height:33, borderRadius:10, background:T.inkMute+'55', border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:20, fontWeight:900, color:T.mintDeep }}>+</button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </SheetOverlay>
+  );
+}
 function BuszConfigSheet({ config, setConfig, onClose }) {
   const CFG = [
     { key:'deckCount',      label:'Paklik száma',        min:1, max:3 },
@@ -45707,6 +45894,7 @@ function SetupPickSheet({ title, options, current, onPick, onClose }) {
 const GAME_CONFIG_DEFS = {
   busz:      { metaKey:'buszConfig',      Comp: BuszConfigSheet },
   beerpong:  { metaKey:'beerpongConfig',  Comp: BeerPongConfigSheet },
+  beerpong2: { metaKey:'beerpong2Config', Comp: BeerPong2ConfigSheet },
   kisebb:    { metaKey:'kisebbConfig',    Comp: KisebbConfigSheet },
   collect:   { metaKey:'collectConfig',   Comp: CollectBoomConfigSheet },
   ovfj:      { metaKey:'ovfjConfig',      Comp: OVFJConfigSheet },
@@ -50250,6 +50438,2005 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
           <BeerPongConfetti />
           {showQR && <QRModal url={joinUrl} onClose={() => setShowQR(false)} />}
           {showTableau && <BeerPongTableau
+            champion={champion}
+            players={players}
+            tournamentName={TOURNAMENT_NAME}
+            tournament={TOURNAMENT}
+            seRounds={seRounds}
+            rrMatches={rrMatches}
+            tsGroups={tsGroups}
+            drinkMap={drinkMap}
+            maxCups={MAX_CUPS}
+            matchMinutes={MATCH_MINUTES}
+            onClose={() => setShowTableau(false)}
+          />}
+          <BohIcon name="trophy" size={30} />
+          <div style={{ width:88, height:88, borderRadius:'50%', background:champion.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:38, color:'#fff', boxShadow:'0 6px 24px ' + champion.color + '55' }}>
+            {champion.name.charAt(0).toUpperCase()}
+          </div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:24, color:T.ink }}>{champion.name}</div>
+          <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>Beer Pong Bajnok! 🍺</div>
+          {TOURNAMENT_NAME ? <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkMute, marginTop:-4 }}>{TOURNAMENT_NAME}</div> : null}
+          <button onClick={() => setShowTableau(true)} style={{ marginTop:4, padding:'10px 28px', borderRadius:14, border:'none', background:T.yellow, color:T.ink, fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer', display:'flex', alignItems:'center', gap:8 }}>
+            <span>📊</span> Tábló megosztása
+          </button>
+
+        </div>
+      );
+    }
+    if (!currentMatch) return null;
+    if (!currentMatch.p1 || !currentMatch.p2) return null;
+
+    // Phase + match label
+    let phaseLabel = '';
+    if (TOURNAMENT.startsWith('grp_') && tsPhase === 'groups') phaseLabel = tsGroups[viewGroup]?.label || '';
+    else if (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals') phaseLabel = 'Főszakasz';
+
+    // Build header parts for one-line row
+    let bracketPart = '';
+    let matchNumPart = '';
+    if (TOURNAMENT === 'se' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'se')) {
+      bracketPart = roundName(seCurRound, totalSERounds).toUpperCase();
+      matchNumPart = 'MECCS ' + (seCurMatch + 1);
+    } else if (TOURNAMENT === 'rr' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'rr')) {
+      bracketPart = 'KÖRMÉRKŐZŐ';
+      matchNumPart = (rrIdx + 1) + '/' + rrMatches.length;
+    } else {
+      bracketPart = (tsGroups[viewGroup]?.label || '').toUpperCase();
+      matchNumPart = 'MECCS ' + (tsGroups[viewGroup]?.curIdx + 1 || 1);
+    }
+    if (phaseLabel) bracketPart = phaseLabel.toUpperCase() + (bracketPart ? ' · ' + bracketPart : '');
+
+    const winnerP = cups1 !== cups2 ? (cups1 > cups2 ? currentMatch.p1 : currentMatch.p2) : null;
+    const isRRMode = TOURNAMENT === 'rr' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'rr');
+    const matchKey = isRRMode ? ('rr_' + rrIdx) : (seCurRound + '_' + seCurMatch);
+    // A DONTO kimarad a ket menetbol - ott egy meccs dont.
+    const visszaApplies = VISSZAVAGO && ((isSEFinals && !isSEFinalMatch) || isRRMode);
+    const isVissza = visszaApplies && visszavagoUsedRef.current.has(matchKey);
+    const visszaLabel = isSEFinalMatch ? '🏆 DÖNTŐ'
+      : isVissza ? '⚔️ VISSZAVÁGÓ' : (visszaApplies ? '1. MECCS' : null);
+
+    return (
+      <div style={{ width:'100%', background:T.surface, borderRadius:22, padding:'16px 18px 18px', boxShadow:T.shadow }}>
+        {showQR && <QRModal url={joinUrl} onClose={() => setShowQR(false)} />}
+
+        {/* Match label — single one-line row */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10, gap:6 }}>
+          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, letterSpacing:'0.08em', flexShrink:0 }}>{bracketPart}</div>
+          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.ink, letterSpacing:'0.08em', flexShrink:0 }}>{matchNumPart}</div>
+          <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0 }}>
+            {visszaLabel && <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color: isVissza ? T.coral : T.inkMute, letterSpacing:'0.06em' }}>{visszaLabel}</div>}
+            {canReshuffle && <button onClick={handleReshuffle} title="Újra sorsol" style={{ width:24, height:24, borderRadius:7, border:'none', cursor:'pointer', background:'rgba(20,30,50,0.07)', display:'grid', placeItems:'center', fontSize:12 }}>🔀</button>}
+          </div>
+        </div>
+
+        {/* Timer row */}
+        {MATCH_MINUTES > 0 && (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:14, marginBottom:14 }}>
+            <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:44, letterSpacing:3, color: timerSecs === 0 ? T.inkMute : timerSecs < 30 ? '#D85F5C' : T.ink, lineHeight:1, fontVariantNumeric:'tabular-nums' }}>
+              {Math.floor(timerSecs/60).toString().padStart(2,'0')}:{(timerSecs%60).toString().padStart(2,'0')}
+            </div>
+            {!timerRunning ? (
+              <button onClick={startTimer} style={{ padding:'12px 22px', borderRadius:12, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:15, background:T.mint, color:'#fff', boxShadow:'0 4px 12px rgba(79,194,160,0.4)', whiteSpace:'nowrap' }}>
+                ▶ {timerSecs === 0 ? 'Start' : 'Folytat'}
+              </button>
+            ) : (
+              <button onClick={stopTimer} style={{ padding:'12px 22px', borderRadius:12, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:15, background:T.coral+'44', color:T.coral, whiteSpace:'nowrap' }}>
+                ⏸ Megáll
+              </button>
+            )}
+            {timerSecs > 0 && !timerRunning && (
+              <button onClick={resetTimer} style={{ width:40, height:40, borderRadius:12, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:16, background:'rgba(20,30,50,0.07)', color:T.inkSoft, display:'grid', placeItems:'center' }}>↺</button>
+            )}
+          </div>
+        )}
+
+        {/* Players row */}
+        <div style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
+          {/* Player 1 */}
+          <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+            <div style={{ width:80, height:80, borderRadius:'50%', background:currentMatch.p1.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:34, color:'#fff', border: cups1 > cups2 ? `4px solid ${currentMatch.p1.color}` : `4px solid ${currentMatch.p1.color}44`, boxShadow: cups1 > cups2 ? `0 0 0 3px #fff, 0 0 0 6px ${currentMatch.p1.color}66` : '0 2px 10px rgba(0,0,0,0.10)', transition:'box-shadow .2s, border .2s' }}>
+              {currentMatch.p1.img ? <img src={currentMatch.p1.img} style={{width:80,height:80,objectFit:'cover',borderRadius:'50%'}} /> : currentMatch.p1.name.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p1.name}</div>
+            <CupCounter value={cups1} onChange={setCups1} color={currentMatch.p1.color} max={curMaxCups} winning={cups1 > cups2} />
+          </div>
+
+          {/* VS + QR */}
+          <div style={{ width:48, display:'flex', flexDirection:'column', alignItems:'center', gap:8, paddingTop:32, flexShrink:0, zIndex:10, position:'relative' }}>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:16, color:T.inkSoft, letterSpacing:'0.06em' }}>VS</div>
+            {roomCode && (
+              <button onClick={() => setShowQR(true)} style={{ width:44, height:44, borderRadius:12, border:'none', background:'rgba(20,30,50,0.08)', cursor:'pointer', display:'grid', placeItems:'center', touchAction:'manipulation', WebkitTapHighlightColor:'rgba(0,0,0,0.1)', pointerEvents:'auto' }}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="1" y="1" width="7" height="7" rx="1" stroke="#64748B" strokeWidth="1.5" fill="none"/>
+                  <rect x="3" y="3" width="3" height="3" fill="#64748B"/>
+                  <rect x="12" y="1" width="7" height="7" rx="1" stroke="#64748B" strokeWidth="1.5" fill="none"/>
+                  <rect x="14" y="3" width="3" height="3" fill="#64748B"/>
+                  <rect x="1" y="12" width="7" height="7" rx="1" stroke="#64748B" strokeWidth="1.5" fill="none"/>
+                  <rect x="3" y="14" width="3" height="3" fill="#64748B"/>
+                  <rect x="12" y="12" width="2" height="2" fill="#64748B"/>
+                  <rect x="15" y="12" width="2" height="2" fill="#64748B"/>
+                  <rect x="18" y="12" width="2" height="2" fill="#64748B"/>
+                  <rect x="12" y="15" width="2" height="2" fill="#64748B"/>
+                  <rect x="15" y="15" width="2" height="2" fill="#64748B"/>
+                  <rect x="18" y="15" width="2" height="2" fill="#64748B"/>
+                  <rect x="12" y="18" width="2" height="2" fill="#64748B"/>
+                  <rect x="18" y="18" width="2" height="2" fill="#64748B"/>
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* Player 2 */}
+          <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+            <div style={{ width:80, height:80, borderRadius:'50%', background:currentMatch.p2.color, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:34, color:'#fff', border: cups2 > cups1 ? `4px solid ${currentMatch.p2.color}` : `4px solid ${currentMatch.p2.color}44`, boxShadow: cups2 > cups1 ? `0 0 0 3px #fff, 0 0 0 6px ${currentMatch.p2.color}66` : '0 2px 10px rgba(0,0,0,0.10)', transition:'box-shadow .2s, border .2s' }}>
+              {currentMatch.p2.img ? <img src={currentMatch.p2.img} style={{width:80,height:80,objectFit:'cover',borderRadius:'50%'}} /> : currentMatch.p2.name.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p2.name}</div>
+            <CupCounter value={cups2} onChange={setCups2} color={currentMatch.p2.color} max={curMaxCups} winning={cups2 > cups1} />
+          </div>
+        </div>
+
+        {/* Visszavágó offer overlay */}
+        {visszavagoOffer && (
+          <div style={{ marginTop:16, background:'rgba(14,14,24,0.05)', borderRadius:16, padding:'16px', display:'flex', flexDirection:'column', gap:10 }}>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, textAlign:'center' }}>⚔️ Visszavágó?</div>
+            <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center' }}><b>{visszavagoOffer.loser?.name}</b> kérhet visszavágót!</div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={() => {
+                visszavagoUsedRef.current.add(visszavagoOffer.matchKey);
+                setVissszavagoOffer(null);
+                setCups1(0); setCups2(0); resetTimer();
+              }} style={{ flex:1, padding:'13px', borderRadius:14, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background:T.coral, color:'#fff', boxShadow:'0 4px 12px rgba(240,100,80,0.35)' }}>
+                🔄 Visszavágó!
+              </button>
+              <button onClick={() => { setVissszavagoOffer(null); confirmHandler && confirmHandler(); }} style={{ flex:1, padding:'13px', borderRadius:14, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background:T.mint, color:'#fff', boxShadow:'0 4px 12px rgba(79,194,160,0.35)' }}>
+                Nem, tovább →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Confirm button */}
+        {!visszavagoOffer && (
+          <button onClick={() => {
+            if (!canConfirm) return;
+            const seKey = seCurRound + '_' + seCurMatch;
+            // A donto MINDIG egy meccs: nem bontjuk ket menetre akkor sem, ha a
+            // "Visszavago" be van kapcsolva.
+            if (isSEFinals && !isSEFinalMatch && !visszavagoUsedRef.current.has(seKey)) {
+              // automatikus visszavágó — mentsük el az 1. eredményt, azonnal indul
+              visszavagoUsedRef.current.add(seKey);
+              setSeRounds(prev => {
+                const nr = prev.map(r => r.map(mm => ({...mm})));
+                nr[seCurRound][seCurMatch].score1 = { p1: cups1, p2: cups2 };
+                return nr;
+              });
+              setCups1(0); setCups2(0); resetTimer();
+              return;
+            }
+            // Körmérkőzés (rr / grp-döntő rr): ugyanaz a két-menetes visszavágó
+            const rrMode = TOURNAMENT === 'rr' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'rr');
+            const rrKey = 'rr_' + rrIdx;
+            if (VISSZAVAGO && rrMode && !rrDone && !visszavagoUsedRef.current.has(rrKey)) {
+              visszavagoUsedRef.current.add(rrKey);
+              setRrMatches(prev => prev.map((mm, i) => i === rrIdx ? { ...mm, score1: { p1: cups1, p2: cups2 } } : mm));
+              setCups1(0); setCups2(0); resetTimer();
+              return;
+            }
+            confirmHandler && confirmHandler();
+          }} disabled={!canConfirm} style={{ width:'100%', marginTop:16, minHeight:52, border:'none', borderRadius:16, cursor: canConfirm ? 'pointer' : 'default', fontFamily:T.font, fontWeight:800, fontSize:16, color:'#fff', background: !canConfirm ? 'rgba(0,0,0,0.07)' : winnerP ? T.mint : T.inkSoft, boxShadow: canConfirm && winnerP ? '0 4px 0 ' + T.mintDeep : 'none', transition:'background .2s', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+            {!canConfirm ? <span style={{ color:T.inkMute }}>Állítsd be az eredményt</span>
+              : cups1 === cups2 ? <React.Fragment><BohIcon name="draw" size={15} style={{ marginRight:6 }} />Döntetlen megerősítése</React.Fragment>
+              : <><BohIcon name="trophy" size={15} /><span>{winnerP?.name} nyert — tovább</span></>
+            }
+          </button>
+        )}
+
+        {/* Drink reminder */}
+        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, textAlign:'center', marginTop:8, color:'#D85F5C' }}>
+          A vesztes annyi kortyt iszik, amennyivel kevesebb poharat döntött le 🍺
+        </div>
+      </div>
+    );
+  };
+
+  // ── Render RR match list ─────────────────────────────────────────────────
+  const renderRRMatchList = (parts, matches, curIdx, setIdx, onReset) => (
+    <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 16px', boxShadow:T.shadow, marginTop:12 }}>
+      <div onClick={() => setMatchListExp(v => !v)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding:'4px 0', marginBottom: matchListExp ? 6 : 0 }}>
+        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>Meccsek</div>
+        <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{matchListExp ? '▲' : '▼'}</div>
+      </div>
+      {!matchListExp && null}
+      {matchListExp && <React.Fragment>
+      <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+        {matches.map((m, i) => {
+          const isDone = m.winner !== null || m.draw === true;
+          const isSel = i === curIdx && !isDone;
+          const isPending = !isDone;
+          const openRRSheet = (e) => { if (champion) return; e.preventDefault(); lpTimer.current = setTimeout(() => { setMatchActionSheet({ type:'rr', match:m, matchIdx:i, isSelectable:isPending, isDone, onSelect:() => { setIdx(i); setCups1(0); setCups2(0); }, onReset:() => { if(onReset) onReset(i); setCups1(0); setCups2(0); resetTimer(); } }); }, 500); };
+          return (
+            <div key={i}
+              onClick={isPending ? () => { setIdx(i); setCups1(0); setCups2(0); } : undefined}
+              onMouseDown={openRRSheet} onMouseUp={() => clearTimeout(lpTimer.current)} onMouseLeave={() => clearTimeout(lpTimer.current)}
+              onTouchStart={openRRSheet} onTouchEnd={() => clearTimeout(lpTimer.current)}
+              style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderRadius:10, cursor: isPending ? 'pointer' : 'default', background: isSel ? T.blue+'18' : 'transparent', border: isSel ? `1.5px solid ${T.blue}55` : '1.5px solid transparent', transition:'all .15s', userSelect:'none', WebkitUserSelect:'none', WebkitTapHighlightColor:'transparent' }}>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, color: isDone&&m.winner?.id===m.p1?.id?T.mint:isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name}</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
+              <div style={{ display:'flex', alignItems:'center', gap:2, flexShrink:0, whiteSpace:'nowrap' }}>
+                {isDone&&m.score ? (<>
+                  <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: m.draw ? T.inkSoft : m.winner?.id===m.p1?.id ? T.mint : T.inkSoft }}>{m.score.p1}</span>
+                  <span style={{ fontFamily:T.font, fontSize:11, color:T.inkMute }}> VS </span>
+                  <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: m.draw ? T.inkSoft : m.winner?.id===m.p2?.id ? T.mint : T.inkSoft }}>{m.score.p2}</span>
+                </>) : <span style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>vs</span>}
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, color: isDone&&m.winner?.id===m.p2?.id?T.mint:isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2.name}</div>
+            </div>
+          );
+        })}
+      </div>
+      </React.Fragment>}
+    </div>
+  );
+
+  // ── Render RR standings ───────────────────────────────────────────────────
+  const renderRRStandings = (parts, matches, title) => {
+    const st = getRRStandings(parts, matches);
+    const hdr = { fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em', textAlign:'center', minWidth:38 };
+    return (
+      <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadow, overflowX:'auto' }}>
+        <div onClick={() => setStandingsExp(v => !v)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding:'4px 0', marginBottom: standingsExp ? 6 : 0 }}>
+          <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>{title || 'Állás'}</div>
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{standingsExp ? '▲' : '▼'}</div>
+        </div>
+        {!standingsExp && null}
+        {standingsExp && <React.Fragment>
+        <div style={{ display:'grid', gridTemplateColumns:'20px 1fr 80px 36px 42px 32px', gap:'0 6px', alignItems:'center', paddingBottom:4, borderBottom:'1px solid rgba(20,30,50,0.08)' }}>
+          <div></div><div></div>
+          <div style={{...hdr, textAlign:'center'}}>GY-V-D</div>
+          <div style={hdr}>Diff</div>
+          <div style={hdr}>Pohár</div>
+          <div style={{...hdr, color:(T.yellowText||T.yellow)}}>Pont</div>
+        </div>
+        {st.map((s, i) => (
+          <div key={s.player.id} style={{ display:'grid', gridTemplateColumns:'20px 1fr 80px 36px 42px 32px', gap:'0 6px', alignItems:'center', padding:'6px 0', borderBottom: i < st.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none' }}>
+            <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:12, color: i===0 ? T.yellow : T.inkSoft }}>{i+1}</div>
+            <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
+              <PlayerAvatar player={s.player} size={24} />
+              <div style={{ fontFamily:T.font, fontWeight: i===0?700:400, fontSize:13, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.player.name}</div>
+            </div>
+            <div style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft, textAlign:'center' }}>{s.wins}-{s.losses}-{s.draws}</div>
+            <div style={{ fontFamily:'monospace', fontSize:11, color: s.diff > 0 ? T.mint : s.diff < 0 ? T.coral : T.inkSoft, textAlign:'center' }}>{s.diff > 0 ? '+' : ''}{s.diff}</div>
+            <div style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft, textAlign:'center' }}>{s.setWins}</div>
+            <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:13, color: i===0 ? T.yellow : T.ink, textAlign:'center' }}>{s.pts}</div>
+          </div>
+        ))}
+        </React.Fragment>}
+      </div>
+    );
+  };
+
+  // ── Render SE bracket ─────────────────────────────────────────────────────
+  const renderSEBracket = (rounds, curRound, curMatch) => {
+    if (!rounds.length) return null;
+    const total = rounds.length > 0 ? Math.ceil(Math.log2(Math.max(rounds[0].length * 2, 2))) : Math.ceil(Math.log2(Math.max(players.length, 2)));
+    const currentRoundName = roundName(curRound, total);
+    return (
+      <div style={{ width:'100%', background:T.surface, borderRadius:22, padding:'14px 16px', boxShadow:T.shadow }}>
+        <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkMute, letterSpacing:'0.12em', textTransform:'uppercase', marginBottom:10 }}>
+          Bracket · {currentRoundName}
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+          {rounds.map((round, rIdx) => {
+            const isPast = rIdx < curRound, isCurrent = rIdx === curRound;
+            const isExp = expandedRounds[rIdx] !== false;
+            const winners = round.map(m => m.winner).filter(Boolean);
+            if (!isExp) return (
+              <div key={rIdx} onClick={() => setExpandedRounds(s => ({...s, [rIdx]: true}))}
+                style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 12px', borderRadius:12, cursor:'pointer', background: isCurrent ? T.mint+'22' : T.surfaceMuted, marginBottom:2 }}>
+                <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isCurrent ? T.mintDeep : T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em' }}>{roundName(rIdx, total)}</div>
+                <div style={{ display:'flex', alignItems:'center', gap:3 }}>
+                  {winners.map(w => <div key={w.id} style={{ width:14, height:14, borderRadius:'50%', background:w.color }} />)}
+                  <span style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginLeft:4 }}>▼</span>
+                </div>
+              </div>
+            );
+            return (
+              <div key={rIdx}>
+                <div onClick={() => setExpandedRounds(s => ({...s, [rIdx]: false}))}
+                    style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 12px', borderRadius:12, cursor:'pointer', background: isCurrent ? T.mint+'22' : T.surfaceMuted, marginBottom:4 }}>
+                    <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isCurrent ? T.mintDeep : T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em' }}>{roundName(rIdx, total)}</div>
+                    <span style={{ fontSize:12, color:T.inkSoft }}>{isExp ? '▲' : '▼'}</span>
+                  </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                  {round.map((m, mIdx) => {
+                    const isDone = m.winner !== null;
+                    const isSelectable = isCurrent && !isDone && !m.tbd && m.p1 && m.p2;
+                    const isSelected = isCurrent && mIdx === curMatch && !m.tbd;
+                    const p1win = isDone && m.winner?.id === m.p1?.id;
+                    const p2win = isDone && m.winner?.id === m.p2?.id;
+
+                    // swap helpers
+                    const mkSwapHandlers = (side) => {
+                      const player = m[side];
+                      if (!player) return {};
+                      const isSel = swapSel && swapSel.rIdx === rIdx && swapSel.mIdx === mIdx && swapSel.side === side;
+                      const isSwapTarget = swapSel && !isSel;
+                      return {
+                        onMouseDown: (e) => { e.stopPropagation(); lpTimer.current = setTimeout(() => { setSwapSel({ rIdx, mIdx, side, player }); }, 400); },
+                        onMouseUp: (e) => { e.stopPropagation(); clearTimeout(lpTimer.current); },
+                        onTouchStart: (e) => { e.stopPropagation(); lpTimer.current = setTimeout(() => { setSwapSel({ rIdx, mIdx, side, player }); }, 400); },
+                        onTouchEnd: (e) => { e.stopPropagation(); clearTimeout(lpTimer.current); },
+                        onClick: (e) => {
+                          e.stopPropagation();
+                          if (!swapSel) return;
+                          if (isSel) { setSwapSel(null); return; }
+                          // perform swap in seRounds
+                          setSeRounds(prev => {
+                            const next = prev.map(r => r.map(mm => ({...mm})));
+                            const a = next[swapSel.rIdx][swapSel.mIdx];
+                            const b = next[rIdx][mIdx];
+                            const tmp = a[swapSel.side];
+                            a[swapSel.side] = b[side];
+                            b[side] = tmp;
+                            return next;
+                          });
+                          setSwapSel(null);
+                        },
+                        _isSel: isSel,
+                        _isSwapTarget: isSwapTarget,
+                      };
+                    };
+                    const p1h = mkSwapHandlers('p1');
+                    const p2h = mkSwapHandlers('p2');
+
+                    const openSheet = (e) => { if (champion) return; e.preventDefault(); lpTimer.current = setTimeout(() => { setSeActionSheet({ rIdx, mIdx }); }, 500); };
+                    const cancelLp = () => clearTimeout(lpTimer.current);
+                    return (
+                      <div key={mIdx}
+                        onClick={!swapSel && isSelectable ? () => { setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(0); setCups2(0); } : (swapSel ? () => setSwapSel(null) : undefined)}
+                        onMouseDown={openSheet} onMouseUp={cancelLp} onMouseLeave={cancelLp}
+                        onTouchStart={openSheet} onTouchEnd={cancelLp}
+                        style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px', borderRadius:14, cursor: isSelectable ? 'pointer' : isDone ? 'context-menu' : 'default', background: isSelected ? T.mint+'20' : 'rgba(20,30,50,0.03)', border: isSelected ? `1.5px solid ${T.mint}66` : '1.5px solid transparent', transition:'all .15s', userSelect:'none', WebkitUserSelect:'none', WebkitTapHighlightColor:'transparent' }}>
+                        {/* P1 dot */}
+                        <div style={{ width:10, height:10, borderRadius:'50%', background: m.p1?.color || T.inkMute, flexShrink:0, opacity: isDone&&!p1win ? 0.35 : 1 }} />
+                        {/* P1 name */}
+                        <div
+                          style={{ flex:1, fontFamily:T.font, fontWeight: p1win?800:600, fontSize:13, color: p1win?T.ink:isDone?T.inkSoft:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textDecoration: isDone&&!p1win?'line-through':'none', userSelect:'none', WebkitUserSelect:'none', WebkitTapHighlightColor:'transparent' }}>{m.p1?m.p1.name:'BYE'}</div>
+                        {/* Score */}
+                        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, flexShrink:0, textAlign:'center', color: isDone ? T.inkMute : T.inkMute, display:'flex', flexDirection:'column', alignItems:'center', gap:1 }}>
+                          {(isDone && m.scores) ? (
+                            m.scores.map((s, si) => {
+                              const s1win = s.p1 > s.p2;
+                              const s2win = s.p2 > s.p1;
+                              return <div key={si} style={{ opacity: si===0 ? 0.65 : 1 }}><span style={{ color: s1win ? T.mint : T.inkSoft }}>{s.p1}</span><span style={{ color:T.inkMute }}>–</span><span style={{ color: s2win ? T.mint : T.inkSoft }}>{s.p2}</span></div>;
+                            })
+                          ) : m.score1 ? (
+                            <div style={{ opacity:0.65 }}><span style={{ color: m.score1.p1>m.score1.p2?T.mint:T.inkSoft }}>{m.score1.p1}</span><span style={{ color:T.inkMute }}>–</span><span style={{ color: m.score1.p2>m.score1.p1?T.mint:T.inkSoft }}>{m.score1.p2}</span></div>
+                          ) : isDone && m.score ? (
+                            <div style={{ whiteSpace:'nowrap' }}><span style={{ color: p1win ? T.mint : T.inkSoft }}>{m.score.p1}</span><span style={{ color:T.inkMute }}>–</span><span style={{ color: p2win ? T.mint : T.inkSoft }}>{m.score.p2}</span></div>
+                          ) : <span style={{ fontSize:12, color:T.inkMute }}>vs</span>}
+                        </div>
+                        {/* P2 name */}
+                        <div
+                          style={{ flex:1, fontFamily:T.font, fontWeight: p2win?800:600, fontSize:13, color: m.tbd?T.inkMute:p2win?T.ink:isDone?T.inkSoft:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right', textDecoration: isDone&&!p2win?'line-through':'none', fontStyle: m.tbd?'italic':'normal', userSelect:'none', WebkitUserSelect:'none', WebkitTapHighlightColor:'transparent' }}>{m.p2?m.p2.name:m.tbd?'...':'BYE'}</div>
+                        {/* P2 dot */}
+                        <div style={{ width:10, height:10, borderRadius:'50%', background: m.p2?.color || T.inkMute, flexShrink:0, opacity: isDone&&!p2win ? 0.35 : 1 }} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // ── Render group overview ─────────────────────────────────────────────────
+  const renderGroupOverview = () => {
+    const groupType = TOURNAMENT.startsWith('grp_rr') ? 'rr' : 'se';
+    return (
+      <div style={{ display:'flex', flexDirection:'column', gap:10, width:'100%' }}>
+        {tsGroups.map((g, gi) => {
+          const isCurrent = gi === tsCurGroup && tsPhase === 'groups';
+          const isDone = g.done;
+          const isExpG = expandedGroups_g[gi] !== false; // default open
+          if (groupType === 'rr') {
+            const st = getRRStandings(g.players, g.matches);
+            const hdr = { fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em', textAlign:'center', minWidth:38 };
+            return (
+              <div key={gi} style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadowPill, border: isCurrent ? '1.5px solid ' + T.blue + '44' : '1.5px solid rgba(20,30,50,0.06)' }}>
+                <div onClick={() => setExpandedGroups_g(s => ({...s, [gi]: !isExpG}))} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding:'4px 0', marginBottom: isExpG ? 6 : 0 }}>
+                  <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isCurrent ? T.blue : T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>
+                    {g.label} állás {isDone ? '✓' : isCurrent ? '●' : ''}
+                  </div>
+                  <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{isExpG ? '▲' : '▼'}</div>
+                </div>
+                {isExpG && <React.Fragment>
+                  <div style={{ display:'grid', gridTemplateColumns:'20px 1fr 80px 36px 42px 32px', gap:'0 6px', alignItems:'center', paddingBottom:4, borderBottom:'1px solid rgba(20,30,50,0.08)' }}>
+                    <div></div><div></div>
+                    <div style={{...hdr, textAlign:'center'}}>GY-V-D</div>
+                    <div style={hdr}>Diff</div>
+                    <div style={hdr}>Pohár</div>
+                    <div style={{...hdr, color:(T.yellowText||T.yellow)}}>Pont</div>
+                  </div>
+                  {st.map((s, i) => (
+                    <div key={s.player.id} style={{ display:'grid', gridTemplateColumns:'20px 1fr 80px 36px 42px 32px', gap:'0 6px', alignItems:'center', padding:'6px 0', borderBottom: i < st.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none' }}>
+                      <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:12, color: i===0 ? T.yellow : T.inkSoft }}>{i+1}</div>
+                      <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
+                        <PlayerAvatar player={s.player} size={22} />
+                        <div style={{ fontFamily:T.font, fontWeight: i===0?700:400, fontSize:12, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.player.name}</div>
+                      </div>
+                      <div style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft, textAlign:'center' }}>{s.wins}-{s.losses}-{s.draws}</div>
+                      <div style={{ fontFamily:'monospace', fontSize:11, color: s.diff>0?T.mint:s.diff<0?T.coral:T.inkSoft, textAlign:'center' }}>{s.diff>0?'+':''}{s.diff}</div>
+                      <div style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft, textAlign:'center' }}>{s.setWins}</div>
+                      <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:12, color: i===0?T.yellow:T.ink, textAlign:'center' }}>{s.pts}</div>
+                    </div>
+                  ))}
+                </React.Fragment>}
+              </div>
+            );
+          }
+          // SE group: show match results
+          return (
+            <div key={gi} style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadow, border: isCurrent ? '1.5px solid ' + T.blue + '44' : '1.5px solid rgba(20,30,50,0.06)' }}>
+              <div onClick={() => setExpandedGroups_g(s => ({...s, [gi]: !isExpG}))} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding:'4px 0', marginBottom: isExpG ? 6 : 0 }}>
+                <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: isCurrent ? T.blue : T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>
+                  {g.label} {isDone ? '✓' : isCurrent ? '●' : ''}
+                </div>
+                <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{isExpG ? '▲' : '▼'}</div>
+              </div>
+              {isExpG && <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {g.players.map(p => <div key={p.id} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', borderRadius:8, background: p.color + '22' }}><div style={{ width:16, height:16, borderRadius:'50%', background:p.color }}></div><span style={{ fontFamily:T.font, fontSize:12, fontWeight:600, color:T.ink }}>{p.name}</span></div>)}
+              </div>}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // ── Main render ───────────────────────────────────────────────────────────
+  const isTwoStage = TOURNAMENT.startsWith('grp_');
+  const effectivePlayers = (MODE === 'csapat' && teamsReady && teamPlayersRef.current) ? teamPlayersRef.current : players;
+
+  const rrParts = TOURNAMENT === 'rr' ? effectivePlayers : (rrMatches.flatMap(m => [m.p1, m.p2]).filter((p, i, a) => p && a.findIndex(x => x && x.id === p.id) === i));
+
+  if (MODE === 'csapat' && !teamsReady) {
+    const teamColors = [T.mint, T.coral, T.blue, '#FACC15', '#A855F7', '#F97316', '#14B8A6', '#EC4899'];
+    const teamLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    const numTeams = Math.max(2, Math.floor(players.length / 2));
+    const defaultTeam = (p) => players.indexOf(p) % numTeams;
+    const teamCounts = Array.from({length: numTeams}, (_, ti) => players.filter(p => (teamAssign[p.id] ?? defaultTeam(p)) === ti).length);
+    return (
+      <div style={{ display:'flex', flexDirection:'column', gap:16, padding:'4px 0 12px' }}>
+        {/* Header */}
+        <div style={{ textAlign:'center' }}>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink }}>Csapatok összeállítása</div>
+          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:4 }}>Koppints egy játékosra a csapat váltásához</div>
+        </div>
+
+        {/* Team tabs with editable names */}
+        <div style={{ display:'flex', gap:8, overflowX:'auto', padding:'6px 4px 8px', WebkitOverflowScrolling:'touch', scrollbarWidth:'none' }}>
+          {Array.from({length: numTeams}, (_, ti) => (
+            <div key={ti} style={{ flex:'0 0 80px', background: T.surface, borderRadius:16, padding:'12px 6px 10px', display:'flex', flexDirection:'column', alignItems:'center', gap:5, boxShadow: `0 0 0 2.5px ${teamColors[ti]}`, transition:'box-shadow .15s' }}>
+              <div style={{ width:28, height:28, borderRadius:'50%', background: teamColors[ti], display:'grid', placeItems:'center', flexShrink:0 }}>
+                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:'#fff', lineHeight:1 }}>{teamLetters[ti]}</span>
+              </div>
+              <input
+                value={teamNames[ti]}
+                onChange={e => setTeamNames(prev => prev.map((n,i) => i===ti ? e.target.value.slice(0,12) : n))}
+                onClick={e => e.stopPropagation()}
+                style={{ width:'100%', minWidth:0, border:'none', background:'transparent', fontFamily:T.font, fontWeight:700, fontSize:11, color: T.inkSoft, outline:'none', textAlign:'center', padding:0 }}
+              />
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:800, color: teamColors[ti] }}>{teamCounts[ti]} fő</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Player list */}
+        <div style={{ width:'100%', background:T.surface, borderRadius:18, overflow:'hidden', boxShadow:T.shadow }}>
+          {players.map((p, idx) => {
+            const ti = teamAssign[p.id] ?? defaultTeam(p);
+            const nextTi = (ti + 1) % numTeams;
+            const tc = teamColors[ti];
+            return (
+              <div key={p.id} onClick={() => setTeamAssign(prev => ({...prev, [p.id]: nextTi}))}
+                style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 16px', cursor:'pointer', borderBottom: idx < players.length-1 ? '1px solid rgba(20,30,50,0.07)' : 'none', transition:'background .1s' }}>
+                <div style={{ width:12, height:12, borderRadius:'50%', background: tc, flexShrink:0 }} />
+                <div style={{ flex:1, fontFamily:T.font, fontWeight:700, fontSize:16, color:T.ink }}>{p.name}</div>
+                <div style={{ display:'flex', alignItems:'center', gap:5, background: tc+'22', borderRadius:20, padding:'6px 12px' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M7 16l-4-4 4-4M17 8l4 4-4 4M14 4l-4 16" stroke={tc} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color: tc }}>{teamNames[ti]}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ position:'sticky', bottom:0, background:T.bg, paddingBottom:8, paddingTop:4 }}>
+          <PrimaryButton onClick={() => {
+            const numT = numTeams;
+            const builtTeams = Array.from({length: numT}, (_, ti) => ({
+              id: 'team_' + ti,
+              name: teamNames[ti] || ('Csapat ' + (ti+1)),
+              emoji: ['🟢','🔴','🔵','🟡','🟣','🟠','🩵','🩷'][ti] || '⚪',
+              avatar: null,
+              color: teamColors[ti],
+              members: players.filter(p => (teamAssign[p.id] ?? defaultTeam(p)) === ti),
+            })).filter(t => t.members.length > 0);
+            teamPlayersRef.current = builtTeams;
+            setTeamsReady(true);
+          }}>Torna indítása ▶</PrimaryButton>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, width:'100%' }}>
+      {manualEdit && (
+        <ManualBracketEditor
+          players={manualEdit}
+          tournament={TOURNAMENT}
+          onApply={applyManualOrder}
+          onClose={() => setManualEdit(false)}
+        />
+      )}
+      {/* Phase switcher for two-stage */}
+      {isTwoStage && (() => {
+        const finalsReady = seRounds.length > 0 || rrMatches.length > 0;
+        return (
+          <div style={{ width:'100%', background:'rgba(20,30,50,0.08)', borderRadius:14, padding:4, display:'flex', position:'relative' }}>
+            <div style={{ position:'absolute', top:4, bottom:4, left: tsPhase==='groups' ? 4 : 'calc(50% + 2px)', right: tsPhase==='groups' ? 'calc(50% + 2px)' : 4, background:T.surface, borderRadius:10, boxShadow:'0 1px 6px rgba(0,0,0,0.10)', transition:'left .2s ease, right .2s ease' }} />
+            <button onClick={() => setTsPhase('groups')} style={{ flex:1, padding:'10px 0', border:'none', background:'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, color: tsPhase==='groups' ? T.ink : T.inkMute, position:'relative', zIndex:1, transition:'color .2s', display:'flex', alignItems:'center', justifyContent:'center', gap:5 }}>
+              <img src={IMGS['bajnoksag-csoport']} style={{ width:15, height:15, objectFit:'contain', opacity: tsPhase==='groups' ? 0.8 : 0.4 }} />
+              Csoportkör
+            </button>
+            <button onClick={() => { if(finalsReady) setTsPhase('finals'); }} style={{ flex:1, padding:'10px 0', border:'none', background:'transparent', cursor: finalsReady ? 'pointer' : 'default', fontFamily:T.font, fontWeight:800, fontSize:13, color: tsPhase==='finals' ? T.ink : finalsReady ? T.inkMute : T.inkMute+'66', position:'relative', zIndex:1, transition:'color .2s', display:'flex', alignItems:'center', justifyContent:'center', gap:5 }}>
+              <img src={IMGS['bajnoksag-kieses']} style={{ width:15, height:15, objectFit:'contain', opacity: tsPhase==='finals' ? 0.8 : finalsReady ? 0.4 : 0.2 }} />
+              Főszakasz {!finalsReady && <BohIcon name="lock" size={11} />}
+            </button>
+          </div>
+        );
+      })()}
+
+      {polipOverlay && (() => {
+        const po = polipOverlay;
+        const doFinish = (pickedWinner) => {
+          const pickedLoser = pickedWinner.id === po.match.p1.id ? po.match.p2 : po.match.p1;
+          const newDrink = { ...drinkMap };
+          setDrinkMap(newDrink);
+          setCups1(0); setCups2(0);
+          po.setCB(prevRounds => {
+            const nr = prevRounds.map(r => r.map(m => ({ ...m })));
+            nr[po.curRound][po.curMatch].winner = pickedWinner;
+            nr[po.curRound][po.curMatch].loser  = pickedLoser;
+            nr[po.curRound][po.curMatch].score  = po.score2;
+            nr[po.curRound][po.curMatch].scores = [po.score1, po.score2];
+            delete nr[po.curRound][po.curMatch].score1;
+            if (nr[po.curRound + 1]?.[po.curMatch]?.tbd) {
+              nr[po.curRound + 1][po.curMatch] = { ...nr[po.curRound + 1][po.curMatch], p2: pickedWinner, tbd: false };
+            }
+            const nextInRound = nr[po.curRound].findIndex(m => m.winner === null && !m.tbd);
+            if (nextInRound !== -1) { setSeCurMatch(nextInRound); return nr; }
+            if (nr[po.curRound + 1]) {
+              const nextPre = nr[po.curRound + 1].findIndex(m => m.winner === null && !m.tbd);
+              if (nextPre !== -1) { setSeCurRound(po.curRound + 1); setSeCurMatch(nextPre); return nr; }
+              const preWinners = nr[po.curRound + 1].map(m => m.winner).filter(Boolean);
+              if (preWinners.length === 1) { finishSE(preWinners[0], newDrink); return nr; }
+            }
+            const winners = nr[po.curRound].map(m => m.winner).filter(Boolean);
+            if (winners.length === 1) { finishSE(winners[0], newDrink); return nr; }
+            const nextRound = buildSERound(winners);
+            const nextRoundIdx = nr[po.curRound + 1] ? po.curRound + 2 : po.curRound + 1;
+            const nextPending = nextRound.findIndex(m => m.winner === null);
+            if (nextPending !== -1) { setSeCurRound(nextRoundIdx); setSeCurMatch(nextPending); }
+            return [...nr, nextRound];
+          });
+          setPolipOverlay(null);
+        };
+        return (
+          <div style={{ position:'fixed', inset:0, zIndex:9999, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'flex-end', justifyContent:'center' }} onClick={() => {}}>
+            <div style={{ width:'100%', maxWidth:480, background:T.surface, borderRadius:'22px 22px 0 0', padding:'24px 20px calc(36px + 80px + env(safe-area-inset-bottom, 0px))', display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
+              <div style={{ fontFamily:T.font, fontSize:44, lineHeight:1 }}>🐙</div>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink, textAlign:'center' }}>Mindkét meccs döntetlen!</div>
+              <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center' }}>A polip dönt — ki jut tovább?</div>
+              {/* Meccs eredmények */}
+              <div style={{ width:'100%', background:T.surfaceMuted, borderRadius:12, padding:'10px 14px', display:'flex', flexDirection:'column', gap:6 }}>
+                {[po.score1, po.score2].map((sc, i) => (
+                  <div key={i} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, minWidth:60 }}>{i===0?'1. meccs':'Visszavágó'}</div>
+                    <div style={{ display:'flex', alignItems:'center', gap:6, flex:1, justifyContent:'center' }}>
+                      <div style={{ width:16, height:16, borderRadius:'50%', background:po.match.p1.color, flexShrink:0 }}/>
+                      <span style={{ fontFamily:'monospace', fontWeight:800, fontSize:15, color:T.ink }}>{sc.p1}</span>
+                      <span style={{ fontFamily:T.font, fontSize:11, color:T.inkMute }}>–</span>
+                      <span style={{ fontFamily:'monospace', fontWeight:800, fontSize:15, color:T.ink }}>{sc.p2}</span>
+                      <div style={{ width:16, height:16, borderRadius:'50%', background:po.match.p2.color, flexShrink:0 }}/>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display:'flex', gap:12, width:'100%' }}>
+                {[po.match.p1, po.match.p2].map(p => (
+                  <button key={p.id} onClick={() => doFinish(p)} style={{ flex:1, padding:'16px 8px', borderRadius:16, border:`3px solid ${p.color}`, background:p.color+'18', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+                    <PlayerAvatar player={p} size={56} boxShadow={'0 4px 12px ' + p.color + '55'} />
+                    <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>{p.name}</div>
+                    <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>továbbjut →</div>
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:-4 }}>Nyomd meg a továbbjutó játékost</div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {renderMatchCard()}
+
+      {/* Bracket / standings */}
+      {TOURNAMENT === 'se' && seRounds.length > 0 && (
+        <div style={{ width:'100%' }}>
+          <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:6 }}>
+            <div style={{ display:'flex', background:'rgba(20,30,50,0.07)', borderRadius:10, padding:3, gap:2 }}>
+              <button onClick={() => setBracketViewMode('list')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='list' ? T.surface : 'transparent', color: bracketViewMode==='list' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='list' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>📋 Lista</button>
+              <button onClick={() => setBracketViewMode('tree')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='tree' ? T.surface : 'transparent', color: bracketViewMode==='tree' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='tree' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>🌿 Faág</button>
+              <button onClick={() => setBracketViewMode('korty')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='korty' ? T.surface : 'transparent', color: bracketViewMode==='korty' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='korty' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>🍺 Pohár</button>
+            </div>
+          </div>
+          {bracketViewMode === 'korty' ? renderKortyTab() : bracketViewMode === 'list' ? renderSEBracket(seRounds, seCurRound, seCurMatch) : (
+            <div style={{ background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadow, overflowX:'auto' }}>
+              <BracketView seRoundsArr={seRounds} seCurRound={seCurRound} seCurMatch={seCurMatch} />
+            </div>
+          )}
+        </div>
+      )}
+      {TOURNAMENT === 'rr' && (
+        <div style={{ width:'100%' }}>
+          <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:6 }}>
+            <div style={{ display:'flex', background:'rgba(20,30,50,0.07)', borderRadius:10, padding:3, gap:2 }}>
+              <button onClick={() => setBracketViewMode('list')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='list' ? T.surface : 'transparent', color: bracketViewMode==='list' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='list' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>📋 Lista</button>
+              <button onClick={() => setBracketViewMode('korty')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='korty' ? T.surface : 'transparent', color: bracketViewMode==='korty' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='korty' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>🍺 Pohár</button>
+            </div>
+          </div>
+          {bracketViewMode === 'korty' ? renderKortyTab() : (<React.Fragment>{renderRRStandings(effectivePlayers, rrMatches, 'Állás')}{!rrDone && renderRRMatchList(effectivePlayers, rrMatches, rrIdx, setRrIdx, (i) => { setRrMatches(prev => prev.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})); setRrDone(false); doneRef.current=false; setChampion(null); })}</React.Fragment>)}
+        </div>
+      )}
+      {isTwoStage && tsPhase === 'groups' && renderGroupOverview()}
+      {isTwoStage && tsPhase === 'groups' && (
+        <div style={{ width:'100%', background:T.surface, borderRadius:20, padding:'14px 16px', boxShadow:T.shadow }}>
+          {/* Group tabs */}
+          {tsGroups.length > 1 && (
+            <div style={{ display:'flex', gap:6, marginBottom:10 }}>
+              {tsGroups.map((g, gi) => (
+                <button key={gi} onClick={() => { setViewGroup(gi); setGroupMatchExp(true); }} style={{ flex:1, padding:'6px 0', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:12, background: viewGroup===gi ? T.blue+'22' : 'rgba(20,30,50,0.05)', color: viewGroup===gi ? T.blue : T.inkSoft, transition:'all .15s' }}>
+                  {g.label.replace(' csoport','')} {g.done ? '✓' : !g.done && g.matches.some(m => m.winner || m.draw) ? '●' : ''}
+                </button>
+              ))}
+            </div>
+          )}
+          {tsGroups[viewGroup] && (
+          <React.Fragment>
+          <div onClick={() => setGroupMatchExp(v => !v)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding:'4px 0', marginBottom: groupMatchExp ? 6 : 0 }}>
+            <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: !tsGroups[viewGroup].done ? T.blue : T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>
+              {tsGroups[viewGroup].label} {tsGroups[viewGroup].done ? '— kész ✓' : '— folyamatban'}
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>{groupMatchExp ? '▲' : '▼'}</div>
+          </div>
+          {groupMatchExp && <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+            {tsGroups[viewGroup].matches.map((m, i) => {
+              const g = tsGroups[viewGroup];
+              const isDone = m.winner !== null || m.draw;
+              const isSel = !g.done && i === g.curIdx && !isDone;
+              const openGrpSheet = (e) => { if (champion) return; e.preventDefault(); lpTimer.current = setTimeout(() => { setMatchActionSheet({ type:'grp', match:m, matchIdx:i, groupIdx:viewGroup, isSelectable:!isDone&&!g.done, isDone, onSelect:() => { setTsGroups(prev => prev.map((gg, gi) => gi===viewGroup ? {...gg, curIdx:i} : gg)); setCups1(0); setCups2(0); }, onReset:() => { setTsGroups(prev => prev.map((gg, gi) => gi!==viewGroup?gg:{...gg, curIdx:i, done:false, matches:gg.matches.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})})); setCups1(0); setCups2(0); resetTimer(); } }); }, 500); };
+              return (
+                <div key={i}
+                  onClick={!isDone && !g.done ? () => { setTsGroups(prev => prev.map((gg, gi) => gi===viewGroup ? {...gg, curIdx:i} : gg)); setCups1(0); setCups2(0); } : undefined}
+                  onMouseDown={openGrpSheet} onMouseUp={() => clearTimeout(lpTimer.current)} onMouseLeave={() => clearTimeout(lpTimer.current)}
+                  onTouchStart={openGrpSheet} onTouchEnd={() => clearTimeout(lpTimer.current)}
+                  style={{ display:'flex', alignItems:'center', gap:4, padding:'7px 6px', borderRadius:10, cursor: !isDone&&!g.done?'pointer':'default', background: isSel?T.blue+'18':'transparent', border: isSel?`1.5px solid ${T.blue}55`:'1.5px solid transparent', transition:'all .15s', userSelect:'none', WebkitUserSelect:'none', WebkitTapHighlightColor:'transparent' }}>
+                  <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.winner?.id===m.p1?.id?T.mint:isDone&&m.loser?.id===m.p1?.id?T.inkSoft:T.ink, fontWeight: isDone&&m.winner?.id===m.p1?.id?700:400, flex:1, textDecoration: isDone&&m.loser?.id===m.p1?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name}</div>
+                  <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:2, flexShrink:0 }}>
+                    {isDone&&m.score ? (<>
+                      <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: m.winner?.id===m.p1?.id ? T.mint : T.inkSoft }}>{m.score.p1}</span>
+                      <span style={{ fontFamily:T.font, fontSize:11, color:T.inkMute }}> VS </span>
+                      <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color: m.winner?.id===m.p2?.id ? T.mint : T.inkSoft }}>{m.score.p2}</span>
+                    </>) : <span style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>vs</span>}
+                  </div>
+                  <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
+                  <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.winner?.id===m.p2?.id?T.mint:isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2.name}</div>
+                </div>
+              );
+            })}
+          </div>}
+          </React.Fragment>
+          )}
+        </div>
+      )}
+      {isTwoStage && tsPhase === 'finals' && finalsType === 'se' && seRounds.length > 0 && (
+        <div style={{ width:'100%' }}>
+          <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:6 }}>
+            <div style={{ display:'flex', background:'rgba(20,30,50,0.07)', borderRadius:10, padding:3, gap:2 }}>
+              <button onClick={() => setBracketViewMode('list')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='list' ? T.surface : 'transparent', color: bracketViewMode==='list' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='list' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>📋 Lista</button>
+              <button onClick={() => setBracketViewMode('tree')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='tree' ? T.surface : 'transparent', color: bracketViewMode==='tree' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='tree' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>🌿 Faág</button>
+              <button onClick={() => setBracketViewMode('korty')} style={{ padding:'5px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:700, fontSize:11, background: bracketViewMode==='korty' ? T.surface : 'transparent', color: bracketViewMode==='korty' ? T.ink : T.inkSoft, boxShadow: bracketViewMode==='korty' ? '0 1px 4px rgba(0,0,0,0.10)' : 'none', transition:'all .15s' }}>🍺 Pohár</button>
+            </div>
+          </div>
+          {bracketViewMode === 'korty' ? renderKortyTab() : bracketViewMode === 'list' ? renderSEBracket(seRounds, seCurRound, seCurMatch) : (
+            <div style={{ background:T.surface, borderRadius:20, padding:'14px 14px', boxShadow:T.shadow, overflowX:'auto' }}>
+              <BracketView seRoundsArr={seRounds} seCurRound={seCurRound} seCurMatch={seCurMatch} />
+            </div>
+          )}
+        </div>
+      )}
+      {isTwoStage && tsPhase === 'finals' && finalsType === 'rr' && renderRRStandings(rrParts, rrMatches, 'Főszakasz állás')}
+      {isTwoStage && tsPhase === 'finals' && finalsType === 'rr' && !rrDone && renderRRMatchList(rrParts, rrMatches, rrIdx, setRrIdx, (i) => { setRrMatches(prev => prev.map((mm,mi) => mi!==i?mm:{...mm,winner:null,loser:null,score:null,draw:false})); setRrDone(false); doneRef.current=false; setChampion(null); })}
+
+      {/* RR / Group Action Sheet */}
+      {matchActionSheet && (() => {
+        const { match: m, isSelectable, isDone, onSelect, onReset, swapSide, groupIdx, matchIdx } = matchActionSheet;
+        const btnStyle = (tone) => ({ width:'100%', padding:'12px 14px', border:'none', borderRadius:12, cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background: tone==='mint'?T.mint:tone==='coral'?T.coral+'22':tone==='blue'?T.blue+'18':T.surfaceMuted, color: tone==='mint'?'#fff':tone==='coral'?T.coral:tone==='blue'?T.blue:T.inkSoft, textAlign:'left', display:'flex', alignItems:'center', gap:10 });
+
+        // Swap target picker
+        if (swapSide) {
+          const swapPlayer = m[swapSide];
+          const targets = [];
+          tsGroups.forEach((grp, gi) => {
+            grp.matches.forEach((mm, mi) => {
+              ['p1','p2'].forEach(s => {
+                if (mm[s] && !(gi===groupIdx && mi===matchIdx && s===swapSide)) {
+                  targets.push({ player: mm[s], groupIdx: gi, matchIdx: mi, side: s });
+                }
+              });
+            });
+          });
+          const doGrpSwap = (t) => {
+            setTsGroups(prev => {
+              const next = prev.map(grp => ({ ...grp, players: [...grp.players], matches: grp.matches.map(mm => ({...mm})) }));
+              const playerA = next[groupIdx].matches[matchIdx][swapSide];
+              const playerB = next[t.groupIdx].matches[t.matchIdx][t.side];
+              // Swap in all matches across both groups
+              [groupIdx, t.groupIdx].forEach(gi => {
+                next[gi].matches = next[gi].matches.map(mm => {
+                  const updated = {...mm};
+                  if (updated.p1?.id === playerA.id) updated.p1 = playerB;
+                  else if (updated.p1?.id === playerB.id) updated.p1 = playerA;
+                  if (updated.p2?.id === playerA.id) updated.p2 = playerB;
+                  else if (updated.p2?.id === playerB.id) updated.p2 = playerA;
+                  if (updated.winner?.id === playerA.id) updated.winner = playerB;
+                  else if (updated.winner?.id === playerB.id) updated.winner = playerA;
+                  if (updated.loser?.id === playerA.id) updated.loser = playerB;
+                  else if (updated.loser?.id === playerB.id) updated.loser = playerA;
+                  return updated;
+                });
+                next[gi].players = next[gi].players.map(p =>
+                  p.id === playerA.id ? playerB : p.id === playerB.id ? playerA : p
+                );
+              });
+              return next;
+            });
+            setMatchActionSheet(null);
+          };
+          return (
+            <div onClick={() => setMatchActionSheet(null)} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.45)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 24px' }}>
+              <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:300, background:T.surface, borderRadius:20, padding:'16px', boxShadow:'0 8px 32px rgba(0,0,0,0.25)', display:'flex', flexDirection:'column', gap:8 }}>
+                <div style={{ fontFamily:T.font, fontSize:13, color:T.inkMute, fontWeight:700, paddingBottom:8, borderBottom:`1px solid ${T.surfaceMuted}` }}>
+                  ⇄ <span style={{color:T.ink, fontWeight:800}}>{swapPlayer?.name}</span> cseréje — válassz célpontot:
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:260, overflowY:'auto' }}>
+                  {targets.map((t, ti) => (
+                    <button key={ti} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', border:'none', borderRadius:12, cursor:'pointer', background:T.surfaceMuted, fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink, textAlign:'left' }} onClick={() => doGrpSwap(t)}>
+                      <div style={{ width:9, height:9, borderRadius:'50%', background:t.player.color||T.inkMute, flexShrink:0 }} />
+                      <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.player.name}</span>
+                      <span style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, marginLeft:'auto', flexShrink:0 }}>{tsGroups[t.groupIdx]?.label?.replace(' csoport','')}</span>
+                    </button>
+                  ))}
+                </div>
+                <button style={btnStyle('cancel')} onClick={() => setMatchActionSheet({...matchActionSheet, swapSide:null})}>
+                  <span>←</span><span>{t('backBtn')}</span>
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div onClick={() => setMatchActionSheet(null)} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.45)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 24px' }}>
+            <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:300, background:T.surface, borderRadius:20, padding:'16px', boxShadow:'0 8px 32px rgba(0,0,0,0.25)', display:'flex', flexDirection:'column', gap:8 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 4px 10px', borderBottom:`1px solid ${T.surfaceMuted}` }}>
+                <div style={{ width:9, height:9, borderRadius:'50%', background:m.p1?.color||T.inkMute, flexShrink:0 }} />
+                <div style={{ flex:1, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1?.name||'?'}</div>
+                <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, fontWeight:700, flexShrink:0 }}>{isDone&&m.score ? `${m.score.p1} – ${m.score.p2}` : m.draw ? 'Döntetlen' : 'vs'}</div>
+                <div style={{ flex:1, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2?.name||'?'}</div>
+                <div style={{ width:9, height:9, borderRadius:'50%', background:m.p2?.color||T.inkMute, flexShrink:0 }} />
+              </div>
+              {isSelectable && (
+                <button style={btnStyle('mint')} onClick={() => { onSelect(); setMatchActionSheet(null); }}>
+                  <span>✓</span><span>Meccs kijelölése</span>
+                </button>
+              )}
+              {isDone && (
+                <button style={btnStyle('coral')} onClick={() => { onReset(); setMatchActionSheet(null); }}>
+                  <span>↺</span><span>Eredmény visszavonása</span>
+                </button>
+              )}
+              {m.p1 && groupIdx !== undefined && (
+                <button style={btnStyle('blue')} onClick={() => setMatchActionSheet({...matchActionSheet, swapSide:'p1'})}>
+                  <span>⇄</span><span>{m.p1.name} cseréje</span>
+                </button>
+              )}
+              {m.p2 && groupIdx !== undefined && (
+                <button style={btnStyle('blue')} onClick={() => setMatchActionSheet({...matchActionSheet, swapSide:'p2'})}>
+                  <span>⇄</span><span>{m.p2.name} cseréje</span>
+                </button>
+              )}
+              <button style={btnStyle('cancel')} onClick={() => setMatchActionSheet(null)}>
+                <span>✕</span><span>Mégsem</span>
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* SE Action Sheet */}
+      {seActionSheet && (() => {
+        const { rIdx, mIdx, swapSide } = seActionSheet;
+        const m = seRounds[rIdx]?.[mIdx];
+        if (!m) { setSeActionSheet(null); return null; }
+        const isDoneM = m.winner !== null;
+        const isCurRound = rIdx === seCurRound;
+        const isSelectable = isCurRound && !isDoneM && !m.tbd && m.p1 && m.p2;
+        const isSelected = isCurRound && mIdx === seCurMatch;
+        const resetMatch = () => {
+          setSeRounds(prev => {
+            const nr = prev.map(r => r.map(mm => ({...mm})));
+            const wasW = nr[rIdx][mIdx].winner;
+            const mm = nr[rIdx][mIdx];
+            delete mm.score1; delete mm.scores;
+            const r1s = mm.r1slot; const r1side = mm.r1side || 'p2';
+            nr[rIdx][mIdx] = {...mm, winner:null, loser:null, score:null};
+            if (r1s !== undefined && nr[rIdx+1]?.[r1s]) {
+              const r1m = {...nr[rIdx+1][r1s]}; r1m[r1side] = null; r1m.tbd = true; nr[rIdx+1][r1s] = r1m;
+            } else if (wasW && nr[rIdx+1]?.[mIdx] && !nr[rIdx+1][mIdx].tbd && nr[rIdx+1][mIdx].p2?.id === wasW.id) {
+              nr[rIdx+1][mIdx] = {...nr[rIdx+1][mIdx], p2:null, tbd:true};
+            }
+            return nr;
+          });
+          visszavagoUsedRef.current.delete(rIdx + '_' + mIdx);
+          setChampion(null); doneRef.current = false; setCups1(0); setCups2(0); resetTimer();
+          setSeCurRound(rIdx); setSeCurMatch(mIdx);
+          setSeActionSheet(null);
+        };
+        const btnStyle = (tone) => ({ width:'100%', padding:'12px 14px', border:'none', borderRadius:12, cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background: tone === 'mint' ? T.mint : tone === 'coral' ? T.coral+'22' : tone === 'blue' ? T.blue+'18' : T.surfaceMuted, color: tone === 'mint' ? '#fff' : tone === 'coral' ? T.coral : tone === 'blue' ? T.blue : T.inkSoft, textAlign:'left', display:'flex', alignItems:'center', gap:10 });
+
+        // Swap target picker view
+        if (swapSide) {
+          const swapPlayer = m[swapSide];
+          const targets = [];
+          seRounds.forEach((round, ri) => round.forEach((mm, mi) => {
+            ['p1','p2'].forEach(s => {
+              if (mm[s] && !(ri===rIdx && mi===mIdx && s===swapSide)) {
+                targets.push({ player: mm[s], rIdx: ri, mIdx: mi, side: s });
+              }
+            });
+          }));
+          const doSwap = (t) => {
+            setSeRounds(prev => {
+              const next = prev.map(r => r.map(mm => ({...mm})));
+              const a = next[rIdx][mIdx];
+              const b = next[t.rIdx][t.mIdx];
+              const tmp = a[swapSide];
+              a[swapSide] = b[t.side];
+              b[t.side] = tmp;
+              return next;
+            });
+            setSeActionSheet(null);
+          };
+          return (
+            <div onClick={() => setSeActionSheet(null)} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.45)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 24px' }}>
+              <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:300, background:T.surface, borderRadius:20, padding:'16px', boxShadow:'0 8px 32px rgba(0,0,0,0.25)', display:'flex', flexDirection:'column', gap:8 }}>
+                <div style={{ fontFamily:T.font, fontSize:13, color:T.inkMute, fontWeight:700, paddingBottom:8, borderBottom:`1px solid ${T.surfaceMuted}` }}>
+                  ⇄ <span style={{color:T.ink, fontWeight:800}}>{swapPlayer?.name}</span> cseréje — válassz célpontot:
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:260, overflowY:'auto' }}>
+                  {targets.map((t, ti) => (
+                    <button key={ti} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', border:'none', borderRadius:12, cursor:'pointer', background:T.surfaceMuted, fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink, textAlign:'left' }} onClick={() => doSwap(t)}>
+                      <div style={{ width:9, height:9, borderRadius:'50%', background:t.player.color||T.inkMute, flexShrink:0 }} />
+                      <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.player.name}</span>
+                    </button>
+                  ))}
+                </div>
+                <button style={btnStyle('cancel')} onClick={() => setSeActionSheet({ rIdx, mIdx })}>
+                  <span>←</span><span>{t('backBtn')}</span>
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div onClick={() => setSeActionSheet(null)} style={{ position:'fixed', inset:0, background:'rgba(14,14,24,0.45)', zIndex:500, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 24px' }}>
+            <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:300, background:T.surface, borderRadius:20, padding:'16px', boxShadow:'0 8px 32px rgba(0,0,0,0.25)', display:'flex', flexDirection:'column', gap:8 }}>
+              {/* Match header */}
+              <div style={{ display:'flex', alignItems:'center', gap:8, padding:'4px 4px 10px', borderBottom:`1px solid ${T.surfaceMuted}` }}>
+                <div style={{ width:9, height:9, borderRadius:'50%', background:m.p1?.color||T.inkMute, flexShrink:0 }} />
+                <div style={{ flex:1, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1?.name||'BYE'}</div>
+                <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, fontWeight:700, flexShrink:0 }}>
+                  {isDoneM && m.score ? `${m.score.p1} – ${m.score.p2}` : 'vs'}
+                </div>
+                <div style={{ flex:1, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2?.name||'BYE'}</div>
+                <div style={{ width:9, height:9, borderRadius:'50%', background:m.p2?.color||T.inkMute, flexShrink:0 }} />
+              </div>
+              {/* Actions */}
+              {isSelectable && !isSelected && (
+                <button style={btnStyle('mint')} onClick={() => { setSeCurRound(rIdx); setSeCurMatch(mIdx); setCups1(0); setCups2(0); setSeActionSheet(null); }}>
+                  <span>✓</span><span>Meccs kijelölése</span>
+                </button>
+              )}
+              {isSelected && (
+                <div style={{...btnStyle('mint'), opacity:0.5, cursor:'default'}}><span>✓</span><span>Kijelölve</span></div>
+              )}
+              {isDoneM && (
+                <button style={btnStyle('coral')} onClick={resetMatch}>
+                  <span>↺</span><span>Eredmény visszavonása</span>
+                </button>
+              )}
+              {m.p1 && !m.tbd && (
+                <button style={btnStyle('blue')} onClick={() => setSeActionSheet({ rIdx, mIdx, swapSide:'p1' })}>
+                  <span>⇄</span><span>{m.p1.name} cseréje</span>
+                </button>
+              )}
+              {m.p2 && !m.tbd && (
+                <button style={btnStyle('blue')} onClick={() => setSeActionSheet({ rIdx, mIdx, swapSide:'p2' })}>
+                  <span>⇄</span><span>{m.p2.name} cseréje</span>
+                </button>
+              )}
+              <button style={btnStyle('cancel')} onClick={() => setSeActionSheet(null)}>
+                <span>✕</span><span>Mégsem</span>
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+// ═══════════════ BEER PONG 2.0 — JÁTÉK (duplikátum, v10.376) ═══════════════
+function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCode, initialBpState, onSetHideFooter, onSetBpEnded }) {
+  const bpCfg = gameMeta?.beerpong2Config || {};
+  const [showQR, setShowQR] = React.useState(false);
+  const joinUrl = roomCode ? (window.location.origin + window.location.pathname + '?room=' + roomCode) : '';
+  const DRINKS_PER_LOSS = bpCfg.drinksPerLoss ?? 5;
+  const MAX_CUPS = bpCfg.maxCups ?? 10;
+  const FINAL_CUPS = bpCfg.finalCups ?? MAX_CUPS;
+  const VISSZAVAGO   = !!(bpCfg.visszavago);
+  const TOURNAMENT = bpCfg.tournamentType || 'se';
+  const GROUP_ADVANCE = bpCfg.groupAdvance ?? 1;
+  const NUM_GROUPS = bpCfg.numGroups ?? 2;
+  const MATCH_MINUTES = bpCfg.matchMinutes ?? 5;
+  const MODE = bpCfg.mode || 'egyeni';
+  const TOURNAMENT_NAME = bpCfg.tournamentName || '';
+  const doneRef = React.useRef(false);
+  const [showTableau, setShowTableau] = React.useState(false);
+  const teamPlayersRef = React.useRef(null);
+
+  // A bajnok annyi pontot kap a buli-pontversenyben, ahányan játsszuk a
+  // bajnokságot osztva kettővel, felfelé kerekítve (a többi játék 1 pontot ad).
+  // Csapat módban is a résztvevő emberek száma számít, nem a csapatoké.
+  const bpHeadcount = (MODE === 'csapat' && teamPlayersRef.current)
+    ? teamPlayersRef.current.reduce((s, tm) => s + ((tm.members || []).length || 1), 0)
+    : (players || []).length;
+  const BP_WIN_POINTS = Math.max(1, Math.ceil(bpHeadcount / 2));
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const buildSERound = (parts) => {
+    const ms = [];
+    for (let i = 0; i < parts.length; i += 2) {
+      const p1 = parts[i] || null, p2 = parts[i+1] || null;
+      if (!p1 && !p2) continue;
+      ms.push({ p1, p2, winner: !p2 ? p1 : !p1 ? p2 : null, loser: null, score: null });
+    }
+    return ms;
+  };
+  const buildSEBracket = (parts) => {
+    const sh = [...parts].sort(() => Math.random() - 0.5);
+    const n = sh.length;
+    if (n < 2) return [];
+    // Use UPPER power of 2 so after prelim we get exactly nextPow2/2 players
+    let nextPow2 = 1;
+    while (nextPow2 < n) nextPow2 *= 2;
+    const byes = nextPow2 - n;           // players who skip prelim (free pass)
+    const prelimCount = n - nextPow2 / 2; // number of prelim matches
+    if (prelimCount === 0) return [buildSERound(sh)];
+    const byePlayers = sh.slice(0, byes);
+    const prelimPlayers = sh.slice(byes); // 2*prelimCount players play prelim
+    // Build round0 with r1slot/r1side so fill-logic knows where each winner goes
+    const round0 = [];
+    for (let i = 0; i < prelimCount; i++) {
+      const p1 = prelimPlayers[2*i], p2 = prelimPlayers[2*i+1];
+      let r1slot, r1side;
+      if (i < byes) { r1slot = i; r1side = 'p2'; }          // fills bye-player's open slot
+      else { const off = i - byes; r1slot = byes + Math.floor(off/2); r1side = off%2===0?'p1':'p2'; }
+      round0.push({ p1, p2, winner: null, loser: null, score: null, r1slot, r1side });
+    }
+    // Build round1: first min(byes,prelimCount) bye slots await prelim winners in p2,
+    // remaining bye players (when byes > prelimCount) are paired against each other,
+    // remaining prelim winners (when prelimCount > byes) are paired all-TBD.
+    const round1 = [];
+    const byeVsPrelim = Math.min(byes, prelimCount);
+    for (let i = 0; i < byeVsPrelim; i++) {
+      round1.push({ p1: byePlayers[i], p2: null, winner: null, loser: null, score: null, tbd: true });
+    }
+    // Cross-pair remaining bye players from both ends (seed2 vs seed7, seed3 vs seed6, ...)
+    const remByes = byePlayers.slice(byeVsPrelim);
+    for (let i = 0; i < Math.floor(remByes.length / 2); i++) {
+      const pa = remByes[i], pb = remByes[remByes.length - 1 - i];
+      round1.push({ p1: pa, p2: pb ?? null, winner: pb ? null : pa, loser: null, score: null, tbd: false });
+    }
+    for (let i = 0; i < prelimCount - byes; i += 2) {
+      round1.push({ p1: null, p2: null, winner: null, loser: null, score: null, tbd: true });
+    }
+    return [round0, round1];
+  };
+  const buildRRMatchesOneLeg = (parts) => {
+    const ms = [];
+    const players = parts.length % 2 === 0 ? [...parts] : [...parts, null];
+    const numRounds = players.length - 1;
+    const half = players.length / 2;
+    const fixed = players[0];
+    const rotating = players.slice(1);
+    for (let r = 0; r < numRounds; r++) {
+      const pairs = [[fixed, rotating[0]]];
+      for (let i = 1; i < half; i++) pairs.push([rotating[i], rotating[rotating.length - i]]);
+      pairs.forEach(([a, b]) => {
+        if (a && b) ms.push({ p1: a, p2: b, winner: null, loser: null, score: null, draw: false });
+      });
+      rotating.unshift(rotating.pop());
+    }
+    return ms;
+  };
+  const buildRRMatches = (parts) => {
+    if (parts.length < 2) return [];
+    const legs = Math.max(1, Math.min(5, bpCfg.rrLegs || 1));
+    let all = [];
+    for (let leg = 0; leg < legs; leg++) {
+      const legMatches = buildRRMatchesOneLeg(parts);
+      // páratlan (visszavágó) körben megcseréljük a hazai/vendég sorrendet, hogy ne
+      // pont ugyanaz a p1/p2 elrendezés ismétlődjön minden körben
+      if (leg % 2 === 1) legMatches.forEach(m => { const tmp = m.p1; m.p1 = m.p2; m.p2 = tmp; });
+      all = all.concat(legMatches);
+    }
+    return all;
+  };
+  const getRRStandings = (parts, matches) => {
+    const st = {};
+    parts.forEach(p => { st[p.id] = { player:p, wins:0, losses:0, draws:0, setWins:0, diff:0, pts:0 }; });
+    matches.forEach(m => {
+      if (!m.score) return;
+      const p1cups = m.score.p1, p2cups = m.score.p2;
+      const p1pot = MAX_CUPS - p1cups, p2pot = MAX_CUPS - p2cups;
+      if (m.draw) {
+        if (st[m.p1.id]) { st[m.p1.id].draws++; st[m.p1.id].pts += 1; st[m.p1.id].setWins += p1cups; }
+        if (st[m.p2.id]) { st[m.p2.id].draws++; st[m.p2.id].pts += 1; st[m.p2.id].setWins += p2cups; }
+      } else if (m.winner) {
+        if (m.winner && st[m.winner.id]) { st[m.winner.id].wins++; st[m.winner.id].pts += 3; }
+        if (m.loser && st[m.loser.id]) st[m.loser.id].losses++;
+        const p1diff = p2pot - p1pot; // p1cups - p2cups: pozitív ha p1 több poharat lőtt
+        if (st[m.p1.id]) { st[m.p1.id].setWins += p1cups; st[m.p1.id].diff += p1diff; }
+        if (st[m.p2.id]) { st[m.p2.id].setWins += p2cups; st[m.p2.id].diff -= p1diff; }
+      }
+    });
+    return Object.values(st).sort((a, b) => b.pts - a.pts || b.diff - a.diff || b.setWins - a.setWins);
+  };
+  const roundName = (rIdx, total) => {
+    if (rIdx === 0 && seRounds.length > 1) return 'Előkör';
+    const rem = total - rIdx;
+    if (rem === 1) return 'Döntő';
+    if (rem === 2) return 'Elődöntő';
+    if (rem === 3) return 'Negyeddöntő';
+    return (Math.pow(2, rem)) + 'ed döntő';
+  };
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  const [cups1, setCups1] = React.useState(0);
+  const [cups2, setCups2] = React.useState(0);
+  const [drinkMap, setDrinkMap] = React.useState({});
+  const [champion, setChampion] = React.useState(null);
+  // Jelezzük a PlayScreennek, ha a bajnokság véget ért (van bajnok) — így a footer
+  // "Kövi"/"Vége" gombja aktívvá válhat.
+  React.useEffect(() => { if (typeof onSetBpEnded === 'function') onSetBpEnded(!!champion); }, [champion]);
+  React.useEffect(() => () => { if (typeof onSetBpEnded === 'function') onSetBpEnded(false); }, []);
+  const [visszavagoOffer, setVissszavagoOffer] = React.useState(null);
+  const visszavagoUsedRef = React.useRef(new Set());
+  const [polipOverlay, setPolipOverlay] = React.useState(null); // { match, onPick } — döntetlen visszavágó tiebreaker
+  const [expandedRounds, setExpandedRounds] = React.useState({});
+  const lpTimer = React.useRef(null);
+  const [standingsExp, setStandingsExp] = React.useState(true);
+  const [teamsReady, setTeamsReady] = React.useState(false);
+  const [teamNames, setTeamNames] = React.useState(['A csapat', 'B csapat', 'C csapat', 'D csapat', 'E csapat', 'F csapat', 'G csapat', 'H csapat']);
+  const [teamAssign, setTeamAssign] = React.useState(() => {
+    const numT = Math.max(2, Math.floor(players.length / 2));
+    const a = {};
+    players.forEach((p, i) => { a[p.id] = i % numT; });
+    return a;
+  });
+  const [bracketViewMode, setBracketViewMode] = React.useState('list'); // 'list' | 'tree'
+  const [matchListExp, setMatchListExp] = React.useState(true);
+  const [groupMatchExp, setGroupMatchExp] = React.useState(true);
+  const [viewGroup, setViewGroup] = React.useState(0);
+  const [expandedGroups_g, setExpandedGroups_g] = React.useState({});
+  const [timerSecs, setTimerSecs] = React.useState(0);
+  const [timerRunning, setTimerRunning] = React.useState(false);
+  const [lastMinuteAlert, setLastMinuteAlert] = React.useState(false);
+  const lastMinuteFiredRef = React.useRef(false);
+  const timerRef = React.useRef(null);
+
+  const resumeFromBpState = (bp) => {
+    if (!bp) return;
+    const norm = (v) => v ? (Array.isArray(v) ? v : Object.values(v)) : [];
+    // A szinkronizált bp2State karcsú játékos-másolatokat tartalmaz (img nélkül) —
+    // visszatöltéskor a teljes játékos-objektumokból hidratáljuk őket id alapján.
+    const hydP = (sp) => {
+      if (!sp) return sp;
+      const full = (players || []).find(pp => pp.id === sp.id);
+      if (full) return { ...full };
+      if (sp.members) return { ...sp, members: sp.members.map(m => (players || []).find(pp => pp.id === m.id) || m) };
+      return sp;
+    };
+    const hydM = (m) => m ? { ...m, p1: hydP(m.p1), p2: hydP(m.p2), winner: hydP(m.winner), loser: hydP(m.loser) } : m;
+    setSeRounds(norm(bp.seRounds).map(r => norm(r).map(hydM)));
+    setSeCurRound(bp.seCurRound ?? 0);
+    setSeCurMatch(bp.seCurMatch ?? 0);
+    setRrMatches(norm(bp.rrMatches).map(hydM));
+    setRrIdx(bp.rrIdx ?? 0);
+    setRrDone(bp.rrDone ?? false);
+    setTsGroups(norm(bp.tsGroups).map(g => ({
+      ...g,
+      players: norm(g.players).map(hydP),
+      matches: norm(g.matches).map(hydM),
+      seRounds: g.seRounds ? norm(g.seRounds).map(r => norm(r).map(hydM)) : null,
+    })));
+    setTsPhase(bp.phase || 'groups');
+    setDrinkMap(bp.drinkMap || {});
+    setChampion(bp.champion || null);
+    setViewGroup(0);
+    setCups1(0); setCups2(0);
+    doneRef.current = !!bp.champion;
+    if (MODE === 'csapat') setTeamsReady(true);
+  };
+
+  React.useEffect(() => { if (initialBpState) resumeFromBpState(initialBpState); }, []);
+
+  const audioCtxRef = React.useRef(null);
+  const getAudioCtx = () => {
+    if (!audioCtxRef.current) {
+      try { audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+    }
+    return audioCtxRef.current;
+  };
+  const playLastMinuteBeep = () => {
+    try {
+      const ctx = getAudioCtx();
+      if (!ctx) return;
+      const play = () => {
+        const beep = (freq, start, dur, vol) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = 'sine'; o.frequency.value = freq;
+          g.gain.setValueAtTime(0, ctx.currentTime + start);
+          g.gain.linearRampToValueAtTime(vol, ctx.currentTime + start + 0.02);
+          g.gain.linearRampToValueAtTime(0, ctx.currentTime + start + dur);
+          o.start(ctx.currentTime + start);
+          o.stop(ctx.currentTime + start + dur + 0.05);
+        };
+        beep(880, 0,    0.18, 0.4);
+        beep(880, 0.22, 0.18, 0.4);
+        beep(1100, 0.46, 0.32, 0.5);
+      };
+      if (ctx.state === 'suspended') ctx.resume().then(play).catch(() => {});
+      else play();
+    } catch(e) {}
+  };
+
+  const notifyCurrentMatch = (p1name, p2name) => {
+    if (!roomCode || typeof syncRoom !== 'function') return;
+    syncRoom(roomCode, { bp2Notif: { p1: p1name || '?', p2: p2name || '?', ts: Date.now() } });
+  };
+
+  React.useEffect(() => {
+    if (timerRunning) {
+      timerRef.current = setInterval(() => {
+        setTimerSecs(s => {
+          if (s === 61) playLastMinuteBeep();
+          if (s <= 1) { setTimerRunning(false); clearInterval(timerRef.current); return 0; }
+          return s - 1;
+        });
+      }, 1000);
+    } else {
+      clearInterval(timerRef.current);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [timerRunning]);
+
+  React.useEffect(() => {
+    if (timerSecs !== 60 || !timerRunning) return;
+    if (!roomCode || typeof syncRoom !== 'function') return;
+    // Get current match players
+    let p1name = '', p2name = '';
+    let nextP1 = '', nextP2 = '';
+    if (TOURNAMENT === 'se' && seRounds.length > 0) {
+      const r = Array.isArray(seRounds[seCurRound]) ? seRounds[seCurRound] : Object.values(seRounds[seCurRound] || {});
+      const m = r[seCurMatch];
+      if (m) { p1name = m.p1?.name || ''; p2name = m.p2?.name || ''; }
+      // next match in same round
+      const nextInRound = r.slice(seCurMatch + 1).find(m => m && !m.winner && !m.tbd);
+      if (nextInRound) { nextP1 = nextInRound.p1?.name || ''; nextP2 = nextInRound.p2?.name || ''; }
+      else if (seRounds[seCurRound + 1]) {
+        const nr = Array.isArray(seRounds[seCurRound + 1]) ? seRounds[seCurRound + 1] : Object.values(seRounds[seCurRound + 1]);
+        const nm = nr.find(m => m && !m.winner && !m.tbd && m.p1 && m.p2);
+        if (nm) { nextP1 = nm.p1?.name || ''; nextP2 = nm.p2?.name || ''; }
+      }
+    } else if (TOURNAMENT === 'rr' && rrMatches.length > 0) {
+      const idx = rrMatches.findIndex(m => m && !m.winner && !m.draw);
+      if (idx !== -1) { p1name = rrMatches[idx].p1?.name || ''; p2name = rrMatches[idx].p2?.name || ''; }
+      const nm = rrMatches.slice(idx + 1).find(m => m && !m.winner && !m.draw);
+      if (nm) { nextP1 = nm.p1?.name || ''; nextP2 = nm.p2?.name || ''; }
+    }
+    syncRoom(roomCode, { bp2TimerAlert: { type: 'lastMinute', p1: p1name, p2: p2name, score1: cups1, score2: cups2, nextP1, nextP2, ts: Date.now() } });
+  }, [timerSecs]);
+
+  const startTimer = () => {
+    // Wake up AudioContext on user gesture so later beep works on mobile
+    const ctx = getAudioCtx();
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+    if (timerSecs === 0) setTimerSecs(MATCH_MINUTES * 60);
+    setTimerRunning(true);
+  };
+  const stopTimer = () => setTimerRunning(false);
+  const resetTimer = () => { setTimerRunning(false); setTimerSecs(0); };
+
+  // SE
+  const [seRounds, setSeRounds] = React.useState([]);
+  const [seCurRound, setSeCurRound] = React.useState(0);
+  const [seCurMatch, setSeCurMatch] = React.useState(0);
+
+  // RR
+  const [rrMatches, setRrMatches] = React.useState([]);
+  const [rrIdx, setRrIdx] = React.useState(0);
+  const [rrDone, setRrDone] = React.useState(false);
+
+  // Two-stage
+  const [tsPhase, setTsPhase] = React.useState('groups');
+  const [tsGroups, setTsGroups] = React.useState([]);
+  const [tsCurGroup, setTsCurGroup] = React.useState(0);
+  // finals reuse SE or RR state (seRounds/rrMatches)
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  const initTournament = (tp) => {
+    doneRef.current = false;
+    setCups1(0); setCups2(0);
+    setDrinkMap({}); setChampion(null); setExpandedRounds({}); setViewGroup(0); setExpandedGroups_g({});
+    if (TOURNAMENT === 'se') {
+      const br = buildSEBracket(tp);
+      setSeRounds(br); setSeCurRound(0);
+      const firstPending = br.length > 0 ? br[0].findIndex(m => m.winner === null) : -1;
+      setSeCurMatch(firstPending >= 0 ? firstPending : 0);
+    } else if (TOURNAMENT === 'rr') {
+      const ms = buildRRMatches([...tp].sort(() => Math.random() - 0.5));
+      setRrMatches(ms); setRrIdx(0); setRrDone(false);
+    } else {
+      const sh = [...tp].sort(() => Math.random() - 0.5);
+      const numGroups = Math.max(2, Math.min(NUM_GROUPS, Math.floor(sh.length / 2)));
+      const gPlayers = Array.from({ length: numGroups }, (_, gi) => {
+        const start = Math.floor(gi * sh.length / numGroups);
+        const end = Math.floor((gi + 1) * sh.length / numGroups);
+        return sh.slice(start, end);
+      }).filter(g => g.length > 0);
+      const groupType = TOURNAMENT.startsWith('grp_rr') ? 'rr' : 'se';
+      const groups = gPlayers.map((gp, gi) => ({
+        id: gi, label: 'A B C D E F G H'.split(' ')[gi] + ' csoport',
+        players: gp,
+        matches: (groupType === 'rr' || gp.length === 2) ? buildRRMatches(gp) : buildSEBracket(gp).flat(),
+        seRounds: groupType === 'se' ? buildSEBracket(gp) : null,
+        seCurRound: 0,
+        curIdx: 0, done: false,
+      }));
+      setTsGroups(groups); setTsCurGroup(0); setTsPhase('groups');
+      setSeRounds([]); setRrMatches([]); setRrDone(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (initialBpState) return;
+    if (MODE === 'csapat') { setTeamsReady(false); teamPlayersRef.current = null; return; }
+    initTournament(players);
+  }, [gameIdx]);
+
+  // ── Sync BP state to room for observer ──────────────────────────────────
+  React.useEffect(() => {
+    if (!roomCode || typeof syncRoom !== 'function') return;
+    // Firestore-ba csak karcsú játékos-másolat megy (base64 img NÉLKÜL) — a teljes
+    // játékos-objektumokkal egy torna bp2State-je 700KB+ is lehetett, ami elérte a
+    // Firestore 1MB-os dokumentum-limitjét és megölte az online szinkront.
+    const slimP = (p) => {
+      if (!p) return p;
+      const s = { id: p.id, name: p.name || null, color: p.color || null };
+      if (p.emoji) s.emoji = p.emoji;
+      if (p.members) s.members = p.members.map(m => ({ id: m.id, name: m.name || null, color: m.color || null }));
+      return s;
+    };
+    const slimM = (m) => m ? { ...m, p1: slimP(m.p1), p2: slimP(m.p2), winner: slimP(m.winner), loser: slimP(m.loser) } : m;
+    // Firestore nem támogat nested array-t — seRounds és tsGroups-t objektummá alakítjuk
+    const seRoundsObj = Object.fromEntries(seRounds.map((r, i) => [String(i), r.map(slimM)]));
+    const tsGroupsFlat = tsGroups.map(g => ({
+      ...g,
+      players: (g.players || []).map(slimP),
+      matches: Object.fromEntries(g.matches.map((m, i) => [String(i), slimM(m)])),
+      seRounds: g.seRounds ? Object.fromEntries(g.seRounds.map((r, i) => [String(i), r.map(slimM)])) : null,
+    }));
+    syncRoom(roomCode, { bp2State: {
+      tournament: TOURNAMENT,
+      phase: tsPhase,
+      seRounds: seRoundsObj, seCurRound, seCurMatch,
+      cups1, cups2,
+      timerSecs,
+      rrMatches: rrMatches.map(slimM), rrIdx, rrDone,
+      tsGroups: tsGroupsFlat, tsCurGroup: viewGroup,
+      champion: champion ? { id: champion.id, name: champion.name, color: champion.color } : null,
+      drinkMap,
+    }});
+    // A bajnoksag lezarult: a fuggoben maradt ertesitesek TORLODNEK a szobabol.
+    // Nelkuluk a "Kovetkezo meccs!" ott maradna a dokumentumban.
+    if (champion) syncRoom(roomCode, { bp2Notif: null, bp2TimerAlert: null });
+  }, [seRounds, seCurRound, seCurMatch, cups1, cups2, timerSecs, rrMatches, rrIdx, tsGroups, viewGroup, champion, rrDone, tsPhase, drinkMap]);
+
+  React.useEffect(() => {
+    if (initialBpState) return;
+    if (!teamsReady || !teamPlayersRef.current) return;
+    initTournament(teamPlayersRef.current);
+  }, [teamsReady]);
+
+  // Egy torna-résztvevő mögötti valódi profilok. Csapat módban a torna
+  // „játékosa" egy csapat — a statisztika viszont mindig profilokhoz tartozik.
+  const profilesOf = (entity) => {
+    if (!entity) return [];
+    if (entity.members && entity.members.length) return entity.members.filter(m => m && m.profileId);
+    return entity.profileId ? [entity] : [];
+  };
+
+  // Egy lejátszott meccs könyvelése: meccsmérleg (Gy/D/V) + head-to-head.
+  // Csapat módban minden tagra rögzítjük, a h2h-t pedig a két csapat tagjai
+  // közötti összes párosításra. Nyertesnél a=győztes, b=vesztes; döntetlennél
+  // a és b a két fél.
+  // Firestore nested map: bp_h2h.{ellenfélProfileId}.{w|l|d}
+  const recordMatch = (a, b, isDraw) => {
+    if (typeof window.updateStats !== 'function') return;
+    const A = profilesOf(a), B = profilesOf(b);
+    if (!A.length || !B.length) return;
+    const FV = firebase.firestore.FieldValue;
+    const bump = (p, delta) => {
+      const upd = {}; Object.keys(delta).forEach(k => { upd[k] = FV.increment(delta[k]); });
+      window.updateStats(p.profileId, upd);
+      if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, delta);
+    };
+    if (isDraw) A.concat(B).forEach(p => bump(p, { bp_match_draws: 1 }));
+    else {
+      A.forEach(p => bump(p, { bp_match_wins: 1, bp_match_losses: 0 }));
+      B.forEach(p => bump(p, { bp_match_wins: 0, bp_match_losses: 1 }));
+    }
+    const inc = FV.increment(1);
+    A.forEach(pa => B.forEach(pb => {
+      if (pa.profileId === pb.profileId) return;
+      if (isDraw) {
+        window.updateStats(pa.profileId, { ['bp_h2h.' + pb.profileId + '.d']: inc });
+        window.updateStats(pb.profileId, { ['bp_h2h.' + pa.profileId + '.d']: inc });
+      } else {
+        window.updateStats(pa.profileId, { ['bp_h2h.' + pb.profileId + '.w']: inc });
+        window.updateStats(pb.profileId, { ['bp_h2h.' + pa.profileId + '.l']: inc });
+      }
+    }));
+  };
+
+  // ── SE confirm ────────────────────────────────────────────────────────────
+  const handleSEConfirm = (rounds, curRound, curMatch, setCB) => {
+    if (!rounds[curRound]?.[curMatch]) return;
+    const match = rounds[curRound][curMatch];
+    const score  = { p1: cups1, p2: cups2 };
+    resetTimer();
+
+    // Ha visszavágó volt (score1 létezik), összesített pohárszám dönt 1-1 esetén
+    let winner, loser;
+    if (match.score1) {
+      const s1 = match.score1;
+      const m1draw = s1.p1 === s1.p2, m2draw = cups1 === cups2;
+      // Mindkét meccs döntetlen → polip tiebreaker
+      if (m1draw && m2draw) {
+        setPolipOverlay({ match, rounds, curRound, curMatch, setCB, score1: s1, score2: score });
+        return;
+      }
+      const m1p1win = s1.p1 > s1.p2, m2p1win = cups1 > cups2;
+      if (m1p1win === m2p1win) {
+        winner = m2p1win ? match.p1 : match.p2;
+        loser  = m2p1win ? match.p2 : match.p1;
+      } else {
+        const totP1 = s1.p1 + cups1, totP2 = s1.p2 + cups2;
+        if (totP1 === totP2) {
+          setPolipOverlay({ match, rounds, curRound, curMatch, setCB, score1: s1, score2: score });
+          return;
+        }
+        winner = totP1 > totP2 ? match.p1 : match.p2;
+        loser  = totP1 > totP2 ? match.p2 : match.p1;
+      }
+    } else {
+      winner = cups1 > cups2 ? match.p1 : match.p2;
+      loser  = cups1 > cups2 ? match.p2 : match.p1;
+    }
+
+    const loserScore = winner?.id === match.p1?.id ? cups2 : cups1;
+    const winnerScore = winner?.id === match.p1?.id ? cups1 : cups2;
+    const cupDiff = Math.max(1, Math.abs(winnerScore - loserScore));
+    const newDrink = { ...drinkMap };
+    if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + cupDiff;
+    setDrinkMap(newDrink);
+    setCups1(0); setCups2(0);
+
+    // Meccs-statisztika
+    if (winner && loser) recordMatch(winner, loser, false);
+
+    setCB(prevRounds => {
+      const nr = prevRounds.map(r => r.map(m => ({ ...m })));
+      nr[curRound][curMatch].winner = winner;
+      nr[curRound][curMatch].loser  = loser;
+      nr[curRound][curMatch].score  = score;
+      if (nr[curRound][curMatch].score1) {
+        nr[curRound][curMatch].scores = [nr[curRound][curMatch].score1, score];
+        delete nr[curRound][curMatch].score1;
+      }
+
+      // Fill TBD slot in pre-built round1 when a prelim match finishes
+      const pm = nr[curRound][curMatch];
+      if (pm.r1slot !== undefined && nr[curRound + 1]?.[pm.r1slot] !== undefined) {
+        const r1m = { ...nr[curRound + 1][pm.r1slot] };
+        r1m[pm.r1side || 'p2'] = winner;
+        if (r1m.p1 && r1m.p2) r1m.tbd = false; // both slots filled → match is ready
+        nr[curRound + 1][pm.r1slot] = r1m;
+      } else if (nr[curRound + 1]?.[curMatch]?.tbd) {
+        // Fallback for old-format bracket data
+        nr[curRound + 1][curMatch] = { ...nr[curRound + 1][curMatch], p2: winner, tbd: false };
+      }
+
+      // Next pending in current round (skip TBD placeholders)
+      const nextInRound = nr[curRound].findIndex(m => m.winner === null && !m.tbd);
+      if (nextInRound !== -1) {
+        setSeCurMatch(nextInRound);
+        const nm = nr[curRound][nextInRound];
+        if (nm?.p1 && nm?.p2) notifyCurrentMatch(nm.p1.name, nm.p2.name);
+        return nr;
+      }
+
+      // Current round done — advance to pre-built next round if it exists
+      if (nr[curRound + 1]) {
+        const nextPre = nr[curRound + 1].findIndex(m => m.winner === null && !m.tbd);
+        if (nextPre !== -1) {
+          setSeCurRound(curRound + 1); setSeCurMatch(nextPre);
+          const nm = nr[curRound + 1][nextPre];
+          if (nm?.p1 && nm?.p2) notifyCurrentMatch(nm.p1.name, nm.p2.name);
+          return nr;
+        }
+        const preWinners = nr[curRound + 1].map(m => m.winner).filter(Boolean);
+        if (preWinners.length === 1) { finishSE(preWinners[0], newDrink); return nr; }
+      }
+
+      // Build next round from winners of current round
+      const winners = nr[curRound].map(m => m.winner).filter(Boolean);
+      if (winners.length === 1) { finishSE(winners[0], newDrink); return nr; }
+      let nextRound = buildSERound(winners);
+      let nextRoundIdx = (nr[curRound + 1] ? curRound + 2 : curRound + 1);
+      let nextPending = nextRound.findIndex(m => m.winner === null);
+      while (nextPending === -1 && nextRound.length > 1) {
+        const autoWinners = nextRound.map(m => m.winner).filter(Boolean);
+        if (autoWinners.length === 1) { finishSE(autoWinners[0], newDrink); return [...nr, nextRound]; }
+        nextRound = buildSERound(autoWinners);
+        nextRoundIdx++;
+        nextPending = nextRound.findIndex(m => m.winner === null);
+      }
+      if (nextPending === -1 && nextRound.length === 1 && nextRound[0].winner) {
+        finishSE(nextRound[0].winner, newDrink); return [...nr, nextRound];
+      }
+      setSeCurRound(nextRoundIdx); setSeCurMatch(nextPending);
+      return [...nr, nextRound];
+    });
+  };
+
+  // Közös bajnokság-lezáró: statisztika (bp_wins/losses/played/tournaments),
+  // győztes-jelvény (champion badge) + időszak-esemény, és az előzmény-mentés.
+  // Statisztika min. 3 profilos játékostól; a győztes-jelvény min. 4 főtől jár.
+  const recordBpTournament = (champ, type, extra) => {
+    // Csapat módban a torna résztvevői csapatok, a statisztika viszont
+    // profilokhoz tartozik — a bajnok id-je ilyenkor 'team_N', ami sosem
+    // egyezne egy játékos id-jével, ezért profilokra bontva hasonlítunk.
+    const roster = (MODE === 'csapat' && teamPlayersRef.current) ? teamPlayersRef.current : players;
+    const entrants = roster.flatMap(profilesOf);
+    const champIds = new Set(profilesOf(champ).map(p => p.profileId));
+    if (entrants.length < 3) return;
+    if (typeof window.updateStats === 'function') {
+      entrants.forEach(p => {
+        const isWinner = champIds.has(p.profileId);
+        window.updateStats(p.profileId, {
+          bp_wins: firebase.firestore.FieldValue.increment(isWinner ? 1 : 0),
+          bp_losses: firebase.firestore.FieldValue.increment(isWinner ? 0 : 1),
+          bp_played: firebase.firestore.FieldValue.increment(1),
+          bp_tournaments: firebase.firestore.FieldValue.increment(isWinner ? 1 : 0),
+        });
+        if (typeof window.logStatEvent === 'function') window.logStatEvent(p.profileId, { bp_wins: isWinner ? 1 : 0, bp_losses: isWinner ? 0 : 1, bp_played: 1, bp_tournaments: isWinner ? 1 : 0 });
+      });
+      // bajnok-jelvény min. 4 főtől — csapatnál a nyertes csapat minden tagjának
+      if (entrants.length >= 4) {
+        const badgeAt = new Date().toISOString();
+        champIds.forEach(pid => window.updateStats(pid, { lastBadges: ['champion'], lastBadgeAt: badgeAt }));
+      }
+    }
+    if (typeof window.saveTournament === 'function') {
+      window.saveTournament(Object.assign({
+        ts: Date.now(),
+        game: 'beerpong',
+        type,
+        roomCode: roomCode || null,
+        tournamentName: gameMeta?.beerpong2Config?.tournamentName || null,
+        champion: champ ? { id: champ.id, name: champ.name, color: champ.color } : null,
+        players: players.map(p => ({ id: p.id, name: p.name, color: p.color, profileId: p.profileId || null })),
+      }, extra || {}));
+    }
+  };
+
+  // Csapat módban a torna „játékosa" egy csapat, a buli állását viszont
+  // egyéni játékosok vezetik — a kortyot/pontot a tagokra kell szétosztani,
+  // különben semmi nem kerülne be a buli eredményébe.
+  const spreadToParty = (map) => {
+    const roster = (MODE === 'csapat' && teamPlayersRef.current) ? teamPlayersRef.current : null;
+    if (!roster) return map || {};
+    const out = {};
+    Object.entries(map || {}).forEach(([id, v]) => {
+      const team = roster.find(t => t.id === id);
+      if (team && team.members && team.members.length) team.members.forEach(m => { out[m.id] = (out[m.id] || 0) + v; });
+      else out[id] = (out[id] || 0) + v;
+    });
+    return out;
+  };
+
+  const finishSE = (champ, dm) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    setChampion(champ);
+    const finalDm = {};
+    Object.entries(dm).forEach(([id, cnt]) => { finalDm[id] = cnt; });
+    if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { observerAllowed: true });
+    // A bajnok +5 pontot kap; a kortyok nyers pohár-különbségek, ezért raw
+    // (nem szorozzuk a nehézségi szinttel — ahogy a Lóversenynél sem)
+    onAdvance && onAdvance(spreadToParty(finalDm), spreadToParty(champ ? { [champ.id]: BP_WIN_POINTS } : {}), { raw: true });
+    recordBpTournament(champ, 'se');
+  };
+
+  // ── RR confirm ────────────────────────────────────────────────────────────
+  const handleRRConfirm = (matches, idx, setMatchesCB, onFinish) => {
+    const m = matches[idx];
+    const score  = { p1: cups1, p2: cups2 };
+    // Visszavágó (két menet): az összesített pohárszám dönt; egyenlő → döntetlen
+    let isDraw, winner, loser, cupDiff2;
+    if (m.score1) {
+      const totP1 = (m.score1.p1 || 0) + cups1, totP2 = (m.score1.p2 || 0) + cups2;
+      isDraw = totP1 === totP2;
+      winner = isDraw ? null : (totP1 > totP2 ? m.p1 : m.p2);
+      loser  = isDraw ? null : (totP1 > totP2 ? m.p2 : m.p1);
+      cupDiff2 = Math.max(1, Math.abs(totP1 - totP2));
+    } else {
+      isDraw = cups1 === cups2;
+      winner = isDraw ? null : (cups1 > cups2 ? m.p1 : m.p2);
+      loser  = isDraw ? null : (cups1 > cups2 ? m.p2 : m.p1);
+      cupDiff2 = Math.max(1, Math.abs(cups1 - cups2));
+    }
+    const newDrink = { ...drinkMap };
+    if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + cupDiff2;
+    setDrinkMap(newDrink);
+    setCups1(0); setCups2(0); resetTimer();
+
+    // Meccs-statisztika
+    if (isDraw) recordMatch(m.p1, m.p2, true); else if (winner && loser) recordMatch(winner, loser, false);
+
+    setMatchesCB(prev => {
+      const nm = prev.map((mm, i) => {
+        if (i !== idx) return mm;
+        const upd = { ...mm, winner, loser, score, draw: isDraw };
+        if (mm.score1) { upd.scores = [mm.score1, score]; delete upd.score1; }
+        return upd;
+      });
+      const nextIdx = nm.findIndex(mm => mm.winner === null && !mm.draw);
+      if (nextIdx !== -1) {
+        setRrIdx(nextIdx);
+        const nm2 = nm[nextIdx];
+        if (nm2?.p1 && nm2?.p2) notifyCurrentMatch(nm2.p1.name, nm2.p2.name);
+      }
+      else { onFinish(nm, newDrink); }
+      return nm;
+    });
+  };
+
+  React.useEffect(() => { setVissszavagoOffer(null); }, [seCurRound, seCurMatch]);
+
+  const [manualEdit, setManualEdit] = React.useState(false);
+  const [manualOrder, setManualOrder] = React.useState(null); // null = auto
+  const [swapSel, setSwapSel] = React.useState(null); // { rIdx, mIdx, side:'p1'|'p2', player }
+  const [seActionSheet, setSeActionSheet] = React.useState(null); // { rIdx, mIdx }
+  const [matchActionSheet, setMatchActionSheet] = React.useState(null); // { type:'rr'|'grp', match, matchIdx, groupIdx?, isSelectable, isDone, onSelect, onReset }
+
+  // Build bracket from a specific player order (no internal shuffle)
+  const buildSEBracketOrdered = (parts) => {
+    const n = parts.length;
+    if (n < 2) return [];
+    let nextPow2 = 1;
+    while (nextPow2 < n) nextPow2 *= 2;
+    const byes = nextPow2 - n;
+    const prelimCount = n - nextPow2 / 2;
+    if (prelimCount === 0) return [buildSERound(parts)];
+    const byePlayers = parts.slice(0, byes);
+    const prelimPlayers = parts.slice(byes);
+    const round0 = [];
+    for (let i = 0; i < prelimCount; i++) {
+      const p1 = prelimPlayers[2*i], p2 = prelimPlayers[2*i+1];
+      let r1slot, r1side;
+      if (i < byes) { r1slot = i; r1side = 'p2'; }
+      else { const off = i - byes; r1slot = byes + Math.floor(off/2); r1side = off%2===0?'p1':'p2'; }
+      round0.push({ p1, p2, winner: null, loser: null, score: null, r1slot, r1side });
+    }
+    const round1 = [];
+    const byeVsPrelim2 = Math.min(byes, prelimCount);
+    for (let i = 0; i < byeVsPrelim2; i++) {
+      round1.push({ p1: byePlayers[i], p2: null, winner: null, loser: null, score: null, tbd: true });
+    }
+    // Cross-pair remaining bye players from both ends (seed2 vs seed7, seed3 vs seed6, ...)
+    const remByes2 = byePlayers.slice(byeVsPrelim2);
+    for (let i = 0; i < Math.floor(remByes2.length / 2); i++) {
+      const pa = remByes2[i], pb = remByes2[remByes2.length - 1 - i];
+      round1.push({ p1: pa, p2: pb ?? null, winner: pb ? null : pa, loser: null, score: null, tbd: false });
+    }
+    for (let i = 0; i < prelimCount - byes; i += 2) {
+      round1.push({ p1: null, p2: null, winner: null, loser: null, score: null, tbd: true });
+    }
+    return [round0, round1];
+  };
+
+  const handleReshuffle = () => {
+    const ep = (MODE === 'csapat' && teamsReady && teamPlayersRef.current) ? teamPlayersRef.current : players;
+    doneRef.current = false;
+    setCups1(0); setCups2(0);
+    setDrinkMap({}); setChampion(null); setExpandedRounds({});
+    resetTimer();
+    if (TOURNAMENT === 'se') {
+      const br = buildSEBracket(ep);
+      setSeRounds(br); setSeCurRound(0);
+      const fp = br.length > 0 ? br[0].findIndex(m => m.winner === null) : -1;
+      setSeCurMatch(fp >= 0 ? fp : 0);
+    } else if (TOURNAMENT === 'rr') {
+      const ms = buildRRMatches([...ep].sort(() => Math.random() - 0.5));
+      setRrMatches(ms); setRrIdx(0); setRrDone(false);
+    } else {
+      const sh = [...ep].sort(() => Math.random() - 0.5);
+      const numGroups2 = Math.max(2, Math.min(NUM_GROUPS, Math.floor(sh.length / 2)));
+      const gPlayers = Array.from({ length: numGroups2 }, (_, gi) => {
+        const start = Math.floor(gi * sh.length / numGroups2);
+        const end = Math.floor((gi + 1) * sh.length / numGroups2);
+        return sh.slice(start, end);
+      }).filter(g => g.length > 0);
+      const groupType = TOURNAMENT.startsWith('grp_rr') ? 'rr' : 'se';
+      const groups = gPlayers.map((gp, gi) => ({
+        id: gi, label: 'A B C D E F G H'.split(' ')[gi] + ' csoport',
+        players: gp,
+        matches: (groupType === 'rr' || gp.length === 2) ? buildRRMatches(gp) : buildSEBracket(gp).flat(),
+        seRounds: groupType === 'se' ? buildSEBracket(gp) : null,
+        seCurRound: 0, curIdx: 0, done: false,
+      }));
+      setTsGroups(groups); setTsCurGroup(0); setTsPhase('groups');
+      setSeRounds([]); setRrMatches([]); setRrDone(false); setViewGroup(0);
+    }
+  };
+
+  const finishRR = (matches, dm, parts) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    setRrDone(true);
+    const standings = getRRStandings(parts, matches);
+    const champ = standings[0]?.player;
+    setChampion(champ);
+    const finalDm = {};
+    Object.entries(dm).forEach(([id, cnt]) => { finalDm[id] = cnt; });
+    if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { observerAllowed: true });
+    onAdvance && onAdvance(spreadToParty(finalDm), spreadToParty(champ ? { [champ.id]: BP_WIN_POINTS } : {}), { raw: true });
+    const podium = standings.slice(0, 3).map((s, i) => ({ rank: i+1, id: s.player.id, name: s.player.name, color: s.player.color, pts: s.pts }));
+    recordBpTournament(champ, 'rr', { podium });
+  };
+
+  // ── Two-stage group confirm ───────────────────────────────────────────────
+  const handleGroupConfirm = () => {
+    const grp = tsGroups[viewGroup];
+    if (!grp || grp.done) return;
+    const isRR = TOURNAMENT.startsWith('grp_rr');
+    const m = grp.matches[grp.curIdx];
+    if (!m) return;
+    const isDraw = cups1 === cups2;
+    const winner = isDraw ? null : (cups1 > cups2 ? m.p1 : m.p2);
+    const loser  = isDraw ? null : (cups1 > cups2 ? m.p2 : m.p1);
+    const score  = { p1: cups1, p2: cups2 };
+
+    const loserScore3 = cups1 > cups2 ? cups2 : cups1;
+    const winnerScore3 = cups1 > cups2 ? cups1 : cups2;
+    const cupDiff3 = Math.max(1, Math.abs(winnerScore3 - loserScore3));
+    const newDrink = { ...drinkMap };
+    if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + cupDiff3;
+    setDrinkMap(newDrink);
+    setCups1(0); setCups2(0); resetTimer();
+
+    // Meccs-statisztika (csoportkör)
+    if (isDraw) recordMatch(m.p1, m.p2, true); else if (winner && loser) recordMatch(winner, loser, false);
+
+    setTsGroups(prev => {
+      const ng = prev.map((g, gi) => {
+        if (gi !== viewGroup) return g;
+        const nm = g.matches.map((mm, i) => i === g.curIdx ? { ...mm, winner, loser, score, draw: isDraw } : mm);
+        // SE csoport: a prelim meccs győztesét betöltjük a következő kör TBD meccsébe
+        const curM = nm[g.curIdx];
+        if (!isRR && winner && curM && curM.r1slot !== undefined && curM.r1slot !== null) {
+          const base = nm.filter(mm => mm.r1slot !== undefined && mm.r1slot !== null).length;
+          const ti = base + curM.r1slot;
+          if (nm[ti]) {
+            const filled = { ...nm[ti], [curM.r1side]: winner };
+            filled.tbd = !(filled.p1 && filled.p2);
+            nm[ti] = filled;
+          }
+        }
+        const nextIdx = nm.findIndex(mm => mm.winner === null && !mm.draw && mm.p1 && mm.p2);
+        const done = nextIdx === -1;
+        return { ...g, matches: nm, curIdx: done ? g.curIdx : nextIdx, done };
+      });
+
+      // After each match, rotate to next incomplete group (interleave groups for rest time)
+      const numG = ng.length;
+      let nextGroup = -1;
+      for (let step = 1; step < numG; step++) {
+        const gi = (viewGroup + step) % numG;
+        if (!ng[gi].done) { nextGroup = gi; break; }
+      }
+      if (nextGroup !== -1) setViewGroup(nextGroup);
+
+      // Check if ALL groups are done → start finals
+      const allDone = ng.every(g => g.done);
+      if (allDone) {
+          // All groups done — start finals
+          const finalsType = TOURNAMENT.endsWith('_se') ? 'se' : 'rr';
+          // Build per-group ranked advancers: advByGroup[gi][pos] = player
+          const advByGroup = ng.map(g => {
+            const standings = getRRStandings(g.players, g.matches);
+            return standings.slice(0, GROUP_ADVANCE).map(s => s.player);
+          });
+          const numGroups = advByGroup.length;
+          // Interleave by position: seed1=A1, seed2=B1, seed3=A2, seed4=B2, ...
+          const allSeeded = [];
+          for (let pos = 0; pos < GROUP_ADVANCE; pos++) {
+            for (let gi = 0; gi < numGroups; gi++) {
+              if (advByGroup[gi][pos]) allSeeded.push(advByGroup[gi][pos]);
+            }
+          }
+          const allAdvanced = allSeeded; // for RR (no seeding needed)
+          if (finalsType === 'se') {
+            // Cross-pair seeding: top seeds get byes, weakest seeds cross-pair in prelim
+            // (A2 vs B3, B2 vs A3 etc.) so no same-group early meetings
+            const N = allSeeded.length;
+            let nextPow2 = 1;
+            while (nextPow2 < N) nextPow2 *= 2;
+            const byes = nextPow2 - N;
+            const parts = allSeeded.slice(0, byes);
+            const rem = allSeeded.slice(byes);
+            for (let i = 0; i < rem.length / 2; i++) {
+              parts.push(rem[i], rem[rem.length - 1 - i]);
+            }
+            const br = buildSEBracketOrdered(parts);
+            setSeRounds(br); setSeCurRound(0);
+            const fp = br.length > 0 ? br[0].findIndex(mm => mm.winner === null) : -1;
+            setSeCurMatch(fp >= 0 ? fp : 0);
+          } else {
+            const ms = buildRRMatches(allAdvanced);
+            setRrMatches(ms); setRrIdx(0); setRrDone(false);
+          }
+          setTsPhase('finals');
+      }
+      return ng;
+    });
+  };
+
+  // ── CupCounter ────────────────────────────────────────────────────────────
+  const CupCounter = ({ value, onChange, color, max, winning }) => (
+    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+      <button onClick={() => onChange(Math.max(0, value - 1))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.coralSoft, color:'#D85F5C', fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>−</button>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color: winning ? T.mint : T.ink, minWidth:28, textAlign:'center', fontVariantNumeric:'tabular-nums', transition:'color .2s' }}>{value}</div>
+      <button onClick={() => onChange(Math.min(max, value + 1))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>+</button>
+    </div>
+  );
+
+  if (!players.length) return null;
+
+  // ── Determine current match & confirm handler ─────────────────────────────
+  let currentMatch = null, canConfirm = false, confirmHandler = null;
+  const finalsType = TOURNAMENT.endsWith('_rr') ? 'rr' : 'se';
+
+  if (TOURNAMENT === 'se' && seRounds.length && !champion) {
+    currentMatch = seRounds[seCurRound]?.[seCurMatch];
+    const seIsDraw = cups1 === cups2;
+    const seHasScore1 = !!(currentMatch?.score1); // visszavágó folyamatban
+    canConfirm = currentMatch && currentMatch.p1 && currentMatch.p2 && (!seIsDraw || seHasScore1);
+    confirmHandler = () => handleSEConfirm(seRounds, seCurRound, seCurMatch, setSeRounds);
+  } else if (TOURNAMENT === 'rr' && !rrDone && rrMatches.length) {
+    currentMatch = rrMatches[rrIdx];
+    canConfirm = true;
+    confirmHandler = () => handleRRConfirm(rrMatches, rrIdx, setRrMatches, (ms, dm) => finishRR(ms, dm, players));
+  } else if (TOURNAMENT.startsWith('grp_') && tsPhase === 'groups' && tsGroups.length) {
+    const grp = tsGroups[viewGroup];
+    currentMatch = grp && !grp.done ? grp.matches[grp.curIdx] : null;
+    canConfirm = currentMatch && currentMatch.p1 && currentMatch.p2;
+    confirmHandler = handleGroupConfirm;
+  } else if (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals') {
+    if (finalsType === 'se' && seRounds.length && !champion) {
+      currentMatch = seRounds[seCurRound]?.[seCurMatch];
+      const seIsDraw2 = cups1 === cups2;
+      const seHasScore1_2 = !!(currentMatch?.score1);
+      canConfirm = currentMatch && currentMatch.p1 && currentMatch.p2 && (!seIsDraw2 || seHasScore1_2);
+      confirmHandler = () => handleSEConfirm(seRounds, seCurRound, seCurMatch, setSeRounds);
+    } else if (finalsType === 'rr' && !rrDone && rrMatches.length) {
+      currentMatch = rrMatches[rrIdx];
+      canConfirm = true;
+      const finalsPlayers = rrMatches.filter(Boolean).flatMap(m => [m.p1, m.p2]).filter((p, i, a) => p && a.findIndex(x => x && x.id === p.id) === i);
+      confirmHandler = () => handleRRConfirm(rrMatches, rrIdx, setRrMatches, (ms, dm) => finishRR(ms, dm, finalsPlayers));
+    }
+  }
+
+  // FIGYELEM a nevre: az `isSEFinals` azt jelenti, hogy EGYENES KIESESES agban
+  // vagyunk ES be van kapcsolva a visszavago (minden meccs ket menetes). NEM
+  // azt, hogy eppen a dontot jatsszuk - az az `isSEFinalMatch` lent.
+  const seBracket = (
+    TOURNAMENT === 'se' ||
+    (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'se')
+  );
+  const isSEFinals = VISSZAVAGO && seBracket;
+  // ⚠️ A DONTO felismerese: az az a meccs, ami UTAN mar nincs kivel jatszani.
+  // Ket naiv szabaly is megbukik rajta, mindketto valodi felallason:
+  //   • „egy meccs van a korben"  → 3 jatekosnal a 0. kor IS egy meccs (a
+  //     harmadik szabadkartyat kap), utana viszont meg jon a donto;
+  //   • „nincs kovetkezo kor"     → 2 jatekosnal a pakli MINDIG epit egy ures
+  //     (tbd) masodik kort, tehat a valodi donto is „nem utolso"-nak latszana.
+  // Ezert azt nezzuk, marad-e RAJTUK KIVUL barki jatekban: masik fuggoben levo
+  // meccs, vagy egy kesobbi korben varakozo (szabadkartyas) jatekos.
+  const isSEFinalMatch = (() => {
+    if (!seBracket || champion) return false;
+    const m = (seRounds[seCurRound] || [])[seCurMatch];
+    if (!m || !m.p1 || !m.p2) return false;
+    const inMatch = new Set([m.p1.id, m.p2.id]);
+    for (let r = 0; r < seRounds.length; r++) {
+      const round = seRounds[r] || [];
+      for (let i = 0; i < round.length; i++) {
+        if (r === seCurRound && i === seCurMatch) continue;
+        const x = round[i];
+        if (!x) continue;
+        if (!x.winner && !x.tbd && x.p1 && x.p2) return false;   // masik jatszando meccs
+        if (r > seCurRound) {                                     // varakozo jatekos
+          if (x.p1 && !inMatch.has(x.p1.id)) return false;
+          if (x.p2 && !inMatch.has(x.p2.id)) return false;
+        }
+      }
+    }
+    return true;
+  })();
+  // A dontonek sajat pohar-szama lehet.
+  const curMaxCups = isSEFinalMatch ? FINAL_CUPS : MAX_CUPS;
+  const totalSERounds = seRounds.length > 1
+    ? 1 + Math.ceil(Math.log2(Math.max(seRounds[1].length * 2, 2)))
+    : seRounds.length > 0
+      ? Math.ceil(Math.log2(Math.max(seRounds[0].length * 2, 2)))
+      : Math.ceil(Math.log2(Math.max(players.length, 2)));
+
+  const canReshuffle = (() => {
+    if (TOURNAMENT === 'se') return seRounds.length > 0 && seRounds[0].every(m => !m.winner) && (!seRounds[1] || seRounds[1].every(m => m.tbd || !m.winner));
+    if (TOURNAMENT === 'rr') return rrMatches.length > 0 && rrMatches.every(m => !m.winner && !m.draw);
+    if (TOURNAMENT.startsWith('grp_') && tsPhase === 'groups')
+      return tsGroups.length > 0 && tsGroups.every(g => !g.done && g.matches.every(m => !m.winner && !m.draw));
+    return false;
+  })();
+
+  const applyManualOrder = (orderedPlayers) => {
+    setManualOrder(orderedPlayers);
+    setManualEdit(false);
+    doneRef.current = false;
+    setCups1(0); setCups2(0);
+    setDrinkMap({}); setChampion(null); setExpandedRounds({});
+    resetTimer();
+    if (TOURNAMENT === 'se') {
+      const br = buildSEBracketOrdered(orderedPlayers);
+      setSeRounds(br); setSeCurRound(0);
+      const fp = br.length > 0 ? br[0].findIndex(m => m.winner === null) : -1;
+      setSeCurMatch(fp >= 0 ? fp : 0);
+    } else if (TOURNAMENT === 'rr') {
+      const ms = buildRRMatches(orderedPlayers);
+      setRrMatches(ms); setRrIdx(0); setRrDone(false);
+    }
+  };
+
+  // ── Render match card ─────────────────────────────────────────────────────
+  const renderKortyTab = () => {
+    // Aggregate per-player: thrown cups, received cups, sips
+    const stats = {};
+    const ensure = (p) => { if (p && p.id && !stats[p.id]) stats[p.id] = { player:p, thrown:0, received:0 }; };
+    const addMatch = (m) => {
+      if (!m || !m.p1 || !m.p2) return;
+      ensure(m.p1); ensure(m.p2);
+      const addSet = (s) => {
+        if (!s) return;
+        stats[m.p1.id].thrown   += (s.p1||0);
+        stats[m.p1.id].received += (s.p2||0);
+        stats[m.p2.id].thrown   += (s.p2||0);
+        stats[m.p2.id].received += (s.p1||0);
+      };
+      // scores = [1. menet, 2. menet]; a m.score a 2. menettel azonos → NEM adjuk hozzá még egyszer
+      if (m.scores) { m.scores.forEach(addSet); }
+      else if (m.score1) { addSet(m.score1); if (m.score) addSet(m.score); }
+      else if (m.score) addSet(m.score);
+    };
+    seRounds.forEach(round => round.forEach(addMatch));
+    rrMatches.forEach(addMatch);
+    tsGroups.forEach(g => (g.matches||[]).forEach(addMatch));
+    const rows = Object.values(stats).sort((a,b) => (drinkMap[b.player.id]||0) - (drinkMap[a.player.id]||0));
+    if (!rows.length) return <div style={{ padding:'16px', fontFamily:T.font, fontSize:13, color:T.inkMute, textAlign:'center' }}>Még nincs lejátszott meccs.</div>;
+    return (
+      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+        {rows.map(({ player, thrown, received }) => {
+          const sips = drinkMap[player.id] || 0;
+          return (
+            <div key={player.id} style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadowPill, display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ width:11, height:11, borderRadius:'50%', background:player.color||T.inkMute, flexShrink:0 }} />
+              <div style={{ flex:1, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{player.name}</div>
+              <div style={{ display:'flex', gap:10, flexShrink:0 }}>
+                <div style={{ textAlign:'center' }}>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.mint }}>{thrown}</div>
+                  <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, fontWeight:700 }}>kidobott</div>
+                </div>
+                <div style={{ width:1, background:T.surfaceMuted, alignSelf:'stretch' }} />
+                <div style={{ textAlign:'center' }}>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.coral }}>{received}</div>
+                  <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, fontWeight:700 }}>kapott</div>
+                </div>
+                <div style={{ width:1, background:T.surfaceMuted, alignSelf:'stretch' }} />
+                <div style={{ textAlign:'center' }}>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.blue }}>{sips}</div>
+                  <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute, fontWeight:700 }}>korty</div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderMatchCard = () => {
+    if (champion) {
+      return (
+        <div style={{ width:'100%', background:T.surface, borderRadius:22, padding:'28px 20px', textAlign:'center', boxShadow:T.shadow, display:'flex', flexDirection:'column', alignItems:'center', gap:12, position:'relative', overflow:'hidden' }}>
+          <BeerPongConfetti />
+          {showQR && <QRModal url={joinUrl} onClose={() => setShowQR(false)} />}
+          {showTableau && <BeerPong2Tableau
             champion={champion}
             players={players}
             tournamentName={TOURNAMENT_NAME}
@@ -61740,6 +63927,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'quiz') return <QuizGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} gameMeta={gameMeta} />;
   if (gameId === 'utveszto') return <UtvesztoGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} opponent={opponent} players={players||[]} onAdvance={onAdvance} onResult={onResult} onSetHideFooter={onSetHideFooter} gameMeta={gameMeta} />;
   if (gameId === 'beerpong') return <BeerPongGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} initialBpState={null} onSetHideFooter={onSetHideFooter} onSetBpEnded={onSetBpEnded} />;
+  if (gameId === 'beerpong2') return <BeerPong2Game key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} initialBpState={null} onSetHideFooter={onSetHideFooter} onSetBpEnded={onSetBpEnded} />;
   if (gameId === 'blackjack') return <BlackjackGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onLiveDrinkUpdate={onLiveDrinkUpdate} onSetBuszSwitch={onSetBuszSwitch} />;
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onSetBuszSwitch={onSetBuszSwitch} />;
   if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} roomCode={roomCode} />;
@@ -69719,6 +71907,365 @@ function BpObsPlayerChip({ p, highlight }) {
   );
 }
 
+// ═══════════════ BEER PONG 2.0 — TABLÓ (duplikátum, v10.376) ═══════════════
+function BeerPong2Tableau({ champion, players, tournamentName, tournament, seRounds, rrMatches, tsGroups, drinkMap, maxCups, matchMinutes, onClose }) {
+  const canvasRef = React.useRef(null);
+  const [imgUrl, setImgUrl] = React.useState(null);
+
+  const getScore = (sc) => {
+    if (!sc) return [0,0];
+    if (typeof sc === 'object') return [sc.p1||0, sc.p2||0];
+    const p = String(sc).split('-'); return [parseInt(p[0])||0, parseInt(p[1])||0];
+  };
+
+  const allMatches = React.useMemo(() => {
+    const ms = [];
+    if (tournament === 'se') {
+      (seRounds||[]).forEach((rnd,ri) => rnd.forEach(m => { if(m.winner||m.draw) ms.push({...m,roundIdx:ri}); }));
+    } else if (tournament === 'rr') {
+      (rrMatches||[]).forEach(m => { if(m.winner||m.draw) ms.push(m); });
+    } else {
+      (tsGroups||[]).forEach(g => (g.matches||[]).forEach(m => { if(m.winner||m.draw) ms.push({...m,groupLabel:g.label||''}); }));
+    }
+    return ms;
+  }, [tournament, seRounds, rrMatches, tsGroups]);
+
+  const standings = React.useMemo(() => {
+    const st = {};
+    players.forEach(p => { st[p.id]={player:p,W:0,D:0,L:0,Pp:0,Pm:0}; });
+    allMatches.forEach(m => {
+      const [s1,s2] = getScore(m.score);
+      if(st[m.p1?.id]){st[m.p1.id].Pp+=s1;st[m.p1.id].Pm+=s2;}
+      if(st[m.p2?.id]){st[m.p2.id].Pp+=s2;st[m.p2.id].Pm+=s1;}
+      if(m.draw){if(st[m.p1?.id])st[m.p1.id].D++;if(st[m.p2?.id])st[m.p2.id].D++;}
+      else if(m.winner){
+        const lid=m.p1?.id===m.winner.id?m.p2?.id:m.p1?.id;
+        if(st[m.winner.id])st[m.winner.id].W++;
+        if(lid&&st[lid])st[lid].L++;
+      }
+    });
+    const arr=Object.values(st).sort((a,b)=>b.W-a.W||(b.Pp-b.Pm)-(a.Pp-a.Pm));
+    const ci=arr.findIndex(x=>x.player.id===champion?.id);
+    if(ci>0){const c=arr.splice(ci,1);arr.unshift(c[0]);}
+    return arr;
+  }, [players, allMatches, champion]);
+
+  React.useEffect(() => {
+    setTimeout(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      try {
+        // A4 landscape: 1123 x 794 px at 96dpi
+        const W=1540, H=1080;
+        canvas.width=W; canvas.height=H;
+        const ctx=canvas.getContext('2d');
+        const th = T || {};
+        const BG    = th.bg     || '#F5F0E8';
+        const SURF  = th.surface|| '#FFFFFF';
+        const INK   = th.ink    || '#1A1A2E';
+        const SOFT  = th.inkSoft|| '#6B7280';
+        const MUTE  = th.inkMute|| '#9CA3AF';
+        const MINT  = th.mint   || '#4FC2A0';
+        const BSOFT = th.bgSoft || '#F0EBE1';
+        const GOLD  = '#F59E0B';
+        const SILVER= '#94A3B8';
+        const BRONZE= '#CD7C3A';
+        const F     = th.font   || "'Nunito',sans-serif";
+        const SHD   = '0 2px 8px rgba(0,0,0,.08)';
+
+        function rrect(x,y,w,h,r){
+          if(w<=0||h<=0)return;
+          r=Math.min(r,w/2,h/2);
+          ctx.beginPath();
+          ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);
+          ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+          ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);
+          ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);
+          ctx.closePath();
+        }
+        function shadow(x,y,w,h,r,col){
+          ctx.save();ctx.shadowColor='rgba(0,0,0,.10)';ctx.shadowBlur=12;ctx.shadowOffsetY=3;
+          ctx.fillStyle=col;rrect(x,y,w,h,r);ctx.fill();ctx.restore();
+        }
+        function avatar(x,y,r,color,letter){
+          ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle='#fff';ctx.font='bold '+Math.round(r*1.1)+'px '+F;ctx.textAlign='center';ctx.textBaseline='middle';
+          ctx.fillText(letter,x,y+1);ctx.textBaseline='alphabetic';
+        }
+
+        // Background
+        ctx.fillStyle=BG;ctx.fillRect(0,0,W,H);
+
+        // ── HEADER ───────────────────────────────────────────────────────
+        shadow(0,0,W,72,0,SURF);
+        // Logo pill
+        ctx.fillStyle=MINT;rrect(16,14,44,44,12);ctx.fill();
+        ctx.fillStyle='#fff';ctx.font='bold 22px '+F;ctx.textAlign='center';ctx.fillText('🏓',38,42);
+        // Title
+        ctx.fillStyle=INK;ctx.font='bold 26px '+F;ctx.textAlign='left';
+        ctx.fillText(tournamentName||'Beer Pong Torna',70,46);
+        // Meta right
+        const now=new Date().toLocaleDateString('hu-HU',{year:'numeric',month:'long',day:'numeric'});
+        ctx.fillStyle=SOFT;ctx.font='14px '+F;ctx.textAlign='right';
+        ctx.fillText(now,W-16,30);
+        const tTypeLabel = tournament==='se'?'Kieséses':tournament==='rr'?'Körmérkőzéses':tournament==='grp_rr_se'?'Csoport + Kieséses':tournament==='grp_rr_rr'?'Csoport + Körmérkőzéses':(tournament||'');
+        ctx.fillText(players.length+' játékos · '+(maxCups||10)+' pohár · '+(matchMinutes||5)+' perc/meccs · '+tTypeLabel,W-16,50);
+
+        const PAD=14, TOP=84;
+        const LW=340; // bal oszlop szélessége
+
+        // ── BAL OSZLOP: csoportok + meccsek ──────────────────────────────
+        let cy=TOP;
+
+        const drawGroupTable = (g) => {
+          const gst={};
+          (g.players||[]).forEach(p=>{gst[p.id]={p,J:0,Gy:0,D:0,V:0,Pp:0,Pm:0};});
+          (g.matches||[]).forEach(m=>{
+            if(!m.winner&&!m.draw)return;
+            const[s1,s2]=getScore(m.score);
+            if(gst[m.p1?.id]){gst[m.p1.id].J++;gst[m.p1.id].Pp+=s1;gst[m.p1.id].Pm+=s2;}
+            if(gst[m.p2?.id]){gst[m.p2.id].J++;gst[m.p2.id].Pp+=s2;gst[m.p2.id].Pm+=s1;}
+            if(m.draw){if(gst[m.p1?.id])gst[m.p1.id].D++;if(gst[m.p2?.id])gst[m.p2.id].D++;}
+            else if(m.winner){const lid=m.p1?.id===m.winner.id?m.p2?.id:m.p1?.id;if(gst[m.winner.id])gst[m.winner.id].Gy++;if(lid&&gst[lid])gst[lid].V++;}
+          });
+          const rows=Object.values(gst).sort((a,b)=>b.Gy-a.Gy||(b.Pp-b.Pm)-(a.Pp-a.Pm));
+          const ROW=22, HDR=28, COLS=['J','Gy','D','V','P+','P-'];
+          const NW=120, CW=(LW-NW)/6;
+          const totalH=HDR+18+rows.length*ROW+10;
+          shadow(PAD,cy,LW,totalH,12,SURF);
+          // Group header
+          ctx.fillStyle=MINT;rrect(PAD,cy,LW,HDR,12);ctx.fill();
+          // fix bottom corners
+          ctx.fillRect(PAD,cy+HDR-8,LW,8);
+          ctx.fillStyle='#fff';ctx.font='bold 13px '+F;ctx.textAlign='left';
+          ctx.fillText(g.label||'Csoport',PAD+10,cy+19);
+          cy+=HDR;
+          // Col headers
+          ctx.fillStyle=BSOFT;ctx.fillRect(PAD,cy,LW,18);
+          ctx.fillStyle=MUTE;ctx.font='bold 10px '+F;
+          COLS.forEach((c,i)=>{ctx.textAlign='center';ctx.fillText(c,PAD+NW+i*CW+CW/2,cy+13);});
+          cy+=18;
+          // Rows
+          rows.forEach((r,ri)=>{
+            const ry=cy+ri*ROW;
+            if(ri%2===1){ctx.fillStyle=BSOFT;ctx.fillRect(PAD,ry,LW,ROW);}
+            // avatar
+            ctx.fillStyle=r.p.color||MINT;ctx.beginPath();ctx.arc(PAD+14,ry+ROW/2,7,0,Math.PI*2);ctx.fill();
+            ctx.fillStyle='#fff';ctx.font='bold 7px '+F;ctx.textAlign='center';ctx.fillText(r.p.name.charAt(0).toUpperCase(),PAD+14,ry+ROW/2+2.5);
+            ctx.fillStyle=INK;ctx.font=(ri===0?'bold ':'')+'12px '+F;ctx.textAlign='left';
+            ctx.fillText(r.p.name,PAD+26,ry+15);
+            [r.J,r.Gy,r.D,r.V,r.Pp,r.Pm].forEach((v,i)=>{
+              ctx.fillStyle=i===1&&v>0?MINT:SOFT;ctx.font=(i===1&&v>0?'bold ':'')+'12px '+F;
+              ctx.textAlign='center';ctx.fillText(v,PAD+NW+i*CW+CW/2,ry+15);
+            });
+          });
+          cy+=rows.length*ROW+10;
+        };
+
+        if(tsGroups&&tsGroups.length>0) tsGroups.forEach(g=>drawGroupTable(g));
+
+        // Meccs eredmények
+        if(allMatches.length>0){
+          const ROW=20;
+          const maxRows=Math.floor((H-cy-PAD-10)/ROW);
+          const showMs=allMatches.slice(0,maxRows);
+          const tblH=26+showMs.length*ROW+8;
+          shadow(PAD,cy,LW,tblH,12,SURF);
+          ctx.fillStyle=MINT;rrect(PAD,cy,LW,26,12);ctx.fill();ctx.fillRect(PAD,cy+18,LW,8);
+          ctx.fillStyle='#fff';ctx.font='bold 12px '+F;ctx.textAlign='left';ctx.fillText('Meccseredmények',PAD+10,cy+18);
+          cy+=26;
+          showMs.forEach((m,i)=>{
+            const ry=cy+i*ROW;
+            if(i%2===1){ctx.fillStyle=BSOFT;ctx.fillRect(PAD,ry,LW,ROW);}
+            const[s1,s2]=getScore(m.score);const wid=m.winner?.id;
+            const sc=m.score?(s1+' – '+s2):'vs';
+            ctx.fillStyle=wid===m.p1?.id?MINT:INK;ctx.font=(wid===m.p1?.id?'bold ':'')+'11px '+F;ctx.textAlign='left';
+            ctx.fillText(m.p1?.name||'?',PAD+6,ry+14);
+            ctx.fillStyle=MUTE;ctx.font='11px '+F;ctx.textAlign='center';ctx.fillText(sc,PAD+LW/2,ry+14);
+            ctx.fillStyle=wid===m.p2?.id?MINT:INK;ctx.font=(wid===m.p2?.id?'bold ':'')+'11px '+F;ctx.textAlign='right';
+            ctx.fillText(m.p2?.name||'?',PAD+LW-6,ry+14);
+          });
+          cy+=showMs.length*ROW+8;
+        }
+
+        // ── JOBB OSZLOP ───────────────────────────────────────────────────
+        const RX=PAD+LW+12;
+        const RW=W-RX-PAD;
+        const BRACH=Math.round(H*0.54);
+
+        // ── ÁGRAJZ ───────────────────────────────────────────────────────
+        shadow(RX,TOP,RW,BRACH,14,SURF);
+        ctx.fillStyle=INK;ctx.font='bold 13px '+F;ctx.textAlign='left';
+        ctx.fillText('ÁGRAJZ',RX+14,TOP+20);
+
+        const drawBracket=(rounds,bx,by,bw,bh)=>{
+          if(!rounds||!rounds.length)return;
+          const nr=rounds.length;
+          const cw=bw/nr;
+          // connector lines first
+          rounds.forEach((rnd,ri)=>{
+            if(ri>=nr-1)return;
+            const nm=rnd.length, sh=bh/nm;
+            const nm2=rounds[ri+1].length, sh2=bh/nm2;
+            rnd.forEach((m,mi)=>{
+              const my=by+mi*sh+sh/2;
+              const ny=by+Math.floor(mi/2)*sh2+sh2/2;
+              const cx1=bx+ri*cw+cw-12, cx2=bx+(ri+1)*cw+12;
+              const midX=(cx1+cx2)/2;
+              ctx.strokeStyle=BSOFT;ctx.lineWidth=2;
+              ctx.beginPath();ctx.moveTo(cx1,my);ctx.lineTo(midX,my);ctx.lineTo(midX,ny);ctx.lineTo(cx2,ny);ctx.stroke();
+            });
+          });
+          // match cards
+          rounds.forEach((rnd,ri)=>{
+            const nm=rnd.length, sh=bh/nm;
+            const isLast=ri===nr-1;
+            let label=isLast?(nm===1?'Döntő':'Elődöntő'):'Kör '+(ri+1);
+            ctx.fillStyle=MUTE;ctx.font='bold 10px '+F;ctx.textAlign='center';
+            ctx.fillText(label.toUpperCase(),bx+ri*cw+cw/2,by-6);
+            rnd.forEach((m,mi)=>{
+              const mx=bx+ri*cw+12, my=by+mi*sh+(sh-68)/2;
+              const mw=cw-24, mh=68;
+              if(mw<30||mh<20)return;
+              const isWon=!!m.winner;
+              shadow(mx,my,mw,mh,10,SURF);
+              if(isWon){ctx.strokeStyle=MINT;ctx.lineWidth=2;rrect(mx,my,mw,mh,10);ctx.stroke();}
+              // divider
+              ctx.strokeStyle=BSOFT;ctx.lineWidth=1;
+              ctx.beginPath();ctx.moveTo(mx+8,my+mh/2);ctx.lineTo(mx+mw-8,my+mh/2);ctx.stroke();
+              [[m.p1,m.score?.p1??getScore(m.score)[0]],[m.p2,m.score?.p2??getScore(m.score)[1]]].forEach(([p,sc],pi)=>{
+                const py=my+(pi===0?mh/4:3*mh/4);
+                const isW=m.winner?.id===p?.id;
+                if(p){
+                  ctx.fillStyle=p.color||MINT;ctx.beginPath();ctx.arc(mx+14,py,9,0,Math.PI*2);ctx.fill();
+                  ctx.fillStyle='#fff';ctx.font='bold 8px '+F;ctx.textAlign='center';ctx.fillText(p.name.charAt(0).toUpperCase(),mx+14,py+3);
+                }
+                ctx.fillStyle=isW?INK:SOFT;ctx.font=(isW?'bold ':'')+'12px '+F;ctx.textAlign='left';
+                ctx.fillText(p?.name||'TBD',mx+28,py+4);
+                if(m.winner&&sc!=null){
+                  ctx.fillStyle=isW?MINT:SOFT;ctx.font='bold 13px '+F;ctx.textAlign='right';
+                  ctx.fillText(sc,mx+mw-8,py+4);
+                }
+              });
+            });
+          });
+        };
+
+        const seR=seRounds&&seRounds.length>0?seRounds:null;
+        if(seR){
+          drawBracket(seR,RX+8,TOP+30,RW-16,BRACH-44);
+        }
+        // RR standings always shown
+        if(tournament==='rr'||(tournament&&tournament.startsWith('grp_')&&!seR)){
+          const rrSt={};
+          players.forEach(p=>{rrSt[p.id]={player:p,W:0,D:0,L:0,Pp:0,Pm:0};});
+          (rrMatches||[]).forEach(m=>{
+            if(!m.winner&&!m.draw)return;
+            const[s1,s2]=getScore(m.score);
+            if(rrSt[m.p1?.id]){rrSt[m.p1.id].Pp+=s1;rrSt[m.p1.id].Pm+=s2;}
+            if(rrSt[m.p2?.id]){rrSt[m.p2.id].Pp+=s2;rrSt[m.p2.id].Pm+=s1;}
+            if(m.draw){if(rrSt[m.p1?.id])rrSt[m.p1.id].D++;if(rrSt[m.p2?.id])rrSt[m.p2.id].D++;}
+            else if(m.winner){const lid=m.p1?.id===m.winner.id?m.p2?.id:m.p1?.id;if(rrSt[m.winner.id])rrSt[m.winner.id].W++;if(lid&&rrSt[lid])rrSt[lid].L++;}
+          });
+          const rrRows=Object.values(rrSt).sort((a,b)=>b.W-a.W||(b.Pp-b.Pm)-(a.Pp-a.Pm));
+          const NW2=140,COLS2=['J','Gy','D','V','P+','P-'],CW2=(RW-28-NW2)/6,ROW2=22;
+          let ry2=TOP+28;
+          // header
+          ctx.fillStyle=MINT;rrect(RX+8,ry2,RW-16,26,8);ctx.fill();
+          ctx.fillStyle='#fff';ctx.font='bold 13px '+F;ctx.textAlign='left';
+          ctx.fillText('KÖRMÉRKŐZÉSES ÁLLÁS',RX+18,ry2+18);ry2+=26;
+          ctx.fillStyle=BSOFT;ctx.fillRect(RX+8,ry2,RW-16,18);
+          ctx.fillStyle=MUTE;ctx.font='bold 10px '+F;
+          COLS2.forEach((c,i)=>{ctx.textAlign='center';ctx.fillText(c,RX+8+NW2+i*CW2+CW2/2,ry2+13);});ry2+=18;
+          rrRows.forEach((r,ri)=>{
+            if(ri%2===1){ctx.fillStyle=BSOFT;ctx.fillRect(RX+8,ry2+ri*ROW2,RW-16,ROW2);}
+            ctx.fillStyle=r.player?.color||MINT;ctx.beginPath();ctx.arc(RX+18,ry2+ri*ROW2+11,7,0,Math.PI*2);ctx.fill();
+            ctx.fillStyle='#fff';ctx.font='bold 7px '+F;ctx.textAlign='center';ctx.fillText((r.player?.name||'?').charAt(0).toUpperCase(),RX+18,ry2+ri*ROW2+14);
+            ctx.fillStyle=ri===0?MINT:INK;ctx.font=(ri===0?'bold ':'')+'12px '+F;ctx.textAlign='left';
+            ctx.fillText(r.player?.name||'?',RX+28,ry2+ri*ROW2+15);
+            [r.W+r.D+r.L,r.W,r.D,r.L,r.Pp,r.Pm].forEach((v,i)=>{
+              ctx.fillStyle=i===1&&v>0?MINT:SOFT;ctx.font=(i===1&&v>0?'bold ':'')+'12px '+F;
+              ctx.textAlign='center';ctx.fillText(v,RX+8+NW2+i*CW2+CW2/2,ry2+ri*ROW2+15);
+            });
+          });
+        }
+
+        // ── DOBOGÓ ────────────────────────────────────────────────────────
+        const PY=TOP+BRACH+12, PH=H-PY-PAD;
+        shadow(RX,PY,RW,PH,14,SURF);
+        ctx.fillStyle=INK;ctx.font='bold 13px '+F;ctx.textAlign='left';
+        ctx.fillText('DOBOGÓ',RX+14,PY+20);
+
+        // Bajnok kiemelő
+        if(champion){
+          ctx.fillStyle=GOLD+'22';rrect(RX+10,PY+28,RW-20,32,10);ctx.fill();
+          ctx.fillStyle=GOLD;ctx.font='bold 15px '+F;ctx.textAlign='center';
+          ctx.fillText('🏆 '+champion.name+' — Beer Pong Bajnok!',RX+RW/2,PY+50);
+        }
+
+        // Pódium
+        const podData=[standings[1],standings[0],standings[2]];
+        const podColors=[SILVER,GOLD,BRONZE],podH2=[55,78,40],podLbls=['2.','1.','3.'];
+        const podW=Math.min(100,(RW*0.4)/3);
+        const podStartX=RX+RW*0.05, baseY=PY+PH-14;
+        podData.forEach((s,i)=>{
+          if(!s)return;
+          const bx=podStartX+i*(podW+16);
+          ctx.fillStyle=podColors[i]+'33';rrect(bx,baseY-podH2[i],podW,podH2[i],6);ctx.fill();
+          ctx.strokeStyle=podColors[i];ctx.lineWidth=2;rrect(bx,baseY-podH2[i],podW,podH2[i],6);ctx.stroke();
+          ctx.fillStyle=podColors[i];ctx.font='bold 16px '+F;ctx.textAlign='center';
+          ctx.fillText(podLbls[i],bx+podW/2,baseY-podH2[i]+22);
+          avatar(bx+podW/2,baseY-podH2[i]-24,20,s.player?.color||MINT,(s.player?.name||'?').charAt(0).toUpperCase());
+          ctx.fillStyle=INK;ctx.font='bold 11px '+F;ctx.textAlign='center';
+          ctx.fillText(s.player?.name||'?',bx+podW/2,baseY-podH2[i]-46);
+          ctx.fillStyle=SOFT;ctx.font='bold 11px '+F;
+          ctx.fillText(s.W+'gy / '+s.L+'v',bx+podW/2,baseY-podH2[i]+36);
+          ctx.fillStyle=GOLD;ctx.font='bold 14px '+F;
+          ctx.fillText(s.Pp+' pohár',bx+podW/2,baseY-podH2[i]+52);
+        });
+
+        // 4.+ hely
+        const listX=RX+RW*0.52, listY=PY+68;
+        standings.slice(3).forEach((s,i)=>{
+          avatar(listX+10,listY+i*26,9,s.player?.color||MUTE,(s.player?.name||'?').charAt(0).toUpperCase());
+          ctx.fillStyle=SOFT;ctx.font='bold 12px '+F;ctx.textAlign='left';
+          ctx.fillText((i+4)+'. '+( s.player?.name||'?')+' — '+s.W+'gy/'+s.L+'v ('+s.Pp+'-'+s.Pm+')',listX+24,listY+i*26+4);
+        });
+
+        setImgUrl(canvas.toDataURL('image/png'));
+      } catch(err){ console.error('Canvas hiba:',err); }
+    }, 100);
+  }, []);
+
+  const handleDownload = () => {
+    if(!imgUrl)return;
+    const a=document.createElement('a');a.href=imgUrl;a.download='beerpong_tabló.png';a.click();
+  };
+
+  return (
+    <div style={{position:'fixed',inset:0,background:T.bgOverlay||'rgba(0,0,0,.9)',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:16}}>
+      <canvas ref={canvasRef} style={{display:'none'}}/>
+      <div style={{background:T.surface,borderRadius:20,padding:14,width:'100%',maxWidth:520,display:'flex',flexDirection:'column',gap:10,maxHeight:'90vh',overflowY:'auto'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+          <span style={{fontFamily:T.font,fontWeight:900,fontSize:17,color:T.ink}}>📊 Tábló</span>
+          <button onClick={onClose} style={{background:'none',border:'none',fontSize:22,cursor:'pointer',color:T.inkSoft,lineHeight:1}}>✕</button>
+        </div>
+        {imgUrl ? (
+          <>
+            <img src={imgUrl} style={{width:'100%',borderRadius:12,border:`1px solid ${T.bgSoft}`}} alt="Tábló"/>
+            <button onClick={handleDownload} style={{padding:'13px',borderRadius:14,border:'none',background:T.mint,color:'#fff',fontFamily:T.font,fontWeight:900,fontSize:15,cursor:'pointer',flexShrink:0}}>
+              ⬇️ Letöltés
+            </button>
+          </>
+        ) : (
+          <div style={{color:T.inkSoft,textAlign:'center',padding:48,fontFamily:T.font}}>Tábló generálása...</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 function BeerPongObserverView({ room, code, onLeave }) {
   const winW = useWindowWidth();
   const isWide = winW >= 1024;
@@ -69732,6 +72279,394 @@ function BeerPongObserverView({ room, code, onLeave }) {
   const gameIdx = room.gameIdx || 0;
   const currentGameId = selGames[gameIdx % Math.max(1, selGames.length)];
   const isBP = currentGameId === 'beerpong';
+
+  const [notifPerm, setNotifPerm] = React.useState(() => ('Notification' in window ? Notification.permission : 'unsupported'));
+  React.useEffect(() => {
+    const iv = setInterval(() => {
+      if ('Notification' in window) setNotifPerm(Notification.permission);
+    }, 1000);
+    return () => clearInterval(iv);
+  }, []);
+
+  const getRRSt = (parts, matches) => {
+    if (!parts || !matches) return [];
+    const st = {};
+    parts.forEach(p => { if (p) st[p.id] = { player:p, wins:0, losses:0, draws:0, pts:0, diff:0, setWins:0 }; });
+    (Array.isArray(matches) ? matches : Object.values(matches)).forEach(m => {
+      if (!m || !m.score) return;
+      const MAX = 10;
+      const p1cups = m.score.p1, p2cups = m.score.p2; // score = kilőtt poharak száma
+      const p1pot = MAX - p1cups, p2pot = MAX - p2cups;
+      if (m.draw) {
+        if (st[m.p1?.id]) { st[m.p1.id].draws++; st[m.p1.id].pts++; st[m.p1.id].setWins += p1cups; }
+        if (st[m.p2?.id]) { st[m.p2.id].draws++; st[m.p2.id].pts++; st[m.p2.id].setWins += p2cups; }
+      } else if (m.winner) {
+        if (st[m.winner.id]) { st[m.winner.id].wins++; st[m.winner.id].pts += 3; }
+        if (m.loser && st[m.loser.id]) st[m.loser.id].losses++;
+        const d = p2pot - p1pot; // = p1cups - p2cups: pozitív ha p1 több poharat lőtt
+        if (st[m.p1?.id]) { st[m.p1.id].diff += d; st[m.p1.id].setWins += p1cups; }
+        if (st[m.p2?.id]) { st[m.p2.id].diff -= d; st[m.p2.id].setWins += p2cups; }
+      }
+    });
+    return Object.values(st).sort((a,b) => b.pts - a.pts || b.diff - a.diff || b.setWins - a.setWins);
+  };
+
+  const seRoundsArr = bp.seRounds ? (Array.isArray(bp.seRounds) ? bp.seRounds : Object.values(bp.seRounds)) : [];
+  const rrMatchesArr = bp.rrMatches ? (Array.isArray(bp.rrMatches) ? bp.rrMatches : Object.values(bp.rrMatches)) : [];
+  const tsGroupsArr = bp.tsGroups ? (Array.isArray(bp.tsGroups) ? bp.tsGroups : Object.values(bp.tsGroups)) : [];
+
+  // Current active match
+  const curMatch = (() => {
+    if (bp.tournament === 'se' && seRoundsArr.length > 0) {
+      const r = seRoundsArr[bp.seCurRound ?? 0];
+      return r ? (Array.isArray(r) ? r[bp.seCurMatch ?? 0] : Object.values(r)[bp.seCurMatch ?? 0]) : null;
+    }
+    if (bp.tournament === 'rr' && rrMatchesArr.length > 0) {
+      return rrMatchesArr.find(m => m && !m.winner && !m.draw) || null;
+    }
+    if (bp.tournament?.startsWith('grp_')) {
+      if (bp.phase === 'groups') {
+        const curGrpIdx = bp.tsCurGroup ?? 0;
+        const g = tsGroupsArr[curGrpIdx];
+        if (g && !g.done) {
+          const ms = Array.isArray(g.matches) ? g.matches : Object.values(g.matches || {});
+          const idx = g.curIdx ?? 0;
+          if (ms[idx] && !ms[idx].winner && !ms[idx].draw) return ms[idx];
+          return ms.find(m => m && !m.winner && !m.draw) || null;
+        }
+        return null;
+      } else if (bp.phase === 'finals') {
+        if (bp.tournament?.endsWith('_se') && seRoundsArr.length > 0) {
+          const r = seRoundsArr[bp.seCurRound ?? 0];
+          return r ? (Array.isArray(r) ? r[bp.seCurMatch ?? 0] : Object.values(r)[bp.seCurMatch ?? 0]) : null;
+        }
+        if (bp.tournament?.endsWith('_rr') && rrMatchesArr.length > 0) {
+          return rrMatchesArr.find(m => m && !m.winner && !m.draw) || null;
+        }
+      }
+    }
+    return null;
+  })();
+
+  return (
+    <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg }}>
+      {/* Status bar */}
+      <div style={{ margin:'10px 16px 4px', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', background:T.surface, borderRadius:14, boxShadow:T.shadow, flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ width:8, height:8, borderRadius:'50%', background:'#E03A3A', animation:'pulse 1.4s infinite' }}/>
+          <span style={{ fontFamily:T.font, fontWeight:T.weightTitle, fontSize:13, color:T.ink, letterSpacing:'0.08em', textTransform:'uppercase' }}>🏓 Beer Pong · Szoba {code}</span>
+        </div>
+        <button onClick={onLeave} style={{ padding:'4px 10px', border:'none', background:T.coralSoft, color:T.coral, borderRadius:999, fontFamily:T.font, fontWeight:T.weightTitle, fontSize:11, cursor:'pointer', textTransform:'uppercase', letterSpacing:'0.06em' }}>{t('leave')}</button>
+      </div>
+      {/* Notification permission banner */}
+      {notifPerm !== 'granted' && notifPerm !== 'unsupported' && (
+        <button onPointerDown={e => e.currentTarget.style.opacity='0.7'} onPointerUp={e => e.currentTarget.style.opacity='1'} onPointerCancel={e => e.currentTarget.style.opacity='1'}
+          onClick={() => {
+            if (!('Notification' in window)) { alert('Ez a böngésző nem támogatja az értesítéseket.'); return; }
+            if (Notification.permission === 'denied') { alert('Értesítések letiltva. Böngésző Beállítások → Webhelyek → Értesítések → engedélyezd ezt az oldalt.'); return; }
+            Notification.requestPermission().then(p => {
+              setNotifPerm(p);
+              if (p === 'default') alert('iOS Safariban az értesítések csak PWA módban működnek. Nyisd meg a megosztás menüt (□↑) és válaszd: "Főképernyőre".');
+            }).catch(() => {});
+          }}
+          style={{ margin:'0 16px 4px', padding:'12px 16px', border:'none', borderRadius:14, background: notifPerm === 'denied' ? T.coralSoft : `${T.mint}22`, cursor:'pointer', display:'flex', alignItems:'center', gap:10, flexShrink:0, textAlign:'left', touchAction:'manipulation', WebkitTapHighlightColor:'rgba(0,0,0,0.1)' }}>
+          <span style={{ fontSize:20 }}>{notifPerm === 'denied' ? '🔕' : '🔔'}</span>
+          <div style={{ flex:1 }}>
+            <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color: notifPerm === 'denied' ? T.coral : T.mint }}>
+              {notifPerm === 'denied' ? 'Értesítések letiltva' : 'Értesítések engedélyezése'}
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>
+              {notifPerm === 'denied' ? 'Engedélyezd böngésző beállításokban' : 'Kapj értesítést a következő meccsről'}
+            </div>
+          </div>
+          {notifPerm !== 'denied' && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.mint }}>▶</span>}
+        </button>
+      )}
+
+      <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'8px 16px 24px' }}>
+      <div style={{ display:'flex', flexDirection: isWide ? 'row' : 'column', gap:12, alignItems: isWide ? 'flex-start' : 'stretch' }}>
+        <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:12 }}>
+
+        {/* Champion banner */}
+        {bp.champion && (
+          <div style={{ background:`linear-gradient(135deg, ${T.yellow}22, ${T.yellow}08)`, border:`1.5px solid ${T.yellow}88`, borderRadius:14, padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
+            <BohIcon name="trophy" size={20} />
+            <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.08em' }}>Bajnok</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink }}>{bp.champion.name}</div>
+          </div>
+        )}
+
+        {/* Current match */}
+        {curMatch && curMatch.p1 && curMatch.p2 && !bp.champion && (
+          <div style={{ background:T.surface, borderRadius:18, boxShadow:`0 0 0 2px ${T.mint}40, ${T.shadow}`, padding:'14px 14px' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em' }}>⚡ Aktuális meccs</div>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                  <span style={{ width:7, height:7, borderRadius:'50%', background:'#E03A3A', animation:'pulse 1.4s infinite' }}/>
+                  <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:'#E03A3A', letterSpacing:'0.08em' }}>ÉLŐ</span>
+                </div>
+                <button onClick={() => {
+                    const cur = 'Notification' in window ? Notification.permission : 'unsupported';
+                    setNotifPerm(cur);
+                    if (cur !== 'granted' && cur !== 'unsupported') Notification.requestPermission().then(p => setNotifPerm(p)).catch(() => {});
+                  }}
+                  style={{ display:'flex', alignItems:'center', gap:3, padding:'5px 10px', borderRadius:8, border:'none',
+                    background: notifPerm === 'granted' ? `${T.mint}22` : notifPerm === 'denied' ? `${T.coral}18` : 'rgba(20,30,50,0.07)',
+                    cursor: notifPerm !== 'granted' ? 'pointer' : 'default', touchAction:'manipulation' }}>
+                  <span style={{ fontSize:11 }}>{notifPerm === 'granted' ? '🔔' : notifPerm === 'denied' ? '🔕' : '🔔'}</span>
+                  <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, letterSpacing:'0.06em',
+                    color: notifPerm === 'granted' ? T.mint : notifPerm === 'denied' ? T.coral : T.inkMute }}>
+                    {notifPerm === 'granted' ? 'ÉRTESÍTÉS BE' : notifPerm === 'denied' ? 'TILTVA' : 'ÉRTESÍTÉS?'}
+                  </span>
+                </button>
+              </div>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <BpObsPlayerChip p={hydObs(curMatch.p1)} highlight />
+              {(() => {
+                const liveCups1 = bp.cups1 ?? null;
+                const liveCups2 = bp.cups2 ?? null;
+                const hasLive = liveCups1 !== null && liveCups2 !== null;
+                const s = curMatch.score;
+                if (s) {
+                  return (
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0 }}>
+                      <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:22, color:T.ink, lineHeight:1 }}>
+                        {s.p1}<span style={{ color:T.inkMute, fontSize:16 }}> – </span>{s.p2}
+                      </div>
+                      <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em' }}>pohár marad</div>
+                    </div>
+                  );
+                }
+                if (hasLive) {
+                  return (
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, flexShrink:0 }}>
+                      <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:22, color:T.mint, lineHeight:1 }}>
+                        {liveCups1}<span style={{ color:T.inkMute, fontSize:16 }}> – </span>{liveCups2}
+                      </div>
+                      <div style={{ fontFamily:T.font, fontSize:11, color:T.mint, textTransform:'uppercase', letterSpacing:'0.06em' }}>marad</div>
+                    </div>
+                  );
+                }
+                return <VsDivider size={15} style={{ flexShrink:0 }} />;
+              })()}
+              <BpObsPlayerChip p={hydObs(curMatch.p2)} highlight />
+            </div>
+            {(() => {
+              const secs = bp.timerSecs ?? 0;
+              if (!secs) return null;
+              const mins = Math.floor(secs / 60);
+              const timerColor = secs > 60 ? T.inkSoft : T.coral;
+              const timerText = secs < 60 ? '< 1 perc' : mins + ' perc';
+              return (
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6, marginTop:8, padding:'5px 10px', borderRadius:999, background:T.surfaceMuted, alignSelf:'center' }}>
+                  <span style={{ fontSize:12 }}>{secs < 60 ? '⚠️' : '⏱'}</span>
+                  <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:timerColor }}>{timerText} van hátra</span>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Match results */}
+        {(() => {
+          let results = [];
+          if (bp.tournament === 'rr') {
+            results = rrMatchesArr.filter(m => m.score).map(m => ({ p1: m.p1, p2: m.p2, score: m.score, winner: m.winner }));
+          } else if (bp.tournament === 'se') {
+            results = seRoundsArr.flatMap(r => r).filter(m => m.score).map(m => ({ p1: m.p1, p2: m.p2, score: m.score, winner: m.winner }));
+          } else if (bp.tournament?.startsWith('grp_')) {
+            if (bp.phase === 'groups') {
+              results = tsGroupsArr.flatMap(g => {
+                const ms = Array.isArray(g.matches) ? g.matches : Object.values(g.matches || {});
+                return ms.filter(m => m.score).map(m => ({ p1: m.p1, p2: m.p2, score: m.score, winner: m.winner, group: g.label }));
+              });
+            } else if (bp.tournament?.endsWith('_rr')) {
+              results = rrMatchesArr.filter(m => m.score).map(m => ({ p1: m.p1, p2: m.p2, score: m.score, winner: m.winner }));
+            } else {
+              results = seRoundsArr.flatMap(r => r).filter(m => m.score).map(m => ({ p1: m.p1, p2: m.p2, score: m.score, winner: m.winner }));
+            }
+          }
+          if (results.length === 0) return null;
+          return (
+            <div style={{ background:T.surface, borderRadius:18, boxShadow:T.shadow, padding:'14px 14px' }}>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>📋 Eredmények</div>
+              {[...results].reverse().map((m, i) => {
+                const w1 = m.winner && m.p1 && m.winner.id === m.p1.id;
+                const w2 = m.winner && m.p2 && m.winner.id === m.p2.id;
+                return (
+                  <div key={i} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 4px', borderBottom: i < results.length-1 ? `1px solid ${T.surfaceMuted}` : 'none' }}>
+                    {m.group && <div style={{ fontFamily:T.font, fontSize:11, color:T.blue, fontWeight:700, minWidth:20 }}>{m.group?.replace(' csoport','')}</div>}
+                    <div style={{ flex:1, fontFamily:T.font, fontSize:12, fontWeight: w1 ? 800 : 500, color: w1 ? T.ink : T.inkSoft, textAlign:'right', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1?.name}</div>
+                    <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:13, color:T.ink, flexShrink:0, minWidth:48, textAlign:'center' }}>
+                      {m.score.p1}<span style={{ color:T.inkMute }}> – </span>{m.score.p2}
+                    </div>
+                    <div style={{ flex:1, fontFamily:T.font, fontSize:12, fontWeight: w2 ? 800 : 500, color: w2 ? T.ink : T.inkSoft, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p2?.name}</div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        {/* SE Bracket */}
+        {bp.tournament === 'se' && (
+          seRoundsArr.length > 0 ? (
+            <div style={{ background:T.surface, borderRadius:18, boxShadow:T.shadow, padding:'14px 14px' }}>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:12 }}>🏆 Kieséses ágrajz</div>
+              <BracketView seRoundsArr={seRoundsArr} seCurRound={bp.seCurRound} seCurMatch={bp.seCurMatch} />
+            </div>
+          ) : (
+            <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', fontFamily:T.font, fontSize:12, color:T.inkSoft }}>
+              ⏳ Bajnokság sorsolás folyamatban...
+            </div>
+          )
+        )}
+
+        {/* RR Standings */}
+        {bp.tournament === 'rr' && rrMatchesArr.length > 0 && (() => {
+          const parts = rrMatchesArr.flatMap(m => [m.p1, m.p2]).filter((p,i,a) => p && a.findIndex(x=>x&&x.id===p.id)===i);
+          const st = getRRSt(parts, rrMatchesArr);
+          return (
+            <div style={{ background:T.surface, borderRadius:18, boxShadow:T.shadow, padding:'14px 14px' }}>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>📊 Körmérkőzés állás</div>
+              <div style={{ display:'flex', gap:4, padding:'4px 6px', borderBottom:`1px solid ${T.surfaceMuted}`, marginBottom:6 }}>
+                <div style={{ flex:1, fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkMute, textTransform:'uppercase' }}>Játékos</div>
+                {['GY','D','V','Pt'].map(h => <div key={h} style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkMute, textTransform:'uppercase', minWidth:26, textAlign:'center' }}>{h}</div>)}
+              </div>
+              {st.map((s,i) => (
+                <div key={s.player.id} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 6px', borderRadius:8, background: i===0 ? `${T.yellow}12` : 'transparent' }}>
+                  <div style={{ fontFamily:T.font, fontSize:11, color:i===0?T.yellow:T.inkSoft, fontWeight:700, minWidth:16 }}>{i+1}.</div>
+                  <PlayerAvatar player={hydObs(s.player)} size={24} />
+                  <div style={{ flex:1, fontFamily:T.font, fontSize:13, fontWeight:700, color:T.ink }}>{s.player.name}</div>
+                  <div style={{ fontFamily:'monospace', fontSize:12, color:T.mint, minWidth:26, textAlign:'center' }}>{s.wins}</div>
+                  <div style={{ fontFamily:'monospace', fontSize:12, color:T.inkSoft, minWidth:26, textAlign:'center' }}>{s.draws}</div>
+                  <div style={{ fontFamily:'monospace', fontSize:12, color:T.coral, minWidth:26, textAlign:'center' }}>{s.losses}</div>
+                  <div style={{ fontFamily:'monospace', fontSize:13, fontWeight:700, color:T.ink, minWidth:26, textAlign:'center' }}>{s.pts}</div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
+        {/* Group phase */}
+        {bp.tournament?.startsWith('grp_') && tsGroupsArr.length > 0 && bp.phase === 'groups' && (
+          <div style={{ background:T.surface, borderRadius:18, boxShadow:T.shadow, padding:'14px 14px' }}>
+            <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>🔵 Csoportkör</div>
+            {tsGroupsArr.map((g, gi) => {
+              const ms = Array.isArray(g.matches) ? g.matches : Object.values(g.matches || {});
+              const st = getRRSt(g.players || [], ms);
+              const hdr = { fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkMute, textTransform:'uppercase', letterSpacing:'0.06em', textAlign:'center', minWidth:38 };
+              const GROUP_ADVANCE = 2;
+              return (
+                <div key={gi} style={{ marginBottom: gi < tsGroupsArr.length - 1 ? 16 : 0 }}>
+                  <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.blue, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:6, display:'flex', alignItems:'center', gap:6 }}>
+                    {g.label} {g.done ? <span style={{ color:T.mint }}>✓</span> : <span style={{ color:T.yellow }}>●</span>}
+                  </div>
+                  <div style={{ display:'grid', gridTemplateColumns:'20px 1fr 80px 36px 42px 32px', gap:'0 6px', alignItems:'center', paddingBottom:4, borderBottom:'1px solid rgba(20,30,50,0.08)' }}>
+                    <div/><div/>
+                    <div style={{...hdr, textAlign:'center'}}>GY-V-D</div>
+                    <div style={hdr}>Diff</div>
+                    <div style={hdr}>Pohár</div>
+                    <div style={{...hdr, color:(T.yellowText||T.yellow)}}>Pont</div>
+                  </div>
+                  {st.map((s, si) => (
+                    <div key={s.player.id} style={{ display:'grid', gridTemplateColumns:'20px 1fr 80px 36px 42px 32px', gap:'0 6px', alignItems:'center', padding:'6px 0', borderBottom: si < st.length-1 ? '1px solid rgba(20,30,50,0.05)' : 'none', background: si < GROUP_ADVANCE ? `${T.mint}08` : 'transparent', borderRadius:6 }}>
+                      <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:12, color: si===0 ? T.yellow : T.inkSoft }}>{si+1}</div>
+                      <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
+                        <PlayerAvatar player={hydObs(s.player)} size={24} />
+                        <div style={{ fontFamily:T.font, fontWeight: si===0?700:400, fontSize:13, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {s.player.name}
+                          {si < GROUP_ADVANCE && <span style={{ marginLeft:5, fontSize:10, color:T.mint, fontWeight:700 }}>↑</span>}
+                        </div>
+                      </div>
+                      <div style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft, textAlign:'center' }}>{s.wins}-{s.losses}-{s.draws}</div>
+                      <div style={{ fontFamily:'monospace', fontSize:11, color: s.diff > 0 ? T.mint : s.diff < 0 ? T.coral : T.inkSoft, textAlign:'center' }}>{s.diff > 0 ? '+' : ''}{s.diff}</div>
+                      <div style={{ fontFamily:'monospace', fontSize:11, color:T.inkSoft, textAlign:'center' }}>{s.setWins ?? 0}</div>
+                      <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:13, color: si===0 ? T.yellow : T.ink, textAlign:'center' }}>{s.pts}</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Finals SE bracket (grp_rr_se) */}
+        {bp.tournament?.endsWith('_se') && bp.phase === 'finals' && seRoundsArr.length > 0 && (
+          <div style={{ background:T.surface, borderRadius:18, boxShadow:T.shadow, padding:'14px 14px' }}>
+            <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:12 }}>🏆 Főszakasz ágrajz</div>
+            <BracketView seRoundsArr={seRoundsArr} seCurRound={bp.seCurRound} seCurMatch={bp.seCurMatch} />
+          </div>
+        )}
+
+        {/* Finals RR standings (grp_rr_rr) */}
+        {bp.tournament?.endsWith('_rr') && bp.phase === 'finals' && rrMatchesArr.length > 0 && (() => {
+          const parts = rrMatchesArr.flatMap(m => [m.p1, m.p2]).filter((p,i,a) => p && a.findIndex(x=>x&&x.id===p.id)===i);
+          const st = getRRSt(parts, rrMatchesArr);
+          return (
+            <div style={{ background:T.surface, borderRadius:18, boxShadow:T.shadow, padding:'14px 14px' }}>
+              <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>🏆 Főszakasz állás</div>
+              <div style={{ display:'flex', gap:4, padding:'4px 6px', borderBottom:`1px solid ${T.surfaceMuted}`, marginBottom:6 }}>
+                <div style={{ flex:1, fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkMute, textTransform:'uppercase' }}>Játékos</div>
+                {['GY','D','V','Pt'].map(h => <div key={h} style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.inkMute, textTransform:'uppercase', minWidth:26, textAlign:'center' }}>{h}</div>)}
+              </div>
+              {st.map((s,i) => (
+                <div key={s.player.id} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 6px', borderRadius:8, background: i===0 ? `${T.yellow}12` : 'transparent' }}>
+                  <div style={{ fontFamily:T.font, fontSize:11, color:i===0?T.yellow:T.inkSoft, fontWeight:700, minWidth:16 }}>{i+1}.</div>
+                  <PlayerAvatar player={hydObs(s.player)} size={24} />
+                  <div style={{ flex:1, fontFamily:T.font, fontSize:13, fontWeight:700, color:T.ink }}>{s.player.name}</div>
+                  <div style={{ fontFamily:'monospace', fontSize:12, color:T.mint, minWidth:26, textAlign:'center' }}>{s.wins}</div>
+                  <div style={{ fontFamily:'monospace', fontSize:12, color:T.inkSoft, minWidth:26, textAlign:'center' }}>{s.draws}</div>
+                  <div style={{ fontFamily:'monospace', fontSize:12, color:T.coral, minWidth:26, textAlign:'center' }}>{s.losses}</div>
+                  <div style={{ fontFamily:'monospace', fontSize:13, fontWeight:700, color:T.ink, minWidth:26, textAlign:'center' }}>{s.pts}</div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
+        </div>
+        {/* Right column: Drinks leaderboard */}
+        <div style={{ flex: isWide ? '0 0 200px' : undefined, width: isWide ? 200 : undefined, display:'flex', flexDirection:'column', gap:12 }}>
+        {players.length > 0 && (
+          <div style={{ background:T.surface, borderRadius:18, boxShadow:T.shadow, padding:'14px 14px' }}>
+            <div style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>🍺 Pohár összesítő</div>
+            {[...players].map(p => ({ ...p, bpDrinks: (bp.drinkMap && bp.drinkMap[p.id]) || p.drinks || 0 })).sort((a,b) => b.bpDrinks - a.bpDrinks).map((p, i) => (
+              <div key={p.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 6px', borderRadius:10, background: i===0 && p.bpDrinks > 0 ? `${T.coral}12` : 'transparent' }}>
+                <PlayerAvatar player={p} size={28} />
+                <div style={{ flex:1, fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>{p.name}</div>
+                <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color: p.bpDrinks > 0 ? T.coral : T.inkMute }}>{p.bpDrinks}</span>
+                  <span style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>korty</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        </div>
+      </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════ BEER PONG 2.0 — OBSERVER (duplikátum, v10.376) ═══════════════
+function BeerPong2ObserverView({ room, code, onLeave }) {
+  const winW = useWindowWidth();
+  const isWide = winW >= 1024;
+  const bp = room.bp2State || {};
+  const players = room.players || [];
+  // A bp2State karcsú játékos-másolatokat tartalmaz (img nélkül) — az avatarhoz
+  // a room.players teljes objektumaiból hidratálunk id alapján.
+  const _bpPmap = React.useMemo(() => { const m = {}; players.forEach(p => { if (p && p.id) m[p.id] = p; }); return m; }, [players]);
+  const hydObs = (p) => (p && _bpPmap[p.id]) || p;
+  const selGames = room.selectedGames || [];
+  const gameIdx = room.gameIdx || 0;
+  const currentGameId = selGames[gameIdx % Math.max(1, selGames.length)];
+  const isBP = currentGameId === 'beerpong2';
 
   const [notifPerm, setNotifPerm] = React.useState(() => ('Notification' in window ? Notification.permission : 'unsupported'));
   React.useEffect(() => {
@@ -70670,6 +73605,9 @@ function ObserverWatching({ code, observerName, onLeave }) {
   const _curGameId2 = _selGames2[(room.gameIdx || 0) % Math.max(1, _selGames2.length)];
   if (room.bpState && _curGameId2 === 'beerpong') {
     return <BeerPongObserverView room={room} code={code} onLeave={onLeave} />;
+  }
+  if (room.bp2State && _curGameId2 === 'beerpong2') {
+    return <BeerPong2ObserverView room={room} code={code} onLeave={onLeave} />;
   }
 
   // Busz player mode — replace observer UI with player hand view

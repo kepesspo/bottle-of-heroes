@@ -123,7 +123,7 @@ async function setup(p, gameId, opts) {
   // v10.372: a Hajime / Kez csere / Meduza kapott FIX (stakeAbsolute) korongot,
   // az Utveszto pedig NORMAL skalazott korongot — tehat mar egyiknek sincs null
   // teteje. A null-listan a DNR/solo jatekok maradnak (nincs egyszeru tartomany).
-  const VART_NULL = ['beerpong','blackjack','busz','farkasos',
+  const VART_NULL = ['beerpong','beerpong2','blackjack','busz','farkasos',
                      'ovfj','powerhour','ringfire'].sort();
   ok(decl.nulls.slice().sort().join(',') === VART_NULL.join(','),
      'pontosan a várt játékok deklarálnak null tétet', decl.nulls.slice().sort().join(', '));
