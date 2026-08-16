@@ -46,7 +46,8 @@ const MOUNT = (sel) => `
 
 const txt = p => p.evaluate(() => (document.getElementById('__g').innerText || '').replace(/\s+/g, ' '));
 const clickG = (p, re) => p.evaluate(reSrc => { const b = [...document.querySelectorAll('#__g button')].find(x => new RegExp(reSrc).test(x.textContent || '')); if (b) { b.click(); return true; } return false; }, re.source);
-const clickBack = p => p.evaluate(() => { const b = [...document.querySelectorAll('#__g button')].find(x => (x.textContent || '').trim() === '‹'); if (b) { b.click(); return true; } return false; });
+// A fejléc a KÖZÖS AppBar — a vissza gomb az .appbar-shell első gombja (SVG, nincs szöveg).
+const clickBack = p => p.evaluate(() => { const b = document.querySelector('#__g .appbar-shell button'); if (b) { b.click(); return true; } return false; });
 
 (async () => {
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
@@ -64,7 +65,10 @@ const clickBack = p => p.evaluate(() => { const b = [...document.querySelectorAl
   console.log('\n===== 1. EGYBŐL A WIZARD (nincs köztes képernyő) =====');
   const t1 = await txt(p);
   ok(/Ki játszik\?/.test(t1), 'a Játékmenet EGYBŐL a „Mód" lépéssel nyit', /Ki játszik/.test(t1));
-  ok(/1\/4/.test(t1), 'a haladásjelző 1/4-en áll', (t1.match(/\d\/4/) || ['?'])[0]);
+  ok(/Játékmenet/.test(t1), 'a KÖZÖS AppBar fejléc („Játékmenet") ott van', /Játékmenet/.test(t1));
+  ok(/Mód/.test(t1) && /Formátum/.test(t1) && /Részletek/.test(t1) && /Név/.test(t1), 'a lépcső-jelző mind a 4 lépést mutatja');
+  const appbar = await p.evaluate(() => !!document.querySelector('#__g .appbar-shell'));
+  ok(appbar, 'a KÖZÖS appbar-shell komponens van használva (nem saját fejléc)');
   ok(!/Beer Pong beállítása/.test(t1), 'NINCS köztes „Beer Pong beállítása" gomb', !/Beer Pong beállítása/.test(t1));
   ok(!/Nehézségi szint/.test(t1) && !/Játéksorrend/.test(t1), 'NINCS Nehézség / Játéksorrend szekció');
 
