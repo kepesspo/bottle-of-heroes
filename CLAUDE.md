@@ -2325,3 +2325,47 @@ Teszt: `node tests/beerpong2_test.js` — a 2.0 végigjátszható és bajnokot h
 fordítva (`bpState`, nem `bp2State`), és a 2.0 observer a `bp2State`-ből rajzol.
 A `bp_final_test` (a RÉGI Beer Pong) változatlanul zöld — ez a bizonyíték, hogy
 a meglévő nem sérült.
+
+## Beer Pong 2.0: telefonos eredmény-beküldés (v10.377)
+A roadmap #1: a meccs játékosai a **telefonjukon** állítják a poharat és
+**beküldik**, a **host** marad a hiteles és **egy koppintással** jóváhagyja. Ez
+oldja fel a host-szűk keresztmetszetet (eddig csak a host tudott pontozni), és
+megágyaz a párhuzamos asztaloknak (#2).
+
+**A csatorna a szoba `bp2Submit` mezője** — NEM a `bp2State` (az a hosté, a
+`syncRoom` írja). A telefon `bohRoomRef(code).update({ bp2Submit: {...} })`-vel ír,
+a host `subscribeRoom`-mal figyeli. A javaslat alakja:
+`{ p1id, p2id, p1, p2, by, ts }`.
+
+**⚠️ A javaslat a meccs KÉT játékosának id-jére hivatkozik** (`p1id`/`p2id`), nem
+egy meccs-indexre. Így egy elavult, már lejátszott meccsre szóló beküldést a host
+render maga kiszűr (`s.p1id === currentMatch.p1.id && s.p2id === currentMatch.p2.id`).
+A bracket **véletlenszerűen sorsol**, tehát a telefon a `bp2State` aktuális
+meccséből olvassa az orientációt — a beküldés ugyanabban az orientációban megy
+vissza, a host nem cserél p1/p2-t.
+
+**A host jóváhagyása EGY tap, refaktor nélkül a törékeny confirm-úton.** A
+megerősítő gomb `onClick`-ja `doConfirm()`-má lett kiemelve (a gomb ÉS a
+telefon-elfogadás ugyanazt futtatja). Az „Elfogadom": beállítja a `cups1/cups2`-t
+a javasolt értékre, majd egy **auto-rögzítő effekt** (`pendingConfirmRef` +
+`[cups1,cups2]` figyelés) lefuttatja a `doConfirm()`-ot, amint a state tükrözi az
+értéket. Így a `handleSEConfirm`/`handleRRConfirm`/`handleGroupConfirm` (visszavágó,
+polip-tiebreaker) érintetlen marad — csak a cups-állapoton keresztül hívjuk.
+
+**⚠️ A `CupCounter` a játék-komponensbe ágyazott** (nested, nem modul-szintű),
+ezért a `BeerPong2ObserverView`-ból NEM elérhető — a telefon-panel **saját inline
+léptetőt** rajzol (ugyanaz a `−`/szám/`+` szerkezet). Aki modul-szintre emelné,
+mindkét játékból ki kell vennie.
+
+A `bp2State` sync mostantól viszi a `maxCups`/`finalCups`-ot is — a telefonnak
+kell a léptető plafonjához. Az `observerName` a diszpécserből lemegy a 2.0
+observernek (a `by` mezőhöz). Döntetlen nem küldhető/rögzíthető (SE-ben nincs
+értelme) — a gomb tiltott.
+
+Teszt: `node tests/beerpong2_phone_test.js` — host + telefon EGY szobán: a telefon
+beküldő-panelt mutat, a beküldés megtölti a `bp2Submit`-et a helyes id-kkel, a
+hoston megjelenik a jóváhagyó sáv, és az „Elfogadom" rögzíti a meccset (2 főnél
+bajnok + pont + a vesztes a pohár-különbséget issza), végül a `bp2Submit` törlődik.
+⚠️ A bracket sorsol, ezért a teszt a `bp2State`-ből olvassa a meccs orientációját;
+az `innerText` a `text-transform:uppercase` miatt NAGYBETŰS, ezért a cím-ellenőrzés
+`/i`.
