@@ -2446,3 +2446,28 @@ Teszt: `node tests/beerpong2_bronze_test.js` — 4 játékos, teljes lefutás: e
 döntő → a döntő NEM hirdet bajnokot, a BRONZ indul a 2 elődöntő-vesztessel („3. helyért"
 címke) → a bronz lezárása bajnokot hirdet, a Végeredmény 🥇🥈🥉-mal, és az `onAdvance`
 a bronz UTÁN megy (bajnok-pont + a bronz-vesztes kortyai is benne).
+
+## Beer Pong 2.0: 1 csoportos 2 lépcsős opció (erősorrend) (v10.380)
+A 2 lépcsős tornáknál (`grp_rr_se`, `grp_rr_rr`) engedélyezve az **1 csoport**. Ok:
+egy közös körmérkőzés = **erősorrend**, majd az arra épülő főszakasz.
+
+**⚠️ 1 csoportnál MINDENKI továbbjut** a főszakaszra, a végső állás szerint kiemelve
+— NEM csak a top `groupAdvance`. A finals-build (`handleGroupConfirm` setCB, „start
+finals" blokk): `oneGroup = ng.length === 1` → `take = standings.length`, és a seed-
+összefésülés `maxPos = max(advByGroup hosszak)`-ig megy (nem `GROUP_ADVANCE`-ig). Több
+csoportnál a régi viselkedés marad (top `GROUP_ADVANCE`/csoport, pozíció szerint
+összefésülve). A kieséses ág `buildSEBracketOrdered`-del seedeli az állás-sorrendet
+(1. vs utolsó…), a RR ág simán mindenkit visz.
+
+**A `numGroups` alsó határa 1** két helyen: a `BeerPong2ConfigSheet` léptetője
+(`Math.max(1, …)`) és a `initTournament` mindkét ága (`Math.max(1, Math.min(NUM_GROUPS,
+floor(N/2)))`). A config lapon 1 csoportnál a „Továbbjutók/csoport" sor helyett egy
+jegyzet áll („mindenki továbbjut, erősorrend szerint kiemelve"), mert a `groupAdvance`
+ilyenkor nem játszik.
+
+⚠️ Ez CSAK a `beerpong2` — a régi `beerpong` min-2 csoportja változatlan.
+
+Teszt: `node tests/beerpong2_group1_test.js` — `grp_rr_se`, 1 csoport, **`groupAdvance:1`**
+(!), 4 játékos: pontosan 1 csoport, 6 meccses RR, majd a kieséses főszakaszba MIND A 4
+játékos bekerül. A `groupAdvance:1` a fogódzó: az 1-csoport-felülírás nélkül a régi
+logika 1 embert vinne tovább (degenerált).
