@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.377';
+const APP_VERSION = 'v10.378';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -44923,6 +44923,10 @@ function BeerPong2ConfigSheet({ config, setConfig, onClose, playerCount }) {
     { key:'maxCups',       label:'Poharak száma',    val:maxCups,       min:4, max:16, step:2 },
     { key:'finalCups',     label:'Poharak a döntőben', val:finalCups, min:4, max:16, step:2,
       sub:'A döntő mindig egy meccs — visszavágó nélkül' },
+    // Parhuzamos asztalok (v10.378): kieseses agban ennyi meccs mehet egyszerre,
+    // telefonrol bekuldve. A host mindegyiket kulon jovahagyja.
+    { key:'tables',        label:'Asztalok száma',   val: (config.tables ?? 1), min:1, max:4, step:1,
+      sub:'Hány meccs mehet egyszerre, telefonos beküldéssel (kieséses)' },
 
     { key:'matchMinutes',  label:'Meccs hossza (perc)',val:matchMinutes, min:0, max:20, step:1 },
   ];
@@ -51422,6 +51426,9 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
   const MATCH_MINUTES = bpCfg.matchMinutes ?? 5;
   const MODE = bpCfg.mode || 'egyeni';
   const TOURNAMENT_NAME = bpCfg.tournamentName || '';
+  // Parhuzamos asztalok (v10.378): a kieseses kor ennyi meccse mehet EGYSZERRE,
+  // telefonrol bekuldve. Csak SE-ben ertelmes; visszavagoval 1-re esik vissza.
+  const TABLES = (TOURNAMENT === 'se' && !VISSZAVAGO) ? Math.max(1, Math.min(4, bpCfg.tables ?? 1)) : 1;
   const doneRef = React.useRef(false);
   const [showTableau, setShowTableau] = React.useState(false);
   const teamPlayersRef = React.useRef(null);
@@ -51792,6 +51799,7 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
       champion: champion ? { id: champion.id, name: champion.name, color: champion.color } : null,
       drinkMap,
       maxCups: MAX_CUPS, finalCups: FINAL_CUPS,   // a telefonos bekuldeshez kell a plafon
+      tables: TABLES,                              // parhuzamos asztalok szama (SE)
     }});
     // A bajnoksag lezarult: a fuggoben maradt ertesitesek TORLODNEK a szobabol.
     // Nelkuluk a "Kovetkezo meccs!" ott maradna a dokumentumban.
@@ -51846,28 +51854,34 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
   };
 
   // ── SE confirm ────────────────────────────────────────────────────────────
-  const handleSEConfirm = (rounds, curRound, curMatch, setCB) => {
+  const handleSEConfirm = (rounds, curRound, curMatch, setCB, aCups, bCups) => {
     if (!rounds[curRound]?.[curMatch]) return;
     const match = rounds[curRound][curMatch];
-    const score  = { p1: cups1, p2: cups2 };
-    resetTimer();
+    // Parhuzamos asztalok (v10.378): a telefonos elfogadas EXPLICIT cups-szal hivja
+    // (aCups/bCups) — igy egy TETSZOLEGES fuggoben levo meccs is lezarhato, nem csak
+    // a mutato (seCurMatch). A rendes (mutato) ut a cups1/cups2 allapotot hasznalja.
+    const explicit = (aCups != null && bCups != null);
+    const a = explicit ? aCups : cups1;
+    const b = explicit ? bCups : cups2;
+    const score  = { p1: a, p2: b };
+    if (!explicit) resetTimer();
 
     // Ha visszavágó volt (score1 létezik), összesített pohárszám dönt 1-1 esetén
     let winner, loser;
     if (match.score1) {
       const s1 = match.score1;
-      const m1draw = s1.p1 === s1.p2, m2draw = cups1 === cups2;
+      const m1draw = s1.p1 === s1.p2, m2draw = a === b;
       // Mindkét meccs döntetlen → polip tiebreaker
       if (m1draw && m2draw) {
         setPolipOverlay({ match, rounds, curRound, curMatch, setCB, score1: s1, score2: score });
         return;
       }
-      const m1p1win = s1.p1 > s1.p2, m2p1win = cups1 > cups2;
+      const m1p1win = s1.p1 > s1.p2, m2p1win = a > b;
       if (m1p1win === m2p1win) {
         winner = m2p1win ? match.p1 : match.p2;
         loser  = m2p1win ? match.p2 : match.p1;
       } else {
-        const totP1 = s1.p1 + cups1, totP2 = s1.p2 + cups2;
+        const totP1 = s1.p1 + a, totP2 = s1.p2 + b;
         if (totP1 === totP2) {
           setPolipOverlay({ match, rounds, curRound, curMatch, setCB, score1: s1, score2: score });
           return;
@@ -51876,17 +51890,17 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
         loser  = totP1 > totP2 ? match.p2 : match.p1;
       }
     } else {
-      winner = cups1 > cups2 ? match.p1 : match.p2;
-      loser  = cups1 > cups2 ? match.p2 : match.p1;
+      winner = a > b ? match.p1 : match.p2;
+      loser  = a > b ? match.p2 : match.p1;
     }
 
-    const loserScore = winner?.id === match.p1?.id ? cups2 : cups1;
-    const winnerScore = winner?.id === match.p1?.id ? cups1 : cups2;
+    const loserScore = winner?.id === match.p1?.id ? b : a;
+    const winnerScore = winner?.id === match.p1?.id ? a : b;
     const cupDiff = Math.max(1, Math.abs(winnerScore - loserScore));
     const newDrink = { ...drinkMap };
     if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + cupDiff;
     setDrinkMap(newDrink);
-    setCups1(0); setCups2(0);
+    if (!explicit) { setCups1(0); setCups2(0); }
 
     // Meccs-statisztika
     if (winner && loser) recordMatch(winner, loser, false);
@@ -52071,40 +52085,43 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
 
   React.useEffect(() => { setVissszavagoOffer(null); }, [seCurRound, seCurMatch]);
 
-  // ── Telefonos eredmeny-bekuldes (v10.377) ─────────────────────────────────
-  // A meccs jatekosai a telefonjukon allitjak a poharat, es bekuldik: a szoba
-  // `bp2Submit` mezojebe irnak (nem a bp2State-be — az a hoste). A HOST marad a
-  // hiteles: itt csak MEGJELENIK egy javaslat-sav, es a host EGY koppintassal
-  // elfogadja (a szamlalok kitoltodnek + rogzites) vagy elveti. A javaslat a
-  // meccs KET jatekosanak id-jere hivatkozik (p1id/p2id), igy egy elavult, mar
-  // lejatszott meccsre szolo bekuldest a render maga kiszur.
-  const [submitProposal, setSubmitProposal] = React.useState(null);
-  const seenSubmitRef = React.useRef(null);
-  const pendingConfirmRef = React.useRef(null);   // { p1, p2 } — auto-rogzites a cups frissulese utan
+  // ── Telefonos eredmeny-bekuldes + PARHUZAMOS ASZTALOK (v10.377/378) ────────
+  // A meccs jatekosai a telefonjukon allitjak a poharat es bekuldik: a szoba
+  // `bp2Submit` MAP-jaba irnak (kulcs: a ket jatekos id-je), NEM a bp2State-be
+  // (az a hoste). Tobb asztal EGYSZERRE kuldhet be — a host mindegyiket kulon
+  // jovahagyja. Az elavult (mar lejatszott meccsre szolo) bekuldest a render
+  // kiszuri; a helyes (r,i) koordinatat a jatekos-id-kbol keressuk vissza.
+  const [submitMap, setSubmitMap] = React.useState({});
+  const pendingConfirmRef = React.useRef(null);   // RR/group ut: auto-rogzites a cups frissulese utan
   const doConfirmRef = React.useRef(null);
   React.useEffect(() => {
     if (!roomCode || typeof subscribeRoom !== 'function') return;
     const unsub = subscribeRoom(roomCode, data => {
-      const s = data && data.bp2Submit;
-      if (!s) { setSubmitProposal(null); return; }
-      if (s.ts && seenSubmitRef.current === s.ts) return;   // ugyanaz — ne villogjon
-      seenSubmitRef.current = s.ts || null;
-      setSubmitProposal(s);
+      setSubmitMap((data && data.bp2Submit && typeof data.bp2Submit === 'object') ? data.bp2Submit : {});
     });
     return () => unsub && unsub();
   }, [roomCode, gameIdx]);
-  const clearProposal = () => {
-    setSubmitProposal(null);
-    if (roomCode) { const r = bohRoomRef(roomCode); if (r) r.update({ bp2Submit: null }).catch(() => {}); }
+  const clearSub = (mkId) => {
+    setSubmitMap(m => { const n = { ...m }; delete n[mkId]; return n; });
+    if (roomCode) { const r = bohRoomRef(roomCode); if (r) r.set({ bp2Submit: { [mkId]: firebase.firestore.FieldValue.delete() } }, { merge: true }).catch(() => {}); }
   };
-  // A cups allapotot a javasolt ertekre allitjuk, majd amint a state tukrozi,
-  // az auto-rogzites effekt lefuttatja a rendes megerosito utat (doConfirm).
-  const acceptProposal = (s) => {
-    if (!s) return;
-    clearProposal();
-    if (cups1 === s.p1 && cups2 === s.p2) { if (doConfirmRef.current) doConfirmRef.current(); return; }
-    pendingConfirmRef.current = { p1: s.p1, p2: s.p2 };
-    setCups1(s.p1); setCups2(s.p2);
+  // Egy telefonos javaslat elfogadasa. SE-ben TETSZOLEGES fuggoben levo meccset
+  // lezarhatunk (explicit cups) — igy megy a parhuzamos asztal. RR/group (egy
+  // asztal) a mutato-uton at rogzit (cups allapot + doConfirm).
+  const acceptSub = (mkId, sub) => {
+    if (!sub) return;
+    if (TOURNAMENT === 'se' && seRounds.length && !champion) {
+      const round = seRounds[seCurRound] || [];
+      const idx = round.findIndex(m => m && m.winner == null && !m.tbd && m.p1 && m.p2 && m.p1.id === sub.p1id && m.p2.id === sub.p2id);
+      if (idx === -1) { clearSub(mkId); return; }
+      clearSub(mkId);
+      handleSEConfirm(seRounds, seCurRound, idx, setSeRounds, sub.p1, sub.p2);
+      return;
+    }
+    clearSub(mkId);
+    if (cups1 === sub.p1 && cups2 === sub.p2) { if (doConfirmRef.current) doConfirmRef.current(); return; }
+    pendingConfirmRef.current = { p1: sub.p1, p2: sub.p2 };
+    setCups1(sub.p1); setCups2(sub.p2);
   };
   React.useEffect(() => {
     const pc = pendingConfirmRef.current;
@@ -52669,24 +52686,37 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
           </div>
         )}
 
-        {/* 📱 Telefonos eredmeny-javaslat — a host EGY koppintassal elfogadja/elveti */}
+        {/* 📱 Telefonos eredmeny-javaslatok — PARHUZAMOS asztalok; a host kulon jovahagyja (v10.378) */}
         {(() => {
-          const s = submitProposal;
-          const okMatch = s && currentMatch && currentMatch.p1 && currentMatch.p2 &&
-            s.p1id === currentMatch.p1.id && s.p2id === currentMatch.p2.id;
-          if (!okMatch) return null;
+          const _nm = (id, fb) => { const p = (players || []).find(x => x.id === id); return (p && p.name) || fb || '?'; };
+          const entries = Object.keys(submitMap || {}).map(k => ({ mkId: k, sub: submitMap[k] })).filter(({ sub }) => {
+            if (!sub) return false;
+            if (TOURNAMENT === 'se' && seRounds.length && !champion) {
+              const round = seRounds[seCurRound] || [];
+              return round.some(m => m && m.winner == null && !m.tbd && m.p1 && m.p2 && m.p1.id === sub.p1id && m.p2.id === sub.p2id);
+            }
+            return currentMatch && currentMatch.p1 && currentMatch.p2 && sub.p1id === currentMatch.p1.id && sub.p2id === currentMatch.p2.id;
+          });
+          if (!entries.length) return null;
           return (
-            <div style={{ marginTop:16, background:T.mintSoft, borderRadius:16, padding:'14px 16px', display:'flex', flexDirection:'column', gap:10, border:'2px solid '+T.mint }}>
-              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:T.mintDeep, letterSpacing:'0.04em' }}>📱 BEKÜLDÖTT EREDMÉNY{s.by ? ' · ' + s.by : ''}</div>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink }}>
-                <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110, textAlign:'right' }}>{currentMatch.p1.name}</span>
-                <span style={{ fontVariantNumeric:'tabular-nums', color:T.mintDeep }}>{s.p1} – {s.p2}</span>
-                <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110 }}>{currentMatch.p2.name}</span>
-              </div>
-              <div style={{ display:'flex', gap:8 }}>
-                <button onClick={() => clearProposal()} style={{ flex:1, padding:'12px', borderRadius:12, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background:'rgba(14,14,24,0.06)', color:T.inkSoft }}>Elvetem</button>
-                <button onClick={() => acceptProposal(s)} disabled={s.p1 === s.p2} style={{ flex:2, padding:'12px', borderRadius:12, border:'none', cursor: s.p1===s.p2?'default':'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, background: s.p1===s.p2?'rgba(0,0,0,0.07)':T.mint, color: s.p1===s.p2?T.inkMute:'#fff', boxShadow: s.p1===s.p2?'none':'0 4px 0 '+T.mintDeep }}>{s.p1===s.p2 ? 'Döntetlen — nem rögzíthető' : 'Elfogadom és rögzítem'}</button>
-              </div>
+            <div style={{ marginTop:16, display:'flex', flexDirection:'column', gap:10 }}>
+              {entries.map(({ mkId, sub }) => {
+                const draw = sub.p1 === sub.p2;
+                return (
+                  <div key={mkId} style={{ background:T.mintSoft, borderRadius:16, padding:'14px 16px', display:'flex', flexDirection:'column', gap:10, border:'2px solid '+T.mint }}>
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:T.mintDeep, letterSpacing:'0.04em' }}>📱 BEKÜLDÖTT EREDMÉNY{sub.by ? ' · ' + sub.by : ''}</div>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink }}>
+                      <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110, textAlign:'right' }}>{_nm(sub.p1id, sub.p1name)}</span>
+                      <span style={{ fontVariantNumeric:'tabular-nums', color:T.mintDeep }}>{sub.p1} – {sub.p2}</span>
+                      <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110 }}>{_nm(sub.p2id, sub.p2name)}</span>
+                    </div>
+                    <div style={{ display:'flex', gap:8 }}>
+                      <button onClick={() => clearSub(mkId)} style={{ flex:1, padding:'12px', borderRadius:12, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background:'rgba(14,14,24,0.06)', color:T.inkSoft }}>Elvetem</button>
+                      <button onClick={() => acceptSub(mkId, sub)} disabled={draw} style={{ flex:2, padding:'12px', borderRadius:12, border:'none', cursor: draw?'default':'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, background: draw?'rgba(0,0,0,0.07)':T.mint, color: draw?T.inkMute:'#fff', boxShadow: draw?'none':'0 4px 0 '+T.mintDeep }}>{draw ? 'Döntetlen — nem rögzíthető' : 'Elfogadom és rögzítem'}</button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           );
         })()}
@@ -72805,22 +72835,32 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
     return null;
   })();
 
-  // ── Telefonos eredmeny-bekuldes (v10.377) ─────────────────────────────────
-  // A meccs jatekosai a telefonjukon beallitjak a poharat es bekuldik: a szoba
-  // `bp2Submit` mezojebe irunk, a HOST hagyja jova. A `_matchId` a ket jatekos
-  // id-jere epul — igy egy uj meccsnel az urlap automatikusan nulazodik.
-  const _cmP1 = curMatch && curMatch.p1 ? hydObs(curMatch.p1) : null;
-  const _cmP2 = curMatch && curMatch.p2 ? hydObs(curMatch.p2) : null;
-  const _matchId = (_cmP1 && _cmP2 && !bp.champion) ? (_cmP1.id + '|' + _cmP2.id) : null;
+  // ── Telefonos eredmeny-bekuldes + PARHUZAMOS ASZTALOK (v10.377/378) ────────
+  // Tobb asztal EGYSZERRE kuldhet be: a szoba `bp2Submit` MAP-jaba irunk (kulcs a
+  // ket jatekos id-je). SE-ben a jelenlegi kor fuggoben levo meccsei kozul az elso
+  // `tables` mehet egyszerre; mas tipusnal a jelenlegi (mutato) meccs egyedul.
+  const _tables = Math.max(1, Math.min(4, bp.tables || 1));
+  const _seRoundArr = (bp.tournament === 'se' && !bp.champion)
+    ? (() => { const r = seRoundsArr[bp.seCurRound ?? 0]; return r ? (Array.isArray(r) ? r : Object.values(r)) : []; })()
+    : [];
+  const _activeMatches = (bp.tournament === 'se' && !bp.champion)
+    ? _seRoundArr.filter(m => m && m.p1 && m.p2 && m.winner == null && !m.tbd).slice(0, _tables)
+    : (curMatch && curMatch.p1 && curMatch.p2 && !bp.champion ? [curMatch] : []);
   const _maxCups = bp.maxCups || 10;
-  const [bpEntry, setBpEntry] = React.useState({ mid: null, a: 0, b: 0 });
-  React.useEffect(() => { setBpEntry({ mid: _matchId, a: 0, b: 0 }); }, [_matchId]);
-  const _pendingSubmit = (room.bp2Submit && curMatch && curMatch.p1 && curMatch.p2 &&
-    room.bp2Submit.p1id === curMatch.p1.id && room.bp2Submit.p2id === curMatch.p2.id) ? room.bp2Submit : null;
-  const submitScore = () => {
-    if (!_cmP1 || !_cmP2 || !code || bpEntry.a === bpEntry.b) return;
+  const _mkId = (aId, bId) => aId + '__' + bId;
+  const _activeKey = _activeMatches.map(m => _mkId(m.p1.id, m.p2.id)).join(',');
+  const [bpEntries, setBpEntries] = React.useState({});
+  React.useEffect(() => { setBpEntries({}); }, [_activeKey]);   // uj aktiv-halmaznal nulazunk
+  const _entryOf = (mkId) => bpEntries[mkId] || { a: 0, b: 0 };
+  const _setEntry = (mkId, patch) => setBpEntries(prev => { const cur = prev[mkId] || { a: 0, b: 0 }; return { ...prev, [mkId]: { ...cur, ...(typeof patch === 'function' ? patch(cur) : patch) } }; });
+  const _pendingOf = (mkId) => (room.bp2Submit && room.bp2Submit[mkId]) ? room.bp2Submit[mkId] : null;
+  const submitMatch = (m) => {
+    if (!m || !m.p1 || !m.p2 || !code) return;
+    const mkId = _mkId(m.p1.id, m.p2.id);
+    const e = _entryOf(mkId);
+    if (e.a === e.b) return;
     const ref = bohRoomRef(code); if (!ref) return;
-    ref.update({ bp2Submit: { p1id: curMatch.p1.id, p2id: curMatch.p2.id, p1: bpEntry.a, p2: bpEntry.b, by: observerName || '', ts: Date.now() } }).catch(() => {});
+    ref.set({ bp2Submit: { [mkId]: { p1id: m.p1.id, p2id: m.p2.id, p1name: (hydObs(m.p1).name)||'', p2name: (hydObs(m.p2).name)||'', p1: e.a, p2: e.b, by: observerName || '', ts: Date.now() } } }, { merge: true }).catch(() => {});
   };
 
   return (
@@ -72863,45 +72903,52 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
         <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:12 }}>
 
 
-        {/* 📱 Eredmeny bekuldese a hostnak (v10.377) */}
-        {_matchId && _cmP1 && _cmP2 && (
-          <div style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:T.shadow, display:'flex', flexDirection:'column', gap:12 }}>
-            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>Eredmény beküldése</div>
-            {_pendingSubmit ? (
-              <div style={{ textAlign:'center', fontFamily:T.font, fontSize:14, color:T.mintDeep, fontWeight:800, padding:'6px 0' }}>
-                ⏳ Elküldve — {_cmP1.name} {_pendingSubmit.p1} – {_pendingSubmit.p2} {_cmP2.name}
-                <div style={{ fontSize:12, color:T.inkSoft, fontWeight:600, marginTop:2 }}>a host jóváhagyására vár…</div>
-              </div>
-            ) : (
-              <React.Fragment>
-                <div style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
-                  <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
-                    <PlayerAvatar player={_cmP1} size={52} />
-                    <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, textAlign:'center', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{_cmP1.name}</div>
-                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                      <button onClick={()=>setBpEntry(e=>({...e,a:Math.max(0,e.a-1)}))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.coralSoft, color:'#D85F5C', fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>−</button>
-                      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color: bpEntry.a>bpEntry.b ? T.mint : T.ink, minWidth:28, textAlign:'center', fontVariantNumeric:'tabular-nums' }}>{bpEntry.a}</div>
-                      <button onClick={()=>setBpEntry(e=>({...e,a:Math.min(_maxCups,e.a+1)}))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>+</button>
-                    </div>
-                  </div>
-                  <div style={{ paddingTop:22, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft, flexShrink:0 }}>VS</div>
-                  <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
-                    <PlayerAvatar player={_cmP2} size={52} />
-                    <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, textAlign:'center', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{_cmP2.name}</div>
-                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                      <button onClick={()=>setBpEntry(e=>({...e,b:Math.max(0,e.b-1)}))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.coralSoft, color:'#D85F5C', fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>−</button>
-                      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color: bpEntry.b>bpEntry.a ? T.mint : T.ink, minWidth:28, textAlign:'center', fontVariantNumeric:'tabular-nums' }}>{bpEntry.b}</div>
-                      <button onClick={()=>setBpEntry(e=>({...e,b:Math.min(_maxCups,e.b+1)}))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>+</button>
-                    </div>
-                  </div>
+        {/* 📱 Eredmeny bekuldese a hostnak — PARHUZAMOS asztalok (v10.378) */}
+        {_activeMatches.map((m) => {
+          const p1 = hydObs(m.p1), p2 = hydObs(m.p2);
+          const mkId = _mkId(m.p1.id, m.p2.id);
+          const e = _entryOf(mkId);
+          const pend = _pendingOf(mkId);
+          const multi = _activeMatches.length > 1;
+          return (
+            <div key={mkId} style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:T.shadow, display:'flex', flexDirection:'column', gap:12 }}>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>{multi ? 'Asztal — eredmény beküldése' : 'Eredmény beküldése'}</div>
+              {pend ? (
+                <div style={{ textAlign:'center', fontFamily:T.font, fontSize:14, color:T.mintDeep, fontWeight:800, padding:'6px 0' }}>
+                  ⏳ Elküldve — {p1.name} {pend.p1} – {pend.p2} {p2.name}
+                  <div style={{ fontSize:12, color:T.inkSoft, fontWeight:600, marginTop:2 }}>a host jóváhagyására vár…</div>
                 </div>
-                <button onClick={submitScore} disabled={bpEntry.a===bpEntry.b} style={{ width:'100%', padding:'13px', borderRadius:14, border:'none', cursor: bpEntry.a===bpEntry.b?'default':'pointer', fontFamily:T.font, fontWeight:900, fontSize:15, background: bpEntry.a===bpEntry.b?'rgba(0,0,0,0.07)':T.mint, color: bpEntry.a===bpEntry.b?T.inkMute:'#fff', boxShadow: bpEntry.a===bpEntry.b?'none':'0 4px 0 '+T.mintDeep }}>
-                  {bpEntry.a===bpEntry.b ? 'Állítsd be az eredményt' : 'Beküldés a hostnak'}
-                </button>
-              </React.Fragment>
-            )}
-          </div>
-        )}
+              ) : (
+                <React.Fragment>
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
+                    <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+                      <PlayerAvatar player={p1} size={52} />
+                      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, textAlign:'center', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p1.name}</div>
+                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <button onClick={()=>_setEntry(mkId, c=>({a:Math.max(0,c.a-1)}))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.coralSoft, color:'#D85F5C', fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>−</button>
+                        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color: e.a>e.b ? T.mint : T.ink, minWidth:28, textAlign:'center', fontVariantNumeric:'tabular-nums' }}>{e.a}</div>
+                        <button onClick={()=>_setEntry(mkId, c=>({a:Math.min(_maxCups,c.a+1)}))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>+</button>
+                      </div>
+                    </div>
+                    <div style={{ paddingTop:22, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft, flexShrink:0 }}>VS</div>
+                    <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
+                      <PlayerAvatar player={p2} size={52} />
+                      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, textAlign:'center', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p2.name}</div>
+                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <button onClick={()=>_setEntry(mkId, c=>({b:Math.max(0,c.b-1)}))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.coralSoft, color:'#D85F5C', fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>−</button>
+                        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color: e.b>e.a ? T.mint : T.ink, minWidth:28, textAlign:'center', fontVariantNumeric:'tabular-nums' }}>{e.b}</div>
+                        <button onClick={()=>_setEntry(mkId, c=>({b:Math.min(_maxCups,c.b+1)}))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>+</button>
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={()=>submitMatch(m)} disabled={e.a===e.b} style={{ width:'100%', padding:'13px', borderRadius:14, border:'none', cursor: e.a===e.b?'default':'pointer', fontFamily:T.font, fontWeight:900, fontSize:15, background: e.a===e.b?'rgba(0,0,0,0.07)':T.mint, color: e.a===e.b?T.inkMute:'#fff', boxShadow: e.a===e.b?'none':'0 4px 0 '+T.mintDeep }}>
+                    {e.a===e.b ? 'Állítsd be az eredményt' : 'Beküldés a hostnak'}
+                  </button>
+                </React.Fragment>
+              )}
+            </div>
+          );
+        })}
 
         {/* Champion banner */}
         {bp.champion && (

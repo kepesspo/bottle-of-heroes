@@ -2369,3 +2369,42 @@ bajnok + pont + a vesztes a pohár-különbséget issza), végül a `bp2Submit` 
 ⚠️ A bracket sorsol, ezért a teszt a `bp2State`-ből olvassa a meccs orientációját;
 az `innerText` a `text-transform:uppercase` miatt NAGYBETŰS, ezért a cím-ellenőrzés
 `/i`.
+
+## Beer Pong 2.0: párhuzamos asztalok (v10.378)
+A roadmap #2: a kieséses kör **több meccse mehet EGYSZERRE**, telefonról beküldve;
+a host mindegyiket **külön** jóváhagyja. Config: **`tables`** (1–4), csak SE-ben és
+**visszavágó nélkül** él (`const TABLES = (TOURNAMENT==='se' && !VISSZAVAGO) ? ... : 1`)
+— a két menetes ág a mutató-utat használja.
+
+**⚠️ A `bp2Submit` mostantól MAP** (kulcs: `p1id + '__' + p2id`), nem egyetlen
+objektum. Így több asztal beküldése egyszerre megfér. A telefon `set(..., {merge:true})`-vel
+ír egy kulcsot (nem `update`, ami az egész mezőt cserélné); a host `FieldValue.delete()`-tel
+(szintén `set`+`merge`) veszi ki a feldolgozottat — dotted-path helyett, mert a
+kulcs `|`/`.` karaktert is tartalmazhat (v10.323 mintája).
+
+**⚠️ A `handleSEConfirm` explicit cups-ot fogad** (`(rounds, curRound, curMatch,
+setCB, aCups, bCups)`) — így egy TETSZŐLEGES függőben lévő meccs is lezárható, nem
+csak a `seCurMatch` mutató. A meccs-koordinátát (r,i) a beküldés két játékos-id-jéből
+keressük vissza a jelenlegi körben. A pontozó-motor round-advance logikája már eddig
+is bírta a kör-on-belüli tetszőleges sorrendet (a `curMatch` PARAMÉTER, és utána
+újraszkennel a következő függőre) — csak a UI kötötte egy mutatóhoz.
+
+**A host** a beküldéseket egy **kártya-táblaként** mutatja (egy kártya asztalonként),
+mindegyik külön Elfogadom/Elvetem. Az SE-elfogadás `handleSEConfirm`-ot hív explicit
+cups-szal; a RR/group (egy asztal) a régi cups+`doConfirm` mutató-utat. A manuális
+meccs-kártya (pointer) megmarad — a host kézzel is pontozhat egy asztalt.
+
+**A telefon** SE + `tables>1` esetén a kör első `tables` függőben lévő meccsét
+mutatja, mindegyiket saját léptető-párral és beküldő-gombbal (per-match `bpEntries`
+state, `_activeKey`-re nullázva). `tables===1` és a nem-SE típusok a régi
+egy-meccses viselkedést kapják (a lista ilyenkor egy elemű).
+
+**⚠️ A `CupCounter` nested** (a játék-komponensbe ágyazott), ezért a telefon-panel
+saját inline léptetőt rajzol — ez a v10.377 óta így van, a párhuzamos kártyák is
+ezt viszik.
+
+Teszt: `node tests/beerpong2_tables_test.js` — 4 játékos / 2 asztal: a telefon 2
+beküldő-kártyát mutat, két egyidejű beküldés a hoston 2 jóváhagyó kártyát ad,
+mindkettő elfogadása lezárja a két elődöntőt (out-of-order is jó, mindkét vesztes a
+pohár-különbséget issza) és a DÖNTŐRE lép, végül a döntő bajnokot hirdet ponttal.
+A `beerpong2_phone_test` (egy asztal) és a `bp_final_test` (régi) változatlanul zöld.

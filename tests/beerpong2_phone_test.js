@@ -92,7 +92,9 @@ const phoneTxt = p => p.evaluate(() => (document.getElementById('__phone').inner
   await p.waitForTimeout(200);
   await p.evaluate(() => { const b = [...document.querySelectorAll('#__phone button')].find(x => /Beküldés a hostnak/.test(x.textContent || '')); if (b) b.click(); });
   await p.waitForTimeout(700);
-  const sub = (await store(p)).bp2Submit;
+  // v10.378: a bp2Submit MAP (kulcs a két játékos id-je) — egy asztalnál egy bejegyzés
+  const subMap = (await store(p)).bp2Submit || {};
+  const sub = Object.values(subMap)[0];
   ok(sub && sub.p1 === 7 && sub.p2 === 0, 'a szoba bp2Submit mezője megtelt (7–0)', sub && (sub.p1 + '–' + sub.p2));
   ok(sub && sub.p1id === cm.p1id && sub.p2id === cm.p2id, 'a beküldés a meccs két játékosának id-jét viszi', sub && (sub.p1id + '/' + sub.p2id));
   ok(/Elküldve|jóváhagyására vár/.test(await phoneTxt(p)), 'a telefon „várakozás" állapotot mutat');
@@ -113,8 +115,9 @@ const phoneTxt = p => p.evaluate(() => (document.getElementById('__phone').inner
   // A 7 kortyot a p1 (a beküldő rows[0]) kapta → ő a NYERTES, a p2 a vesztes.
   ok(adv && adv.pm && adv.pm[cm.p1id] > 0, `a bajnok (${cm.p1name}) pontot kap (onAdvance pm)`, adv && JSON.stringify(adv.pm));
   ok(adv && adv.dm && adv.dm[cm.p2id] === 7, `a vesztes (${cm.p2name}) 7 kortyot kap (a pohár-különbség)`, adv && adv.dm && JSON.stringify(adv.dm));
-  const sub2 = (await store(p)).bp2Submit;
-  ok(!sub2, 'a bp2Submit törlődött a rögzítés után', sub2 ? 'MÉG OTT VAN' : 'törölve');
+  const sub2map = (await store(p)).bp2Submit || {};
+  const sub2 = Object.values(sub2map).filter(Boolean);
+  ok(sub2.length === 0, 'a bp2Submit bejegyzés törlődött a rögzítés után', sub2.length ? 'MÉG OTT VAN' : 'törölve');
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
