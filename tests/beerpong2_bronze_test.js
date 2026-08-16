@@ -1,36 +1,32 @@
-// v10.378 — Beer Pong 2.0: PÁRHUZAMOS ASZTALOK
+// v10.379 — Beer Pong 2.0: 3. helyért meccs (bronz) + végső rangsor
 //
-// A kieséses kör több meccse mehet EGYSZERRE, telefonról beküldve; a host
-// mindegyiket külön jóváhagyja. A `bp2Submit` MAP (kulcs a két játékos id-je),
-// így több asztal beküldése egyszerre megfér. A `handleSEConfirm` explicit
-// cups-szal TETSZŐLEGES függőben lévő meccset lezár (nem csak a mutatót).
+// A döntő után a két elődöntő-vesztes játszik a 3. helyért; a bajnokot addig
+// VISSZATARTJUK (pendingChampRef), és csak a bronz lezárása után hirdetjük ki,
+// a teljes rangsorral (1-2-3-4). A bronz ugyanazon a telefonos beküldés + host
+// jóváhagyás úton megy, mint a többi meccs.
 //
-// Fogódzók (4 játékos, 2 asztal → a 0. kör 2 elődöntő):
-//  1) a telefon 2 beküldő-kártyát mutat (párhuzamos asztalok)
-//  2) két egyidejű beküldés → a host 2 jóváhagyó kártyát mutat
-//  3) mindkettő elfogadása lezárja a két elődöntőt (out-of-order is jó),
-//     mindkét vesztes a pohár-különbséget issza, és a kör a DÖNTŐRE lép
-//  4) a döntő rögzítése bajnokot hirdet, a bajnok pontot kap
+// Fogódzók (4 játékos, thirdPlace alapból BE):
+//  1) a 2 elődöntő lezárása után a döntő jön
+//  2) a döntő lezárása NEM hirdet bajnokot — a BRONZ indul (a 2 elődöntő-vesztes)
+//  3) a bronz lezárása után van bajnok, ÉS a végeredmény 1-2-3-4 helyes
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const ROOT = '/home/user/bottle-of-heroes';
 const stub = fs.readFileSync(ROOT + '/tests/fbstub.js', 'utf8');
 let fail = 0;
 const ok = (c, l, e) => { console.log((c ? '  OK   ' : '  HIBA ') + l + (e !== undefined ? '  → ' + e : '')); if (!c) fail++; };
-const CODE = '990022';
+const CODE = '990033';
 const bpState = p => p.evaluate(c => window.__fbStore['rooms'][c].bp2State || {}, CODE);
-const hostBtns = (p, re) => p.evaluate(reSrc => [...document.querySelectorAll('#__host button')].filter(b => new RegExp(reSrc).test(b.textContent || '')).length, re.source);
+const hostTxt = p => p.evaluate(() => (document.getElementById('__host').innerText || '').replace(/\s+/g, ' '));
+const phoneTxt = p => p.evaluate(() => (document.getElementById('__phone').innerText || '').replace(/\s+/g, ' '));
 const clickHost = (p, re) => p.evaluate(reSrc => { const b = [...document.querySelectorAll('#__host button')].find(x => new RegExp(reSrc).test(x.textContent || '')); if (b) { b.click(); return true; } return false; }, re.source);
-
-// A 0. kör összes (p1,p2)-vel bíró meccse
+const clickAllHost = async (p, re, times) => { for (let i = 0; i < times; i++) { await clickHost(p, re); await p.waitForTimeout(700); } };
 const roundMatches = p => p.evaluate(c => {
   const bp = window.__fbStore['rooms'][c].bp2State;
   const rObj = bp.seRounds; const r0 = Array.isArray(rObj) ? rObj[bp.seCurRound ?? 0] : Object.values(rObj)[bp.seCurRound ?? 0];
   const arr = Array.isArray(r0) ? r0 : Object.values(r0);
   return arr.filter(m => m && m.p1 && m.p2 && m.winner == null).map(m => ({ p1id: m.p1.id, p2id: m.p2.id, p1name: m.p1.name, p2name: m.p2.name }));
 }, CODE);
-
-// Két/egy beküldés a szoba bp2Submit MAP-jébe (merge — mint két külön telefon)
 const submitAll = (p, subs) => p.evaluate(({ code, subs }) => {
   const ref = firebase.firestore().collection('rooms').doc(code);
   const map = {};
@@ -58,14 +54,14 @@ const submitAll = (p, subs) => p.evaluate(({ code, subs }) => {
     window.__adv = null;
     const r0 = document.getElementById('root'); if (r0) r0.style.display = 'none';
     const h = document.createElement('div'); h.id = '__host';
-    h.style.cssText = 'position:absolute;left:0;top:0;width:402px;height:900px;overflow:auto;z-index:9;background:#fff';
+    h.style.cssText = 'position:absolute;left:0;top:0;width:402px;height:940px;overflow:auto;z-index:9;background:#fff';
     document.body.appendChild(h);
     ReactDOM.createRoot(h).render(React.createElement(BeerPong2Game, {
       gameIdx: 0, players: pl, roomCode: code, initialBpState: null,
-      gameMeta: { beerpong2Config: { tournamentType:'se', mode:'egyeni', maxCups:10, finalCups:10, visszavago:false, matchMinutes:0, tables:2, thirdPlace:false } },
+      gameMeta: { beerpong2Config: { tournamentType:'se', mode:'egyeni', maxCups:10, finalCups:10, visszavago:false, matchMinutes:0, tables:2 } }, // thirdPlace alapból BE
       onAdvance: (dm, pm) => { window.__adv = { dm, pm }; }, onResult: () => {}, onSetHideFooter: () => {}, onSetBpEnded: () => {} }));
     const f = document.createElement('div'); f.id = '__phone';
-    f.style.cssText = 'position:absolute;left:0;top:920px;width:402px;height:760px;overflow:auto;z-index:9;background:#fff';
+    f.style.cssText = 'position:absolute;left:0;top:960px;width:402px;height:720px;overflow:auto;z-index:9;background:#fff';
     document.body.appendChild(f);
     function W() {
       const [room, setRoom] = React.useState(() => window.__fbStore['rooms'][code]);
@@ -77,45 +73,49 @@ const submitAll = (p, subs) => p.evaluate(({ code, subs }) => {
   }, { code: CODE });
   await p.waitForTimeout(1800);
 
-  // ── 1. A 0. kör 2 elődöntő; a telefon 2 beküldő-kártyát mutat ──
-  console.log('\n===== 1. PÁRHUZAMOS ASZTALOK — 2 aktív meccs =====');
+  // ── 1. Elődöntők → döntő ──
+  console.log('\n===== 1. ELŐDÖNTŐK → DÖNTŐ =====');
   const semis = await roundMatches(p);
-  ok(semis.length === 2, 'a 0. kör 2 meccs (2 elődöntő)', semis.length);
-  const phoneCards = await p.evaluate(() => [...document.querySelectorAll('#__phone button')].filter(b => /Beküldés a hostnak|Állítsd be az eredményt/.test(b.textContent || '')).length);
-  ok(phoneCards === 2, 'a telefon 2 beküldő-kártyát mutat', phoneCards);
-
-  // ── 2. Két egyidejű beküldés → host 2 jóváhagyó kártya ──
-  console.log('\n===== 2. KÉT EGYIDEJŰ BEKÜLDÉS =====');
-  // semi0: p1 nyer 10–6 (vesztes 4-et iszik); semi1: p1 nyer 10–4 (vesztes 6-ot iszik)
-  await submitAll(p, [
-    { ...semis[0], p1:10, p2:6, by:'1. asztal' },
-    { ...semis[1], p1:10, p2:4, by:'2. asztal' },
-  ]);
+  ok(semis.length === 2, 'a 0. kör 2 elődöntő', semis.length);
+  // semi0: p1 nyer 10–6 (vesztes: semi0.p2) ; semi1: p1 nyer 10–4 (vesztes: semi1.p2)
+  await submitAll(p, [{ ...semis[0], p1:10, p2:6, by:'A' }, { ...semis[1], p1:10, p2:4, by:'B' }]);
   await p.waitForTimeout(700);
-  ok(await hostBtns(p, /Elfogadom és rögzítem/) === 2, 'a host 2 jóváhagyó kártyát mutat', await hostBtns(p, /Elfogadom és rögzítem/));
-
-  // ── 3. Mindkettő elfogadása → két elődöntő lezárul, döntőre lép ──
-  console.log('\n===== 3. MINDKETTŐ ELFOGADÁSA =====');
-  await clickHost(p, /Elfogadom és rögzítem/); await p.waitForTimeout(700);
-  await clickHost(p, /Elfogadom és rögzítem/); await p.waitForTimeout(900);
-  const st = await bpState(p);
-  ok(!st.champion, 'még nincs bajnok (a döntő hátravan)', st.champion ? st.champion.name : 'nincs');
-  ok(st.drinkMap[semis[0].p2id] === 4, `az 1. elődöntő vesztese (${semis[0].p2name}) 4 kortyot ivott`, st.drinkMap[semis[0].p2id]);
-  ok(st.drinkMap[semis[1].p2id] === 6, `a 2. elődöntő vesztese (${semis[1].p2name}) 6 kortyot ivott`, st.drinkMap[semis[1].p2id]);
-  ok(await hostBtns(p, /Elfogadom és rögzítem/) === 0, 'a jóváhagyó kártyák eltűntek (nincs több beküldés)');
+  await clickAllHost(p, /Elfogadom és rögzítem/, 2);
   const finals = await roundMatches(p);
-  ok(finals.length === 1, 'a következő kör 1 meccs — a döntő', finals.length);
+  ok(finals.length === 1, 'a döntő beállt (1 meccs)', finals.length);
+  const bronzeLosers = [semis[0].p2id, semis[1].p2id];
 
-  // ── 4. A döntő rögzítése → bajnok + pont ──
-  console.log('\n===== 4. A DÖNTŐ =====');
+  // ── 2. A döntő lezárása NEM hirdet bajnokot — a BRONZ indul ──
+  console.log('\n===== 2. DÖNTŐ → A BRONZ INDUL (nincs még bajnok) =====');
   await submitAll(p, [{ ...finals[0], p1:10, p2:7, by:'döntő' }]);
   await p.waitForTimeout(700);
-  await clickHost(p, /Elfogadom és rögzítem/); await p.waitForTimeout(1200);
+  await clickAllHost(p, /Elfogadom és rögzítem/, 1);
+  const st1 = await bpState(p);
+  ok(!st1.champion, '⚠️ a döntő után MÉG NINCS bajnok (a bronz hátravan)', st1.champion ? st1.champion.name : 'nincs');
+  ok(!!st1.bronze && !st1.bronze.winner, 'a bronz-meccs aktív', st1.bronze ? 'igen' : 'nincs');
+  const bParts = st1.bronze ? [st1.bronze.p1.id, st1.bronze.p2.id].sort() : [];
+  ok(bParts.join(',') === bronzeLosers.slice().sort().join(','), 'a bronzban a két elődöntő-vesztes van', bParts.join(','));
+  ok(/3\. HELYÉRT|3\. helyért/i.test(await hostTxt(p)), 'a host „3. helyért" címkét mutat', /HELYÉRT/i.test(await hostTxt(p)));
+  ok(/Elfogadom és rögzítem/.test(await hostTxt(p)) || /Néző|3/.test(await phoneTxt(p)), 'a bronz beküldhető (host/telefon)');
+
+  // ── 3. A bronz lezárása → bajnok + végső rangsor ──
+  console.log('\n===== 3. BRONZ → BAJNOK + RANGSOR =====');
+  // bronz p1 nyer 10–5 → bronz p1 = 3. hely, bronz p2 = 4. hely
+  await submitAll(p, [{ p1id: st1.bronze.p1.id, p2id: st1.bronze.p2.id, p1name: st1.bronze.p1.name, p2name: st1.bronze.p2.name, p1:10, p2:5, by:'bronz' }]);
+  await p.waitForTimeout(700);
+  await clickAllHost(p, /Elfogadom és rögzítem/, 1);
+  await p.waitForTimeout(700);
   const st2 = await bpState(p);
   ok(!!st2.champion && st2.champion.id === finals[0].p1id, `a bajnok a döntő nyertese (${finals[0].p1name})`, st2.champion && st2.champion.name);
+  const ht = await hostTxt(p);
+  ok(/Végeredmény/i.test(ht), 'a champion-képernyő kiírja a Végeredményt', /Végeredmény/i.test(ht));
+  // mind a 4 játékos szerepel a rangsorban
+  ok(['Sere','Kecsi','Vivi','Robi'].every(n => ht.includes(n)), 'mind a 4 játékos a rangsorban van');
+  // a bronz nyertese a 3. (🥉), a bronz vesztese a 4.
+  ok(/🥇/.test(ht) && /🥈/.test(ht) && /🥉/.test(ht), 'arany/ezüst/bronz érem mind kint van');
   const adv = await p.evaluate(() => window.__adv);
-  ok(adv && adv.pm && adv.pm[finals[0].p1id] > 0, 'a bajnok pontot kap (onAdvance pm)', adv && JSON.stringify(adv.pm));
-  ok(adv && adv.dm && adv.dm[finals[0].p2id] === 3, `a döntő vesztese (${finals[0].p2name}) 3 kortyot kap`, adv && adv.dm && JSON.stringify(adv.dm));
+  ok(adv && adv.pm && adv.pm[finals[0].p1id] > 0, 'a bajnok pontot kap (onAdvance a bronz UTÁN)', adv && JSON.stringify(adv.pm));
+  ok(adv && adv.dm && adv.dm[st1.bronze.p2.id] >= 5, 'a bronz vesztese is kapott kortyot a végső könyvelésben', adv && adv.dm && adv.dm[st1.bronze.p2.id]);
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();

@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.378';
+const APP_VERSION = 'v10.379';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -45071,6 +45071,17 @@ function BeerPong2ConfigSheet({ config, setConfig, onClose, playerCount }) {
           </div>
         )}
 
+        {/* 3. helyert meccs (bronz) — csak kieseses agban (v10.379) */}
+        {tournament === 'se' && (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'none' }}>
+            <div>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>3. helyért meccs</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft }}>A két elődöntő-vesztes játszik a bronzért; a végén teljes rangsor</div>
+            </div>
+            <Toggle on={config.thirdPlace !== false} onChange={() => setConfig(c => ({...c, thirdPlace: !(c.thirdPlace !== false)}))} />
+          </div>
+        )}
+
         {/* Körmérkőzés kör-szám — hányszor játsszon mindenki mindenkivel (1-5) */}
         {(tournament === 'rr' || tournament.startsWith('grp_rr_')) && (
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0', borderTop:'none' }}>
@@ -51429,6 +51440,9 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
   // Parhuzamos asztalok (v10.378): a kieseses kor ennyi meccse mehet EGYSZERRE,
   // telefonrol bekuldve. Csak SE-ben ertelmes; visszavagoval 1-re esik vissza.
   const TABLES = (TOURNAMENT === 'se' && !VISSZAVAGO) ? Math.max(1, Math.min(4, bpCfg.tables ?? 1)) : 1;
+  // 3. helyert meccs (bronz): alapbol BE, csak kieseses agban. A ket elodonto-
+  // vesztes jatszik a 3. helyert; a bajnokot addig visszatartjuk (v10.379).
+  const THIRD_PLACE = (bpCfg.thirdPlace ?? true) && TOURNAMENT === 'se';
   const doneRef = React.useRef(false);
   const [showTableau, setShowTableau] = React.useState(false);
   const teamPlayersRef = React.useRef(null);
@@ -51555,6 +51569,12 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
   const [cups2, setCups2] = React.useState(0);
   const [drinkMap, setDrinkMap] = React.useState({});
   const [champion, setChampion] = React.useState(null);
+  // 3. helyert meccs (bronz) allapota — a sync-effekt is hivatkozik ra, ezert
+  // a bp2State-effekt FELETT kell allnia (TDZ) (v10.379).
+  const [bronzeMatch, setBronzeMatch] = React.useState(null);
+  const bronzeStartedRef = React.useRef(false);
+  const bronzeDoneRef = React.useRef(false);
+  const pendingChampRef = React.useRef(null);
   // Jelezzük a PlayScreennek, ha a bajnokság véget ért (van bajnok) — így a footer
   // "Kövi"/"Vége" gombja aktívvá válhat.
   React.useEffect(() => { if (typeof onSetBpEnded === 'function') onSetBpEnded(!!champion); }, [champion]);
@@ -51730,6 +51750,7 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
     doneRef.current = false;
     setCups1(0); setCups2(0);
     setDrinkMap({}); setChampion(null); setExpandedRounds({}); setViewGroup(0); setExpandedGroups_g({});
+    setBronzeMatch(null); bronzeStartedRef.current = false; bronzeDoneRef.current = false; pendingChampRef.current = null;
     if (TOURNAMENT === 'se') {
       const br = buildSEBracket(tp);
       setSeRounds(br); setSeCurRound(0);
@@ -51800,11 +51821,13 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
       drinkMap,
       maxCups: MAX_CUPS, finalCups: FINAL_CUPS,   // a telefonos bekuldeshez kell a plafon
       tables: TABLES,                              // parhuzamos asztalok szama (SE)
+      thirdPlace: THIRD_PLACE,
+      bronze: bronzeMatch ? { p1: slimP(bronzeMatch.p1), p2: slimP(bronzeMatch.p2), winner: slimP(bronzeMatch.winner), loser: slimP(bronzeMatch.loser), score: bronzeMatch.score || null } : null,
     }});
     // A bajnoksag lezarult: a fuggoben maradt ertesitesek TORLODNEK a szobabol.
     // Nelkuluk a "Kovetkezo meccs!" ott maradna a dokumentumban.
     if (champion) syncRoom(roomCode, { bp2Notif: null, bp2TimerAlert: null });
-  }, [seRounds, seCurRound, seCurMatch, cups1, cups2, timerSecs, rrMatches, rrIdx, tsGroups, viewGroup, champion, rrDone, tsPhase, drinkMap]);
+  }, [seRounds, seCurRound, seCurMatch, cups1, cups2, timerSecs, rrMatches, rrIdx, tsGroups, viewGroup, champion, rrDone, tsPhase, drinkMap, bronzeMatch]);
 
   React.useEffect(() => {
     if (initialBpState) return;
@@ -51946,24 +51969,24 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
           return nr;
         }
         const preWinners = nr[curRound + 1].map(m => m.winner).filter(Boolean);
-        if (preWinners.length === 1) { finishSE(preWinners[0], newDrink); return nr; }
+        if (preWinners.length === 1) { finishSE(preWinners[0], newDrink, nr); return nr; }
       }
 
       // Build next round from winners of current round
       const winners = nr[curRound].map(m => m.winner).filter(Boolean);
-      if (winners.length === 1) { finishSE(winners[0], newDrink); return nr; }
+      if (winners.length === 1) { finishSE(winners[0], newDrink, nr); return nr; }
       let nextRound = buildSERound(winners);
       let nextRoundIdx = (nr[curRound + 1] ? curRound + 2 : curRound + 1);
       let nextPending = nextRound.findIndex(m => m.winner === null);
       while (nextPending === -1 && nextRound.length > 1) {
         const autoWinners = nextRound.map(m => m.winner).filter(Boolean);
-        if (autoWinners.length === 1) { finishSE(autoWinners[0], newDrink); return [...nr, nextRound]; }
+        if (autoWinners.length === 1) { finishSE(autoWinners[0], newDrink, [...nr, nextRound]); return [...nr, nextRound]; }
         nextRound = buildSERound(autoWinners);
         nextRoundIdx++;
         nextPending = nextRound.findIndex(m => m.winner === null);
       }
       if (nextPending === -1 && nextRound.length === 1 && nextRound[0].winner) {
-        finishSE(nextRound[0].winner, newDrink); return [...nr, nextRound];
+        finishSE(nextRound[0].winner, newDrink, [...nr, nextRound]); return [...nr, nextRound];
       }
       setSeCurRound(nextRoundIdx); setSeCurMatch(nextPending);
       return [...nr, nextRound];
@@ -52026,17 +52049,85 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
     return out;
   };
 
-  const finishSE = (champ, dm) => {
+  const seLoserRounds = (rounds) => {
+    const out = [];
+    (rounds || []).forEach((round, r) => (round || []).forEach(m => { if (m && m.loser && !m.bronze) out.push({ loser: m.loser, round: r }); }));
+    return out;
+  };
+  // Az elodonto ket vesztese: a donto (legmagasabb kor) ALATTI legmagasabb kor vesztesei.
+  const semifinalLosersFrom = (rounds) => {
+    const list = seLoserRounds(rounds);
+    if (list.length < 2) return [];
+    const finalRound = Math.max(...list.map(x => x.round));
+    const below = list.filter(x => x.round < finalRound);
+    if (!below.length) return [];
+    const semiRound = Math.max(...below.map(x => x.round));
+    return below.filter(x => x.round === semiRound).map(x => x.loser);
+  };
+  const computeRanking = (rounds, bronze, champ) => {
+    const list = seLoserRounds(rounds);
+    const rank = [];
+    if (champ) rank.push({ player: champ, place: 1 });
+    if (!list.length) return rank;
+    const finalRound = Math.max(...list.map(x => x.round));
+    const runnerUp = (list.find(x => x.round === finalRound) || {}).loser;
+    if (runnerUp) rank.push({ player: runnerUp, place: 2 });
+    const used = new Set(rank.map(r => r.player && r.player.id).filter(Boolean));
+    let place = 3;
+    if (bronze && bronze.winner && bronze.loser) {
+      rank.push({ player: bronze.winner, place: 3 });
+      rank.push({ player: bronze.loser, place: 4 });
+      used.add(bronze.winner.id); used.add(bronze.loser.id);
+      place = 5;
+    }
+    const rest = list.filter(x => x.loser && !used.has(x.loser.id)).sort((a, b) => b.round - a.round);
+    rest.forEach(x => { if (!used.has(x.loser.id)) { rank.push({ player: x.loser, place: place++ }); used.add(x.loser.id); } });
+    return rank;
+  };
+
+  const finishSE = (champ, dm, roundsSnap) => {
     if (doneRef.current) return;
+    // 3. helyert meccs: ha kell, eloszor a bronz-meccs — a bajnokot VISSZATARTJUK.
+    if (THIRD_PLACE && TOURNAMENT === 'se' && !bronzeStartedRef.current) {
+      const semis = semifinalLosersFrom(roundsSnap || []);
+      if (semis.length === 2 && semis[0] && semis[1] && semis[0].id !== semis[1].id) {
+        bronzeStartedRef.current = true;
+        pendingChampRef.current = { champ, dm };
+        setBronzeMatch({ p1: semis[0], p2: semis[1], winner: null, loser: null, score: null, bronze: true });
+        if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { observerAllowed: true });
+        return;
+      }
+    }
     doneRef.current = true;
     setChampion(champ);
     const finalDm = {};
     Object.entries(dm).forEach(([id, cnt]) => { finalDm[id] = cnt; });
     if (roomCode && typeof syncRoom === 'function') syncRoom(roomCode, { observerAllowed: true });
-    // A bajnok +5 pontot kap; a kortyok nyers pohár-különbségek, ezért raw
-    // (nem szorozzuk a nehézségi szinttel — ahogy a Lóversenynél sem)
     onAdvance && onAdvance(spreadToParty(finalDm), spreadToParty(champ ? { [champ.id]: BP_WIN_POINTS } : {}), { raw: true });
     recordBpTournament(champ, 'se');
+  };
+
+  // A bronz-meccs lezarasa (explicit cups). Utana zarul le a bajnoksag a
+  // visszatartott bajnokkal — a vegso onAdvance a bronz-kortyokat is viszi.
+  const resolveBronze = (aCups, bCups) => {
+    const bm = bronzeMatch;
+    if (!bm || bm.winner || aCups === bCups) return;
+    const winner = aCups > bCups ? bm.p1 : bm.p2;
+    const loser  = aCups > bCups ? bm.p2 : bm.p1;
+    const diff = Math.max(1, Math.abs(aCups - bCups));
+    const nd = { ...drinkMap }; nd[loser.id] = (nd[loser.id] || 0) + diff;
+    setDrinkMap(nd);
+    setBronzeMatch({ ...bm, winner, loser, score: { p1: aCups, p2: bCups } });
+    bronzeDoneRef.current = true;
+    if (winner && loser) recordMatch(winner, loser, false);
+    setCups1(0); setCups2(0); resetTimer();
+    const pc = pendingChampRef.current;
+    if (pc && !doneRef.current) {
+      doneRef.current = true;
+      setChampion(pc.champ);
+      onAdvance && onAdvance(spreadToParty(nd), spreadToParty(pc.champ ? { [pc.champ.id]: BP_WIN_POINTS } : {}), { raw: true });
+      recordBpTournament(pc.champ, 'se');
+    }
   };
 
   // ── RR confirm ────────────────────────────────────────────────────────────
@@ -52110,6 +52201,11 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
   // asztal) a mutato-uton at rogzit (cups allapot + doConfirm).
   const acceptSub = (mkId, sub) => {
     if (!sub) return;
+    // Bronz-meccs (3. helyert): explicit lezaras.
+    if (bronzeMatch && !bronzeMatch.winner && bronzeMatch.p1 && bronzeMatch.p2 &&
+        sub.p1id === bronzeMatch.p1.id && sub.p2id === bronzeMatch.p2.id) {
+      clearSub(mkId); resolveBronze(sub.p1, sub.p2); return;
+    }
     if (TOURNAMENT === 'se' && seRounds.length && !champion) {
       const round = seRounds[seCurRound] || [];
       const idx = round.findIndex(m => m && m.winner == null && !m.tbd && m.p1 && m.p2 && m.p1.id === sub.p1id && m.p2.id === sub.p2id);
@@ -52179,6 +52275,7 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
     doneRef.current = false;
     setCups1(0); setCups2(0);
     setDrinkMap({}); setChampion(null); setExpandedRounds({});
+    setBronzeMatch(null); bronzeStartedRef.current = false; bronzeDoneRef.current = false; pendingChampRef.current = null;
     resetTimer();
     if (TOURNAMENT === 'se') {
       const br = buildSEBracket(ep);
@@ -52336,7 +52433,13 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
   let currentMatch = null, canConfirm = false, confirmHandler = null;
   const finalsType = TOURNAMENT.endsWith('_rr') ? 'rr' : 'se';
 
-  if (TOURNAMENT === 'se' && seRounds.length && !champion) {
+  // 3. helyert meccs (bronz): a bajnok visszatartva, ilyenkor a bronz a soros meccs.
+  const bronzeActive = bronzeMatch && !bronzeMatch.winner && !champion;
+  if (bronzeActive) {
+    currentMatch = bronzeMatch;
+    canConfirm = cups1 !== cups2;
+    confirmHandler = () => resolveBronze(cups1, cups2);
+  } else if (TOURNAMENT === 'se' && seRounds.length && !champion) {
     currentMatch = seRounds[seCurRound]?.[seCurMatch];
     const seIsDraw = cups1 === cups2;
     const seHasScore1 = !!(currentMatch?.score1); // visszavágó folyamatban
@@ -52424,6 +52527,7 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
     doneRef.current = false;
     setCups1(0); setCups2(0);
     setDrinkMap({}); setChampion(null); setExpandedRounds({});
+    setBronzeMatch(null); bronzeStartedRef.current = false; bronzeDoneRef.current = false; pendingChampRef.current = null;
     resetTimer();
     if (TOURNAMENT === 'se') {
       const br = buildSEBracketOrdered(orderedPlayers);
@@ -52550,6 +52654,24 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
             <span>📊</span> Tábló megosztása
           </button>
 
+          {(() => {
+            const ranking = computeRanking(seRounds, bronzeMatch, champion);
+            if (ranking.length < 2) return null;
+            const medal = (pl) => pl === 1 ? '🥇' : pl === 2 ? '🥈' : pl === 3 ? '🥉' : (pl + '.');
+            return (
+              <div style={{ width:'100%', marginTop:10, display:'flex', flexDirection:'column', gap:6 }}>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase', textAlign:'left' }}>Végeredmény</div>
+                {ranking.map((r, i) => (
+                  <div key={(r.player && r.player.id) || i} style={{ display:'flex', alignItems:'center', gap:10, background: r.place<=3 ? T.mintSoft : T.surfaceMuted, borderRadius:12, padding:'8px 12px' }}>
+                    <div style={{ width:28, textAlign:'center', fontFamily:T.font, fontWeight:900, fontSize:16 }}>{medal(r.place)}</div>
+                    <div style={{ width:10, height:10, borderRadius:'50%', background:(r.player && r.player.color) || T.inkMute, flexShrink:0 }} />
+                    <div style={{ flex:1, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'left' }}>{r.player && r.player.name}</div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
         </div>
       );
     }
@@ -52575,6 +52697,8 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
       matchNumPart = 'MECCS ' + (tsGroups[viewGroup]?.curIdx + 1 || 1);
     }
     if (phaseLabel) bracketPart = phaseLabel.toUpperCase() + (bracketPart ? ' · ' + bracketPart : '');
+    // 3. helyert meccs: egyertelmu cimke a mar kiesett ket jatekosnak.
+    if (bronzeActive) { bracketPart = '🥉 3. HELYÉRT'; matchNumPart = ''; }
 
     const winnerP = cups1 !== cups2 ? (cups1 > cups2 ? currentMatch.p1 : currentMatch.p2) : null;
     const isRRMode = TOURNAMENT === 'rr' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'rr');
@@ -52691,6 +52815,8 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
           const _nm = (id, fb) => { const p = (players || []).find(x => x.id === id); return (p && p.name) || fb || '?'; };
           const entries = Object.keys(submitMap || {}).map(k => ({ mkId: k, sub: submitMap[k] })).filter(({ sub }) => {
             if (!sub) return false;
+            if (bronzeMatch && !bronzeMatch.winner && bronzeMatch.p1 && bronzeMatch.p2 &&
+                sub.p1id === bronzeMatch.p1.id && sub.p2id === bronzeMatch.p2.id) return true;
             if (TOURNAMENT === 'se' && seRounds.length && !champion) {
               const round = seRounds[seCurRound] || [];
               return round.some(m => m && m.winner == null && !m.tbd && m.p1 && m.p2 && m.p1.id === sub.p1id && m.p2.id === sub.p2id);
@@ -72843,9 +72969,14 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
   const _seRoundArr = (bp.tournament === 'se' && !bp.champion)
     ? (() => { const r = seRoundsArr[bp.seCurRound ?? 0]; return r ? (Array.isArray(r) ? r : Object.values(r)) : []; })()
     : [];
-  const _activeMatches = (bp.tournament === 'se' && !bp.champion)
-    ? _seRoundArr.filter(m => m && m.p1 && m.p2 && m.winner == null && !m.tbd).slice(0, _tables)
-    : (curMatch && curMatch.p1 && curMatch.p2 && !bp.champion ? [curMatch] : []);
+  // 3. helyert (bronz): amig a bronz fuggoben van (a bajnok visszatartva), AZ az
+  // egyetlen bekuldheto meccs — a bracket egyebkent mar lezarult.
+  const _bronze = (bp.bronze && !bp.bronze.winner && bp.bronze.p1 && bp.bronze.p2 && !bp.champion) ? bp.bronze : null;
+  const _activeMatches = _bronze
+    ? [_bronze]
+    : (bp.tournament === 'se' && !bp.champion)
+      ? _seRoundArr.filter(m => m && m.p1 && m.p2 && m.winner == null && !m.tbd).slice(0, _tables)
+      : (curMatch && curMatch.p1 && curMatch.p2 && !bp.champion ? [curMatch] : []);
   const _maxCups = bp.maxCups || 10;
   const _mkId = (aId, bId) => aId + '__' + bId;
   const _activeKey = _activeMatches.map(m => _mkId(m.p1.id, m.p2.id)).join(',');

@@ -2408,3 +2408,41 @@ beküldő-kártyát mutat, két egyidejű beküldés a hoston 2 jóváhagyó ká
 mindkettő elfogadása lezárja a két elődöntőt (out-of-order is jó, mindkét vesztes a
 pohár-különbséget issza) és a DÖNTŐRE lép, végül a döntő bajnokot hirdet ponttal.
 A `beerpong2_phone_test` (egy asztal) és a `bp_final_test` (régi) változatlanul zöld.
+⚠️ A teszt `thirdPlace:false`-szal fut, hogy a bronz-meccs (lásd lent) ne zavarja.
+
+## Beer Pong 2.0: 3. helyért meccs (bronz) + végső rangsor (v10.379)
+A roadmap #3: a döntő után a **két elődöntő-vesztes** játszik a **3. helyért**, és a
+champion-képernyő **teljes rangsort** mutat (🥇🥈🥉 + a többi hely). Config:
+**`thirdPlace`** (alapból BE), csak SE-ben.
+
+**⚠️ A bajnokot VISSZATARTJUK a bronzig.** A `finishSE(champ, dm, roundsSnap)` — most
+kap egy **bracket-pillanatképet** — a champion beállítása ELŐTT megnézi: ha `THIRD_PLACE`
+és van 2 elődöntő-vesztes, akkor NEM zár le, hanem `pendingChampRef`-be teszi a bajnokot
+és `setBronzeMatch`-el elindítja a bronzot. A bronz lezárása (`resolveBronze`) után jön a
+`setChampion` + a végső `onAdvance` (a bronz-kortyokkal EGYÜTT — a `dm` a champion-időben
+még nem tartalmazza őket). A 4 `finishSE` hívási hely mind átadja a pillanatképet (`nr`
+vagy `[...nr, nextRound]`).
+
+**Az elődöntő-vesztesek felismerése bracket-alakfüggetlen** (`semifinalLosersFrom`): a
+vesztest kör-index szerint csoportosítjuk; a döntő (legmagasabb kör) ALATTI legmagasabb
+kör két vesztese a bronz-páros. 2 játékosnál (nincs 2 elődöntő-vesztes) → nincs bronz,
+azonnal bajnok. A `computeRanking` ugyanígy: 1. bajnok, 2. döntő-vesztes, 3-4. a bronz,
+majd a korábbi körök vesztesei kör szerint csökkenő sorrendben.
+
+**A bronz ugyanazon az úton scoreolható**, mint bármely meccs: pszeudo-`currentMatch`
+lesz (a `bronzeActive` ág a currentMatch-blokkban), tehát a host manuális kártyája ÉS a
+telefonos beküldés (`acceptSub` bronz-ág, a host board és a phone `_activeMatches` is
+felismeri) is működik. A `bp2State` viszi a `bronze`-t (slim) és a `thirdPlace`-t.
+
+**⚠️ A `bronzeMatch` state a bp2State-sync effekt FELETT áll** — a sync deps hivatkozik
+rá, ezért TDZ-hibát adott (`Cannot access 'bronzeMatch' before initialization`), amíg a
+`finishSE`-blokknál (lejjebb) volt. A state-et a `champion` state mellé emeltük; a
+helper-függvények és a `finishSE`/`resolveBronze` maradhattak lejjebb.
+
+⚠️ **A `thirdPlace` alapból BE**, tehát a 4+ fős SE tesztek most a bronzon is átmennek —
+a `beerpong2_tables_test` ezért kapott `thirdPlace:false`-t (a parallel-fókuszhoz).
+
+Teszt: `node tests/beerpong2_bronze_test.js` — 4 játékos, teljes lefutás: elődöntők →
+döntő → a döntő NEM hirdet bajnokot, a BRONZ indul a 2 elődöntő-vesztessel („3. helyért"
+címke) → a bronz lezárása bajnokot hirdet, a Végeredmény 🥇🥈🥉-mal, és az `onAdvance`
+a bronz UTÁN megy (bajnok-pont + a bronz-vesztes kortyai is benne).
