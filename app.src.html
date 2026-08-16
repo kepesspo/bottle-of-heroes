@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.380';
+const APP_VERSION = 'v10.381';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -45690,15 +45690,197 @@ const isSoloGame = (id) => SOLO_GAME_IDS.indexOf(id) !== -1;
 // A jatekvalasztas UTAN jon, mert a jatek-beallitasok csak akkor ertelmesek,
 // ha mar tudjuk, mit jatszunk. Adminbol kapcsolhato (setupFlowEnabled);
 // kikapcsolva a Jatekok oldalrol indul a parti, mint korabban.
+// ═══════════════ Beer Pong beállító WIZARD (v10.381) ═══════════════
+// A beer pong (Torna ÉS 2.0) beállítása lépésenkénti onboarding-flow: Mód →
+// Formátum → Részletek → Név, a végén „Torna indítása". A generikus Játékmenet
+// szekciói (nehézség, sorrend, max kör, módok) beer pongnál kimaradnak — a
+// SetupScreen rejti őket. A wizard a meglévő config-mezőket írja (beerpongConfig
+// vagy beerpong2Config), csak lépésekre bontva. A tables / 3. helyért CSAK a 2.0-nál.
+// ⚠️ A Stepper/ToggleRow FÜGGVÉNYEK (nem JSX-komponensek) — függvényként hívjuk,
+// hogy a React ne remountolja őket rendereléskor (CLAUDE.md v10.335 minta).
+function BeerPongSetupWizard({ gameId, config, setConfig, onClose, playerCount, onStart }) {
+  const is2 = gameId === 'beerpong2';
+  const [step, setStep] = React.useState(0);
+  const cfg = config || {};
+  const set = (patch) => setConfig(c => Object.assign({}, c, typeof patch === 'function' ? patch(c || {}) : patch));
+
+  const mode = cfg.mode || 'egyeni';
+  const tournament = cfg.tournamentType || 'se';
+  const isTwo = tournament.startsWith('grp_');
+  const maxCups = cfg.maxCups ?? 10;
+  const finalCups = cfg.finalCups ?? maxCups;
+  const matchMinutes = cfg.matchMinutes ?? 5;
+  const tables = cfg.tables ?? 1;
+  const numGroups = cfg.numGroups ?? 2;
+  const groupAdvance = cfg.groupAdvance ?? 1;
+
+  const Stepper = (o) => (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0' }}>
+      <div style={{ minWidth:0, paddingRight:10 }}>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{o.label}</div>
+        {o.sub && <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>{o.sub}</div>}
+      </div>
+      <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+        <button onClick={() => o.onChange(Math.max(o.min, o.value - (o.step || 1)))} style={{ width:36, height:36, borderRadius:11, background:T.inkMute+'40', border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:22, fontWeight:900, color:'#D85F5C' }}>−</button>
+        <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:19, color:T.ink, minWidth:34, textAlign:'center' }}>{o.value}</span>
+        <button onClick={() => o.onChange(Math.min(o.max, o.value + (o.step || 1)))} style={{ width:36, height:36, borderRadius:11, background:T.inkMute+'40', border:'none', cursor:'pointer', display:'grid', placeItems:'center', fontSize:22, fontWeight:900, color:T.mintDeep }}>+</button>
+      </div>
+    </div>
+  );
+  const ToggleRow = (o) => (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 0' }}>
+      <div style={{ minWidth:0, paddingRight:10 }}>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink }}>{o.label}</div>
+        {o.sub && <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:1 }}>{o.sub}</div>}
+      </div>
+      <Toggle on={o.on} onChange={o.onChange} />
+    </div>
+  );
+
+  const STEPS = ['Mód', 'Formátum', 'Részletek', 'Név'];
+  const last = STEPS.length - 1;
+
+  const stepContent = () => {
+    if (step === 0) {
+      return (
+        <div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink, marginBottom:4 }}>Ki játszik?</div>
+          <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginBottom:16 }}>Egyénileg vagy csapatokban mérkőztök?</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {[{ key:'egyeni', label:'Egyéni', desc:'Mindenki magáért', img:'szures-egyeni' }, { key:'csapat', label:'Csapat', desc:'Csapatokban játszotok', img:'szures-csapat' }].map(m => {
+              const on = mode === m.key;
+              return (
+                <button key={m.key} onClick={() => set({ mode:m.key })} style={{ display:'flex', alignItems:'center', gap:14, padding:'16px', borderRadius:16, cursor:'pointer', border: on ? '2px solid '+T.mint : '2px solid '+T.inkMute+'22', background: on ? T.mintSoft : T.surface, textAlign:'left' }}>
+                  <img src={IMGS[m.img]} style={{ width:30, height:30, objectFit:'contain', opacity: on ? 1 : 0.5 }} />
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color: on ? T.mintDeep : T.ink }}>{m.label}</div>
+                    <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>{m.desc}</div>
+                  </div>
+                  {on && <BohIcon name="check" size={22} />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+    if (step === 1) {
+      const types = [
+        { key:'se', label:'Kieséses', desc:'Vesztes kiesik', img:'bajnoksag-kieses' },
+        { key:'rr', label:'Körmérkőzés', desc:'Mindenki mindenkivel', img:'bajnoksag-csoport' },
+        { key:'grp_rr_se', label:'Csoport → Kieséses', desc:'Csoportkör, majd kiesés', img:'bajnoksag-kieses' },
+        { key:'grp_rr_rr', label:'Csoport → Csoport', desc:'Csoportkör, majd főcsoport', img:'bajnoksag-csoport' },
+      ];
+      return (
+        <div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink, marginBottom:4 }}>Milyen formátum?</div>
+          <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginBottom:16 }}>Hogyan bonyolítsuk le a tornát?</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {types.map(ty => {
+              const on = tournament === ty.key;
+              const disabled = ty.key.startsWith('grp_') && playerCount < 4;
+              return (
+                <button key={ty.key} disabled={disabled} onClick={() => !disabled && set({ tournamentType:ty.key })} style={{ display:'flex', alignItems:'center', gap:14, padding:'15px', borderRadius:16, cursor: disabled ? 'not-allowed' : 'pointer', border: on ? '2px solid '+T.mint : '2px solid '+T.inkMute+'22', background: on ? T.mintSoft : T.surface, textAlign:'left', opacity: disabled ? 0.4 : 1 }}>
+                  <img src={IMGS[ty.img]} style={{ width:28, height:28, objectFit:'contain', opacity: on ? 1 : 0.5 }} />
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color: on ? T.mintDeep : T.ink }}>{ty.label}</div>
+                    <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft }}>{disabled ? 'Min. 4 játékos kell' : ty.desc}</div>
+                  </div>
+                  {on && <BohIcon name="check" size={22} />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+    if (step === 2) {
+      const oneGroup = numGroups === 1;
+      return (
+        <div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink, marginBottom:4 }}>Részletek</div>
+          <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginBottom:6 }}>Poharak, idő és a formátum finomhangolása.</div>
+          {Stepper({ label:'Poharak száma', value:maxCups, min:4, max:16, step:2, onChange:v => set({ maxCups:v }) })}
+          {tournament === 'se' && Stepper({ label:'Poharak a döntőben', sub:'A döntő mindig egy meccs', value:finalCups, min:4, max:16, step:2, onChange:v => set({ finalCups:v }) })}
+          {is2 && tournament === 'se' && !cfg.visszavago && Stepper({ label:'Asztalok száma', sub:'Hány meccs mehet egyszerre, telefonos beküldéssel', value:tables, min:1, max:4, onChange:v => set({ tables:v }) })}
+          {Stepper({ label:'Meccs hossza (perc)', sub:'0 = nincs időmérés', value:matchMinutes, min:0, max:20, onChange:v => set({ matchMinutes:v }) })}
+          {(tournament === 'se' || tournament === 'rr' || isTwo) && ToggleRow({ label:'Visszavágó', sub:'Minden meccs két menetes (a döntő nem)', on: cfg.visszavago === true, onChange:() => set({ visszavago: !(cfg.visszavago === true) }) })}
+          {is2 && tournament === 'se' && ToggleRow({ label:'3. helyért meccs', sub:'A két elődöntő-vesztes játszik a bronzért', on: cfg.thirdPlace !== false, onChange:() => set({ thirdPlace: !(cfg.thirdPlace !== false) }) })}
+          {(tournament === 'rr' || tournament.startsWith('grp_rr_')) && Stepper({ label:'Hány kör', sub:'Hányszor játsszon mindenki mindenkivel', value: cfg.rrLegs ?? 1, min:1, max:5, onChange:v => set({ rrLegs:v }) })}
+          {isTwo && (
+            <React.Fragment>
+              {Stepper({ label:'Csoportok száma', sub: oneGroup ? '1 csoport = közös körmérkőzés, erősorrend' : 'Hány csoportra osztjuk a játékosokat', value:numGroups, min:1, max:8, onChange:v => set({ numGroups:v }) })}
+              {oneGroup ? (
+                <div style={{ padding:'2px 0 8px', fontFamily:T.font, fontSize:12, color:T.inkSoft, lineHeight:1.5 }}>Mindenki továbbjut a főszakaszra, az <b style={{ color:T.ink }}>erősorrend</b> szerint kiemelve.</div>
+              ) : Stepper({ label:'Továbbjutók/csoport', sub:'Hányan jutnak tovább a főszakaszra', value:groupAdvance, min:1, max:3, onChange:v => set({ groupAdvance:v }) })}
+            </React.Fragment>
+          )}
+        </div>
+      );
+    }
+    const modeLabel = mode === 'csapat' ? 'Csapat' : 'Egyéni';
+    const typeLabel = { se:'Kieséses', rr:'Körmérkőzés', grp_rr_se:'Csoport → Kieséses', grp_rr_rr:'Csoport → Csoport' }[tournament] || 'Kieséses';
+    return (
+      <div>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.ink, marginBottom:4 }}>Majdnem kész!</div>
+        <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, marginBottom:16 }}>Adj nevet a tornának (nem kötelező), és indulhat.</div>
+        <input value={cfg.tournamentName || ''} onChange={e => set({ tournamentName: e.target.value.slice(0, 32) })} placeholder="Bajnokság neve (pl. Nyári Kupa)" style={{ width:'100%', boxSizing:'border-box', background:T.bgSoft, border:'1.5px solid rgba(26,42,74,0.10)', borderRadius:14, padding:'13px 15px', fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, outline:'none', marginBottom:16 }} />
+        <div style={{ background:T.surfaceMuted, borderRadius:14, padding:'14px 16px', display:'flex', flexDirection:'column', gap:9 }}>
+          {[['Mód', modeLabel], ['Formátum', typeLabel], ['Poharak', String(maxCups)], ['Meccs', matchMinutes ? matchMinutes + ' perc' : 'nincs időmérés']].map(([k, v]) => (
+            <div key={k} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', fontFamily:T.font, fontSize:13.5 }}>
+              <span style={{ color:T.inkSoft, fontWeight:700 }}>{k}</span>
+              <span style={{ color:T.ink, fontWeight:900 }}>{v}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:400, background:T.bg, display:'flex', flexDirection:'column' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:12, padding:'calc(10px + env(safe-area-inset-top)) 16px 6px' }}>
+        <button onClick={step === 0 ? onClose : () => setStep(s => s - 1)} style={{ width:40, height:40, borderRadius:12, border:'none', background:T.surfaceMuted, cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, flexShrink:0 }}>‹</button>
+        <div style={{ flex:1, display:'flex', gap:6 }}>
+          {STEPS.map((_, i) => (
+            <div key={i} style={{ flex:1, height:6, borderRadius:999, background: i <= step ? T.mint : T.inkMute+'33', transition:'background .2s' }} />
+          ))}
+        </div>
+        <button onClick={onClose} style={{ width:40, height:40, borderRadius:12, border:'none', background:'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:15, color:T.inkSoft, flexShrink:0 }}>✕</button>
+      </div>
+      <div style={{ padding:'2px 20px 2px', fontFamily:T.font, fontWeight:800, fontSize:11.5, letterSpacing:'0.12em', textTransform:'uppercase', color:T.inkMute }}>🏓 Beer Pong · {step + 1}/{STEPS.length} — {STEPS[step]}</div>
+      <div className="screen-wide" style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'12px 20px 20px' }}>
+        {stepContent()}
+      </div>
+      <div style={{ padding:'10px 16px calc(14px + env(safe-area-inset-bottom))', borderTop:'1px solid '+T.inkMute+'1a', background:T.bg }}>
+        {step < last ? (
+          <button onClick={() => setStep(s => Math.min(last, s + 1))} style={{ width:'100%', padding:'16px', borderRadius:16, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)' }}>Tovább</button>
+        ) : (
+          <button onClick={() => { onClose(); onStart && onStart(); }} style={{ width:'100%', padding:'16px', borderRadius:16, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:17, cursor:'pointer', boxShadow:'0 5px 16px -5px rgba(79,194,160,0.6)' }}>🏓 Torna indítása</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta, netReady = true }) {
   const [openCfg, setOpenCfg] = React.useState(null);
   const [picker, setPicker] = React.useState(null);   // 'difficulty' | 'order' | null
+  const [bpWizard, setBpWizard] = React.useState(false);
 
   const games = (selectedGames || []).map(id => GAMES.find(g => g.id === id)).filter(Boolean);
   const configurable = games.filter(g => hasGameConfig(g.id));
   const minutes = Math.max(5, Math.round((selectedGames || []).length * 2.5 / 5) * 5);
   // Pontosan egy, magaban futo jatek — ilyenkor mas a kepernyo sulypontja.
   const soloGame = games.length === 1 && isSoloGame(games[0].id) ? games[0] : null;
+  // ⚠️ Beer Pong (Torna VAGY 2.0): a generikus Jatekmenet-szekciok (nehezseg,
+  // sorrend, max kor, modok, egyeb) NEM kellenek — a beer pong nyers pohar-
+  // kulonbseget oszt, a nehezseg nem hat ra. A beallitas egy dedikalt lepesenkenti
+  // WIZARD-ban nyilik (v10.381). A kepernyo egyebkent valtozatlan.
+  const bpOnly = (games.length === 1 && (games[0].id === 'beerpong' || games[0].id === 'beerpong2')) ? games[0] : null;
+  const bpMetaKey = bpOnly ? (bpOnly.id === 'beerpong2' ? 'beerpong2Config' : 'beerpongConfig') : null;
+  const bpConfig = bpMetaKey ? ((gameMeta && gameMeta[bpMetaKey]) || {}) : {};
+  const setBpConfig = (patch) => setGameMeta(m => Object.assign({}, m, { [bpMetaKey]: typeof patch === 'function' ? patch((m && m[bpMetaKey]) || {}) : patch }));
 
 
 
@@ -45772,6 +45954,19 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta, netRea
           ))}
         </div>
 
+        {bpOnly ? (
+          <button onClick={() => setBpWizard(true)} style={{ ...cardStyle, marginTop:12, width:'100%', border:'none', textAlign:'left', display:'flex', alignItems:'center', gap:14, padding:'16px', cursor:'pointer', minHeight:72 }}>
+            <div style={{ width:48, height:48, borderRadius:14, flexShrink:0, display:'grid', placeItems:'center', background:(bpOnly.color||T.mint)+'22' }}>
+              {bpOnly.img ? <img src={bpOnly.img} style={{ width:32, height:32, objectFit:'contain' }} /> : <span style={{ fontSize:24 }}>🏓</span>}
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink }}>Beer Pong beállítása</div>
+              <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, marginTop:2 }}>Mód · formátum · poharak · név — lépésről lépésre</div>
+            </div>
+            <span style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:T.mintDeep, flexShrink:0 }}>›</span>
+          </button>
+        ) : (
+          <React.Fragment>
         {/* A "Játékmenet" felirat itt nem kell — a fejlécben már ott van. */}
         {/* Egyedül futó játéknál a játéksorrend értelmetlen (egy játék van), a
             max körök pedig félbevágná a menetet — mindkettő kimarad. */}
@@ -45815,6 +46010,8 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta, netRea
             )}
           </React.Fragment>
         ))}
+          </React.Fragment>
+        )}
 
 
       </div>
@@ -45830,6 +46027,12 @@ function SetupScreen({ go, players, selectedGames, gameMeta, setGameMeta, netRea
 
       <GameConfigHost openId={openCfg} onClose={() => setOpenCfg(null)}
         gameMeta={gameMeta} setGameMeta={setGameMeta} playerCount={(players || []).length} />
+
+      {bpWizard && bpOnly && (
+        <BeerPongSetupWizard gameId={bpOnly.id} config={bpConfig} setConfig={setBpConfig}
+          onClose={() => setBpWizard(false)} playerCount={(players || []).length}
+          onStart={() => go('play')} />
+      )}
 
       {picker && (
         <SetupPickSheet

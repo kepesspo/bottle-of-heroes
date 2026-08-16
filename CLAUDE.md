@@ -2471,3 +2471,41 @@ Teszt: `node tests/beerpong2_group1_test.js` — `grp_rr_se`, 1 csoport, **`grou
 (!), 4 játékos: pontosan 1 csoport, 6 meccses RR, majd a kieséses főszakaszba MIND A 4
 játékos bekerül. A `groupAdvance:1` a fogódzó: az 1-csoport-felülírás nélkül a régi
 logika 1 embert vinne tovább (degenerált).
+
+## Beer Pong beállítás: onboarding-WIZARD + a generikus szekciók elrejtése (v10.381)
+Tulajdonosi kérés: a beer pongnál (Torna ÉS 2.0) a Játékmenet **generikus szekciói
+feleslegesek** — Nehézség, Játéksorrend, Max körök, Módok, Egyéb. A beer pong nyers
+**pohár-különbséget** oszt (`{raw:true}`), a nehézség NEM hat rá; sorrend/max kör
+egy önálló tornán értelmetlen. Helyettük a beállítás egy lépésenkénti **wizard**.
+
+**A `SetupScreen` felismeri a beer pongot** (`bpOnly = games.length===1 &&
+(id==='beerpong' || id==='beerpong2')`) és a középső szekciók helyett EGYETLEN „Beer
+Pong beállítása" gombot mutat; a summary és az indító gomb marad. A gomb a
+`BeerPongSetupWizard`-ot nyitja (nem a régi config-lapot). A képernyő nem-beer-pong
+esetben VÁLTOZATLAN (a szekciók a `bpOnly ? … : <React.Fragment>…</React.Fragment>`
+else-ágán).
+
+**`BeerPongSetupWizard`** — teljes képernyős, 4 lépéses flow, felül haladássávval:
+1. **Mód** (Egyéni/Csapat), 2. **Formátum** (a 4 torna-típus), 3. **Részletek**
+(poharak, döntő poharai, meccs-idő + a formátumhoz illő extrák), 4. **Név +
+összefoglaló**. A záró gomb **„Torna indítása"** → `onClose()` + `onStart()` (a
+SetupScreen `go('play')`-je).
+
+- **Egy komponens, két játék:** a `gameId`-ből jön az `is2 = gameId==='beerpong2'`.
+  A **tables** és a **3. helyért** lépés CSAK 2.0-nál látszik; a config-kulcs
+  `beerpongConfig` vagy `beerpong2Config` (a `SetupScreen` `bpMetaKey`-je dönti el,
+  és a `setBpConfig` oda ír).
+- **⚠️ A `Stepper`/`ToggleRow` FÜGGVÉNYEK, nem JSX-komponensek** — `Stepper({…})`-ként
+  hívjuk, nem `<Stepper/>`, hogy a React ne remountolja őket rendereléskor (v10.335).
+- **Nehézség és módok teljesen kimaradnak** a beer pong beállításból (tulajdonosi
+  döntés: „dobjuk el mindet").
+
+⚠️ A `beerpong` (Torna) config-lapja (`BeerPongConfigSheet`) és a 2.0-é
+(`BeerPong2ConfigSheet`) a `GAME_CONFIG_DEFS`-ben MEGMARAD — más játék még hivatkozhat
+a mintára —, csak a beer pong SetupScreen-belépője megy a wizardra.
+
+Teszt: `node tests/beerpong_wizard_test.js` — beer pong 2.0-nál a generikus szekciók
+eltűnnek, a gomb megnyitja a wizardot, a flow végigmegy (formátum→config, név→config),
+a „Torna indítása" `go('play')`-t hív; a régi `beerpong` is a wizardot kapja, a
+`beerpongConfig`-ba ír, és NINCS benne 2.0-mező (Asztalok, 3. helyért). A
+`setupflow_test` (nem-beer-pong) változatlanul zöld.
