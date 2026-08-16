@@ -52,6 +52,8 @@ const ok = (c, l, e) => { console.log((c ? '  OK   ' : '  HIBA ') + l + (e !== u
   // 2) NINCS csapat-panel
   ok(!/Ki rontott/i.test(txt), '⚠️ NINCS „Ki rontott?" panel a beer pongnál', !/Ki rontott/i.test(txt));
   ok(!/Senki nem rontott/i.test(txt), 'és NINCS „Senki nem rontott" gomb', !/Senki nem rontott/i.test(txt));
+  // 3) NINCS „Ki nyert a körben?" prompt-felirat (SCENARIO_DEFAULTS Csapat) — v10.385
+  ok(!/Ki nyert a körben/i.test(txt), '⚠️ NINCS „Ki nyert a körben?" felirat a beer pong tetején', !/Ki nyert a körben/i.test(txt));
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();

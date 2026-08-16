@@ -2546,6 +2546,12 @@ MINDET tükrözni kell:
 - **Solo-listák**: `SOLO_GAME_IDS`, `SOLO_IDS`, a Villám Játék pool-kizárása — a
   `beerpong2` mindháromba, hogy önálló tornaként viselkedjen (ne legyen keverhető,
   ne sorsolódjon random mini-játékként).
+- **„Ki nyert a körben?" prompt-felirat** (v10.385): a `scenario.prompt` a
+  játék-terület tetején a `SCENARIO_DEFAULTS['Csapat']`-ból jön (a beer pongnak
+  nincs saját `SCENARIOS` bejegyzése). A torna maga hirdet bajnokot, ez a felirat
+  csak zaj — a kizáró lista (`!== 'busz' && … !== 'ovfj'`) mostantól a
+  `beerpong`/`beerpong2`-t is tartalmazza.
 
 Teszt: `node tests/beerpong2_panel_test.js` — a PlayScreen beerpong2-vel: a meccs-lap
-renderelődik (VS + nevek), de NINCS „Ki rontott" / „Senki nem rontott" panel.
+renderelődik (VS + nevek), de NINCS „Ki rontott" / „Senki nem rontott" panel ÉS
+nincs „Ki nyert a körben?" felirat.
