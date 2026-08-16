@@ -2509,3 +2509,21 @@ eltűnnek, a gomb megnyitja a wizardot, a flow végigmegy (formátum→config, n
 a „Torna indítása" `go('play')`-t hív; a régi `beerpong` is a wizardot kapja, a
 `beerpongConfig`-ba ír, és NINCS benne 2.0-mező (Asztalok, 3. helyért). A
 `setupflow_test` (nem-beer-pong) változatlanul zöld.
+
+### A wizard MAGA a Játékmenet lépés — nincs köztes képernyő (v10.382)
+Tulajdonosi UX: a köztes „Beer Pong beállítása" gombos képernyő üres volt és egy
+fölösleges koppintás. Innentől beer pongnál a `SetupScreen` **azonnal a wizardot
+rendereli** (early return `if (bpOnly) return <BeerPongSetupWizard onBack={()=>go('games')}
+onStart={()=>go('play')} …/>`), köztes összefoglaló/gomb/alsó indítósáv nélkül.
+
+- A wizard `onBack` propot kapott: a **lépés-1 „‹"** a Játékokhoz visz
+  (`go('games')`), a lépcsőn belül visszalép. A **✕** csak overlay-módban (ha
+  `onClose` van) látszik — képernyő-módban egy üres 40 px-es helykitöltő tartja a
+  progress-sávot középen.
+- A záró **„Torna indítása"** `onStart()`-ot hív (a SetupScreen `go('play')`-je);
+  `onClose` opcionális.
+- A régi gombos/overlay-út (bpWizard state, a bpOnly-gomb ág, az overlay render)
+  **kivezetve** — bezavart volna, mert a wizard most a screen.
+
+⚠️ Bottom sheet helyett teljes képernyős flow: egy 4 lépéses onboarding-hoz a
+sheet szűk; a döntés „egyből a flow" volt.

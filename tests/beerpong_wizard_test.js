@@ -1,15 +1,16 @@
-// v10.381 — Beer Pong beállító WIZARD + a generikus szekciók elrejtése
+// v10.382 — Beer Pong beállító WIZARD = a Játékmenet lépés MAGA (nincs köztes képernyő)
 //
-// Beer pongnál (Torna ÉS 2.0) a Játékmenet generikus szekciói (Nehézség,
-// Játéksorrend, Max körök, Módok, Egyéb) NEM kellenek — a beer pong nyers
-// pohár-különbséget oszt. Helyettük egy „Beer Pong beállítása" gomb egy
-// lépésenkénti WIZARD-ot nyit: Mód → Formátum → Részletek → Név → Indítás.
+// Beer pongnál (Torna ÉS 2.0) a Játékmenet lépés egyből a lépésenkénti WIZARD:
+// Mód → Formátum → Részletek → Név → Indítás. Nincs üres köztes képernyő, nincs
+// „Beer Pong beállítása" gomb. A lépés-1 „Vissza" a Játékokhoz visz, a záró
+// „Torna indítása" indítja a partit. A generikus szekciók (Nehézség, sorrend,
+// max kör, módok) nincsenek.
 //
 // Fogódzók:
-//  1) beer pongnál a generikus szekciók eltűnnek, a „Beer Pong beállítása" gomb ott van
-//  2) a gomb megnyitja a wizardot (Mód lépés)
-//  3) a flow végigmegy (Mód → Formátum → Részletek → Név), a formátum-választás
-//     lemegy a configba, és a „Torna indítása" elindítja a partit (go('play'))
+//  1) beer pongnál a Játékmenet EGYBŐL a wizard (Mód lépés), nincs gomb/szekció
+//  2) a lépés-1 „Vissza" a Játékokhoz visz (go('games'))
+//  3) a flow végigmegy (formátum→config, név→config), a „Torna indítása" → go('play')
+//  4) a régi Beer Pong Torna is a wizardot kapja, a beerpongConfig-ba ír, 2.0-mező nélkül
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const stub = fs.readFileSync(__dirname + '/fbstub.js', 'utf8');
@@ -45,6 +46,7 @@ const MOUNT = (sel) => `
 
 const txt = p => p.evaluate(() => (document.getElementById('__g').innerText || '').replace(/\s+/g, ' '));
 const clickG = (p, re) => p.evaluate(reSrc => { const b = [...document.querySelectorAll('#__g button')].find(x => new RegExp(reSrc).test(x.textContent || '')); if (b) { b.click(); return true; } return false; }, re.source);
+const clickBack = p => p.evaluate(() => { const b = [...document.querySelectorAll('#__g button')].find(x => (x.textContent || '').trim() === '‹'); if (b) { b.click(); return true; } return false; });
 
 (async () => {
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
@@ -58,48 +60,46 @@ const clickG = (p, re) => p.evaluate(reSrc => { const b = [...document.querySele
   await p.evaluate(MOUNT(['beerpong2']));
   await p.waitForTimeout(1000);
 
-  // ── 1. A generikus szekciók eltűntek, a beer pong gomb ott van ──
-  console.log('\n===== 1. GENERIKUS SZEKCIÓK ELREJTVE =====');
+  // ── 1. Egyből a wizard, nincs köztes képernyő/gomb/szekció ──
+  console.log('\n===== 1. EGYBŐL A WIZARD (nincs köztes képernyő) =====');
   const t1 = await txt(p);
-  ok(/Beer Pong beállítása/.test(t1), 'ott a „Beer Pong beállítása" gomb', /Beer Pong beállítása/.test(t1));
-  ok(!/Nehézségi szint/.test(t1), 'NINCS Nehézség szekció', !/Nehézségi szint/.test(t1));
-  ok(!/Játéksorrend/.test(t1), 'NINCS Játéksorrend', !/Játéksorrend/.test(t1));
-  ok(!/Max körök/i.test(t1), 'NINCS Max körök', !/Max körök/i.test(t1));
+  ok(/Ki játszik\?/.test(t1), 'a Játékmenet EGYBŐL a „Mód" lépéssel nyit', /Ki játszik/.test(t1));
+  ok(/1\/4/.test(t1), 'a haladásjelző 1/4-en áll', (t1.match(/\d\/4/) || ['?'])[0]);
+  ok(!/Beer Pong beállítása/.test(t1), 'NINCS köztes „Beer Pong beállítása" gomb', !/Beer Pong beállítása/.test(t1));
+  ok(!/Nehézségi szint/.test(t1) && !/Játéksorrend/.test(t1), 'NINCS Nehézség / Játéksorrend szekció');
 
-  // ── 2. A gomb megnyitja a wizardot ──
-  console.log('\n===== 2. WIZARD MEGNYITÁSA =====');
-  await clickG(p, /Beer Pong beállítása/); await p.waitForTimeout(400);
-  const t2 = await txt(p);
-  ok(/Ki játszik\?/.test(t2), 'a wizard a „Mód" lépéssel nyit', /Ki játszik/.test(t2));
-  ok(/1\/4/.test(t2), 'a haladásjelző 1/4-en áll', (t2.match(/\d\/4/) || ['?'])[0]);
+  // ── 2. A lépés-1 „Vissza" a Játékokhoz visz ──
+  console.log('\n===== 2. LÉPÉS-1 VISSZA → JÁTÉKOK =====');
+  await clickBack(p); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => window.__went) === 'games', 'a ‹ (lépés 1) a Játékokhoz visz (go(games))', await p.evaluate(() => window.__went));
+  // vissza a wizardba a következő lépésekhez
+  await p.evaluate(() => { window.__went = null; });
 
   // ── 3. Végigmegyünk a flow-n, formátumot választunk, majd indítás ──
   console.log('\n===== 3. FLOW VÉGIG → INDÍTÁS =====');
   await clickG(p, /Tovább/); await p.waitForTimeout(300);   // Mód → Formátum
   ok(/Milyen formátum/.test(await txt(p)), 'a 2. lépés a Formátum');
-  await clickG(p, /Körmérkőzés/); await p.waitForTimeout(250);   // rr formátum
+  await clickG(p, /Körmérkőzés/); await p.waitForTimeout(250);
   await clickG(p, /Tovább/); await p.waitForTimeout(300);   // Formátum → Részletek
   ok(/Részletek/.test(await txt(p)), 'a 3. lépés a Részletek');
   await clickG(p, /Tovább/); await p.waitForTimeout(300);   // Részletek → Név
   ok(/Majdnem kész/.test(await txt(p)), 'a 4. lépés a Név + összefoglaló');
-  // név beírása
   await p.evaluate(() => { const inp = document.querySelector('#__g input'); if (inp) { const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(inp, 'Teszt Kupa'); inp.dispatchEvent(new Event('input', { bubbles:true })); } });
   await p.waitForTimeout(250);
-  const metaBefore = await p.evaluate(() => window.__meta);
-  ok(metaBefore.beerpong2Config && metaBefore.beerpong2Config.tournamentType === 'rr', 'a formátum-választás a configba került (rr)', metaBefore.beerpong2Config && metaBefore.beerpong2Config.tournamentType);
-  ok(metaBefore.beerpong2Config && metaBefore.beerpong2Config.tournamentName === 'Teszt Kupa', 'a bajnokság neve a configba került', metaBefore.beerpong2Config && metaBefore.beerpong2Config.tournamentName);
+  const meta1 = await p.evaluate(() => window.__meta);
+  ok(meta1.beerpong2Config && meta1.beerpong2Config.tournamentType === 'rr', 'a formátum-választás a configba került (rr)', meta1.beerpong2Config && meta1.beerpong2Config.tournamentType);
+  ok(meta1.beerpong2Config && meta1.beerpong2Config.tournamentName === 'Teszt Kupa', 'a bajnokság neve a configba került', meta1.beerpong2Config && meta1.beerpong2Config.tournamentName);
   await clickG(p, /Torna indítása/); await p.waitForTimeout(400);
   ok(await p.evaluate(() => window.__went) === 'play', 'a „Torna indítása" elindítja a partit (go(play))', await p.evaluate(() => window.__went));
 
-  // ── 4. A régi Beer Pong Torna is a wizardot kapja, de a beerpongConfig-ba ír ──
+  // ── 4. A régi Beer Pong Torna is a wizardot kapja, beerpongConfig-ba ír ──
   console.log('\n===== 4. RÉGI BEER PONG TORNA — beerpongConfig, nincs 2.0-mező =====');
   await p.evaluate(() => { const g = document.getElementById('__g'); if (g) g.remove(); });
   await p.evaluate(MOUNT(['beerpong']));
   await p.waitForTimeout(800);
-  ok(/Beer Pong beállítása/.test(await txt(p)), 'a régi Beer Pong Torna is a „Beer Pong beállítása" gombot mutatja');
-  await clickG(p, /Beer Pong beállítása/); await p.waitForTimeout(400);
+  ok(/Ki játszik\?/.test(await txt(p)), 'a régi Beer Pong Torna is EGYBŐL a wizardot mutatja');
   await clickG(p, /Tovább/); await p.waitForTimeout(250);   // Mód → Formátum
-  await clickG(p, /Kieséses/); await p.waitForTimeout(250); // formátum: kieséses (→ beerpongConfig íródik)
+  await clickG(p, /Kieséses/); await p.waitForTimeout(250); // formátum (→ beerpongConfig íródik)
   await clickG(p, /Tovább/); await p.waitForTimeout(250);   // Formátum → Részletek
   const t4 = await txt(p);
   ok(!/Asztalok száma/.test(t4), 'a régi Beer Pongnál NINCS „Asztalok száma" (2.0 funkció)');
