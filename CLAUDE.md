@@ -2527,3 +2527,25 @@ onStart={()=>go('play')} …/>`), köztes összefoglaló/gomb/alsó indítósáv
 
 ⚠️ Bottom sheet helyett teljes képernyős flow: egy 4 lépéses onboarding-hoz a
 sheet szűk; a döntés „egyből a flow" volt.
+
+## ⚠️ Beer Pong 2.0: a PlayScreen-beli beerpong-kivételeket ÁT KELL VEZETNI (v10.384)
+Bejelentés: „a beer pongnál miért van Ki rontott rész + gomb?" A duplikáláskor
+(v10.376) a `beerpong2` bekötése kimaradt a PlayScreen több `beerpong`-kivételéből.
+A `beerpong` string a forrásban **sok helyen** kézzel van bedrótozva — új BP-nél
+MINDET tükrözni kell:
+
+- **„Ki rontott?" csapat-panel** (`currentGame.category === 'Csapat' && … !== 'beerpong'`):
+  a maga-könyvelő csapatjátékokat egy hosszú id-lista zárja ki (nem a `cta:[]`,
+  CLAUDE.md v10.361). A `beerpong2` kimaradt → kijött a panel (avatarok + „Senki
+  nem rontott"), egy MÁSODIK, ellentmondó könyvelő út. Javítva: `… !== 'beerpong2'`.
+- **Layout flex** (a torna-UI kitölti a képernyőt): `flex:'1 1 0'` + `minHeight:0`
+  a `beerpong`/`busz`-nál — a `beerpong2` is ide kell.
+- **Footer „Kövi"** (`bpEndActive`/`active`): a beer pong a `bpEnded` jelzőn aktiválja
+  a Kövit (nem a `pendingCommit`-on), mert maga könyvel. A `beerpong2` is passzolja
+  az `onSetBpEnded`-et, tehát `isBeerPong = 'beerpong' || 'beerpong2'`.
+- **Solo-listák**: `SOLO_GAME_IDS`, `SOLO_IDS`, a Villám Játék pool-kizárása — a
+  `beerpong2` mindháromba, hogy önálló tornaként viselkedjen (ne legyen keverhető,
+  ne sorsolódjon random mini-játékként).
+
+Teszt: `node tests/beerpong2_panel_test.js` — a PlayScreen beerpong2-vel: a meccs-lap
+renderelődik (VS + nevek), de NINCS „Ki rontott" / „Senki nem rontott" panel.
