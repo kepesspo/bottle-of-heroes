@@ -126,6 +126,16 @@ const semis = p => p.evaluate(c => {
   }, pointerKey);
   ok(cannotRestart.startDisabled || cannotRestart.hasBekuldve, '⚠️ a beküldött meccs nem indítható újra (Start letiltva vagy „beküldve" jelző)', JSON.stringify(cannotRestart));
 
+  // ── E. A host beküldött-panelje LENYITHATÓ (v10.391) ──
+  console.log('\n===== E. HOST BEKÜLDÖTT-PANEL LENYITHATÓ =====');
+  // alapból NYITVA: az „Elfogadom és rögzítem" gomb látszik
+  ok(/Elfogadom és rögzítem/.test(await hostTxt(p)), 'alapból nyitva (Elfogadom gomb látszik)');
+  // a lenyitható fejlécen kattintunk (cursor:pointer, „Elfogadásra váró")
+  await p.evaluate(() => { const h = [...document.querySelectorAll('#__host *')].find(n => /Elfogadásra váró/i.test(n.innerText || '') && getComputedStyle(n).cursor === 'pointer'); if (h) h.click(); });
+  await p.waitForTimeout(300);
+  ok(!/Elfogadom és rögzítem/.test(await hostTxt(p)), '⚠️ becsukva az Elfogadom gomb eltűnik (a panel lenyitható)');
+  ok(/Elfogadásra váró/i.test(await hostTxt(p)), 'a fejléc (darabszámmal) becsukva is látszik');
+
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
   console.log(fail ? '\n❌ ' + fail + ' HIBA' : '\n✅ MINDEN ELLENORZES RENDBEN');

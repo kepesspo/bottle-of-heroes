@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.390';
+const APP_VERSION = 'v10.391';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -52429,6 +52429,7 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
   // Barki (host vagy observer) elindithatja; a kezdes idobelyege ittal, a
   // visszaszamlalo helyben ketyeg (BeerPong2MatchClock). Elfogadaskor torlodik.
   const [liveMap, setLiveMap] = React.useState({});
+  const [subHostExp, setSubHostExp] = React.useState(true);   // beküldött-panel lenyitva? (host, alapból nyitva)
   const pendingConfirmRef = React.useRef(null);   // RR/group ut: auto-rogzites a cups frissulese utan
   const doConfirmRef = React.useRef(null);
   React.useEffect(() => {
@@ -52946,26 +52947,37 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
       return currentMatch && currentMatch.p1 && currentMatch.p2 && sub.p1id === currentMatch.p1.id && sub.p2id === currentMatch.p2.id;
     });
     if (!entries.length) return null;
+    // Lenyitható panel (v10.391): egy fejléc a darabszámmal, alatta a jóváhagyó kártyák.
     return (
-      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10, marginBottom:12 }}>
-        {entries.length > 1 && <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.mintDeep, letterSpacing:'0.08em', textTransform:'uppercase', padding:'0 2px' }}>📱 {entries.length} elfogadásra váró meccs</div>}
-        {entries.map(({ mkId, sub }) => {
-          const draw = sub.p1 === sub.p2;
-          return (
-            <div key={mkId} style={{ background:T.mintSoft, borderRadius:16, padding:'14px 16px', display:'flex', flexDirection:'column', gap:10, border:'2px solid '+T.mint }}>
-              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:T.mintDeep, letterSpacing:'0.04em' }}>📱 BEKÜLDÖTT EREDMÉNY{sub.by ? ' · ' + sub.by : ''}</div>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink }}>
-                <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110, textAlign:'right' }}>{_nm(sub.p1id, sub.p1name)}</span>
-                <span style={{ fontVariantNumeric:'tabular-nums', color:T.mintDeep }}>{sub.p1} – {sub.p2}</span>
-                <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110 }}>{_nm(sub.p2id, sub.p2name)}</span>
-              </div>
-              <div style={{ display:'flex', gap:8 }}>
-                <button onClick={() => clearSub(mkId)} style={{ flex:1, padding:'12px', borderRadius:12, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background:'rgba(14,14,24,0.06)', color:T.inkSoft }}>Elvetem</button>
-                <button onClick={() => acceptSub(mkId, sub)} disabled={draw} style={{ flex:2, padding:'12px', borderRadius:12, border:'none', cursor: draw?'default':'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, background: draw?'rgba(0,0,0,0.07)':T.mint, color: draw?T.inkMute:'#fff', boxShadow: draw?'none':'0 4px 0 '+T.mintDeep }}>{draw ? 'Döntetlen — nem rögzíthető' : 'Elfogadom és rögzítem'}</button>
-              </div>
-            </div>
-          );
-        })}
+      <div style={{ width:'100%', marginBottom:12, background:T.surface, borderRadius:16, boxShadow:T.shadow, overflow:'hidden' }}>
+        <div onClick={() => setSubHostExp(v => !v)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'11px 16px', cursor:'pointer' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, fontFamily:T.font, fontWeight:900, fontSize:13, color:T.mintDeep }}>
+            <span>📱 Elfogadásra váró</span>
+            <span style={{ background:T.mintSoft, color:T.mintDeep, borderRadius:999, padding:'1px 9px', fontSize:12 }}>{entries.length}</span>
+          </div>
+          <span style={{ color:T.inkSoft, fontSize:12, fontWeight:800 }}>{subHostExp ? '▲' : '▼'}</span>
+        </div>
+        {subHostExp && (
+          <div style={{ padding:'0 12px 12px', display:'flex', flexDirection:'column', gap:10 }}>
+            {entries.map(({ mkId, sub }) => {
+              const draw = sub.p1 === sub.p2;
+              return (
+                <div key={mkId} style={{ background:T.mintSoft, borderRadius:16, padding:'14px 16px', display:'flex', flexDirection:'column', gap:10, border:'2px solid '+T.mint }}>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:T.mintDeep, letterSpacing:'0.04em' }}>📱 BEKÜLDÖTT EREDMÉNY{sub.by ? ' · ' + sub.by : ''}</div>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink }}>
+                    <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110, textAlign:'right' }}>{_nm(sub.p1id, sub.p1name)}</span>
+                    <span style={{ fontVariantNumeric:'tabular-nums', color:T.mintDeep }}>{sub.p1} – {sub.p2}</span>
+                    <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:110 }}>{_nm(sub.p2id, sub.p2name)}</span>
+                  </div>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <button onClick={() => clearSub(mkId)} style={{ flex:1, padding:'12px', borderRadius:12, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background:'rgba(14,14,24,0.06)', color:T.inkSoft }}>Elvetem</button>
+                    <button onClick={() => acceptSub(mkId, sub)} disabled={draw} style={{ flex:2, padding:'12px', borderRadius:12, border:'none', cursor: draw?'default':'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, background: draw?'rgba(0,0,0,0.07)':T.mint, color: draw?T.inkMute:'#fff', boxShadow: draw?'none':'0 4px 0 '+T.mintDeep }}>{draw ? 'Döntetlen — nem rögzíthető' : 'Elfogadom és rögzítem'}</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };
@@ -73364,13 +73376,22 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
   const _activeKey = _activeMatches.map(m => _mkId(m.p1.id, m.p2.id)).join(',');
   const [bpEntries, setBpEntries] = React.useState({});
   const [subExp, setSubExp] = React.useState(false);   // beküldött eredmények lenyitva? (alapból zárva)
-  React.useEffect(() => { setBpEntries({}); }, [_activeKey]);   // uj aktiv-halmaznal nulazunk
+  const [editKeys, setEditKeys] = React.useState({});  // beküldött meccs újra-szerkesztés alatt (v10.391)
+  React.useEffect(() => { setBpEntries({}); setEditKeys({}); }, [_activeKey]);   // uj aktiv-halmaznal nulazunk
   const _entryOf = (mkId) => bpEntries[mkId] || { a: 0, b: 0 };
   const _setEntry = (mkId, patch) => setBpEntries(prev => { const cur = prev[mkId] || { a: 0, b: 0 }; return { ...prev, [mkId]: { ...cur, ...(typeof patch === 'function' ? patch(cur) : patch) } }; });
   const _pendingOf = (mkId) => (room.bp2Submit && room.bp2Submit[mkId]) ? room.bp2Submit[mkId] : null;
-  // Beküldött (host jóváhagyására váró) meccsek FELÜL, külön; a többi (nyitott) lent (v10.389)
-  const _submitted = _activeMatches.filter(m => _pendingOf(_mkId(m.p1.id, m.p2.id)));
-  const _open = _activeMatches.filter(m => !_pendingOf(_mkId(m.p1.id, m.p2.id)));
+  // Egy már beküldött meccs újra-szerkesztésre nyitása: a léptetőt a beküldött
+  // értékkel töltjük, és a meccs visszakerül a NYITOTT (szerkeszthető) közé (v10.391).
+  const startEdit = (m, pend) => {
+    const mkId = _mkId(m.p1.id, m.p2.id);
+    setBpEntries(prev => ({ ...prev, [mkId]: { a: pend.p1, b: pend.p2 } }));
+    setEditKeys(prev => ({ ...prev, [mkId]: true }));
+  };
+  // Beküldött (host jóváhagyására váró) meccsek FELÜL, külön; a többi (nyitott) lent (v10.389).
+  // Ami épp SZERKESZTÉS alatt van (editKeys), az a nyitott közé kerül (v10.391).
+  const _submitted = _activeMatches.filter(m => _pendingOf(_mkId(m.p1.id, m.p2.id)) && !editKeys[_mkId(m.p1.id, m.p2.id)]);
+  const _open = _activeMatches.filter(m => !_pendingOf(_mkId(m.p1.id, m.p2.id)) || editKeys[_mkId(m.p1.id, m.p2.id)]);
   const _liveOf = (mkId) => (room.bp2Live && room.bp2Live[mkId]) ? room.bp2Live[mkId] : null;
   const startMatch = (m) => {
     if (!m || !m.p1 || !m.p2 || !code) return;
@@ -73389,6 +73410,8 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
       bp2Submit: { [mkId]: { p1id: m.p1.id, p2id: m.p2.id, p1name: (hydObs(m.p1).name)||'', p2name: (hydObs(m.p2).name)||'', p1: e.a, p2: e.b, by: observerName || '', ts: Date.now() } },
       bp2Live: { [mkId]: firebase.firestore.FieldValue.delete() },
     }, { merge: true }).catch(() => {});
+    // Ha újra-szerkesztés volt, a módosítás beküldése után visszakerül a beküldött közé
+    setEditKeys(prev => { if (!prev[mkId]) return prev; const n = { ...prev }; delete n[mkId]; return n; });
   };
 
   return (
@@ -73452,6 +73475,7 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
                       <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontSize:13, fontWeight:700, color:T.ink, textAlign:'right', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p1.name}</div>
                       <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:15, color:T.mintDeep, flexShrink:0, minWidth:52, textAlign:'center' }}>{pend.p1} – {pend.p2}</div>
                       <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontSize:13, fontWeight:700, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p2.name}</div>
+                      <button onClick={()=>startEdit(m, pend)} title="Eredmény módosítása" style={{ flexShrink:0, padding:'5px 10px', borderRadius:999, border:'none', background:T.surfaceMuted, color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:12, cursor:'pointer' }}>✏️ Módosítás</button>
                     </div>
                   );
                 })}
@@ -73470,11 +73494,12 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
           const mkId = _mkId(m.p1.id, m.p2.id);
           const e = _entryOf(mkId);
           const live = _liveOf(mkId);
+          const editing = !!editKeys[mkId];   // beküldött eredmény újra-szerkesztése (v10.391)
           const multi = _open.length > 1;
           return (
-            <div key={mkId} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow: live ? `0 0 0 2px ${T.mint}55, ${T.shadow}` : T.shadow, display:'flex', flexDirection:'column', gap:10 }}>
+            <div key={mkId} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow: editing ? `0 0 0 2px ${T.yellow}, ${T.shadow}` : live ? `0 0 0 2px ${T.mint}55, ${T.shadow}` : T.shadow, display:'flex', flexDirection:'column', gap:10 }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
-                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkSoft, letterSpacing:'0.06em', textTransform:'uppercase', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{multi ? p1.name + ' vs ' + p2.name : 'Eredmény beküldése'}</div>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color: editing ? T.inkSoft : T.inkSoft, letterSpacing:'0.06em', textTransform:'uppercase', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{editing ? '✏️ Módosítás — ' + p1.name + ' vs ' + p2.name : (multi ? p1.name + ' vs ' + p2.name : 'Eredmény beküldése')}</div>
                 {_matchMins > 0 && (live
                   ? <BeerPong2MatchClock startedAt={live.startedAt} minutes={_matchMins} compact />
                   : <button onClick={()=>startMatch(m)} style={{ padding:'5px 12px', borderRadius:999, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:12, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:4, flexShrink:0 }}>▶ Indítás</button>
@@ -73502,7 +73527,7 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
                 </div>
               </div>
               <button onClick={()=>submitMatch(m)} disabled={e.a===e.b} style={{ width:'100%', padding:'11px', borderRadius:14, border:'none', cursor: e.a===e.b?'default':'pointer', fontFamily:T.font, fontWeight:900, fontSize:15, background: e.a===e.b?'rgba(0,0,0,0.07)':T.mint, color: e.a===e.b?T.inkMute:'#fff', boxShadow: e.a===e.b?'none':'0 4px 0 '+T.mintDeep }}>
-                {e.a===e.b ? 'Állítsd be az eredményt' : 'Beküldés a hostnak'}
+                {e.a===e.b ? 'Állítsd be az eredményt' : editing ? 'Módosítás beküldése' : 'Beküldés a hostnak'}
               </button>
             </div>
           );

@@ -2683,3 +2683,23 @@ Teszt: `node tests/beerpong2_hostsync_test.js` — host + observer egy szobán:
 a host Start a `bp2Live`-ba ír (observer is látja), az observer indítása a host
 fő kijelzőjén órát mutat, a beküldött eredmény a meccs-kártya FÖLÖTT van, és a
 beküldött meccs Start-ja letiltva.
+
+## Beer Pong 2.0: beküldött eredmény módosítható + host-panel lenyitható (v10.391)
+Két kérés:
+- **Observer: egy már beküldött (jóváhagyásra váró) eredmény MÓDOSÍTHATÓ** — a
+  beküldött-panel során „✏️ Módosítás" gomb; a `startEdit` a léptetőt a beküldött
+  értékkel tölti (`bpEntries`), és a meccset `editKeys`-be teszi → visszakerül a
+  NYITOTT (szerkeszthető) kártyák közé (sárga kerettel, „Módosítás beküldése"
+  felirattal). Az újra-beküldés felülírja a `bp2Submit[mkId]`-t, amit a host
+  `subscribeRoom`-mal olvas → a host jóváhagyó kártyája az ÚJ eredményt mutatja.
+  A `_submitted`/`_open` szűrő az `editKeys`-t is nézi; a `_activeKey`-effekt a
+  `bpEntries` mellett az `editKeys`-t is nulázza új aktív-halmaznál.
+- **Host: a beküldött-panel LENYITHATÓ** (`subHostExp`, alapból NYITVA — a host
+  fő dolga a jóváhagyás, ezért ne legyen egy tap a gombok előtt; de becsukható,
+  a fejléc a darabszámot mutatja). ⚠️ A lenyitható fejléc `cursor:pointer`; a
+  külső panel-div NEM kattintható — teszt/kattintás a fejlécet célozza.
+
+Teszt: `beerpong2_observer_test.js` (4. blokk: módosítás → a store bp2Submit
+megváltozik → a rejtett host is az új eredményt mutatja) és
+`beerpong2_hostsync_test.js` (E. blokk: a host panel becsukható, becsukva az
+Elfogadom gomb eltűnik, a fejléc marad).

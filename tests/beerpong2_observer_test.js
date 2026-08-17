@@ -15,6 +15,7 @@ const ok = (c, l, e) => { console.log((c ? '  OK   ' : '  HIBA ') + l + (e !== u
 const CODE = '990389';
 const live = p => p.evaluate(c => (window.__fbStore['rooms'][c] || {}).bp2Live || {}, CODE);
 const phoneTxt = p => p.evaluate(() => (document.getElementById('__phone').innerText || '').replace(/\s+/g, ' '));
+const hostTxt = p => p.evaluate(() => (document.getElementById('__host') ? (document.getElementById('__host').innerText || '') : '').replace(/\s+/g, ' '));
 
 (async () => {
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
@@ -100,10 +101,36 @@ const phoneTxt = p => p.evaluate(() => (document.getElementById('__phone').inner
     return iGrid === -1 ? true : (iPanel >= 0 && iPanel < iGrid);
   });
   ok(orderOK, '⚠️ a beküldött eredmény FELÜL van (a játszható meccsek előtt)');
-  // lenyitás után látszik az eredmény-sor
-  await p.evaluate(() => { const h = [...document.querySelectorAll('#__phone *')].find(n => /host jóváhagyására vár/i.test((n.innerText || '')) && n.getBoundingClientRect().height < 80); if (h) h.click(); });
+  // lenyitás: a lenyitható fejlécen (cursor:pointer) kattintunk — a külső panel-div nem kattintható
+  await p.evaluate(() => { const h = [...document.querySelectorAll('#__phone *')].find(n => /host jóváhagyására vár/i.test((n.innerText || '')) && getComputedStyle(n).cursor === 'pointer'); if (h) h.click(); });
   await p.waitForTimeout(300);
-  ok(/–/.test(await phoneTxt(p)), 'lenyitva látszik a beküldött eredmény (pontszám-sor)');
+  ok(/Módosítás/.test(await phoneTxt(p)), 'lenyitva látszik a beküldött sor a „✏️ Módosítás" gombbal');
+
+  // ── 4. A beküldött eredmény MÓDOSÍTHATÓ → a store (és így a host) frissül (v10.391) ──
+  console.log('\n===== 4. BEKÜLDÖTT EREDMÉNY MÓDOSÍTÁSA =====');
+  const subKey = await p.evaluate(c => Object.keys((window.__fbStore['rooms'][c] || {}).bp2Submit || {})[0], CODE);
+  const before = await p.evaluate(({ c, k }) => (window.__fbStore['rooms'][c].bp2Submit[k]), { c: CODE, k: subKey });
+  ok(!!subKey, 'van beküldött meccs a store-ban', subKey);
+  // „✏️ Módosítás" → a meccs visszakerül a szerkeszthető (nyitott) közé
+  await p.evaluate(() => { const b = [...document.querySelectorAll('#__phone button')].find(x => /Módosítás/.test(x.textContent || '')); if (b) b.click(); });
+  await p.waitForTimeout(300);
+  ok(/Módosítás beküldése/.test(await phoneTxt(p)), 'a szerkesztő kártya „Módosítás beküldése" gombot mutat (előtöltve)');
+  // a szerkesztő kártyán a p2 „+"-t kétszer nyomjuk (más eredmény), majd újra beküldjük
+  const changed = await p.evaluate(() => {
+    const card = [...document.querySelectorAll('#__phone div')].find(d => /Módosítás —/.test(d.textContent || '') && d.querySelectorAll('button').length >= 5 && d.querySelectorAll('button').length < 9);
+    if (!card) return false;
+    const plus = [...card.querySelectorAll('button')].filter(x => x.textContent.trim() === '+');
+    if (plus[1]) { plus[1].click(); plus[1].click(); }   // p2 +2
+    return true;
+  });
+  ok(changed, 'megtalált a szerkesztő kártya');
+  await p.waitForTimeout(200);
+  await p.evaluate(() => { const b = [...document.querySelectorAll('#__phone button')].find(x => /Módosítás beküldése/.test(x.textContent || '')); if (b) b.click(); });
+  await p.waitForTimeout(500);
+  const after = await p.evaluate(({ c, k }) => (window.__fbStore['rooms'][c].bp2Submit[k]), { c: CODE, k: subKey });
+  ok(after && (after.p1 !== before.p1 || after.p2 !== before.p2), '⚠️ a beküldött eredmény a store-ban MEGVÁLTOZOTT (a host is ezt olvassa)', JSON.stringify(before) + ' → ' + JSON.stringify(after));
+  // a host (rejtett) is az új eredményt látja
+  ok((await hostTxt(p)).includes(after.p1 + ' – ' + after.p2), 'a host jóváhagyó kártyája az ÚJ eredményt mutatja', after.p1 + ' – ' + after.p2);
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
