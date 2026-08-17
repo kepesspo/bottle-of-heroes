@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.396';
+const APP_VERSION = 'v10.397';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -45801,7 +45801,7 @@ function BeerPongSetupWizard({ gameId, config, setConfig, onClose, onBack, playe
           <div style={secHdr}><span>🏆</span> Bajnokság</div>
           <div style={cardSt}>
             {(tournament === 'se' || tournament === 'rr' || isTwo) && ToggleRow({ label:'Visszavágó', sub:'Minden meccs két menetes (a döntő nem)', on: cfg.visszavago === true, onChange:() => set({ visszavago: !(cfg.visszavago === true) }) })}
-            {is2 && tournament === 'se' && ToggleRow({ label:'3. helyért meccs', sub:'A két elődöntő-vesztes játszik a bronzért', on: cfg.thirdPlace !== false, onChange:() => set({ thirdPlace: !(cfg.thirdPlace !== false) }) })}
+            {is2 && (tournament === 'se' || tournament === 'grp_rr_se') && ToggleRow({ label:'3. helyért meccs', sub:'A két elődöntő-vesztes játszik a bronzért', on: cfg.thirdPlace !== false, onChange:() => set({ thirdPlace: !(cfg.thirdPlace !== false) }) })}
             {(tournament === 'rr' || tournament.startsWith('grp_rr_')) && Stepper({ label:'Hány kör', sub:'Hányszor játsszon mindenki mindenkivel', value: cfg.rrLegs ?? 1, min:1, max:5, onChange:v => set({ rrLegs:v }) })}
             {isTwo && (
               <React.Fragment>
@@ -51668,9 +51668,10 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
   const TOURNAMENT_NAME = bpCfg.tournamentName || '';
   // Parhuzamos meccsek (v10.386): nincs asztal-limit — a kor/csoport MINDEN
   // fuggoben levo meccse jatszhato/bekuldheto egyszerre, per-meccs oraval (bp2Live).
-  // 3. helyert meccs (bronz): alapbol BE, csak kieseses agban. A ket elodonto-
-  // vesztes jatszik a 3. helyert; a bajnokot addig visszatartjuk (v10.379).
-  const THIRD_PLACE = (bpCfg.thirdPlace ?? true) && TOURNAMENT === 'se';
+  // 3. helyert meccs (bronz): alapbol BE, minden KIESESES AGGAL ZARULO formatumban
+  // — tiszta SE ES a Csoport → Kieseses (grp_rr_se) donto is (v10.397). A ket
+  // elodonto-vesztes jatszik a 3. helyert; a bajnokot addig visszatartjuk (v10.379).
+  const THIRD_PLACE = (bpCfg.thirdPlace ?? true) && (TOURNAMENT === 'se' || TOURNAMENT === 'grp_rr_se');
   const doneRef = React.useRef(false);
   const [showTableau, setShowTableau] = React.useState(false);
   const teamPlayersRef = React.useRef(null);
@@ -52316,7 +52317,9 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
   const finishSE = (champ, dm, roundsSnap) => {
     if (doneRef.current) return;
     // 3. helyert meccs: ha kell, eloszor a bronz-meccs — a bajnokot VISSZATARTJUK.
-    if (THIRD_PLACE && TOURNAMENT === 'se' && !bronzeStartedRef.current) {
+    // A THIRD_PLACE mar magaban foglalja a kieseses-agu formatumot (se / grp_rr_se),
+    // es a finishSE csak SE-agon fut, ezert itt nem kell kulon TOURNAMENT-szures (v10.397).
+    if (THIRD_PLACE && !bronzeStartedRef.current) {
       const semis = semifinalLosersFrom(roundsSnap || []);
       if (semis.length === 2 && semis[0] && semis[1] && semis[0].id !== semis[1].id) {
         bronzeStartedRef.current = true;

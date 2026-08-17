@@ -2855,3 +2855,32 @@ Teszt: `node tests/beerpong2_draw_test.js` — RR: indítás előtt a döntetlen
 indítás után „Döntetlen beküldése" aktív, beküldve p1===p2, a host „Döntetlen
 rögzítése" gombja elfogadja → a meccs `draw:true`-val zárul; SE kontroll: indítás
 után is tiltott (SE-ben nincs döntetlen).
+
+## Beer Pong 2.0: 3. helyért a Csoport → Kieséses formátumban is (v10.397)
+Bejelentés: „3. helyért opció nincs még." A bronz-meccs eddig CSAK tiszta SE-nél
+élt (`THIRD_PLACE = … && TOURNAMENT === 'se'`), és a wizard kapcsoló is csak ott
+jelent meg (`is2 && tournament === 'se'`). A **`grp_rr_se` (Csoport → Kieséses)**
+döntője viszont szintén kieséses ág — ott is értelmes a 3. helyért.
+
+Három egysoros változás, minden más gépezet már formátum-független volt:
+- **Motor:** `THIRD_PLACE = (bpCfg.thirdPlace ?? true) && (TOURNAMENT === 'se' ||
+  TOURNAMENT === 'grp_rr_se')`.
+- **`finishSE` bronz-kapu:** `if (THIRD_PLACE && !bronzeStartedRef.current)` — a
+  korábbi külön `TOURNAMENT === 'se'` szűrés kimaradt (a `THIRD_PLACE` már
+  magában foglalja a kieséses-ágú formátumot, és a `finishSE` csak SE-ágon fut).
+- **Wizard kapcsoló:** `is2 && (tournament === 'se' || tournament === 'grp_rr_se')`.
+
+Ami MÁR jó volt (nem kellett hozzányúlni): `bronzeActive`, `computeRanking`,
+`semifinalLosersFrom`, a `bp2State` sync (`bronze` + `thirdPlace`) — egyik sincs
+`TOURNAMENT === 'se'`-hez kötve, mind a `seRounds`/`bronzeMatch` alapján dolgozik,
+amit a grp_rr_se döntő SE-ága ugyanúgy tölt.
+
+⚠️ A `grp_rr_se` döntőben csak akkor van bronz, ha a döntő SE-ága legalább 4-fős
+(van elődöntő) — 2 továbbjutónál nincs elődöntő-vesztes, `semifinalLosersFrom`
+< 2 elemet ad, és a `finishSE` simán bajnokot hirdet (a `semis.length === 2` őr).
+
+Teszt: `node tests/beerpong2_grp_bronze_test.js` — grp_rr_se, 2 csoport × 2,
+groupAdvance:2 (mind a 4 továbbjut), thirdPlace:true: csoportkör → SE döntő 2
+elődöntővel → a döntő UTÁN nincs azonnal bajnok, a bronz indul a 2 elődöntő-
+vesztessel → a bronz lezárása bajnokot + 🥇🥈🥉 rangsort ad. A pozíció-alapú
+`mk` kulcsokkal küld be (g#/se#/bronze), mint a valós observer.
