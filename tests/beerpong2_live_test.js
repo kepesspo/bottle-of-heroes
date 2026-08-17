@@ -97,16 +97,9 @@ const submitOne = (p, s) => p.evaluate(({ code, s }) => {
   ok(/\d\d:\d\d/.test(await phoneTxt(p)), 'megjelent a visszaszámláló (mm:ss) a telefonon', (await phoneTxt(p)).match(/\d\d:\d\d/));
   ok(await phoneStartBtns(p) === 1, 'a MÁSIK meccsen még „Indítás" áll (független meccsek)', await phoneStartBtns(p));
 
-  // ── 4. A host „Élő meccsek" panelje ──
-  console.log('\n===== 4. HOST ÉLŐ MECCSEK PANEL =====');
-  ok(/Élő meccsek \(2\)/i.test(await hostTxt(p)), 'a hoston megjelenik az „Élő meccsek (2)" panel', (await hostTxt(p)).match(/Élő meccsek \(\d\)/));
-  // a panel a bp2Live-ból per-meccs órát rajzol (ugyanaz a komponens, mint a telefonon)
-  const hostClockOK = await p.evaluate(() => {
-    const nodes = [...document.querySelectorAll('#__host *')];
-    const panel = nodes.find(n => /^élő meccsek/i.test((n.innerText || '').trim()) && n.querySelectorAll('*').length < 60);
-    return panel ? /\d\d:\d\d/.test(panel.innerText || '') : false;
-  });
-  ok(hostClockOK, 'az „Élő meccsek" panelen belül per-meccs óra (mm:ss) látszik');
+  // ── 4. Nincs külön „Élő meccsek" panel a hoston (beolvadt a párosításokba — v10.387) ──
+  console.log('\n===== 4. NINCS KÜLÖN „ÉLŐ MECCSEK" PANEL =====');
+  ok(!/Élő meccsek/i.test(await hostTxt(p)), '⚠️ a hoston NINCS külön „Élő meccsek" blokk (a párosításokba került)', (await hostTxt(p)).match(/Élő meccsek/));
 
   // ── 5. Beküldés + host elfogadás → bp2Live törlődik arra a meccsre ──
   console.log('\n===== 5. ELFOGADÁS TÖRLI A PER-MECCS ÓRÁT =====');

@@ -2585,16 +2585,48 @@ Amit könnyű elrontani:
   törli a `confirmHandler` előtt. Enélkül a lezárt meccs órája ott ragadna.
 - A `bp2State` sync **`matchMinutes`-t visz** (a plafon-`maxCups` mellett) — a
   per-meccs órához az observernek is kell.
-- A host **„Élő meccsek" panelje** (`MATCH_MINUTES>0`, `pend>1 || someLive`) a
-  függő meccseket listázza, mindegyiket `▶ Indítás`-sal vagy órával — a host
-  telefon nélkül is indíthat asztalt (`hostStartMatch`).
+- A host is indíthat órát (`hostStartMatch`) — a v10.387 óta a párosítás-listákba
+  ágyazva (lásd lent), nem külön panelben.
 
 ⚠️ A régi `beerpong` (Torna) érintetlen (nem volt `tables`); a `bp_final_test`
 zöld. A `beerpong2_tables_test` továbbra is zöld (a párhuzamos beküldés maga
 változatlan, csak a cap tűnt el).
 
-Teszt: `node tests/beerpong2_live_test.js` — 4 játékos, `tables:1` a configban:
-a telefon MINDKÉT elődöntőt mutatja (a cap megszűnt), minden kártyán „Indítás",
-az egyik indítása után `bp2Live` 1 kulcs + óra (05:00) jelenik meg a telefonon ÉS
-a host „Élő meccsek" paneljén, a másik meccs érintetlen, és az elfogadás törli a
-per-meccs órát.
+Teszt: `node tests/beerpong2_live_test.js`.
+
+## Beer Pong 2.0: párhuzamos elfogadás RR/csoportban + a ▶/óra a párosításokba (v10.387)
+Három bejelentett hiba a v10.386 után:
+1. „az observer beküldött 2 meccset, de csak 1-et tudok elfogadni a hoston";
+2. „csak az 1 csapat (csoport) meccsei indíthatóak";
+3. „az Élő meccsek részt kombináljuk a párosításokkal — ne legyen 2 helyen".
+
+**#1 + #2 gyökér-oka: az RR/csoport út MUTATÓ-kötött maradt** (a v10.378 csak az
+SE-t oldotta fel). Javítás:
+- **`handleRRConfirm` és `handleGroupConfirm` explicit cups-ot fogad**
+  (`aCupsArg/bCupsArg`, ill. `giArg/miArg/aCupsArg/bCupsArg`) — ha nincs megadva,
+  a mutató (visszafelé kompatibilis, ezért a régi `beerpong` is kaphatta,
+  változatlan viselkedéssel). Így egy TETSZŐLEGES függő RR/csoport-meccs
+  lezárható, nem csak a soros.
+- **`acceptSub` minden típusban id-alapú koordinátát keres** (bronz / SE / RR /
+  csoport) és explicit cups-szal zár — nem a `cups1/cups2` mutató-állapoton át.
+- **A host beküldés-szűrője BÁRMELYIK függő meccsre igaz** (SE: aktuális kör; RR:
+  összes; csoport: MINDEN csoport minden függő meccse) — nem csak a `currentMatch`.
+  Enélkül csak 1 jóváhagyó kártya jött ki. ⚠️ A `_pmatch` helper a `filter`
+  callbackon BELÜL van (a `sub` a callback paramétere) — kívül `sub is not defined`.
+- **Az observer `_activeMatches` csoport-ága MINDEN csoport függő meccsét gyűjti**
+  (`flatMap`), nem csak a `tsCurGroup`-ét.
+
+**#3: nincs külön „Élő meccsek" panel** — a ▶ Indítás / óra a párosítás-sorokba
+ágyazva (`renderMatchLiveCtl`): a **RR meccs-lista** soraiba, a **csoportkártya**
+függő-meccs-csíkjába (renderGroupOverview RR-ág) és a **két lépcsős csoport
+meccs-listájába**. ⚠️ A lista-renderelők DUPLIKÁLTAK (régi `beerpong` + 2.0), és
+byte-azonosak — a 2.0-only injektálás ezért `{typeof renderMatchLiveCtl ===
+'function' && …}` GUARD-dal megy (a régi `beerpong`-ban a helyi
+`renderMatchLiveCtl` nincs deklarálva → `typeof` 'undefined' → nem renderel),
+így a `replace_all` biztonságos. A plain-SE `renderSEBracket` (swap-soros) és a
+`BracketView` (fa) NEM kapott ▶-t — ott az observer indít, a host validál.
+
+Teszt: `node tests/beerpong2_parallel_test.js` — grp_rr_se, 2 csoport (2-2 fő):
+az observer MINDKÉT csoport meccsét mutatja, mindkét beküldésre 2 jóváhagyó
+kártya jön, és MINDKETTŐ elfogadható (mindkét vesztes iszik, a torna a döntőre
+lép). A javítás előtt a host csak 1-et fogadott el, és az observer csak 1 csoportot mutatott.

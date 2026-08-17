@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.386';
+const APP_VERSION = 'v10.387';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -50388,19 +50388,26 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
   };
 
   // ── Two-stage group confirm ───────────────────────────────────────────────
-  const handleGroupConfirm = () => {
-    const grp = tsGroups[viewGroup];
+  // giArg/miArg/aCupsArg/bCupsArg: explicit csoport-index + meccs-index + pohárszám
+  // (parhuzamos, telefonos elfogadás — barmelyik csoport barmelyik meccse). Ha
+  // nincs megadva, a mutato (viewGroup / curIdx / cups1 / cups2).
+  const handleGroupConfirm = (giArg, miArg, aCupsArg, bCupsArg) => {
+    const gIdx = giArg != null ? giArg : viewGroup;
+    const grp = tsGroups[gIdx];
     if (!grp || grp.done) return;
     const isRR = TOURNAMENT.startsWith('grp_rr');
-    const m = grp.matches[grp.curIdx];
+    const mIdx = miArg != null ? miArg : grp.curIdx;
+    const m = grp.matches[mIdx];
     if (!m) return;
-    const isDraw = cups1 === cups2;
-    const winner = isDraw ? null : (cups1 > cups2 ? m.p1 : m.p2);
-    const loser  = isDraw ? null : (cups1 > cups2 ? m.p2 : m.p1);
-    const score  = { p1: cups1, p2: cups2 };
+    const aCups = aCupsArg != null ? aCupsArg : cups1;
+    const bCups = bCupsArg != null ? bCupsArg : cups2;
+    const isDraw = aCups === bCups;
+    const winner = isDraw ? null : (aCups > bCups ? m.p1 : m.p2);
+    const loser  = isDraw ? null : (aCups > bCups ? m.p2 : m.p1);
+    const score  = { p1: aCups, p2: bCups };
 
-    const loserScore3 = cups1 > cups2 ? cups2 : cups1;
-    const winnerScore3 = cups1 > cups2 ? cups1 : cups2;
+    const loserScore3 = aCups > bCups ? bCups : aCups;
+    const winnerScore3 = aCups > bCups ? aCups : bCups;
     const cupDiff3 = Math.max(1, Math.abs(winnerScore3 - loserScore3));
     const newDrink = { ...drinkMap };
     if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + cupDiff3;
@@ -50412,8 +50419,8 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
 
     setTsGroups(prev => {
       const ng = prev.map((g, gi) => {
-        if (gi !== viewGroup) return g;
-        const nm = g.matches.map((mm, i) => i === g.curIdx ? { ...mm, winner, loser, score, draw: isDraw } : mm);
+        if (gi !== gIdx) return g;
+        const nm = g.matches.map((mm, i) => i === mIdx ? { ...mm, winner, loser, score, draw: isDraw } : mm);
         // SE csoport: a prelim meccs győztesét betöltjük a következő kör TBD meccsébe
         const curM = nm[g.curIdx];
         if (!isRR && winner && curM && curM.r1slot !== undefined && curM.r1slot !== null) {
@@ -50897,6 +50904,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
               </div>
               <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
               <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, color: isDone&&m.winner?.id===m.p2?.id?T.mint:isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2.name}</div>
+              {typeof renderMatchLiveCtl === 'function' && renderMatchLiveCtl(m)}
             </div>
           );
         })}
@@ -51101,6 +51109,17 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
                       <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:12, color: i===0?T.yellow:T.ink, textAlign:'center' }}>{s.pts}</div>
                     </div>
                   ))}
+                  {/* fuggo meccsek — ▶ Indítás / óra (v10.387); guard: csak a 2.0-ban van renderMatchLiveCtl */}
+                  {typeof renderMatchLiveCtl === 'function' && MATCH_MINUTES > 0 && (() => {
+                    const gm = (Array.isArray(g.matches)?g.matches:Object.values(g.matches||{})).filter(mm => mm && mm.p1 && mm.p2 && mm.winner==null && !mm.draw && !mm.tbd);
+                    if (!gm.length) return null;
+                    return <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid rgba(20,30,50,0.06)', display:'flex', flexDirection:'column', gap:4 }}>
+                      {gm.map(mm => <div key={mm.p1.id+'_'+mm.p2.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'2px 0' }}>
+                        <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontSize:12, fontWeight:700, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{mm.p1.name} <span style={{color:T.inkMute}}>vs</span> {mm.p2.name}</div>
+                        {renderMatchLiveCtl(mm)}
+                      </div>)}
+                    </div>;
+                  })()}
                 </React.Fragment>}
               </div>
             );
@@ -51374,6 +51393,7 @@ function BeerPongGame({ gameIdx, players, onAdvance, onResult, gameMeta, roomCod
                   </div>
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
                   <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.winner?.id===m.p2?.id?T.mint:isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2.name}</div>
+                  {typeof renderMatchLiveCtl === 'function' && renderMatchLiveCtl(m)}
                 </div>
               );
             })}
@@ -52339,22 +52359,26 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
   };
 
   // ── RR confirm ────────────────────────────────────────────────────────────
-  const handleRRConfirm = (matches, idx, setMatchesCB, onFinish) => {
+  // aCupsArg/bCupsArg: explicit pohárszám (parhuzamos, telefonos elfogadás — nem a
+  // mutato). Ha nincs megadva, a render-scope cups1/cups2 (kézi, mutato-út).
+  const handleRRConfirm = (matches, idx, setMatchesCB, onFinish, aCupsArg, bCupsArg) => {
     const m = matches[idx];
-    const score  = { p1: cups1, p2: cups2 };
+    const aCups = aCupsArg != null ? aCupsArg : cups1;
+    const bCups = bCupsArg != null ? bCupsArg : cups2;
+    const score  = { p1: aCups, p2: bCups };
     // Visszavágó (két menet): az összesített pohárszám dönt; egyenlő → döntetlen
     let isDraw, winner, loser, cupDiff2;
     if (m.score1) {
-      const totP1 = (m.score1.p1 || 0) + cups1, totP2 = (m.score1.p2 || 0) + cups2;
+      const totP1 = (m.score1.p1 || 0) + aCups, totP2 = (m.score1.p2 || 0) + bCups;
       isDraw = totP1 === totP2;
       winner = isDraw ? null : (totP1 > totP2 ? m.p1 : m.p2);
       loser  = isDraw ? null : (totP1 > totP2 ? m.p2 : m.p1);
       cupDiff2 = Math.max(1, Math.abs(totP1 - totP2));
     } else {
-      isDraw = cups1 === cups2;
-      winner = isDraw ? null : (cups1 > cups2 ? m.p1 : m.p2);
-      loser  = isDraw ? null : (cups1 > cups2 ? m.p2 : m.p1);
-      cupDiff2 = Math.max(1, Math.abs(cups1 - cups2));
+      isDraw = aCups === bCups;
+      winner = isDraw ? null : (aCups > bCups ? m.p1 : m.p2);
+      loser  = isDraw ? null : (aCups > bCups ? m.p2 : m.p1);
+      cupDiff2 = Math.max(1, Math.abs(aCups - bCups));
     }
     const newDrink = { ...drinkMap };
     if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + cupDiff2;
@@ -52415,14 +52439,24 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
     const r = bohRoomRef(roomCode); if (!r) return;
     r.set({ bp2Live: { [mkId]: { startedAt: Date.now(), p1id: m.p1.id, p2id: m.p2.id } } }, { merge: true }).catch(() => {});
   };
+  // Per-meccs ▶ Indítás / óra — a PÁROSÍTÁS-listákba ágyazva (v10.387), hogy ne
+  // legyen külön „Élő meccsek" blokk. A fuggo meccs soraban jelenik meg.
+  const renderMatchLiveCtl = (m) => {
+    if (MATCH_MINUTES <= 0 || !m || !m.p1 || !m.p2 || m.winner != null || m.draw || m.tbd) return null;
+    const mkId = m.p1.id + '__' + m.p2.id;
+    const live = liveMap[mkId];
+    return live
+      ? <BeerPong2MatchClock startedAt={live.startedAt} minutes={MATCH_MINUTES} compact />
+      : <button onClick={(e) => { e.stopPropagation(); hostStartMatch(m); }} title="Óra indítása" style={{ padding:'3px 10px', borderRadius:999, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:12, cursor:'pointer', flexShrink:0, whiteSpace:'nowrap' }}>▶</button>;
+  };
   const clearSub = (mkId) => {
     setSubmitMap(m => { const n = { ...m }; delete n[mkId]; return n; });
     clearLive(mkId);   // a meccs lezarult/elvetve → az oraja is ternjen le
     if (roomCode) { const r = bohRoomRef(roomCode); if (r) r.set({ bp2Submit: { [mkId]: firebase.firestore.FieldValue.delete() } }, { merge: true }).catch(() => {}); }
   };
-  // Egy telefonos javaslat elfogadasa. SE-ben TETSZOLEGES fuggoben levo meccset
-  // lezarhatunk (explicit cups) — igy megy a parhuzamos asztal. RR/group (egy
-  // asztal) a mutato-uton at rogzit (cups allapot + doConfirm).
+  // Egy telefonos javaslat elfogadasa. MINDEN tipusban TETSZOLEGES fuggoben levo
+  // meccset lezarunk explicit cups-szal (v10.387) — igy tobb parhuzamos bekuldes
+  // is elfogadhato, nem csak a mutato. A helyes meccset a jatekos-id-kbol keressuk.
   const acceptSub = (mkId, sub) => {
     if (!sub) return;
     // Bronz-meccs (3. helyert): explicit lezaras.
@@ -52430,7 +52464,8 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
         sub.p1id === bronzeMatch.p1.id && sub.p2id === bronzeMatch.p2.id) {
       clearSub(mkId); resolveBronze(sub.p1, sub.p2); return;
     }
-    if (TOURNAMENT === 'se' && seRounds.length && !champion) {
+    // SE (kieseses, vagy grp_ donto SE): a jelenlegi kor barmelyik fuggo meccse.
+    if ((TOURNAMENT === 'se' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && TOURNAMENT.endsWith('_se'))) && seRounds.length && !champion) {
       const round = seRounds[seCurRound] || [];
       const idx = round.findIndex(m => m && m.winner == null && !m.tbd && m.p1 && m.p2 && m.p1.id === sub.p1id && m.p2.id === sub.p2id);
       if (idx === -1) { clearSub(mkId); return; }
@@ -52438,6 +52473,26 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
       handleSEConfirm(seRounds, seCurRound, idx, setSeRounds, sub.p1, sub.p2);
       return;
     }
+    // RR (vagy grp_ donto RR): barmelyik fuggo rr-meccs.
+    if ((TOURNAMENT === 'rr' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && TOURNAMENT.endsWith('_rr'))) && !rrDone && rrMatches.length) {
+      const idx = rrMatches.findIndex(m => m && m.winner == null && !m.draw && m.p1 && m.p2 && m.p1.id === sub.p1id && m.p2.id === sub.p2id);
+      if (idx === -1) { clearSub(mkId); return; }
+      clearSub(mkId);
+      const parts = TOURNAMENT === 'rr' ? players : rrMatches.filter(Boolean).flatMap(m => [m.p1, m.p2]).filter((p, i, a) => p && a.findIndex(x => x && x.id === p.id) === i);
+      handleRRConfirm(rrMatches, idx, setRrMatches, (ms, dm) => finishRR(ms, dm, parts), sub.p1, sub.p2);
+      return;
+    }
+    // Csoportkor: BARMELYIK csoport barmelyik fuggo meccse (nem csak a soros csoport).
+    if (TOURNAMENT.startsWith('grp_') && tsPhase === 'groups' && tsGroups.length) {
+      for (let gi = 0; gi < tsGroups.length; gi++) {
+        const g = tsGroups[gi]; if (!g || g.done) continue;
+        const ms = Array.isArray(g.matches) ? g.matches : Object.values(g.matches || {});
+        const mi = ms.findIndex(m => m && m.winner == null && !m.draw && m.p1 && m.p2 && m.p1.id === sub.p1id && m.p2.id === sub.p2id);
+        if (mi !== -1) { clearSub(mkId); handleGroupConfirm(gi, mi, sub.p1, sub.p2); return; }
+      }
+      clearSub(mkId); return;
+    }
+    // Tartalek: mutato-ut (cups allapot + doConfirm).
     clearSub(mkId);
     if (cups1 === sub.p1 && cups2 === sub.p2) { if (doConfirmRef.current) doConfirmRef.current(); return; }
     pendingConfirmRef.current = { p1: sub.p1, p2: sub.p2 };
@@ -52546,19 +52601,26 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
   };
 
   // ── Two-stage group confirm ───────────────────────────────────────────────
-  const handleGroupConfirm = () => {
-    const grp = tsGroups[viewGroup];
+  // giArg/miArg/aCupsArg/bCupsArg: explicit csoport-index + meccs-index + pohárszám
+  // (parhuzamos, telefonos elfogadás — barmelyik csoport barmelyik meccse). Ha
+  // nincs megadva, a mutato (viewGroup / curIdx / cups1 / cups2).
+  const handleGroupConfirm = (giArg, miArg, aCupsArg, bCupsArg) => {
+    const gIdx = giArg != null ? giArg : viewGroup;
+    const grp = tsGroups[gIdx];
     if (!grp || grp.done) return;
     const isRR = TOURNAMENT.startsWith('grp_rr');
-    const m = grp.matches[grp.curIdx];
+    const mIdx = miArg != null ? miArg : grp.curIdx;
+    const m = grp.matches[mIdx];
     if (!m) return;
-    const isDraw = cups1 === cups2;
-    const winner = isDraw ? null : (cups1 > cups2 ? m.p1 : m.p2);
-    const loser  = isDraw ? null : (cups1 > cups2 ? m.p2 : m.p1);
-    const score  = { p1: cups1, p2: cups2 };
+    const aCups = aCupsArg != null ? aCupsArg : cups1;
+    const bCups = bCupsArg != null ? bCupsArg : cups2;
+    const isDraw = aCups === bCups;
+    const winner = isDraw ? null : (aCups > bCups ? m.p1 : m.p2);
+    const loser  = isDraw ? null : (aCups > bCups ? m.p2 : m.p1);
+    const score  = { p1: aCups, p2: bCups };
 
-    const loserScore3 = cups1 > cups2 ? cups2 : cups1;
-    const winnerScore3 = cups1 > cups2 ? cups1 : cups2;
+    const loserScore3 = aCups > bCups ? bCups : aCups;
+    const winnerScore3 = aCups > bCups ? aCups : bCups;
     const cupDiff3 = Math.max(1, Math.abs(winnerScore3 - loserScore3));
     const newDrink = { ...drinkMap };
     if (loser) newDrink[loser.id] = (newDrink[loser.id] || 0) + cupDiff3;
@@ -52570,8 +52632,8 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
 
     setTsGroups(prev => {
       const ng = prev.map((g, gi) => {
-        if (gi !== viewGroup) return g;
-        const nm = g.matches.map((mm, i) => i === g.curIdx ? { ...mm, winner, loser, score, draw: isDraw } : mm);
+        if (gi !== gIdx) return g;
+        const nm = g.matches.map((mm, i) => i === mIdx ? { ...mm, winner, loser, score, draw: isDraw } : mm);
         // SE csoport: a prelim meccs győztesét betöltjük a következő kör TBD meccsébe
         const curM = nm[g.curIdx];
         if (!isRR && winner && curM && curM.r1slot !== undefined && curM.r1slot !== null) {
@@ -53039,52 +53101,23 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
           </div>
         )}
 
-        {/* ⏱ Elo / jatszhato meccsek — a host is indithat orat; a countdown mindenhol lathato (v10.386) */}
-        {MATCH_MINUTES > 0 && (() => {
-          const _po = (m) => m && m.p1 && m.p2 && m.winner == null && !m.tbd && !m.draw;
-          let pend = [];
-          if (champion) pend = [];
-          else if (bronzeMatch && _po(bronzeMatch)) pend = [bronzeMatch];
-          else if (TOURNAMENT === 'se') { const r = seRounds[seCurRound] || []; pend = r.filter(_po); }
-          else if (TOURNAMENT === 'rr') pend = rrMatches.filter(_po);
-          else if (TOURNAMENT.startsWith('grp_')) {
-            if (tsPhase === 'groups') { const g = tsGroups[viewGroup]; const ms = g ? (Array.isArray(g.matches) ? g.matches : Object.values(g.matches || {})) : []; pend = ms.filter(_po); }
-            else if (finalsType === 'rr') pend = rrMatches.filter(_po);
-            else { const r = seRounds[seCurRound] || []; pend = r.filter(_po); }
-          }
-          // csak azok, amelyeknek van elo oraja VAGY tobb fuggo meccs van (parhuzam)
-          const someLive = pend.some(m => liveMap[m.p1.id + '__' + m.p2.id]);
-          if (pend.length <= 1 && !someLive) return null;
-          return (
-            <div style={{ marginTop:16, background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow, display:'flex', flexDirection:'column', gap:8 }}>
-              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase' }}>Élő meccsek ({pend.length})</div>
-              {pend.map(m => {
-                const mkId = m.p1.id + '__' + m.p2.id;
-                const live = liveMap[mkId];
-                return (
-                  <div key={mkId} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 0' }}>
-                    <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name} <span style={{ color:T.inkMute }}>vs</span> {m.p2.name}</div>
-                    {live
-                      ? <BeerPong2MatchClock startedAt={live.startedAt} minutes={MATCH_MINUTES} compact />
-                      : <button onClick={() => hostStartMatch(m)} style={{ padding:'5px 12px', borderRadius:999, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:12, cursor:'pointer', flexShrink:0 }}>▶ Indítás</button>}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-
         {/* 📱 Telefonos eredmeny-javaslatok — PARHUZAMOS meccsek; a host kulon jovahagyja (v10.378/386) */}
         {(() => {
           const _nm = (id, fb) => { const p = (players || []).find(x => x.id === id); return (p && p.name) || fb || '?'; };
+          // ⚠️ MINDEN fuggo meccs bekuldese elfogadhato (v10.387) — nem csak a mutato.
+          // Enelkul RR/csoportban csak 1 bekuldest lehetett elfogadni (a soros meccset).
           const entries = Object.keys(submitMap || {}).map(k => ({ mkId: k, sub: submitMap[k] })).filter(({ sub }) => {
             if (!sub) return false;
+            const _pmatch = (m) => m && m.winner == null && !m.tbd && !m.draw && m.p1 && m.p2 && m.p1.id === sub.p1id && m.p2.id === sub.p2id;
             if (bronzeMatch && !bronzeMatch.winner && bronzeMatch.p1 && bronzeMatch.p2 &&
                 sub.p1id === bronzeMatch.p1.id && sub.p2id === bronzeMatch.p2.id) return true;
-            if (TOURNAMENT === 'se' && seRounds.length && !champion) {
-              const round = seRounds[seCurRound] || [];
-              return round.some(m => m && m.winner == null && !m.tbd && m.p1 && m.p2 && m.p1.id === sub.p1id && m.p2.id === sub.p2id);
-            }
+            if (champion) return false;
+            const seLike = TOURNAMENT === 'se' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'se');
+            if (seLike && seRounds.length) return (seRounds[seCurRound] || []).some(_pmatch);
+            const rrLike = TOURNAMENT === 'rr' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'rr');
+            if (rrLike) return rrMatches.some(_pmatch);
+            if (TOURNAMENT.startsWith('grp_') && tsPhase === 'groups')
+              return tsGroups.some(g => g && !g.done && (Array.isArray(g.matches) ? g.matches : Object.values(g.matches || {})).some(_pmatch));
             return currentMatch && currentMatch.p1 && currentMatch.p2 && sub.p1id === currentMatch.p1.id && sub.p2id === currentMatch.p2.id;
           });
           if (!entries.length) return null;
@@ -53161,6 +53194,7 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
               </div>
               <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
               <div style={{ fontFamily:T.font, fontSize:12, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, color: isDone&&m.winner?.id===m.p2?.id?T.mint:isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2.name}</div>
+              {typeof renderMatchLiveCtl === 'function' && renderMatchLiveCtl(m)}
             </div>
           );
         })}
@@ -53365,6 +53399,17 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
                       <div style={{ fontFamily:'monospace', fontWeight:700, fontSize:12, color: i===0?T.yellow:T.ink, textAlign:'center' }}>{s.pts}</div>
                     </div>
                   ))}
+                  {/* fuggo meccsek — ▶ Indítás / óra (v10.387); guard: csak a 2.0-ban van renderMatchLiveCtl */}
+                  {typeof renderMatchLiveCtl === 'function' && MATCH_MINUTES > 0 && (() => {
+                    const gm = (Array.isArray(g.matches)?g.matches:Object.values(g.matches||{})).filter(mm => mm && mm.p1 && mm.p2 && mm.winner==null && !mm.draw && !mm.tbd);
+                    if (!gm.length) return null;
+                    return <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid rgba(20,30,50,0.06)', display:'flex', flexDirection:'column', gap:4 }}>
+                      {gm.map(mm => <div key={mm.p1.id+'_'+mm.p2.id} style={{ display:'flex', alignItems:'center', gap:8, padding:'2px 0' }}>
+                        <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontSize:12, fontWeight:700, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{mm.p1.name} <span style={{color:T.inkMute}}>vs</span> {mm.p2.name}</div>
+                        {renderMatchLiveCtl(mm)}
+                      </div>)}
+                    </div>;
+                  })()}
                 </React.Fragment>}
               </div>
             );
@@ -53638,6 +53683,7 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
                   </div>
                   <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, flexShrink:0 }}>----</div>
                   <div style={{ fontFamily:T.font, fontSize:12, color: isDone&&m.winner?.id===m.p2?.id?T.mint:isDone&&m.loser?.id===m.p2?.id?T.inkSoft:T.ink, fontWeight: isDone&&m.winner?.id===m.p2?.id?700:400, flex:1, textDecoration: isDone&&m.loser?.id===m.p2?.id?'line-through':'none', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{m.p2.name}</div>
+                  {typeof renderMatchLiveCtl === 'function' && renderMatchLiveCtl(m)}
                 </div>
               );
             })}
@@ -73279,9 +73325,12 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
     if (tour === 'rr') return rrMatchesArr.filter(_pendOK);
     if (tour.startsWith('grp_')) {
       if (bp.phase === 'groups') {
-        const g = tsGroupsArr[bp.tsCurGroup ?? 0];
-        const ms = g ? (Array.isArray(g.matches) ? g.matches : Object.values(g.matches || {})) : [];
-        return ms.filter(_pendOK);
+        // MINDEN csoport fuggo meccse (nem csak a soros csoporte) — parhuzam (v10.387)
+        return tsGroupsArr.flatMap(g => {
+          if (!g || g.done) return [];
+          const ms = Array.isArray(g.matches) ? g.matches : Object.values(g.matches || {});
+          return ms.filter(_pendOK);
+        });
       }
       if (tour.endsWith('_se')) {
         const r = seRoundsArr[bp.seCurRound ?? 0];
