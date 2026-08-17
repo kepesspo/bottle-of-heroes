@@ -86,6 +86,13 @@ const clickBack = p => p.evaluate(() => { const b = document.querySelector('#__g
   await clickG(p, /Körmérkőzés/); await p.waitForTimeout(250);
   await clickG(p, /Tovább/); await p.waitForTimeout(300);   // Formátum → Részletek
   ok(/Részletek/.test(await txt(p)), 'a 3. lépés a Részletek');
+  // v10.388 — a Részletek KÉT szekció: fent Bajnokság, lent Meccs
+  // (a szekció-fejlécek CSS-ből NAGYBETŰSEK, ezért az innerText „BAJNOKSÁG"/„MECCS")
+  const t3 = await txt(p);
+  ok(/BAJNOKSÁG/.test(t3) && /MECCS/.test(t3), 'a Részletek két szekcióra bomlik (Bajnokság + Meccs fejléc)');
+  ok(t3.indexOf('BAJNOKSÁG') >= 0 && t3.indexOf('BAJNOKSÁG') < t3.indexOf('MECCS'), 'FELÜL a Bajnokság, ALUL a Meccs szekció-fejléc', t3.indexOf('BAJNOKSÁG') + ' < ' + t3.indexOf('MECCS'));
+  // a torna-beállítás (Visszavágó) FÖLÖTT áll a meccs-beállításnak (Poharak száma)
+  ok(t3.indexOf('Visszavágó') >= 0 && t3.indexOf('Visszavágó') < t3.indexOf('Poharak száma'), 'a torna-beállítás (Visszavágó) a meccs-beállítás (Poharak) FÖLÖTT van', t3.indexOf('Visszavágó') + ' < ' + t3.indexOf('Poharak száma'));
   await clickG(p, /Tovább/); await p.waitForTimeout(300);   // Részletek → Név
   ok(/Majdnem kész/.test(await txt(p)), 'a 4. lépés a Név + összefoglaló');
   await p.evaluate(() => { const inp = document.querySelector('#__g input'); if (inp) { const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(inp, 'Teszt Kupa'); inp.dispatchEvent(new Event('input', { bubbles:true })); } });
