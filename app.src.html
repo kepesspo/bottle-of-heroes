@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.394';
+const APP_VERSION = 'v10.395';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -52419,6 +52419,25 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
   // Barki (host vagy observer) elindithatja; a kezdes idobelyege ittal, a
   // visszaszamlalo helyben ketyeg (BeerPong2MatchClock). Elfogadaskor torlodik.
   const [liveMap, setLiveMap] = React.useState({});
+
+  // ⚠️ ÉLŐ pohárszám-szinkron (v10.394): a mutató meccs kulcsát refben tartjuk
+  // (a currentMatchKey a render KÉSŐBBI részén dől el, az early-return UTÁN, ezért
+  // az effekteket ITT, a return előtt kell deklarálni, és a refből olvasnak).
+  const cmkRef = React.useRef('');
+  const cupsRef = React.useRef({ c1: 0, c2: 0 });
+  // A host pohár-írása a `hostSetCup`-ban KÖZVETLEN (nem effekt) — így nincs
+  // write-back visszhang. Itt CSAK a másik eszköz (observer) által írt cups
+  // OLVASÁSA történik: megjelenik a hoston (v10.395).
+  React.useEffect(() => {
+    const key = cmkRef.current;
+    if (!key) return;
+    if (submitMap && submitMap[key]) return;   // beküldött meccsből nem adoptálunk (befagyasztva)
+    const lv = liveMap[key];
+    if (!lv) return;
+    if (lv.c1 != null && lv.c1 !== cupsRef.current.c1) setCups1(lv.c1);
+    if (lv.c2 != null && lv.c2 !== cupsRef.current.c2) setCups2(lv.c2);
+  }, [liveMap, submitMap]);
+
   const [subHostExp, setSubHostExp] = React.useState(true);   // beküldött-panel lenyitva? (host, alapból nyitva)
   const pendingConfirmRef = React.useRef(null);   // RR/group ut: auto-rogzites a cups frissulese utan
   const doConfirmRef = React.useRef(null);
@@ -52770,6 +52789,20 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
     : (TOURNAMENT === 'rr' || (TOURNAMENT.startsWith('grp_') && tsPhase === 'finals' && finalsType === 'rr')) ? ('rr#' + rrIdx)
     : (TOURNAMENT.startsWith('grp_') && tsPhase === 'groups' && tsGroups[viewGroup]) ? ('g#' + viewGroup + '#' + tsGroups[viewGroup].curIdx)
     : (currentMatch && currentMatch.p1 && currentMatch.p2 ? (currentMatch.p1.id + '__' + currentMatch.p2.id) : '');
+  cmkRef.current = currentMatchKey; cupsRef.current = { c1: cups1, c2: cups2 };   // élő pohár-szinkron refjei
+  // ⚠️ A host pohár-állítása: ELINDÍTOTT (bp2Live) meccsnél KÖZVETLENÜL a közös
+  // bp2Live-ba ír (nem effekten át), így nincs write-back visszhang az observerrel
+  // (v10.395). A helyi cups is frissül (optimista); a be nem küldött/le nem
+  // indított meccsnél csak helyben állítunk (a jóváhagyás cups1/cups2-t olvas).
+  const hostSetCup = (which, v) => {
+    const key = currentMatchKey;
+    const lv = key && liveMap[key];
+    if (lv && roomCode && !(submitMap && submitMap[key])) {
+      const r = bohRoomRef(roomCode);
+      if (r) r.set({ bp2Live: { [key]: { ...lv, c1: which === 1 ? v : (lv.c1 || 0), c2: which === 2 ? v : (lv.c2 || 0) } } }, { merge: true }).catch(() => {});
+    }
+    if (which === 1) setCups1(v); else setCups2(v);
+  };
 
   // FIGYELEM a nevre: az `isSEFinals` azt jelenti, hogy EGYENES KIESESES agban
   // vagyunk ES be van kapcsolva a visszavago (minden meccs ket menetes). NEM
@@ -53113,7 +53146,7 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
               {currentMatch.p1.img ? <img src={currentMatch.p1.img} style={{width:80,height:80,objectFit:'cover',borderRadius:'50%'}} /> : currentMatch.p1.name.charAt(0).toUpperCase()}
             </div>
             <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p1.name}</div>
-            <CupCounter value={cups1} onChange={setCups1} color={currentMatch.p1.color} max={curMaxCups} winning={cups1 > cups2} />
+            <CupCounter value={cups1} onChange={(v)=>hostSetCup(1, v)} color={currentMatch.p1.color} max={curMaxCups} winning={cups1 > cups2} />
           </div>
 
           {/* VS + QR */}
@@ -53147,7 +53180,7 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
               {currentMatch.p2.img ? <img src={currentMatch.p2.img} style={{width:80,height:80,objectFit:'cover',borderRadius:'50%'}} /> : currentMatch.p2.name.charAt(0).toUpperCase()}
             </div>
             <div style={{ fontFamily:T.font, fontWeight:800, fontSize:15, color:T.ink, textAlign:'center', width:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{currentMatch.p2.name}</div>
-            <CupCounter value={cups2} onChange={setCups2} color={currentMatch.p2.color} max={curMaxCups} winning={cups2 > cups1} />
+            <CupCounter value={cups2} onChange={(v)=>hostSetCup(2, v)} color={currentMatch.p2.color} max={curMaxCups} winning={cups2 > cups1} />
           </div>
         </div>
 
@@ -73370,8 +73403,27 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
   const [subExp, setSubExp] = React.useState(false);   // beküldött eredmények lenyitva? (alapból zárva)
   const [editKeys, setEditKeys] = React.useState({});  // beküldött meccs újra-szerkesztés alatt (v10.391)
   React.useEffect(() => { setBpEntries({}); setEditKeys({}); }, [_activeKey]);   // uj aktiv-halmaznal nulazunk
-  const _entryOf = (mkId) => bpEntries[mkId] || { a: 0, b: 0 };
-  const _setEntry = (mkId, patch) => setBpEntries(prev => { const cur = prev[mkId] || { a: 0, b: 0 }; return { ...prev, [mkId]: { ...cur, ...(typeof patch === 'function' ? patch(cur) : patch) } }; });
+  // ⚠️ ÉLŐ pohárszám-szinkron (v10.394): ha a meccs elindult (bp2Live), a léptető
+  // a KÖZÖS bp2Live.c1/c2-ból olvas és oda ír — így a host is látja élőben (és
+  // fordítva). El nem indított meccsnél a helyi bpEntries marad.
+  const _liveCups = (mkId) => { const lv = room.bp2Live && room.bp2Live[mkId]; return (lv && (lv.c1 != null || lv.c2 != null)) ? { a: lv.c1 || 0, b: lv.c2 || 0 } : null; };
+  const _entryOf = (mkId) => _liveCups(mkId) || bpEntries[mkId] || { a: 0, b: 0 };
+  const _setEntry = (mkId, patch) => {
+    const lv = room.bp2Live && room.bp2Live[mkId];
+    if (lv && code) {   // élő meccs → közös bp2Live-ba írunk
+      const cur = { a: lv.c1 || 0, b: lv.c2 || 0 };
+      const next = { ...cur, ...(typeof patch === 'function' ? patch(cur) : patch) };
+      const ref = bohRoomRef(code); if (ref) ref.set({ bp2Live: { [mkId]: { ...lv, c1: next.a, c2: next.b } } }, { merge: true }).catch(() => {});
+    } else {
+      // ⚠️ a friss állapotból számolunk (prev), különben két gyors kattintás
+      // ugyanabból a stale értékből indul, és nem halmozódik (v10.395)
+      setBpEntries(prev => {
+        const cur = prev[mkId] || { a: 0, b: 0 };
+        const next = { ...cur, ...(typeof patch === 'function' ? patch(cur) : patch) };
+        return { ...prev, [mkId]: next };
+      });
+    }
+  };
   const _pendingOf = (mkId) => (room.bp2Submit && room.bp2Submit[mkId]) ? room.bp2Submit[mkId] : null;
   // Egy már beküldött meccs újra-szerkesztésre nyitása: a léptetőt a beküldött
   // értékkel töltjük, és a meccs visszakerül a NYITOTT (szerkeszthető) közé (v10.391).

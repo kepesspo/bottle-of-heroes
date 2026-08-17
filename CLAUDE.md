@@ -2786,3 +2786,39 @@ zárja le (a többi függő marad), és a beküldés eltűnik.
   `minWidth:240`) — nagy kijelzőn a jobb sáv arányosan nő.
 - **Csoportok közti elválasztás** — a második+ csoport-oszlop `borderLeft`+`paddingLeft`.
 - **Beküldött-panel `marginBottom:12`** — nem ér hozzá az alatta lévő kártyához.
+## ⚠️ Beer Pong 2.0: ÉLŐ pohárszám-szinkron host ↔ observer (v10.395)
+Bejelentés: „host oldalon elindítok egy meccset, a számláló mindkét helyen fut,
+DE amit a host beír, azt az observer nem látja — és fordítva."
+
+**A csatorna: a KÖZÖS `bp2Live[mkId]` `c1`/`c2` mezője.** Elindított meccsnél a
+pohárszám többé nem eszköz-helyi (`cups1/cups2`, ill. observer `bpEntries`), hanem
+a szoba `bp2Live`-bejegyzésében ül — így mindkét fél UGYANAZT írja és látja.
+
+**⚠️ A hiba a WRITE-BACK visszhang volt.** Az első verzióban a host egy *effekttel*
+tükrözte a `bp2Live`-ot a saját `cups1/cups2`-jébe, MAJD egy másik effekt a
+`cups1/cups2`-t VISSZAírta a `bp2Live`-ba. Két íróval (host + observer, ugyanaz a
+meccs — 2 fős döntőnél ez MINDIG így van) a kettő felülcsapta egymást: a
+beírt szám 0-ra ugrott, a teszt flakyzett. A javítás **megszünteti a write-back
+effektet**: a host pohár-állítása KÖZVETLEN (`hostSetCup`), nem effekt — élő
+meccsnél rögtön a `bp2Live`-ba ír (a helyi `cups` optimistán frissül), és
+CSAK a másik fél írásának OLVASÁSA maradt effekt (adopt). Így egyik oldal sem ír
+`bp2Live`-ot egy `bp2Live`-változás HATÁSÁRA — csak felhasználói akcióra, tehát
+nincs visszacsatolás.
+
+Három dolog, amit könnyű elrontani:
+- **Beküldött meccsre EGYIK fél sem ír élő pohárt** (`submitMap[key]` őr a host
+  adopt-effektjében): a meccs a jóváhagyásig BEFAGY, különben a host tovább
+  írná a `bp2Live`-ot, amit a beküldés épp töröl — és a bejegyzés visszaéledne.
+- **Az observer `_setEntry` a friss állapotból halmoz** (`setBpEntries(prev=>…)`,
+  a `cur`-t a `prev`-ből, NEM a render-closure-ből): két gyors kattintás
+  különben ugyanabból a stale értékből indul, nem lép kettőt. Ez bukatta a
+  beküldött-eredmény MÓDOSÍTÁSÁT (a `submitMatch` tie-őre — `e.a===e.b` — némán
+  visszafordult, mert a +2 valójában +1 maradt).
+- **Az élő meccs pohara `_entryOf`-ból jön** (`_liveCups(mkId) || bpEntries`),
+  nem a helyi `bpEntries`-ből: elindítás után a közös érték a hiteles.
+
+Teszt: `node tests/beerpong2_livecups_test.js` — host + observer egy szobán,
+2 fős döntő: a host +3-a a közös `bp2Live.c1`-be kerül és az observer LÁTJA,
+az observer +2-je a `bp2Live.c2`-be és a host LÁTJA. Háromszor lefuttatva stabil
+(a write-back visszhang előtt flaky volt). A `beerpong2_observer_test` 4. blokkja
+(beküldött eredmény módosítása) a friss-állapot-halmozást őrzi.
