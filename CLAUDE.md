@@ -2630,3 +2630,28 @@ Teszt: `node tests/beerpong2_parallel_test.js` — grp_rr_se, 2 csoport (2-2 fő
 az observer MINDKÉT csoport meccsét mutatja, mindkét beküldésre 2 jóváhagyó
 kártya jön, és MINDKETTŐ elfogadható (mindkét vesztes iszik, a torna a döntőre
 lép). A javítás előtt a host csak 1-et fogadott el, és az observer csak 1 csoportot mutatott.
+
+### Wizard Részletek: két szekció (v10.388)
+A beer pong wizard Részletek lépése két kártya: FELÜL **🏆 Bajnokság** (a torna
+felépítése — Visszavágó, 3. helyért, Hány kör, Csoportok száma, Továbbjutók/
+csoport), ALUL **🍺 Meccs** (egy meccs — Poharak száma, Poharak a döntőben, Meccs
+hossza). Csak csoportosítás; a config-kulcsok változatlanok. ⚠️ A szekció-fejlécek
+CSS-ből NAGYBETŰSEK (`textTransform`), ezért az `innerText`-ben „BAJNOKSÁG"/„MECCS"
+— a `beerpong_wizard_test` erre szűr, nem a kisbetűs alakra.
+
+## Beer Pong 2.0 observer: beküldött eredmény felül + óra-leállás + kompakt rács (v10.389)
+Három observer-oldali kérés:
+- **A beküldött (host jóváhagyására váró) eredmények FELÜL, lenyitható panelben**
+  (`_submitted` vs `_open` szétválasztva; `subExp` állapot, alapból ZÁRVA, a fejléc
+  a darabszámot mutatja). Korábban a beküldött kártyák a nyitottak közé keveredtek.
+- **Beküldéskor leáll az időzítő** — a `submitMatch` a `bp2Submit` írásával EGYÜTT
+  `bp2Live[mkId]`-t is töröl (`FieldValue.delete()`), így a per-meccs óra megáll.
+- **Nagy kijelzőn kompakt rács** — a nyitott meccsek `display:grid`
+  (`repeat(auto-fill, minmax(300px, 1fr))`), tehát széles képernyőn több oszlop
+  (nem foglalja el az egész magasságot); a kártyák is kisebbek (avatar 52→44,
+  léptető 36→34, padding/gap szűkebb). Mobilon egy oszlop (`1fr`).
+
+Teszt: `node tests/beerpong2_observer_test.js` — nagy (1300 px) kijelzőn: a rács
+több oszlopos, egy meccs indítása után az óra beküldéskor megáll (`bp2Live` üres),
+és a beküldött eredmény a nyitott meccsek ELŐTT, lenyitható panelben (alapból zárva,
+a fejléc a számot mutatja, lenyitva a pontszám-sor látszik).

@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.388';
+const APP_VERSION = 'v10.389';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -73355,10 +73355,14 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
   const _mkId = (aId, bId) => aId + '__' + bId;
   const _activeKey = _activeMatches.map(m => _mkId(m.p1.id, m.p2.id)).join(',');
   const [bpEntries, setBpEntries] = React.useState({});
+  const [subExp, setSubExp] = React.useState(false);   // beküldött eredmények lenyitva? (alapból zárva)
   React.useEffect(() => { setBpEntries({}); }, [_activeKey]);   // uj aktiv-halmaznal nulazunk
   const _entryOf = (mkId) => bpEntries[mkId] || { a: 0, b: 0 };
   const _setEntry = (mkId, patch) => setBpEntries(prev => { const cur = prev[mkId] || { a: 0, b: 0 }; return { ...prev, [mkId]: { ...cur, ...(typeof patch === 'function' ? patch(cur) : patch) } }; });
   const _pendingOf = (mkId) => (room.bp2Submit && room.bp2Submit[mkId]) ? room.bp2Submit[mkId] : null;
+  // Beküldött (host jóváhagyására váró) meccsek FELÜL, külön; a többi (nyitott) lent (v10.389)
+  const _submitted = _activeMatches.filter(m => _pendingOf(_mkId(m.p1.id, m.p2.id)));
+  const _open = _activeMatches.filter(m => !_pendingOf(_mkId(m.p1.id, m.p2.id)));
   const _liveOf = (mkId) => (room.bp2Live && room.bp2Live[mkId]) ? room.bp2Live[mkId] : null;
   const startMatch = (m) => {
     if (!m || !m.p1 || !m.p2 || !code) return;
@@ -73372,7 +73376,11 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
     const e = _entryOf(mkId);
     if (e.a === e.b) return;
     const ref = bohRoomRef(code); if (!ref) return;
-    ref.set({ bp2Submit: { [mkId]: { p1id: m.p1.id, p2id: m.p2.id, p1name: (hydObs(m.p1).name)||'', p2name: (hydObs(m.p2).name)||'', p1: e.a, p2: e.b, by: observerName || '', ts: Date.now() } } }, { merge: true }).catch(() => {});
+    // Beküldéskor az időzítő is LEÁLL (a bp2Live-bejegyzés törlődik) — v10.389
+    ref.set({
+      bp2Submit: { [mkId]: { p1id: m.p1.id, p2id: m.p2.id, p1name: (hydObs(m.p1).name)||'', p2name: (hydObs(m.p2).name)||'', p1: e.a, p2: e.b, by: observerName || '', ts: Date.now() } },
+      bp2Live: { [mkId]: firebase.firestore.FieldValue.delete() },
+    }, { merge: true }).catch(() => {});
   };
 
   return (
@@ -73415,62 +73423,83 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
         <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:12 }}>
 
 
-        {/* 📱 Meccs indítása + eredmény beküldése — PARHUZAMOS meccsek, nincs limit (v10.386) */}
-        {_activeMatches.length > 1 && (
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', padding:'2px 2px 0' }}>{_activeMatches.length} játszható meccs</div>
+        {/* ⏳ Beküldött eredmények — FELÜL, lenyitható (v10.389) */}
+        {_submitted.length > 0 && (
+          <div style={{ background:T.surface, borderRadius:16, boxShadow:T.shadow, overflow:'hidden' }}>
+            <div onClick={()=>setSubExp(v=>!v)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'11px 16px', cursor:'pointer' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, fontFamily:T.font, fontWeight:900, fontSize:13, color:T.mintDeep }}>
+                <span>⏳ Beküldve — host jóváhagyására vár</span>
+                <span style={{ background:T.mintSoft, color:T.mintDeep, borderRadius:999, padding:'1px 9px', fontSize:12 }}>{_submitted.length}</span>
+              </div>
+              <span style={{ color:T.inkSoft, fontSize:12, fontWeight:800 }}>{subExp ? '▲' : '▼'}</span>
+            </div>
+            {subExp && (
+              <div style={{ padding:'0 16px 10px' }}>
+                {_submitted.map(m => {
+                  const p1 = hydObs(m.p1), p2 = hydObs(m.p2);
+                  const mkId = _mkId(m.p1.id, m.p2.id);
+                  const pend = _pendingOf(mkId);
+                  return (
+                    <div key={mkId} style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 0', borderTop:'1px solid '+T.surfaceMuted }}>
+                      <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontSize:13, fontWeight:700, color:T.ink, textAlign:'right', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p1.name}</div>
+                      <div style={{ fontFamily:'monospace', fontWeight:900, fontSize:15, color:T.mintDeep, flexShrink:0, minWidth:52, textAlign:'center' }}>{pend.p1} – {pend.p2}</div>
+                      <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontSize:13, fontWeight:700, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p2.name}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
-        {_activeMatches.map((m) => {
+
+        {/* 📱 Játszható meccsek — indítás + eredmény beküldése; nagy kijelzőn rácsban, kompaktabb (v10.386/389) */}
+        {_open.length > 1 && (
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', padding:'2px 2px 0' }}>{_open.length} játszható meccs</div>
+        )}
+        <div style={{ display:'grid', gridTemplateColumns: isWide ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr', gap:12, alignItems:'start' }}>
+        {_open.map((m) => {
           const p1 = hydObs(m.p1), p2 = hydObs(m.p2);
           const mkId = _mkId(m.p1.id, m.p2.id);
           const e = _entryOf(mkId);
-          const pend = _pendingOf(mkId);
           const live = _liveOf(mkId);
-          const multi = _activeMatches.length > 1;
+          const multi = _open.length > 1;
           return (
-            <div key={mkId} style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow: live ? `0 0 0 2px ${T.mint}55, ${T.shadow}` : T.shadow, display:'flex', flexDirection:'column', gap:12 }}>
+            <div key={mkId} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow: live ? `0 0 0 2px ${T.mint}55, ${T.shadow}` : T.shadow, display:'flex', flexDirection:'column', gap:10 }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
-                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>{multi ? p1.name + ' vs ' + p2.name : 'Eredmény beküldése'}</div>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkSoft, letterSpacing:'0.06em', textTransform:'uppercase', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{multi ? p1.name + ' vs ' + p2.name : 'Eredmény beküldése'}</div>
                 {_matchMins > 0 && (live
                   ? <BeerPong2MatchClock startedAt={live.startedAt} minutes={_matchMins} compact />
-                  : <button onClick={()=>startMatch(m)} style={{ padding:'5px 12px', borderRadius:999, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:12, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:4 }}>▶ Indítás</button>
+                  : <button onClick={()=>startMatch(m)} style={{ padding:'5px 12px', borderRadius:999, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:12, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:4, flexShrink:0 }}>▶ Indítás</button>
                 )}
               </div>
-              {pend ? (
-                <div style={{ textAlign:'center', fontFamily:T.font, fontSize:14, color:T.mintDeep, fontWeight:800, padding:'6px 0' }}>
-                  ⏳ Elküldve — {p1.name} {pend.p1} – {pend.p2} {p2.name}
-                  <div style={{ fontSize:12, color:T.inkSoft, fontWeight:600, marginTop:2 }}>a host jóváhagyására vár…</div>
-                </div>
-              ) : (
-                <React.Fragment>
-                  <div style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
-                    <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
-                      <PlayerAvatar player={p1} size={52} />
-                      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, textAlign:'center', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p1.name}</div>
-                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                        <button onClick={()=>_setEntry(mkId, c=>({a:Math.max(0,c.a-1)}))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.coralSoft, color:'#D85F5C', fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>−</button>
-                        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color: e.a>e.b ? T.mint : T.ink, minWidth:28, textAlign:'center', fontVariantNumeric:'tabular-nums' }}>{e.a}</div>
-                        <button onClick={()=>_setEntry(mkId, c=>({a:Math.min(_maxCups,c.a+1)}))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>+</button>
-                      </div>
-                    </div>
-                    <div style={{ paddingTop:22, fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft, flexShrink:0 }}>VS</div>
-                    <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
-                      <PlayerAvatar player={p2} size={52} />
-                      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, textAlign:'center', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p2.name}</div>
-                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                        <button onClick={()=>_setEntry(mkId, c=>({b:Math.max(0,c.b-1)}))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.coralSoft, color:'#D85F5C', fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>−</button>
-                        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:28, color: e.b>e.a ? T.mint : T.ink, minWidth:28, textAlign:'center', fontVariantNumeric:'tabular-nums' }}>{e.b}</div>
-                        <button onClick={()=>_setEntry(mkId, c=>({b:Math.min(_maxCups,c.b+1)}))} style={{ width:36, height:36, borderRadius:12, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>+</button>
-                      </div>
-                    </div>
+              <div style={{ display:'flex', alignItems:'flex-start', gap:8 }}>
+                <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+                  <PlayerAvatar player={p1} size={44} />
+                  <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, textAlign:'center', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p1.name}</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <button onClick={()=>_setEntry(mkId, c=>({a:Math.max(0,c.a-1)}))} style={{ width:34, height:34, borderRadius:12, border:'none', background:T.coralSoft, color:'#D85F5C', fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>−</button>
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color: e.a>e.b ? T.mint : T.ink, minWidth:26, textAlign:'center', fontVariantNumeric:'tabular-nums' }}>{e.a}</div>
+                    <button onClick={()=>_setEntry(mkId, c=>({a:Math.min(_maxCups,c.a+1)}))} style={{ width:34, height:34, borderRadius:12, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>+</button>
                   </div>
-                  <button onClick={()=>submitMatch(m)} disabled={e.a===e.b} style={{ width:'100%', padding:'13px', borderRadius:14, border:'none', cursor: e.a===e.b?'default':'pointer', fontFamily:T.font, fontWeight:900, fontSize:15, background: e.a===e.b?'rgba(0,0,0,0.07)':T.mint, color: e.a===e.b?T.inkMute:'#fff', boxShadow: e.a===e.b?'none':'0 4px 0 '+T.mintDeep }}>
-                    {e.a===e.b ? 'Állítsd be az eredményt' : 'Beküldés a hostnak'}
-                  </button>
-                </React.Fragment>
-              )}
+                </div>
+                <div style={{ paddingTop:16, fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkSoft, flexShrink:0 }}>VS</div>
+                <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+                  <PlayerAvatar player={p2} size={44} />
+                  <div style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, textAlign:'center', maxWidth:'100%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p2.name}</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <button onClick={()=>_setEntry(mkId, c=>({b:Math.max(0,c.b-1)}))} style={{ width:34, height:34, borderRadius:12, border:'none', background:T.coralSoft, color:'#D85F5C', fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>−</button>
+                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:26, color: e.b>e.a ? T.mint : T.ink, minWidth:26, textAlign:'center', fontVariantNumeric:'tabular-nums' }}>{e.b}</div>
+                    <button onClick={()=>_setEntry(mkId, c=>({b:Math.min(_maxCups,c.b+1)}))} style={{ width:34, height:34, borderRadius:12, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:20, cursor:'pointer', display:'grid', placeItems:'center', flexShrink:0 }}>+</button>
+                  </div>
+                </div>
+              </div>
+              <button onClick={()=>submitMatch(m)} disabled={e.a===e.b} style={{ width:'100%', padding:'11px', borderRadius:14, border:'none', cursor: e.a===e.b?'default':'pointer', fontFamily:T.font, fontWeight:900, fontSize:15, background: e.a===e.b?'rgba(0,0,0,0.07)':T.mint, color: e.a===e.b?T.inkMute:'#fff', boxShadow: e.a===e.b?'none':'0 4px 0 '+T.mintDeep }}>
+                {e.a===e.b ? 'Állítsd be az eredményt' : 'Beküldés a hostnak'}
+              </button>
             </div>
           );
         })}
+        </div>
 
         {/* Champion banner */}
         {bp.champion && (
