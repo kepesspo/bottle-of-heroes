@@ -2555,3 +2555,46 @@ MINDET tükrözni kell:
 Teszt: `node tests/beerpong2_panel_test.js` — a PlayScreen beerpong2-vel: a meccs-lap
 renderelődik (VS + nevek), de NINCS „Ki rontott" / „Senki nem rontott" panel ÉS
 nincs „Ki nyert a körben?" felirat.
+
+## Beer Pong 2.0: nincs asztal-limit + per-meccs óra (v10.386)
+Tulajdonosi kérés: az observeren nem lehetett **kiválasztani**, melyik meccset
+játszod — a `tables` cap (alapból 1) döntött helyetted, ezért nem lehetett „2
+külön meccset kezelni". Új modell: a host **létrehoz + szerkeszt + validál**;
+az observer **megnézi a párosításokat/eredményeket, ÉS bármelyik meccset
+elindíthatja/rögzítheti**. Asztal-limit nélkül.
+
+**A `tables` config MEGSZŰNT** (config sheet, wizard, `bp2State` sync, observer
+cap). A kör/csoport **MINDEN függő meccse** egy kártya az observeren — a `_pendOK`
+szűri (`p1 && p2 && winner==null && !tbd && !draw`), és az `_activeMatches` a
+torna-típus szerint gyűjti (SE: aktuális kör; RR: összes; grp_ groups: aktuális
+csoport; grp_ finals: SE-kör vagy RR). A motor out-of-order része már kész volt
+(v10.378 `handleSEConfirm` explicit cups + id-alapú koordináta).
+
+**Per-meccs óra: közös `bp2Live` MAP** a szoba-dokumentumban (mint a `bp2Submit`),
+amit a host ÉS az observer is ír. `bp2Live[mkId] = { startedAt, p1id, p2id }` —
+bárki elindíthat egy meccset. A visszaszámláló a **`BeerPong2MatchClock`**
+(modul-szintű, `BpObsPlayerChip` mellett): a kezdés időbélyege a szobában ül, a
+ketyegés HELYI (1 mp-es interval), a Busz-óra mintája (v10.330) — **nincs
+másodpercenkénti Firestore-írás**. Hátralévő = `perc*60 − (most − startedAt)`,
+0-ra vágva; host és observer UGYANEZT rajzolja (a meccs oraja a meccshez tartozik,
+nem az eszközhöz).
+
+Amit könnyű elrontani:
+- **Elfogadáskor/elvetéskor a `bp2Live[mkId]` TÖRLŐDIK** — a `clearSub` mostantól
+  `clearLive`-ot is hív; a host manuális `doConfirm` a `currentMatch` mkId-jét
+  törli a `confirmHandler` előtt. Enélkül a lezárt meccs órája ott ragadna.
+- A `bp2State` sync **`matchMinutes`-t visz** (a plafon-`maxCups` mellett) — a
+  per-meccs órához az observernek is kell.
+- A host **„Élő meccsek" panelje** (`MATCH_MINUTES>0`, `pend>1 || someLive`) a
+  függő meccseket listázza, mindegyiket `▶ Indítás`-sal vagy órával — a host
+  telefon nélkül is indíthat asztalt (`hostStartMatch`).
+
+⚠️ A régi `beerpong` (Torna) érintetlen (nem volt `tables`); a `bp_final_test`
+zöld. A `beerpong2_tables_test` továbbra is zöld (a párhuzamos beküldés maga
+változatlan, csak a cap tűnt el).
+
+Teszt: `node tests/beerpong2_live_test.js` — 4 játékos, `tables:1` a configban:
+a telefon MINDKÉT elődöntőt mutatja (a cap megszűnt), minden kártyán „Indítás",
+az egyik indítása után `bp2Live` 1 kulcs + óra (05:00) jelenik meg a telefonon ÉS
+a host „Élő meccsek" paneljén, a másik meccs érintetlen, és az elfogadás törli a
+per-meccs órát.

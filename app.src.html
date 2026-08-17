@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.385';
+const APP_VERSION = 'v10.386';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -44923,11 +44923,6 @@ function BeerPong2ConfigSheet({ config, setConfig, onClose, playerCount }) {
     { key:'maxCups',       label:'Poharak száma',    val:maxCups,       min:4, max:16, step:2 },
     { key:'finalCups',     label:'Poharak a döntőben', val:finalCups, min:4, max:16, step:2,
       sub:'A döntő mindig egy meccs — visszavágó nélkül' },
-    // Parhuzamos asztalok (v10.378): kieseses agban ennyi meccs mehet egyszerre,
-    // telefonrol bekuldve. A host mindegyiket kulon jovahagyja.
-    { key:'tables',        label:'Asztalok száma',   val: (config.tables ?? 1), min:1, max:4, step:1,
-      sub:'Hány meccs mehet egyszerre, telefonos beküldéssel (kieséses)' },
-
     { key:'matchMinutes',  label:'Meccs hossza (perc)',val:matchMinutes, min:0, max:20, step:1 },
   ];
 
@@ -45710,7 +45705,6 @@ function BeerPongSetupWizard({ gameId, config, setConfig, onClose, onBack, playe
   const maxCups = cfg.maxCups ?? 10;
   const finalCups = cfg.finalCups ?? maxCups;
   const matchMinutes = cfg.matchMinutes ?? 5;
-  const tables = cfg.tables ?? 1;
   const numGroups = cfg.numGroups ?? 2;
   const groupAdvance = cfg.groupAdvance ?? 1;
 
@@ -45803,7 +45797,6 @@ function BeerPongSetupWizard({ gameId, config, setConfig, onClose, onBack, playe
           <div style={{ background:T.surface, borderRadius:18, padding:'2px 16px', boxShadow:T.shadow }}>
             {Stepper({ label:'Poharak száma', value:maxCups, min:4, max:16, step:2, onChange:v => set({ maxCups:v }) })}
             {tournament === 'se' && Stepper({ label:'Poharak a döntőben', sub:'A döntő mindig egy meccs', value:finalCups, min:4, max:16, step:2, onChange:v => set({ finalCups:v }) })}
-            {is2 && tournament === 'se' && !cfg.visszavago && Stepper({ label:'Asztalok száma', sub:'Hány meccs mehet egyszerre, telefonos beküldéssel', value:tables, min:1, max:4, onChange:v => set({ tables:v }) })}
             {Stepper({ label:'Meccs hossza (perc)', sub:'0 = nincs időmérés', value:matchMinutes, min:0, max:20, onChange:v => set({ matchMinutes:v }) })}
             {(tournament === 'se' || tournament === 'rr' || isTwo) && ToggleRow({ label:'Visszavágó', sub:'Minden meccs két menetes (a döntő nem)', on: cfg.visszavago === true, onChange:() => set({ visszavago: !(cfg.visszavago === true) }) })}
             {is2 && tournament === 'se' && ToggleRow({ label:'3. helyért meccs', sub:'A két elődöntő-vesztes játszik a bronzért', on: cfg.thirdPlace !== false, onChange:() => set({ thirdPlace: !(cfg.thirdPlace !== false) }) })}
@@ -51653,9 +51646,8 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
   const MATCH_MINUTES = bpCfg.matchMinutes ?? 5;
   const MODE = bpCfg.mode || 'egyeni';
   const TOURNAMENT_NAME = bpCfg.tournamentName || '';
-  // Parhuzamos asztalok (v10.378): a kieseses kor ennyi meccse mehet EGYSZERRE,
-  // telefonrol bekuldve. Csak SE-ben ertelmes; visszavagoval 1-re esik vissza.
-  const TABLES = (TOURNAMENT === 'se' && !VISSZAVAGO) ? Math.max(1, Math.min(4, bpCfg.tables ?? 1)) : 1;
+  // Parhuzamos meccsek (v10.386): nincs asztal-limit — a kor/csoport MINDEN
+  // fuggoben levo meccse jatszhato/bekuldheto egyszerre, per-meccs oraval (bp2Live).
   // 3. helyert meccs (bronz): alapbol BE, csak kieseses agban. A ket elodonto-
   // vesztes jatszik a 3. helyert; a bajnokot addig visszatartjuk (v10.379).
   const THIRD_PLACE = (bpCfg.thirdPlace ?? true) && TOURNAMENT === 'se';
@@ -52036,7 +52028,7 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
       champion: champion ? { id: champion.id, name: champion.name, color: champion.color } : null,
       drinkMap,
       maxCups: MAX_CUPS, finalCups: FINAL_CUPS,   // a telefonos bekuldeshez kell a plafon
-      tables: TABLES,                              // parhuzamos asztalok szama (SE)
+      matchMinutes: MATCH_MINUTES,                 // a per-meccs orahoz (bp2Live)
       thirdPlace: THIRD_PLACE,
       bronze: bronzeMatch ? { p1: slimP(bronzeMatch.p1), p2: slimP(bronzeMatch.p2), winner: slimP(bronzeMatch.winner), loser: slimP(bronzeMatch.loser), score: bronzeMatch.score || null } : null,
     }});
@@ -52399,17 +52391,33 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
   // jovahagyja. Az elavult (mar lejatszott meccsre szolo) bekuldest a render
   // kiszuri; a helyes (r,i) koordinatat a jatekos-id-kbol keressuk vissza.
   const [submitMap, setSubmitMap] = React.useState({});
+  // Elo (elinditott) meccsek per-meccs oraja — a szoba `bp2Live` MAP-ja (v10.386).
+  // Barki (host vagy observer) elindithatja; a kezdes idobelyege ittal, a
+  // visszaszamlalo helyben ketyeg (BeerPong2MatchClock). Elfogadaskor torlodik.
+  const [liveMap, setLiveMap] = React.useState({});
   const pendingConfirmRef = React.useRef(null);   // RR/group ut: auto-rogzites a cups frissulese utan
   const doConfirmRef = React.useRef(null);
   React.useEffect(() => {
     if (!roomCode || typeof subscribeRoom !== 'function') return;
     const unsub = subscribeRoom(roomCode, data => {
       setSubmitMap((data && data.bp2Submit && typeof data.bp2Submit === 'object') ? data.bp2Submit : {});
+      setLiveMap((data && data.bp2Live && typeof data.bp2Live === 'object') ? data.bp2Live : {});
     });
     return () => unsub && unsub();
   }, [roomCode, gameIdx]);
+  const clearLive = (mkId) => {
+    setLiveMap(m => { const n = { ...m }; delete n[mkId]; return n; });
+    if (roomCode) { const r = bohRoomRef(roomCode); if (r) r.set({ bp2Live: { [mkId]: firebase.firestore.FieldValue.delete() } }, { merge: true }).catch(() => {}); }
+  };
+  const hostStartMatch = (m) => {
+    if (!m || !m.p1 || !m.p2 || !roomCode) return;
+    const mkId = m.p1.id + '__' + m.p2.id;
+    const r = bohRoomRef(roomCode); if (!r) return;
+    r.set({ bp2Live: { [mkId]: { startedAt: Date.now(), p1id: m.p1.id, p2id: m.p2.id } } }, { merge: true }).catch(() => {});
+  };
   const clearSub = (mkId) => {
     setSubmitMap(m => { const n = { ...m }; delete n[mkId]; return n; });
+    clearLive(mkId);   // a meccs lezarult/elvetve → az oraja is ternjen le
     if (roomCode) { const r = bohRoomRef(roomCode); if (r) r.set({ bp2Submit: { [mkId]: firebase.firestore.FieldValue.delete() } }, { merge: true }).catch(() => {}); }
   };
   // Egy telefonos javaslat elfogadasa. SE-ben TETSZOLEGES fuggoben levo meccset
@@ -52783,6 +52791,8 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
       setCups1(0); setCups2(0); resetTimer();
       return;
     }
+    // a meccs lezarul → az elo oraja (ha volt) ternjen le
+    if (currentMatch && currentMatch.p1 && currentMatch.p2) clearLive(currentMatch.p1.id + '__' + currentMatch.p2.id);
     confirmHandler && confirmHandler();
   };
   doConfirmRef.current = doConfirm;
@@ -53029,7 +53039,42 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
           </div>
         )}
 
-        {/* 📱 Telefonos eredmeny-javaslatok — PARHUZAMOS asztalok; a host kulon jovahagyja (v10.378) */}
+        {/* ⏱ Elo / jatszhato meccsek — a host is indithat orat; a countdown mindenhol lathato (v10.386) */}
+        {MATCH_MINUTES > 0 && (() => {
+          const _po = (m) => m && m.p1 && m.p2 && m.winner == null && !m.tbd && !m.draw;
+          let pend = [];
+          if (champion) pend = [];
+          else if (bronzeMatch && _po(bronzeMatch)) pend = [bronzeMatch];
+          else if (TOURNAMENT === 'se') { const r = seRounds[seCurRound] || []; pend = r.filter(_po); }
+          else if (TOURNAMENT === 'rr') pend = rrMatches.filter(_po);
+          else if (TOURNAMENT.startsWith('grp_')) {
+            if (tsPhase === 'groups') { const g = tsGroups[viewGroup]; const ms = g ? (Array.isArray(g.matches) ? g.matches : Object.values(g.matches || {})) : []; pend = ms.filter(_po); }
+            else if (finalsType === 'rr') pend = rrMatches.filter(_po);
+            else { const r = seRounds[seCurRound] || []; pend = r.filter(_po); }
+          }
+          // csak azok, amelyeknek van elo oraja VAGY tobb fuggo meccs van (parhuzam)
+          const someLive = pend.some(m => liveMap[m.p1.id + '__' + m.p2.id]);
+          if (pend.length <= 1 && !someLive) return null;
+          return (
+            <div style={{ marginTop:16, background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow, display:'flex', flexDirection:'column', gap:8 }}>
+              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase' }}>Élő meccsek ({pend.length})</div>
+              {pend.map(m => {
+                const mkId = m.p1.id + '__' + m.p2.id;
+                const live = liveMap[mkId];
+                return (
+                  <div key={mkId} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 0' }}>
+                    <div style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.p1.name} <span style={{ color:T.inkMute }}>vs</span> {m.p2.name}</div>
+                    {live
+                      ? <BeerPong2MatchClock startedAt={live.startedAt} minutes={MATCH_MINUTES} compact />
+                      : <button onClick={() => hostStartMatch(m)} style={{ padding:'5px 12px', borderRadius:999, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:12, cursor:'pointer', flexShrink:0 }}>▶ Indítás</button>}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        {/* 📱 Telefonos eredmeny-javaslatok — PARHUZAMOS meccsek; a host kulon jovahagyja (v10.378/386) */}
         {(() => {
           const _nm = (id, fb) => { const p = (players || []).find(x => x.id === id); return (p && p.name) || fb || '?'; };
           const entries = Object.keys(submitMap || {}).map(k => ({ mkId: k, sub: submitMap[k] })).filter(({ sub }) => {
@@ -72352,6 +72397,40 @@ function BpObsPlayerChip({ p, highlight }) {
   );
 }
 
+// Per-meccs visszaszamlalo (v10.386) — a KEZDES idobelyege a szobaban ul
+// (bp2Live[mkId].startedAt), a ketyeges HELYI (1 mp-es interval), a Busz-ora
+// mintajara (v10.330): nincs masodpercenkenti Firestore-iras. A hatralevo ido
+// = minutes*60 − (most − startedAt), 0-ra vagva. Host es observer UGYANEZT
+// rajzolja — a meccs oraja a meccshez tartozik, nem az eszkozhoz.
+function BeerPong2MatchClock({ startedAt, minutes, compact }) {
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const iv = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, []);
+  if (!startedAt || !minutes) return null;
+  const total = minutes * 60;
+  const left = Math.max(0, total - Math.floor((now - startedAt) / 1000));
+  const mm = Math.floor(left / 60), ss = left % 60;
+  const over = left === 0;
+  const warn = left > 0 && left < 30;
+  const col = over ? T.inkMute : warn ? '#D85F5C' : T.ink;
+  const label = over ? 'Lejárt' : (mm.toString().padStart(2,'0') + ':' + ss.toString().padStart(2,'0'));
+  if (compact) {
+    return (
+      <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'3px 9px', borderRadius:999, background: over ? 'rgba(216,95,92,0.12)' : warn ? 'rgba(216,95,92,0.12)' : T.surfaceMuted, fontFamily:T.font, fontWeight:800, fontSize:12, color:col, fontVariantNumeric:'tabular-nums' }}>
+        <span style={{ fontSize:11 }}>{over ? '⌛' : '⏱'}</span>{label}
+      </span>
+    );
+  }
+  return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'6px 12px', borderRadius:12, background: over ? 'rgba(216,95,92,0.10)' : T.surfaceMuted, alignSelf:'center' }}>
+      <span style={{ fontSize:14 }}>{over ? '⌛' : '⏱'}</span>
+      <span style={{ fontFamily:'monospace', fontWeight:900, fontSize:20, color:col, fontVariantNumeric:'tabular-nums', letterSpacing:1 }}>{label}</span>
+    </div>
+  );
+}
+
 // ═══════════════ BEER PONG 2.0 — TABLÓ (duplikátum, v10.376) ═══════════════
 function BeerPong2Tableau({ champion, players, tournamentName, tournament, seRounds, rrMatches, tsGroups, drinkMap, maxCups, matchMinutes, onClose }) {
   const canvasRef = React.useRef(null);
@@ -73181,23 +73260,39 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
     return null;
   })();
 
-  // ── Telefonos eredmeny-bekuldes + PARHUZAMOS ASZTALOK (v10.377/378) ────────
-  // Tobb asztal EGYSZERRE kuldhet be: a szoba `bp2Submit` MAP-jaba irunk (kulcs a
-  // ket jatekos id-je). SE-ben a jelenlegi kor fuggoben levo meccsei kozul az elso
-  // `tables` mehet egyszerre; mas tipusnal a jelenlegi (mutato) meccs egyedul.
-  const _tables = Math.max(1, Math.min(4, bp.tables || 1));
-  const _seRoundArr = (bp.tournament === 'se' && !bp.champion)
-    ? (() => { const r = seRoundsArr[bp.seCurRound ?? 0]; return r ? (Array.isArray(r) ? r : Object.values(r)) : []; })()
-    : [];
-  // 3. helyert (bronz): amig a bronz fuggoben van (a bajnok visszatartva), AZ az
-  // egyetlen bekuldheto meccs — a bracket egyebkent mar lezarult.
+  // ── Telefonos eredmeny-bekuldes + PARHUZAMOS meccsek (v10.377/378/386) ──────
+  // Nincs asztal-limit: a kor/csoport MINDEN fuggoben levo meccse egy kartya, es
+  // barmelyik b armelyik telefonrol INDITHATO (per-meccs ora, `bp2Live`) es
+  // BEKULDHETO (`bp2Submit`). A host mindegyiket kulon jovahagyja. A helyes (r,i)
+  // koordinatat a jatekos-id-kbol keressuk vissza — a mutato nem szamit.
+  // 3. helyert (bronz): amig a bronz fuggoben van, AZ az egyetlen bekuldheto meccs.
   const _bronze = (bp.bronze && !bp.bronze.winner && bp.bronze.p1 && bp.bronze.p2 && !bp.champion) ? bp.bronze : null;
-  const _activeMatches = _bronze
-    ? [_bronze]
-    : (bp.tournament === 'se' && !bp.champion)
-      ? _seRoundArr.filter(m => m && m.p1 && m.p2 && m.winner == null && !m.tbd).slice(0, _tables)
-      : (curMatch && curMatch.p1 && curMatch.p2 && !bp.champion ? [curMatch] : []);
+  const _pendOK = (m) => m && m.p1 && m.p2 && m.winner == null && !m.tbd && !m.draw;
+  const _activeMatches = (() => {
+    if (bp.champion) return [];
+    if (_bronze) return [_bronze];
+    const tour = bp.tournament || '';
+    if (tour === 'se') {
+      const r = seRoundsArr[bp.seCurRound ?? 0];
+      return (r ? (Array.isArray(r) ? r : Object.values(r)) : []).filter(_pendOK);
+    }
+    if (tour === 'rr') return rrMatchesArr.filter(_pendOK);
+    if (tour.startsWith('grp_')) {
+      if (bp.phase === 'groups') {
+        const g = tsGroupsArr[bp.tsCurGroup ?? 0];
+        const ms = g ? (Array.isArray(g.matches) ? g.matches : Object.values(g.matches || {})) : [];
+        return ms.filter(_pendOK);
+      }
+      if (tour.endsWith('_se')) {
+        const r = seRoundsArr[bp.seCurRound ?? 0];
+        return (r ? (Array.isArray(r) ? r : Object.values(r)) : []).filter(_pendOK);
+      }
+      if (tour.endsWith('_rr')) return rrMatchesArr.filter(_pendOK);
+    }
+    return (curMatch && _pendOK(curMatch)) ? [curMatch] : [];
+  })();
   const _maxCups = bp.maxCups || 10;
+  const _matchMins = bp.matchMinutes || 0;
   const _mkId = (aId, bId) => aId + '__' + bId;
   const _activeKey = _activeMatches.map(m => _mkId(m.p1.id, m.p2.id)).join(',');
   const [bpEntries, setBpEntries] = React.useState({});
@@ -73205,6 +73300,13 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
   const _entryOf = (mkId) => bpEntries[mkId] || { a: 0, b: 0 };
   const _setEntry = (mkId, patch) => setBpEntries(prev => { const cur = prev[mkId] || { a: 0, b: 0 }; return { ...prev, [mkId]: { ...cur, ...(typeof patch === 'function' ? patch(cur) : patch) } }; });
   const _pendingOf = (mkId) => (room.bp2Submit && room.bp2Submit[mkId]) ? room.bp2Submit[mkId] : null;
+  const _liveOf = (mkId) => (room.bp2Live && room.bp2Live[mkId]) ? room.bp2Live[mkId] : null;
+  const startMatch = (m) => {
+    if (!m || !m.p1 || !m.p2 || !code) return;
+    const mkId = _mkId(m.p1.id, m.p2.id);
+    const ref = bohRoomRef(code); if (!ref) return;
+    ref.set({ bp2Live: { [mkId]: { startedAt: Date.now(), p1id: m.p1.id, p2id: m.p2.id } } }, { merge: true }).catch(() => {});
+  };
   const submitMatch = (m) => {
     if (!m || !m.p1 || !m.p2 || !code) return;
     const mkId = _mkId(m.p1.id, m.p2.id);
@@ -73254,16 +73356,26 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
         <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:12 }}>
 
 
-        {/* 📱 Eredmeny bekuldese a hostnak — PARHUZAMOS asztalok (v10.378) */}
+        {/* 📱 Meccs indítása + eredmény beküldése — PARHUZAMOS meccsek, nincs limit (v10.386) */}
+        {_activeMatches.length > 1 && (
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkSoft, letterSpacing:'0.08em', textTransform:'uppercase', padding:'2px 2px 0' }}>{_activeMatches.length} játszható meccs</div>
+        )}
         {_activeMatches.map((m) => {
           const p1 = hydObs(m.p1), p2 = hydObs(m.p2);
           const mkId = _mkId(m.p1.id, m.p2.id);
           const e = _entryOf(mkId);
           const pend = _pendingOf(mkId);
+          const live = _liveOf(mkId);
           const multi = _activeMatches.length > 1;
           return (
-            <div key={mkId} style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow:T.shadow, display:'flex', flexDirection:'column', gap:12 }}>
-              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>{multi ? 'Asztal — eredmény beküldése' : 'Eredmény beküldése'}</div>
+            <div key={mkId} style={{ background:T.surface, borderRadius:18, padding:'14px 16px', boxShadow: live ? `0 0 0 2px ${T.mint}55, ${T.shadow}` : T.shadow, display:'flex', flexDirection:'column', gap:12 }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, color:T.inkSoft, letterSpacing:'0.1em', textTransform:'uppercase' }}>{multi ? p1.name + ' vs ' + p2.name : 'Eredmény beküldése'}</div>
+                {_matchMins > 0 && (live
+                  ? <BeerPong2MatchClock startedAt={live.startedAt} minutes={_matchMins} compact />
+                  : <button onClick={()=>startMatch(m)} style={{ padding:'5px 12px', borderRadius:999, border:'none', background:T.mintSoft, color:T.mintDeep, fontFamily:T.font, fontWeight:900, fontSize:12, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:4 }}>▶ Indítás</button>
+                )}
+              </div>
               {pend ? (
                 <div style={{ textAlign:'center', fontFamily:T.font, fontSize:14, color:T.mintDeep, fontWeight:800, padding:'6px 0' }}>
                   ⏳ Elküldve — {p1.name} {pend.p1} – {pend.p2} {p2.name}
