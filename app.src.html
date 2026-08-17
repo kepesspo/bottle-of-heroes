@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.395';
+const APP_VERSION = 'v10.396';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -52996,6 +52996,10 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
           <div style={{ padding:'0 12px 12px', display:'flex', flexDirection:'column', gap:10 }}>
             {entries.map(({ mkId, sub }) => {
               const draw = sub.p1 === sub.p2;
+              // Döntetlen CSAK körmérkőzős pozíción rögzíthető (rr#/g#) — SE/bronz nem (v10.396).
+              const _dk = String(sub.mk || mkId);
+              const drawOK = /^(rr|g)#/.test(_dk);
+              const blockDraw = draw && !drawOK;
               return (
                 <div key={mkId} style={{ background:T.mintSoft, borderRadius:16, padding:'14px 16px', display:'flex', flexDirection:'column', gap:10, border:'2px solid '+T.mint }}>
                   <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:T.mintDeep, letterSpacing:'0.04em' }}>📱 BEKÜLDÖTT EREDMÉNY{sub.by ? ' · ' + sub.by : ''}</div>
@@ -53006,7 +53010,7 @@ function BeerPong2Game({ gameIdx, players, onAdvance, onResult, gameMeta, roomCo
                   </div>
                   <div style={{ display:'flex', gap:8 }}>
                     <button onClick={() => clearSub(mkId)} style={{ flex:1, padding:'12px', borderRadius:12, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, background:'rgba(14,14,24,0.06)', color:T.inkSoft }}>Elvetem</button>
-                    <button onClick={() => acceptSub(mkId, sub)} disabled={draw} style={{ flex:2, padding:'12px', borderRadius:12, border:'none', cursor: draw?'default':'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, background: draw?'rgba(0,0,0,0.07)':T.mint, color: draw?T.inkMute:'#fff', boxShadow: draw?'none':'0 4px 0 '+T.mintDeep }}>{draw ? 'Döntetlen — nem rögzíthető' : 'Elfogadom és rögzítem'}</button>
+                    <button onClick={() => acceptSub(mkId, sub)} disabled={blockDraw} style={{ flex:2, padding:'12px', borderRadius:12, border:'none', cursor: blockDraw?'default':'pointer', fontFamily:T.font, fontWeight:900, fontSize:14, background: blockDraw?'rgba(0,0,0,0.07)':T.mint, color: blockDraw?T.inkMute:'#fff', boxShadow: blockDraw?'none':'0 4px 0 '+T.mintDeep }}>{blockDraw ? 'Döntetlen — nem rögzíthető' : draw ? 'Döntetlen rögzítése' : 'Elfogadom és rögzítem'}</button>
                   </div>
                 </div>
               );
@@ -73447,7 +73451,13 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
     if (!m || !m.p1 || !m.p2 || !code) return;
     const mkId = m._mk;
     const e = _entryOf(mkId);
-    if (e.a === e.b) return;
+    // Döntetlen (e.a === e.b) csak körmérkőzős pozíción (rr#/g#) ÉS elindított
+    // meccsnél küldhető be (v10.396) — SE/bronz döntetlent nem enged.
+    if (e.a === e.b) {
+      const drawsOK = /^(rr|g)#/.test(mkId);
+      const isLive = !!(room.bp2Live && room.bp2Live[mkId]);
+      if (!(drawsOK && isLive)) return;
+    }
     const ref = bohRoomRef(code); if (!ref) return;
     // Beküldéskor az időzítő is LEÁLL (a bp2Live-bejegyzés törlődik) — v10.389
     ref.set({
@@ -73543,6 +73553,14 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
           const live = _liveOf(mkId);
           const editing = !!editKeys[mkId];   // beküldött eredmény újra-szerkesztése (v10.391)
           const multi = _open.length > 1;
+          // Döntetlen CSAK körmérkőzős pozíción érvényes (rr#/g#) — SE/bronz nem (v10.396).
+          // ⚠️ És CSAK ELINDÍTOTT meccsnél (az óra elindítása után) küldhető be: egy le
+          // sem játszott 0–0 döntetlen nincs értelme. Időzítő nélkül nincs indítás →
+          // ott a döntetlent a host rögzíti (a saját megerősítő gombja engedi).
+          const drawsOK = /^(rr|g)#/.test(mkId);
+          const isTie = e.a === e.b;
+          const canDraw = drawsOK && !!live;
+          const submitBlocked = isTie && !canDraw;
           return (
             <div key={mkId} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow: editing ? `0 0 0 2px ${T.yellow}, ${T.shadow}` : live ? `0 0 0 2px ${T.mint}55, ${T.shadow}` : T.shadow, display:'flex', flexDirection:'column', gap:10 }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
@@ -73573,8 +73591,10 @@ function BeerPong2ObserverView({ room, code, onLeave, observerName }) {
                   </div>
                 </div>
               </div>
-              <button onClick={()=>submitMatch(m)} disabled={e.a===e.b} style={{ width:'100%', padding:'11px', borderRadius:14, border:'none', cursor: e.a===e.b?'default':'pointer', fontFamily:T.font, fontWeight:900, fontSize:15, background: e.a===e.b?'rgba(0,0,0,0.07)':T.mint, color: e.a===e.b?T.inkMute:'#fff', boxShadow: e.a===e.b?'none':'0 4px 0 '+T.mintDeep }}>
-                {e.a===e.b ? 'Állítsd be az eredményt' : editing ? 'Módosítás beküldése' : 'Beküldés a hostnak'}
+              <button onClick={()=>submitMatch(m)} disabled={submitBlocked} style={{ width:'100%', padding:'11px', borderRadius:14, border:'none', cursor: submitBlocked?'default':'pointer', fontFamily:T.font, fontWeight:900, fontSize:15, background: submitBlocked?'rgba(0,0,0,0.07)':T.mint, color: submitBlocked?T.inkMute:'#fff', boxShadow: submitBlocked?'none':'0 4px 0 '+T.mintDeep }}>
+                {isTie
+                  ? (canDraw ? 'Döntetlen beküldése' : 'Állítsd be az eredményt')
+                  : (editing ? 'Módosítás beküldése' : 'Beküldés a hostnak')}
               </button>
             </div>
           );

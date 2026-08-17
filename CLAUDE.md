@@ -2822,3 +2822,36 @@ Teszt: `node tests/beerpong2_livecups_test.js` — host + observer egy szobán,
 az observer +2-je a `bp2Live.c2`-be és a host LÁTJA. Háromszor lefuttatva stabil
 (a write-back visszhang előtt flaky volt). A `beerpong2_observer_test` 4. blokkja
 (beküldött eredmény módosítása) a friss-állapot-halmozást őrzi.
+
+## Beer Pong 2.0: observer-oldali DÖNTETLEN (v10.396)
+Bejelentés: „Observer képernyőről Döntetlen-t nem lehet megadni. Legyen ugy hogy
+az időzítő indítása után lesz aktív a gomb, hogy utána döntetlent meg lehessen adni."
+
+Az observer beküldő gombja eddig `disabled={e.a===e.b}` volt — egyenlő pohárnál
+(döntetlen) SOHA nem lehetett beküldeni. Mostantól:
+- **Döntetlen CSAK körmérkőzős pozíción** (`_mk` `rr#`/`g#` — RR torna, csoportkör,
+  `grp_*_rr` döntő). SE / SE-döntő / bronz **nem enged** döntetlent (ahol a host
+  `canConfirm`-ja is winner-t követel).
+- **ÉS csak ELINDÍTOTT meccsnél** (`bp2Live` bejegyzés van): egy le sem játszott
+  0–0 döntetlen értelmetlen. A kapu: `canDraw = drawsOK && !!live`. Így a felhasználó
+  útja: ▶ Indítás → játék → egyenlő állás → a gomb „Döntetlen beküldése" lesz.
+- **Időzítő nélkül** (`matchMinutes:0`) nincs indítás-gomb, tehát observerről nincs
+  döntetlen — ott a **host** rögzíti (a saját megerősítő gombja RR/csoportban
+  `canConfirm=true`-val döntetlent is enged). Ez tudatos: a felirat 0–0-nál marad a
+  régi „Állítsd be az eredményt", nincs zavaró óra-hint.
+
+A host `renderSubmissions` accept-gombja eddig `disabled={draw}` volt (minden
+döntetlent tiltott). Mostantól csak **SE/bronz** pozíción tilt (`blockDraw = draw &&
+!/^(rr|g)#/`); RR/csoport pozíción a gomb „**Döntetlen rögzítése**", és az `acceptSub`
+a meglévő `handleRRConfirm`/`handleGroupConfirm`-en át rögzíti (azok `isDraw = aCups
+=== bCups`-ból már kezelik a döntetlent — `draw:true`). A `submitMatch` tie-őre
+(`e.a===e.b` early-return) ugyanezt a `drawsOK && isLive` feltételt kapta.
+
+⚠️ A `beerpong2_parallel_test` `matchMinutes:5`-tel fut: a fogódzó a fresh 0–0
+csoport-meccs feliratát (`Állítsd be az eredményt`) számolja — ha a felirat
+draw-hintre váltana indítás előtt, a teszt elveszti a kártyákat.
+
+Teszt: `node tests/beerpong2_draw_test.js` — RR: indítás előtt a döntetlen tiltott,
+indítás után „Döntetlen beküldése" aktív, beküldve p1===p2, a host „Döntetlen
+rögzítése" gombja elfogadja → a meccs `draw:true`-val zárul; SE kontroll: indítás
+után is tiltott (SE-ben nincs döntetlen).
