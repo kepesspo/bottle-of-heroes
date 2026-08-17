@@ -2729,3 +2729,24 @@ Teszt: `beerpong2_observer_test.js` 0. blokk — nagy (1300 px) kijelzőn: nincs
 „Aktuális meccs", az „Eredmények" a rács jobbján (jobb oszlop), és a standings a
 meccs-rács fölött (a fogódzók LEVÉL-elemekre szűrnek — a teljes-szélességű ős
 elrontaná a pozíció-mérést).
+
+## Beer Pong 2.0: csoportok egymás mellett + szélesebb sáv + host ▶-redundancia (v10.393)
+Három apró kérés:
+- **Host: a csoport-állás kártyából KIKERÜLT a ▶ indító** (a v10.387-es
+  `renderGroupOverview` pending-meccs strip) — redundáns volt, mert a meccsek a
+  match-listából (A/B tabos) úgyis indíthatók. A strip MINDKÉT `renderGroupOverview`
+  másolatból törölve (a régi `beerpong`-ban úgyis csak `null`-t renderelt a guard
+  miatt). A match-lista ▶-jei (`renderRRMatchList`, két lépcsős csoport-lista) MARADNAK.
+- **Observer: a csoport-állások EGYMÁS MELLETT** — a „🔵 Csoportkör" blokk
+  `tsGroupsArr.map`-je `display:grid` `repeat(auto-fit, minmax(260px,1fr))`
+  wrapperbe került (nagy kijelzőn több oszlop, mobilon egy). A per-csoport
+  `marginBottom` nagy kijelzőn 0 (a grid `gap` tartja a rést).
+- **Observer: szélesebb jobb sáv** — a jobb oszlop `200px` → `264px` (a régi túl
+  keskeny volt a Pohár összesítőnek/Eredményeknek).
+
+⚠️ Mindkét observer-változás CSAK a `BeerPong2ObserverView`-ban (a `flex … 200px`
+és a `🔵 Csoportkör` marker a régiben is megvan — line-scope a 2.0 függvényhez).
+
+Teszt: `node tests/beerpong2_grouplayout_test.js` — grp_rr 2 csoport, nagy kijelző:
+a két csoport-fejléc egy sorban / eltérő oszlopban, a jobb sáv > 240px, és a host
+csoport-állás kártyáján nincs ▶ gomb.
