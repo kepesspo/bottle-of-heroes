@@ -2750,3 +2750,39 @@ Három apró kérés:
 Teszt: `node tests/beerpong2_grouplayout_test.js` — grp_rr 2 csoport, nagy kijelző:
 a két csoport-fejléc egy sorban / eltérő oszlopban, a jobb sáv > 240px, és a host
 csoport-állás kártyáján nincs ▶ gomb.
+
+## ⚠️ Beer Pong 2.0: POZÍCIÓ-alapú meccs-kulcs — a többszörös leg bugja (v10.394)
+Bejelentés: „ha egy csoportban 3× játszanak egymással, 1 meccshez 2× írunk
+eredményt, és a beküldés elfogadása után nem tűnik el a meccs."
+
+**Gyökér-ok:** a meccs-kulcs a csupasz `p1id__p2id` volt. Ha egy páros TÖBBSZÖR
+játszik (rrLegs>1), mind a leg UGYANARRA a kulcsra esett → a `bp2Submit`/`bp2Live`
+ütközött, a host `findIndex(... p1.id===sub.p1id ...)` az ELSŐ függő azonos-páros
+meccset zárta (nem a beküldöttet), és a beküldés kulcsa nem tűnt el.
+
+**Javítás: POZÍCIÓ-alapú kulcs** (`_mk`), amit host és observer UGYANÚGY számol a
+közös `bp2State`-ből:
+- SE (és grp_ döntő SE): `se#<kör>#<matchIdx>`
+- RR (és grp_ döntő RR): `rr#<idx>`
+- csoportkör: `g#<gi>#<mi>`
+- bronz: `bronze`
+
+Az observer a `_activeMatches`-ben minden meccsre ráteszi az `_mk`-t (index-alapú
+map + filter), és `bp2Submit[_mk] = { mk, ... }`-t ír. A host `acceptSub` és a
+beküldés-szűrő a kulcsot PARSE-olja (`key.split('#')`) és a PONTOS pozíción lévő
+meccset zárja/mutatja — nem páros-egyezéssel. A `hostStartMatch`, `renderMatchLiveCtl`
+és a fő-kártya időzítője is a `currentMatchKey`-t / átadott kulcsot használja.
+
+⚠️ **A tesztek is POZÍCIÓ-alapú kulccsal küldenek be** (`mk` mező), mint a valós
+observer — a `p1id__p2id` kulcs elavult. A `parallel`/`tables`/`hostsync` teszt
+`submitAll`-ja `map[s.mk]`-t ír.
+
+Teszt: `node tests/beerpong2_multileg_test.js` — 1 csoport / 3 fő / rrLegs:3 → 9
+meccs, egy páros 3× (KÜLÖNBÖZŐ mk). Egy konkrét leg beküldése+elfogadása CSAK azt
+zárja le (a többi függő marad), és a beküldés eltűnik.
+
+### Layout-finomítás (v10.394)
+- **Observer oszlop-arány 6:2** (a fix 264px helyett flex `6 1 0` / `2 1 0`,
+  `minWidth:240`) — nagy kijelzőn a jobb sáv arányosan nő.
+- **Csoportok közti elválasztás** — a második+ csoport-oszlop `borderLeft`+`paddingLeft`.
+- **Beküldött-panel `marginBottom:12`** — nem ér hozzá az alatta lévő kártyához.

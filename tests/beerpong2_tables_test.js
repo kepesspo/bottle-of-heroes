@@ -25,16 +25,17 @@ const clickHost = (p, re) => p.evaluate(reSrc => { const b = [...document.queryS
 // A 0. kör összes (p1,p2)-vel bíró meccse
 const roundMatches = p => p.evaluate(c => {
   const bp = window.__fbStore['rooms'][c].bp2State;
-  const rObj = bp.seRounds; const r0 = Array.isArray(rObj) ? rObj[bp.seCurRound ?? 0] : Object.values(rObj)[bp.seCurRound ?? 0];
+  const rnd = bp.seCurRound ?? 0;
+  const rObj = bp.seRounds; const r0 = Array.isArray(rObj) ? rObj[rnd] : Object.values(rObj)[rnd];
   const arr = Array.isArray(r0) ? r0 : Object.values(r0);
-  return arr.filter(m => m && m.p1 && m.p2 && m.winner == null).map(m => ({ p1id: m.p1.id, p2id: m.p2.id, p1name: m.p1.name, p2name: m.p2.name }));
+  return arr.map((m, i) => ({ m, i })).filter(({ m }) => m && m.p1 && m.p2 && m.winner == null).map(({ m, i }) => ({ mk: 'se#' + rnd + '#' + i, p1id: m.p1.id, p2id: m.p2.id, p1name: m.p1.name, p2name: m.p2.name }));
 }, CODE);
 
-// Két/egy beküldés a szoba bp2Submit MAP-jébe (merge — mint két külön telefon)
+// Két/egy beküldés a szoba bp2Submit MAP-jébe (POZÍCIÓ-alapú kulcs — mint a valós observer)
 const submitAll = (p, subs) => p.evaluate(({ code, subs }) => {
   const ref = firebase.firestore().collection('rooms').doc(code);
   const map = {};
-  subs.forEach(s => { map[s.p1id + '__' + s.p2id] = { p1id: s.p1id, p2id: s.p2id, p1name: s.p1name, p2name: s.p2name, p1: s.p1, p2: s.p2, by: s.by, ts: Date.now() + Math.random() }; });
+  subs.forEach(s => { map[s.mk] = { mk: s.mk, p1id: s.p1id, p2id: s.p2id, p1name: s.p1name, p2name: s.p2name, p1: s.p1, p2: s.p2, by: s.by, ts: Date.now() + Math.random() }; });
   return ref.set({ bp2Submit: map }, { merge: true });
 }, { code: CODE, subs });
 

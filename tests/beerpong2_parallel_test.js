@@ -29,17 +29,18 @@ const groupMatches = p => p.evaluate(c => {
   const bp = window.__fbStore['rooms'][c].bp2State;
   const groups = bp.tsGroups ? (Array.isArray(bp.tsGroups) ? bp.tsGroups : Object.values(bp.tsGroups)) : [];
   const out = [];
-  groups.forEach(g => {
+  groups.forEach((g, gi) => {
     const ms = Array.isArray(g.matches) ? g.matches : Object.values(g.matches || {});
-    ms.forEach(m => { if (m && m.p1 && m.p2 && m.winner == null && !m.draw) out.push({ p1id: m.p1.id, p2id: m.p2.id, p1name: m.p1.name, p2name: m.p2.name }); });
+    ms.forEach((m, mi) => { if (m && m.p1 && m.p2 && m.winner == null && !m.draw) out.push({ mk: 'g#' + gi + '#' + mi, p1id: m.p1.id, p2id: m.p2.id, p1name: m.p1.name, p2name: m.p2.name }); });
   });
   return out;
 }, CODE);
 
+// A valós observer POZÍCIÓ-alapú kulccsal (mk) küld be — a teszt is így.
 const submitAll = (p, subs) => p.evaluate(({ code, subs }) => {
   const ref = firebase.firestore().collection('rooms').doc(code);
   const map = {};
-  subs.forEach(s => { map[s.p1id + '__' + s.p2id] = { p1id: s.p1id, p2id: s.p2id, p1name: s.p1name, p2name: s.p2name, p1: s.p1, p2: s.p2, by: s.by, ts: Date.now() + Math.random() }; });
+  subs.forEach(s => { map[s.mk] = { mk: s.mk, p1id: s.p1id, p2id: s.p2id, p1name: s.p1name, p2name: s.p2name, p1: s.p1, p2: s.p2, by: s.by, ts: Date.now() + Math.random() }; });
   return ref.set({ bp2Submit: map }, { merge: true });
 }, { code: CODE, subs });
 

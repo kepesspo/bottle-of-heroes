@@ -38,7 +38,7 @@ const CODE = '990393';
       gameMeta: { beerpong2Config: { tournamentType:'grp_rr_se', mode:'egyeni', maxCups:10, finalCups:10, matchMinutes:5, numGroups:2, groupAdvance:1, thirdPlace:false } },
       onAdvance: () => {}, onResult: () => {}, onSetHideFooter: () => {}, onSetBpEnded: () => {} }));
     const f = document.createElement('div'); f.id = '__obs';
-    f.style.cssText = 'position:absolute;left:410px;top:0;width:940px;height:1000px;overflow:auto;z-index:9;background:#fff';
+    f.style.cssText = 'position:absolute;left:410px;top:0;width:1180px;height:1000px;overflow:auto;z-index:9;background:#fff';
     document.body.appendChild(f);
     function W() {
       const [room, setRoom] = React.useState(() => window.__fbStore['rooms'][code]);

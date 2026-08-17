@@ -26,7 +26,7 @@ const semis = p => p.evaluate(c => {
   const bp = window.__fbStore['rooms'][c].bp2State;
   const rObj = bp.seRounds; const r0 = Array.isArray(rObj) ? rObj[0] : Object.values(rObj)[0];
   const arr = Array.isArray(r0) ? r0 : Object.values(r0);
-  return arr.filter(m => m && m.p1 && m.p2 && m.winner == null).map(m => ({ p1id: m.p1.id, p2id: m.p2.id, p1name: m.p1.name, p2name: m.p2.name }));
+  return arr.map((m, i) => ({ m, i })).filter(({ m }) => m && m.p1 && m.p2 && m.winner == null).map(({ m, i }) => ({ mk: 'se#0#' + i, p1id: m.p1.id, p2id: m.p2.id, p1name: m.p1.name, p2name: m.p2.name }));
 }, CODE);
 
 (async () => {
@@ -68,7 +68,7 @@ const semis = p => p.evaluate(c => {
   await p.waitForTimeout(1800);
 
   const sm = await semis(p);
-  const pointerKey = sm[0].p1id + '__' + sm[0].p2id;   // a mutató (seCurMatch 0) meccs
+  const pointerKey = sm[0].mk;   // a mutató (seCurMatch 0) meccs — pozíció-alapú kulcs
 
   // ── A. A host „▶ Start" a KÖZÖS bp2Live-ba ír ──
   console.log('\n===== A. HOST START → KÖZÖS bp2Live =====');
@@ -97,7 +97,7 @@ const semis = p => p.evaluate(c => {
 
   // ── C. Beküldött eredmény a host meccs-kártyája FÖLÖTT ──
   console.log('\n===== C. BEKÜLDÖTT EREDMÉNY FELÜL A HOSTON =====');
-  await p.evaluate(({ c, s }) => firebase.firestore().collection('rooms').doc(c).set({ bp2Submit: { [s.p1id + '__' + s.p2id]: { p1id: s.p1id, p2id: s.p2id, p1name: s.p1name, p2name: s.p2name, p1: 7, p2: 3, by: 'asztal', ts: Date.now() } } }, { merge: true }), { c: CODE, s: sm[0] });
+  await p.evaluate(({ c, s }) => firebase.firestore().collection('rooms').doc(c).set({ bp2Submit: { [s.mk]: { mk: s.mk, p1id: s.p1id, p2id: s.p2id, p1name: s.p1name, p2name: s.p2name, p1: 7, p2: 3, by: 'asztal', ts: Date.now() } } }, { merge: true }), { c: CODE, s: sm[0] });
   await p.waitForTimeout(600);
   ok(/BEKÜLDÖTT EREDMÉNY/i.test(await hostTxt(p)), 'a hoston megjelenik a „BEKÜLDÖTT EREDMÉNY" panel');
   const orderOK = await p.evaluate(() => {
