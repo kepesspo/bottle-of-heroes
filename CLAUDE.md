@@ -2655,3 +2655,31 @@ Teszt: `node tests/beerpong2_observer_test.js` — nagy (1300 px) kijelzőn: a r
 több oszlopos, egy meccs indítása után az óra beküldéskor megáll (`bp2Live` üres),
 és a beküldött eredmény a nyitott meccsek ELŐTT, lenyitható panelben (alapból zárva,
 a fejléc a számot mutatja, lenyitva a pontszám-sor látszik).
+
+## Beer Pong 2.0 host: beküldött eredmények FELÜL + KÖZÖS óra host↔observer (v10.390)
+Három host-oldali kérés/hiba:
+- **A beküldött (jóváhagyásra váró) eredmények a HOSTON is FELÜL** — a
+  jóváhagyó kártyák a `renderMatchCard`-ból kiemelve **`renderSubmissions()`**-be
+  kerültek, és a fő render a meccs-kártya **ELŐTT** hívja őket. (A szűrő
+  változatlan: minden függő meccs beküldése elfogadható, id-alapú koordináta.)
+- **⚠️ KÖZÖS óra: a host fő kártyájának időzítője a `bp2Live`-ból megy** (nem a
+  régi helyi `timerSecs`). A „▶ Start" `hostStartMatch(currentMatch)`-ot hív (a
+  szobába ír), és ha a meccs élő (bárki indította), a fő kártya a
+  `BeerPong2MatchClock`-ot rajzolja. Így a host és az observer UGYANAZT indítja
+  és látja — eddig a host helyi órája nem szinkronizált. A régi `timerSecs`/
+  `startTimer`/`stopTimer`/`timerRunning` a kártyán már nem használt (a
+  `resetTimer` az advance-ekben marad — 0-ra állít, ártalmatlan).
+- **Beküldött meccs nem indítható újra** — a `renderMatchLiveCtl` a `submitMap`-et
+  is nézi: beküldött meccsnél „⏳ beküldve" jelzőt ad ▶ helyett, és a fő kártya
+  Start-ja `disabled`, ha a mutató meccs be van küldve. Eddig observer-beküldés
+  után a host mégis el tudta indítani.
+
+Amit NEM old meg: a játék KÖZBENI (be nem küldött) pohárszám nem szinkronizál a
+host és az observer közt — mindkettő helyben számol, a hiteles eredmény a
+beküldéssel/jóváhagyással kerül a `bp2State`-be (ez szándékos, a `bpEntries`/
+`cups1/cups2` eszközönként helyi).
+
+Teszt: `node tests/beerpong2_hostsync_test.js` — host + observer egy szobán:
+a host Start a `bp2Live`-ba ír (observer is látja), az observer indítása a host
+fő kijelzőjén órát mutat, a beküldött eredmény a meccs-kártya FÖLÖTT van, és a
+beküldött meccs Start-ja letiltva.
