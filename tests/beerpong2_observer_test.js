@@ -57,6 +57,37 @@ const hostTxt = p => p.evaluate(() => (document.getElementById('__host') ? (docu
   }, { code: CODE });
   await p.waitForTimeout(1800);
 
+  // ── 0. Nagy kijelzős layout: nincs „Aktuális meccs", eredmény a jobb oszlopban, standings a meccsek felett (v10.392) ──
+  console.log('\n===== 0. NAGY KIJELZŐS LAYOUT (v10.392) =====');
+  ok(!/Aktuális meccs/i.test(await phoneTxt(p)), '⚠️ NINCS „Aktuális meccs" kártya az observeren');
+  // egy lezárt meccset ültetünk a bp2State-be, hogy az „Eredmények" panel megjelenjen
+  await p.evaluate(c => {
+    const bp = window.__fbStore['rooms'][c].bp2State;
+    const r = Array.isArray(bp.seRounds) ? bp.seRounds : Object.values(bp.seRounds);
+    const m = (Array.isArray(r[0]) ? r[0] : Object.values(r[0]))[0];
+    m.score = { p1: 10, p2: 5 }; m.winner = m.p1; m.loser = m.p2;
+    firebase.firestore().collection('rooms').doc(c).set({ __ping: Date.now() }, { merge: true });
+  }, CODE);
+  await p.waitForTimeout(500);
+  const layout = await p.evaluate(() => {
+    // a levél-elemeket keressük (pontos felirat), nem a teljes-szélességű ősüket
+    const results = [...document.querySelectorAll('#__phone *')].find(n => /^📋\s*Eredmények$/i.test((n.textContent||'').trim()) && n.children.length === 0);
+    const grid = [...document.querySelectorAll('#__phone div')].find(d => getComputedStyle(d).display === 'grid' && /minmax/.test(d.style.gridTemplateColumns || ''));
+    const stand = [...document.querySelectorAll('#__phone *')].find(n => /^🏆\s*Kieséses ágrajz$/i.test((n.textContent||'').trim()) && n.children.length === 0);
+    if (!grid) return { ok:false };
+    const gr = grid.getBoundingClientRect();
+    const rr = results ? results.getBoundingClientRect() : null;
+    const sr = stand ? stand.getBoundingClientRect() : null;
+    return {
+      hasResults: !!results,
+      resultsRight: rr ? rr.left > gr.right - 40 : null,   // az Eredmények a rács jobbján (jobb oszlop)
+      standAboveMatches: sr ? sr.top < gr.top : null,      // a standings a meccs-rács FÖLÖTT
+    };
+  });
+  ok(layout.hasResults, 'az „Eredmények" panel megvan');
+  ok(layout.resultsRight === true, '⚠️ az „Eredmények" a JOBB oszlopban van (a meccs-rács jobbján)', JSON.stringify(layout));
+  ok(layout.standAboveMatches === true, '⚠️ nagy kijelzőn a standings a meccsek FÖLÖTT van', JSON.stringify(layout));
+
   // ── 1. Nagy kijelzőn a nyitott meccsek RÁCSBAN ──
   console.log('\n===== 1. NAGY KIJELZŐ — KOMPAKT RÁCS =====');
   const gridOK = await p.evaluate(() => {

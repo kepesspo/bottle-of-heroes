@@ -2703,3 +2703,29 @@ Teszt: `beerpong2_observer_test.js` (4. blokk: módosítás → a store bp2Submi
 megváltozik → a rejtett host is az új eredményt mutatja) és
 `beerpong2_hostsync_test.js` (E. blokk: a host panel becsukható, becsukva az
 Elfogadom gomb eltűnik, a fejléc marad).
+
+## Beer Pong 2.0 observer: nagy-kijelzős layout + nincs „Aktuális meccs" (v10.392)
+Tulajdonosi kérés a nagy kijelzős observer-nézetre:
+- **Nincs „⚡ Aktuális meccs" kártya** — a játszható-meccsek rács már mutatja a
+  meccseket és az indítást, a külön aktuális-meccs kártya redundáns volt. (Csak a
+  2.0 `BeerPong2ObserverView`-ból tűnt el; a régi `BeerPongObserverView` érintetlen.)
+- **A beküldött-panel TELJES SZÉLESSÉG**, a két oszlop FÖLÖTT (kikerült a bal
+  oszlopból a flex-row konténer elé).
+- **Az „📋 Eredmények" a JOBB oszlopba** került (a „🍺 Pohár összesítő" mellé);
+  eddig a bal oszlopban, a meccsek közt volt.
+- **Nagy kijelzőn a standings (ágrajz / csoport-állás) a meccs-rács FÖLÖTT** — CSS
+  `order`-rel: a standings-blokkokat `order: isWide ? 2 : 5`, a meccs-rácsot
+  `order: isWide ? 5 : 1` wrapper fogja. Így nagy kijelzőn standings→meccsek, de
+  **mobilon marad meccsek→standings** (a néző gyorsan tud eredményt küldeni).
+
+⚠️ A `BeerPongObserverView` (régi) és a `BeerPong2ObserverView` (2.0) MINDKETTŐ
+tartalmazza a `flexDirection: isWide ? 'row'` konténert, a `{/* Match results */}`
+és a `{/* Right column: Drinks leaderboard */}` markert — a szerkesztést a 2.0
+függvény kezdetéhez (`function BeerPong2ObserverView`) kell scope-olni, különben a
+RÉGI observerbe kerül a módosítás (a `beerpong2_observer_test` némán bukik, mert a
+2.0 nézetből eltűnik a panel).
+
+Teszt: `beerpong2_observer_test.js` 0. blokk — nagy (1300 px) kijelzőn: nincs
+„Aktuális meccs", az „Eredmények" a rács jobbján (jobb oszlop), és a standings a
+meccs-rács fölött (a fogódzók LEVÉL-elemekre szűrnek — a teljes-szélességű ős
+elrontaná a pozíció-mérést).
