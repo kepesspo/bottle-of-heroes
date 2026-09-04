@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.397';
+const APP_VERSION = 'v10.398';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -42567,6 +42567,8 @@ function EventLogScreen({ go, goEdit, deepLink }) {
   const [rsvpSheet, setRsvpSheet] = React.useState(false);
   const [rsvpStep, setRsvpStep] = React.useState('who');
   const [rsvpProfile, setRsvpProfile] = React.useState(null);
+  const [rsvpGuestName, setRsvpGuestName] = React.useState('');   // Egyedi (vendég) jelentkező neve (v10.398)
+  const [rsvpGuestErr, setRsvpGuestErr] = React.useState('');
   const [profiles, setProfiles] = React.useState([]);
   const [evView, setEvView] = React.useState('list'); // 'list' | 'calendar'
   const [locOpen, setLocOpen] = React.useState(false);
@@ -42690,6 +42692,32 @@ function EventLogScreen({ go, goEdit, deepLink }) {
     setRsvpSheet(false);
     setRsvpStep('who');
     setRsvpProfile(null);
+  }
+
+  // Egy jelentkezés törlése NÉV alapján (mentett profilé és vendégé is) — v10.398
+  function clearRsvpByName(name) {
+    const col = evDb();
+    if (col) {
+      col.doc(String(detail)).update({ [`rsvp.${name}`]: firebase.firestore.FieldValue.delete() }).catch(() => {
+        setEvents(ev => ev.map(e => e.id===detail ? { ...e, rsvp: Object.fromEntries(Object.entries(e.rsvp||{}).filter(([k])=>k!==name)) } : e));
+      });
+    } else {
+      setEvents(ev => ev.map(e => e.id===detail ? { ...e, rsvp: Object.fromEntries(Object.entries(e.rsvp||{}).filter(([k])=>k!==name)) } : e));
+    }
+  }
+
+  // Egyedi (vendég) jelentkező: a NÉV a kulcs, ezért ütközés = felülírás → tiltjuk (v10.398).
+  // A vendég NEM lesz mentett profil, csak ennek az eseménynek a listáján szerepel.
+  function submitGuest() {
+    const nm = (rsvpGuestName || '').trim();
+    if (!nm) { setRsvpGuestErr('Adj meg egy nevet'); return; }
+    const cur = (getDetail()?.rsvp) || {};
+    const taken = profiles.some(p => (p.name||'').toLowerCase() === nm.toLowerCase())
+               || Object.keys(cur).some(k => k.toLowerCase() === nm.toLowerCase());
+    if (taken) { setRsvpGuestErr('Ez a név már foglalt'); return; }
+    setRsvpGuestErr('');
+    setRsvpProfile({ name: nm, guest: true });
+    setRsvpStep('status');
   }
 
   function saveEditDetail(data, done) {
@@ -42892,8 +42920,17 @@ function EventLogScreen({ go, goEdit, deepLink }) {
             )}
             {rsvpEntries.map(([name, status]) => {
               const p = profiles.find(pr => pr.name === name);
+              // A soron: koppintás = válasz módosítása, hosszú nyomás = jelentkezés törlése.
+              // Így a VENDÉG (aki nincs a „Ki vagy?" rácsban) is tudja módosítani/törölni magát (v10.398).
+              let _lpTimer = null; let _lpFired = false;
+              const openModify = () => { if (_lpFired) { _lpFired = false; return; } setRsvpProfile(p || { name, guest:true }); setRsvpGuestErr(''); setRsvpStep('status'); setRsvpSheet(true); };
+              const armLp = () => { _lpTimer = setTimeout(() => { _lpFired = true; clearRsvpByName(name); }, 600); };
               return (
-                <div key={name} style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+                <button key={name}
+                  onClick={openModify}
+                  onMouseDown={armLp} onMouseUp={() => clearTimeout(_lpTimer)} onMouseLeave={() => clearTimeout(_lpTimer)}
+                  onTouchStart={armLp} onTouchEnd={() => clearTimeout(_lpTimer)} onTouchCancel={() => clearTimeout(_lpTimer)}
+                  style={{ width:'100%', display:'flex', alignItems:'center', gap:10, marginBottom:8, padding:0, border:'none', background:'transparent', cursor:'pointer', textAlign:'left', WebkitTapHighlightColor:'transparent' }}>
                   <div style={{ width:32, height:32, borderRadius:'50%', background:p?.color||'#888', overflow:'hidden', display:'grid', placeItems:'center', flexShrink:0 }}>
                     {p?.img ? <img src={p.img} style={{ width:32, height:32, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff' }}>{(name||'?').charAt(0).toUpperCase()}</span>}
                   </div>
@@ -42901,7 +42938,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
                   <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color: status==='yes'?T.mint:status==='maybe'?RSVP_CLR.maybe:RSVP_CLR.no }}>
                     {status==='yes' ? '✅ Jövök' : status==='maybe' ? '🤔 Talán' : '❌ Nem tudok'}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -42909,7 +42946,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
         {/* Fixed RSVP button — hidden if cancelled */}
         {!ev.cancelled && (
         <div style={{ position:'absolute', bottom:0, left:0, right:0, padding:'12px 16px', paddingBottom:'max(12px, env(safe-area-inset-bottom))', background:`linear-gradient(to top, ${T.bg} 70%, transparent)`, pointerEvents:'none' }}>
-          <button onClick={() => { setRsvpStep('who'); setRsvpProfile(null); setRsvpSheet(true); }} style={{ width:'100%', padding:'16px', borderRadius:18, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff', cursor:'pointer', boxShadow:`0 4px 20px ${T.mint}66`, pointerEvents:'all' }}>
+          <button onClick={() => { setRsvpStep('who'); setRsvpProfile(null); setRsvpGuestName(''); setRsvpGuestErr(''); setRsvpSheet(true); }} style={{ width:'100%', padding:'16px', borderRadius:18, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff', cursor:'pointer', boxShadow:`0 4px 20px ${T.mint}66`, pointerEvents:'all' }}>
             Visszaigazolás
           </button>
         </div>
@@ -42931,16 +42968,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
                       const alreadyVoted = rsvp[p.name];
                       const statusLabel = alreadyVoted === 'yes' ? '✅' : alreadyVoted === 'maybe' ? '🤔' : alreadyVoted === 'no' ? '❌' : null;
                       let _lpTimer = null; let _lpFired = false;
-                      function _clearRsvp() {
-                        const col = evDb();
-                        if (col) {
-                          col.doc(String(detail)).update({ [`rsvp.${p.name}`]: firebase.firestore.FieldValue.delete() }).catch(() => {
-                            setEvents(ev => ev.map(e => e.id===detail ? { ...e, rsvp: Object.fromEntries(Object.entries(e.rsvp||{}).filter(([k])=>k!==p.name)) } : e));
-                          });
-                        } else {
-                          setEvents(ev => ev.map(e => e.id===detail ? { ...e, rsvp: Object.fromEntries(Object.entries(e.rsvp||{}).filter(([k])=>k!==p.name)) } : e));
-                        }
-                      }
+                      function _clearRsvp() { clearRsvpByName(p.name); }
                       return (
                         <button key={p.name}
                           onClick={() => { if (_lpFired) { _lpFired = false; return; } setRsvpProfile(p); setRsvpStep('status'); }}
@@ -42957,7 +42985,33 @@ function EventLogScreen({ go, goEdit, deepLink }) {
                         </button>
                       );
                     })}
+                    {/* Egyedi (vendég) jelentkező — nincs a mentett profilok között (v10.398) */}
+                    <button key="__custom"
+                      onClick={() => { setRsvpGuestName(''); setRsvpGuestErr(''); setRsvpStep('custom'); }}
+                      style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, padding:'14px 8px', borderRadius:16, border:`2px dashed ${T.border}`, background:T.bg, cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
+                      <div style={{ width:52, height:52, borderRadius:'50%', background:T.bg, border:`2px dashed ${T.border}`, display:'grid', placeItems:'center' }}>
+                        <span style={{ fontSize:24, color:T.sub, lineHeight:1 }}>＋</span>
+                      </div>
+                      <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.ink, textAlign:'center', lineHeight:1.2 }}>Egyedi</span>
+                    </button>
                   </div>
+                </>
+              ) : rsvpStep === 'custom' ? (
+                <>
+                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink, marginBottom:4, textAlign:'center' }}>Egyedi jelentkező</div>
+                  <div style={{ fontFamily:T.font, fontSize:13, color:T.sub, marginBottom:16, textAlign:'center' }}>Írd be a neved</div>
+                  <input value={rsvpGuestName} autoFocus maxLength={24}
+                    onChange={e => { setRsvpGuestName(e.target.value); if (rsvpGuestErr) setRsvpGuestErr(''); }}
+                    onKeyDown={e => { if (e.key === 'Enter') submitGuest(); }}
+                    placeholder="Neved"
+                    style={{ width:'100%', boxSizing:'border-box', padding:'14px 16px', borderRadius:14, border:`2px solid ${rsvpGuestErr ? RSVP_CLR.no : T.border}`, background:T.bg, fontFamily:T.font, fontWeight:700, fontSize:16, color:T.ink, outline:'none' }} />
+                  {rsvpGuestErr && <div style={{ fontFamily:T.font, fontSize:12.5, color:RSVP_CLR.no, fontWeight:700, margin:'8px 2px 0' }}>{rsvpGuestErr}</div>}
+                  <button onClick={submitGuest} style={{ marginTop:16, width:'100%', padding:'16px', borderRadius:16, border:'none', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff', cursor:'pointer' }}>
+                    Tovább
+                  </button>
+                  <button onClick={() => setRsvpStep('who')} style={{ marginTop:10, width:'100%', padding:'12px', borderRadius:14, border:'none', background:'transparent', fontFamily:T.font, fontSize:14, color:T.sub, cursor:'pointer' }}>
+                    ← Vissza
+                  </button>
                 </>
               ) : (
                 <>

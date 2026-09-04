@@ -2884,3 +2884,43 @@ groupAdvance:2 (mind a 4 továbbjut), thirdPlace:true: csoportkör → SE dönt�
 elődöntővel → a döntő UTÁN nincs azonnal bajnok, a bronz indul a 2 elődöntő-
 vesztessel → a bronz lezárása bajnokot + 🥇🥈🥉 rangsort ad. A pozíció-alapú
 `mk` kulcsokkal küld be (g#/se#/bronze), mint a valós observer.
+
+## Esemény RSVP: Egyedi (vendég) jelentkező (v10.398)
+Kérés: a DNR eseményre jelentkezésnél legyen olyan is, aki NINCS a mentett
+profilok között — egy „Egyedi" opció, névbeírással és default avatarral, és
+CSAK az adott esemény listáján szerepeljen (nem lesz mentett profil).
+
+**Miért illik jól:** az RSVP a háttérben már eddig is NÉVHEZ kötött
+(`rsvp[<név>] = 'yes'/'maybe'/'no'`), nem profilhoz — a „Ki vagy?" rács csak egy
+belépő a profilokhoz. A vendég így egy újabb `rsvp` kulcs, séma-változás nélkül.
+A jelentkező-lista `profiles.find(...name===name)` fallbackje amúgy is
+kecsesen rajzol ismeretlen nevet: **szürke kör + kezdőbetű** = a „default avatar".
+
+Három döntés (a tulajdonossal átbeszélve), és ahogy megvalósult:
+1. **Foglalt név TILTVA** — a `submitGuest` a beírt nevet a mentett profilok ÉS a
+   már jelentkezettek (`getDetail().rsvp` kulcsai) ellen ellenőrzi, kis/nagybetű-
+   érzéketlenül; ütközésnél „Ez a név már foglalt". ⚠️ Ez a kulcs-ütközés (a
+   NÉV a kulcs) miatt kell: egy vendég „Sere" különben FELÜLÍRNÁ a valódi Sere
+   válaszát.
+2. **Törlés/módosítás a LISTÁRÓL** — a vendég nincs a „Ki vagy?" rácsban, ezért a
+   jelentkező-lista sorai lettek interaktívak (a sor mostantól `<button>`):
+   koppintás = a válasz módosítása (a státusz-lépésre visz `{name, guest:true}`-val),
+   hosszú nyomás (600 ms) = törlés (`clearRsvpByName`). Ez a profiloknak is
+   működik, egységesen.
+3. **Default avatar** — a lista meglévő kezdőbetűs szürke köre (nincs külön 👤).
+
+Felépítés: az „Egyedi" csempe a `profiles.map` UTÁN a rácsban (szaggatott keret,
+`＋`); egy új `rsvpStep === 'custom'` név-beíró lépés (Enter is beküld); a
+`submitGuest` a MEGLÉVŐ státusz-lépésre (`'status'`) ad át egy `{name, guest:true}`
+pszeudo-profilt, tehát a `saveRsvp` (`rsvp.<név> = status`) és a státusz-lépés
+avatarja (`rsvpProfile?.color||'#888'` + kezdőbetű) változatlanul jó. A vendég
+SEHOL nem lesz mentett profil (a flow nem hív profil-mentést).
+
+Közös helper: `clearRsvpByName(name)` (a who-rács inline `_clearRsvp`-je is erre
+hív) — egy helyen a törlés-logika.
+
+Teszt: `node tests/event_guest_rsvp_test.js` — `EventLogScreen` mountolva, seedelt
+`events` szoba + 2 mentett profil: az Egyedi csempe megvan, foglalt névre („Sere")
+hiba és nem lép tovább, szabad névvel („Béla") a vendég beküld (`rsvp.Béla='yes'`,
+szürke+B avatar a listán), a listáról koppintva módosít (yes→no), hosszú nyomással
+töröl.
