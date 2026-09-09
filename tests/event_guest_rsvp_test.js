@@ -1,4 +1,4 @@
-// v10.398 — Esemény RSVP: Egyedi (vendég) jelentkező
+// v10.398/399 — Esemény RSVP: Egyedi (vendég) jelentkező (+ long-press regresszió)
 //
 // Kérés: a DNR eseményre jelentkezésnél legyen „Egyedi" opció is, amivel egy nem
 // mentett-profil név is jelentkezhet (default avatarral), és CSAK a lista mutatja.
@@ -110,6 +110,20 @@ const clickDivText = (p, txt) => p.evaluate(t => {
   ok(await clickBtn(p, 'Nem tudok menni'), 'a státusz-lapon „Nem tudok menni"-t választunk');
   await p.waitForTimeout(400);
   ok((await rsvpOf(p)).Béla === 'no', '⚠️ a vendég válasza módosult (Béla=no)', JSON.stringify(await rsvpOf(p)));
+
+  // ── 4b. REGRESSZIÓ (v10.399): rövid koppintás RE-RENDER-rel a nyomás közben NEM töröl ──
+  // A hiba: a long-press timer a .map() callback lokális `let`-jében ült; egy Firestore-
+  // snapshot re-rendere közben a mouseup a friss closure NULL-ját törölte, az eredeti timer
+  // meg lefutott → koppintásra is törlődött a jelentkezés. Most a timer a KÖZÖS lpRef-ben van.
+  console.log('\n===== 4b. RÖVID KOPPINTÁS RE-RENDER-REL — NEM TÖRÖL =====');
+  await p.evaluate(() => { const row = [...document.querySelectorAll('#__ev button')].find(b => /Béla/.test(b.textContent || '')); if (row) row.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })); });
+  await p.waitForTimeout(100);
+  // re-render kikényszerítése: írunk az esemény dokumentumba → a collection onSnapshot újrarendel
+  await p.evaluate(c => firebase.firestore().collection('events').doc(c).update({ __ping: Date.now() }), CODE);
+  await p.waitForTimeout(150);
+  await p.evaluate(() => { const row = [...document.querySelectorAll('#__ev button')].find(b => /Béla/.test(b.textContent || '')); if (row) row.dispatchEvent(new MouseEvent('mouseup', { bubbles: true })); });
+  await p.waitForTimeout(700);   // túl a 600 ms-os nyomás-küszöbön: a hibás verzió most törölt volna
+  ok((await rsvpOf(p)).Béla === 'no', '⚠️ rövid koppintás után (re-render ellenére) a jelentkezés MEGMARADT', JSON.stringify(await rsvpOf(p)));
 
   // ── 5. Törlés a listáról (hosszú nyomás) ──
   console.log('\n===== 5. TÖRLÉS HOSSZÚ NYOMÁSSAL =====');

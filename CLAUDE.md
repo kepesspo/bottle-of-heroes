@@ -2924,3 +2924,30 @@ Teszt: `node tests/event_guest_rsvp_test.js` — `EventLogScreen` mountolva, see
 hiba és nem lép tovább, szabad névvel („Béla") a vendég beküld (`rsvp.Béla='yes'`,
 szürke+B avatar a listán), a listáról koppintva módosít (yes→no), hosszú nyomással
 töröl.
+
+## ⚠️ Esemény RSVP: a long-press timer REF-ben, nem a .map() `let`-jében (v10.399)
+Bejelentés (másik szálon megtalálva): a jelentkező-listán egy **rövid koppintás
+is törölhette** a jelentkezést.
+
+**Gyökér-ok:** a hosszú-nyomás (`_lpTimer`/`_lpFired`) a `.map()` callback **lokális
+`let`-jében** ült (v10.398). Minden render új closure-t ad ezeknek. A lista sűrűn
+re-renderelődik (Firestore-snapshot: az esemény-doksi / rsvp bármely változása). Ha a
+nyomás közben re-render jött: `mousedown` a RÉGI closure-ben fegyverezte élesre a
+600 ms-os timert, a `mouseup` viszont már az ÚJ closure `_lpTimer`-ét (`null`) törölte
+→ az eredeti timer lefutott → `clearRsvpByName` → **koppintásra is törlődött a
+jelentkezés**.
+
+**Javítás:** a timer és a „fired" jelző a **KÖZÖS `lpRef = React.useRef({timer,fired})`**-ben
+ül (komponens-szint), ami túléli a re-rendert; egyszerre úgyis egy nyomás van, tehát egy
+ref elég. Mindkét long-press hely átállt: a jelentkező-**lista** sorai ÉS a „Ki vagy?"
+**rács** profil-csempéi (utóbbiban a régi lokális-`let` minta is ott lapult).
+
+**Mellék-javítás (offline cache):** a `saveRsvp` `.catch()` ága és a `clearRsvpByName`
+mindkét ága mostantól **`evSave(next)`-et is hív** — enélkül hálózati hiba / offline
+után az app-újraindítás visszahozta a törölt (vagy elvesztette a mentett) választ,
+mert csak a `setEvents` futott, a localStorage-cache nem frissült.
+
+Teszt: `node tests/event_guest_rsvp_test.js` **4b. blokk** — `mousedown` → *re-render
+kikényszerítése* (írás az esemény-doksiba) → `mouseup` a 600 ms-os küszöb ELŐTT →
+700 ms várakozás: a jelentkezésnek MEG KELL maradnia. ⚠️ Ellenőrizve: a hibás (lokális
+`let`) verzión a 4b elbukik (`{}` — a koppintás törölt), a javított verzión zöld.

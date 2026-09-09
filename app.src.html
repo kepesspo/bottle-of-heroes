@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.398';
+const APP_VERSION = 'v10.399';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -42569,6 +42569,11 @@ function EventLogScreen({ go, goEdit, deepLink }) {
   const [rsvpProfile, setRsvpProfile] = React.useState(null);
   const [rsvpGuestName, setRsvpGuestName] = React.useState('');   // Egyedi (vendég) jelentkező neve (v10.398)
   const [rsvpGuestErr, setRsvpGuestErr] = React.useState('');
+  // ⚠️ A hosszú-nyomás (long-press) időzítője REF-ben, nem a .map() callback lokális
+  // `let`-jében (v10.399): a Firestore-snapshot re-rendere közben a friss closure
+  // `clearTimeout`-ja a NULL-t törölné, az eredeti timer meg lefutna → koppintásra
+  // is törlődött a jelentkezés. A ref túléli a re-rendert, egyszerre úgyis 1 nyomás van.
+  const lpRef = React.useRef({ timer: null, fired: false });
   const [profiles, setProfiles] = React.useState([]);
   const [evView, setEvView] = React.useState('list'); // 'list' | 'calendar'
   const [locOpen, setLocOpen] = React.useState(false);
@@ -42683,8 +42688,9 @@ function EventLogScreen({ go, goEdit, deepLink }) {
     const patch = { [`rsvp.${rsvpProfile.name}`]: status };
     if (col) {
       col.doc(String(detail)).update(patch).catch(() => {
-        // fallback: update locally
-        setEvents(ev => ev.map(e => e.id === detail ? { ...e, rsvp: { ...(e.rsvp||{}), [rsvpProfile.name]: status } } : e));
+        // fallback: update locally ÉS a lokális cache-be is (v10.399) — enélkül a
+        // hálózati hiba után app-újraindításkor eltűnt a válasz.
+        setEvents(ev => { const next = ev.map(e => e.id === detail ? { ...e, rsvp: { ...(e.rsvp||{}), [rsvpProfile.name]: status } } : e); evSave(next); return next; });
       });
     } else {
       setEvents(ev => { const next = ev.map(e => e.id === detail ? { ...e, rsvp: { ...(e.rsvp||{}), [rsvpProfile.name]: status } } : e); evSave(next); return next; });
@@ -42697,12 +42703,12 @@ function EventLogScreen({ go, goEdit, deepLink }) {
   // Egy jelentkezés törlése NÉV alapján (mentett profilé és vendégé is) — v10.398
   function clearRsvpByName(name) {
     const col = evDb();
+    // a lokális cache-be is írunk (v10.399), hogy offline / hiba esetén se éledjen újra
+    const _removeLocal = () => setEvents(ev => { const next = ev.map(e => e.id===detail ? { ...e, rsvp: Object.fromEntries(Object.entries(e.rsvp||{}).filter(([k])=>k!==name)) } : e); evSave(next); return next; });
     if (col) {
-      col.doc(String(detail)).update({ [`rsvp.${name}`]: firebase.firestore.FieldValue.delete() }).catch(() => {
-        setEvents(ev => ev.map(e => e.id===detail ? { ...e, rsvp: Object.fromEntries(Object.entries(e.rsvp||{}).filter(([k])=>k!==name)) } : e));
-      });
+      col.doc(String(detail)).update({ [`rsvp.${name}`]: firebase.firestore.FieldValue.delete() }).catch(_removeLocal);
     } else {
-      setEvents(ev => ev.map(e => e.id===detail ? { ...e, rsvp: Object.fromEntries(Object.entries(e.rsvp||{}).filter(([k])=>k!==name)) } : e));
+      _removeLocal();
     }
   }
 
@@ -42922,14 +42928,15 @@ function EventLogScreen({ go, goEdit, deepLink }) {
               const p = profiles.find(pr => pr.name === name);
               // A soron: koppintás = válasz módosítása, hosszú nyomás = jelentkezés törlése.
               // Így a VENDÉG (aki nincs a „Ki vagy?" rácsban) is tudja módosítani/törölni magát (v10.398).
-              let _lpTimer = null; let _lpFired = false;
-              const openModify = () => { if (_lpFired) { _lpFired = false; return; } setRsvpProfile(p || { name, guest:true }); setRsvpGuestErr(''); setRsvpStep('status'); setRsvpSheet(true); };
-              const armLp = () => { _lpTimer = setTimeout(() => { _lpFired = true; clearRsvpByName(name); }, 600); };
+              // ⚠️ A timer/fired a KÖZÖS lpRef-ben van (v10.399) — a lokális `let` re-rendernél elveszett.
+              const openModify = () => { if (lpRef.current.fired) { lpRef.current.fired = false; return; } setRsvpProfile(p || { name, guest:true }); setRsvpGuestErr(''); setRsvpStep('status'); setRsvpSheet(true); };
+              const armLp = () => { lpRef.current.fired = false; clearTimeout(lpRef.current.timer); lpRef.current.timer = setTimeout(() => { lpRef.current.fired = true; clearRsvpByName(name); }, 600); };
+              const cancelLp = () => clearTimeout(lpRef.current.timer);
               return (
                 <button key={name}
                   onClick={openModify}
-                  onMouseDown={armLp} onMouseUp={() => clearTimeout(_lpTimer)} onMouseLeave={() => clearTimeout(_lpTimer)}
-                  onTouchStart={armLp} onTouchEnd={() => clearTimeout(_lpTimer)} onTouchCancel={() => clearTimeout(_lpTimer)}
+                  onMouseDown={armLp} onMouseUp={cancelLp} onMouseLeave={cancelLp}
+                  onTouchStart={armLp} onTouchEnd={cancelLp} onTouchCancel={cancelLp}
                   style={{ width:'100%', display:'flex', alignItems:'center', gap:10, marginBottom:8, padding:0, border:'none', background:'transparent', cursor:'pointer', textAlign:'left', WebkitTapHighlightColor:'transparent' }}>
                   <div style={{ width:32, height:32, borderRadius:'50%', background:p?.color||'#888', overflow:'hidden', display:'grid', placeItems:'center', flexShrink:0 }}>
                     {p?.img ? <img src={p.img} style={{ width:32, height:32, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff' }}>{(name||'?').charAt(0).toUpperCase()}</span>}
@@ -42967,15 +42974,15 @@ function EventLogScreen({ go, goEdit, deepLink }) {
                     {profiles.map(p => {
                       const alreadyVoted = rsvp[p.name];
                       const statusLabel = alreadyVoted === 'yes' ? '✅' : alreadyVoted === 'maybe' ? '🤔' : alreadyVoted === 'no' ? '❌' : null;
-                      let _lpTimer = null; let _lpFired = false;
-                      function _clearRsvp() { clearRsvpByName(p.name); }
+                      // ⚠️ A timer/fired a KÖZÖS lpRef-ben (v10.399) — a lokális `let` re-rendernél
+                      // elveszett, ezért koppintásra is törlődhetett a jelentkezés.
+                      const armLp = () => { if (!alreadyVoted) return; lpRef.current.fired = false; clearTimeout(lpRef.current.timer); lpRef.current.timer = setTimeout(() => { lpRef.current.fired = true; clearRsvpByName(p.name); }, 600); };
+                      const cancelLp = () => clearTimeout(lpRef.current.timer);
                       return (
                         <button key={p.name}
-                          onClick={() => { if (_lpFired) { _lpFired = false; return; } setRsvpProfile(p); setRsvpStep('status'); }}
-                          onMouseDown={() => { if (alreadyVoted) { _lpTimer = setTimeout(() => { _lpFired = true; _clearRsvp(); }, 600); } }}
-                          onMouseUp={() => clearTimeout(_lpTimer)} onMouseLeave={() => clearTimeout(_lpTimer)}
-                          onTouchStart={() => { if (alreadyVoted) { _lpTimer = setTimeout(() => { _lpFired = true; _clearRsvp(); }, 600); } }}
-                          onTouchEnd={() => clearTimeout(_lpTimer)} onTouchCancel={() => clearTimeout(_lpTimer)}
+                          onClick={() => { if (lpRef.current.fired) { lpRef.current.fired = false; return; } setRsvpProfile(p); setRsvpStep('status'); }}
+                          onMouseDown={armLp} onMouseUp={cancelLp} onMouseLeave={cancelLp}
+                          onTouchStart={armLp} onTouchEnd={cancelLp} onTouchCancel={cancelLp}
                           style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, padding:'14px 8px', borderRadius:16, border:`2px solid ${T.border}`, background: alreadyVoted ? T.border : T.bg, cursor:'pointer', WebkitTapHighlightColor:'transparent', opacity: alreadyVoted ? 0.8 : 1, position:'relative' }}>
                           <div style={{ width:52, height:52, borderRadius:'50%', background:p.color||'#888', overflow:'hidden', display:'grid', placeItems:'center' }}>
                             {p.img ? <img src={p.img} style={{ width:52, height:52, objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:20, color:'#fff' }}>{(p.name||'?').charAt(0).toUpperCase()}</span>}
