@@ -2991,3 +2991,12 @@ Szabályok, amiket könnyű elrontani:
 Teszt: `node tests/torta_test.js` — vendég-pontozás a store-ba, visszavonás, élő
 ranglista (két vendég összege), a házigazda nem pontozhat, lezárás, kódvédelem, a Tipp
 mód közös gate-je (regresszió) és az admin mentése (auto-név, kieső csapat/vendég).
+
+### Logó (v10.401)
+`assets/dnr_torta_logo.png` (`TORTA_LOGO`) — 512×512, átlátszó háttérrel. A kapott
+1254 px-es webp-ből vágva és palettásra tömörítve (250 → 38 KB, szemre azonos). Három
+helyen jelenik meg, csak Tortán módban: a „Ki vagy?" képernyőn (132 px), a pontozó nézet
+tetején (96 px), és a főképernyő gombján az emoji helyett (40 px). A főképernyő-gomb
+Tortán módban **a logó színeit viszi** (sötétkék gradiens, arany alsó él), nem a
+Bingó/Tipp zöldjét. A PWA-ikon (`dnr_bingo_icon.png`, manifest) szándékosan NEM
+változik — az a DNR Bingó app ikonja, módtól függetlenül.
