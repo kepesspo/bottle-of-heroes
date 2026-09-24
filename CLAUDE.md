@@ -2951,3 +2951,43 @@ Teszt: `node tests/event_guest_rsvp_test.js` **4b. blokk** — `mousedown` → *
 kikényszerítése* (írás az esemény-doksiba) → `mouseup` a 600 ms-os küszöb ELŐTT →
 700 ms várakozás: a jelentkezésnek MEG KELL maradnia. ⚠️ Ellenőrizve: a hibás (lokális
 `let`) verzión a 4b elbukik (`{}` — a koppintás törölt), a javított verzión zöld.
+
+## DNR Bingó: 3. mód — „DNR a tortán" (v10.400)
+Főzős-vendéglátós sorozat: 2 fős csapatok, alkalmanként 1 házigazda + 2 vendégcsapat
+(6 fő). A 4 vendég 5 kategóriában (🍴 Ételek, 💡 Kreativitás, 🏠 Vendéglátás,
+🎉 Élmény, ⭐ Összhatás) 1–10 ponttal értékel → alkalmanként max. **200** pont; a
+ranglista a házigazda-csapatok összpontja (mindig 4 vendég pontoz, így az összeg fair).
+
+**A meglévő Tipp-vázra épül, nem új app:** `config/bingoConfig.mode === 'torta'`, a
+`BingoScreen` harmadik ága, az `AdminBingo` harmadik módgombja (`⚽ Bingó · 🎯 Tipp ·
+🍽️ Tortán`). Közös marad: a „Ki vagy?" profilválasztó, a `boh_bingo_who`, és az
+**e-mailes kódvédelem** (`tippRequireCode`/`tippMailUrl`/`config/tippAuth` — ugyanaz
+a kapcsoló mindkét módban). A kód-kártya ezért kiemelve **`renderGate(mit)`**, az admin
+kapcsoló **`renderCodeGateAdmin(on, off)`** — sima függvényhívás, nem JSX-komponens
+(v10.335).
+
+Adat:
+- `bingoConfig.tortaTeams = [{ id, name, members:[pid,pid] }]` — egy profil csak egy
+  csapatban lehet (az admin választó kiszűri a foglaltat); **név nélküli csapat
+  mentéskor a tagok nevéből kap nevet** („Luca & Béla"), tag nélküli kiesik.
+- `bingoConfig.tortaEvenings = [{ id, date, hostId, guestIds:[tid,tid], locked }]` — az
+  admin KÉZZEL viszi fel (nincs automata sorsolás — tulajdonosi döntés). Mentéskor a
+  törölt csapatra mutató host/vendég kiesik, a vendég ≠ házigazda.
+- `config/tortaScores = { [alkalomId]: { [profilId]: { etel, kreativ, vendeg, elmeny,
+  ossz, at } } }` — **beágyazott `set`+`merge`**, nem dotted path (v10.323).
+
+Szabályok, amiket könnyű elrontani:
+- **A házigazda a saját estéjét NEM pontozza** — a pontozó kártyát csak a
+  `tortaGuestIds(ev, teams)` (a 2 vendégcsapat tagjai) kapja; a `writeTortaRating`
+  is ellenőrzi.
+- **Az összeg a JOGOSULT vendégek pontjából** számol (`tortaEveningTotal`) — egy
+  közben áthelyezett/törölt vendég régi pontja nem torzít.
+- **Élőben látszik** (tulajdonosi döntés): a félkész értékelés is beszámít, a kártya
+  „k/4 értékelt"-et mutat. Lezárt alkalomnál (`locked`) a gombok tiltva.
+- Ugyanarra az értékre koppintva az érték **törlődik** (visszavonás).
+- ⚠️ A Firestore-szabályok nincsenek a repóban: a `config/tortaScores` írásának ugyanúgy
+  engedélyezettnek kell lennie, mint a `config/tippAnswers`-nek.
+
+Teszt: `node tests/torta_test.js` — vendég-pontozás a store-ba, visszavonás, élő
+ranglista (két vendég összege), a házigazda nem pontozhat, lezárás, kódvédelem, a Tipp
+mód közös gate-je (regresszió) és az admin mentése (auto-név, kieső csapat/vendég).

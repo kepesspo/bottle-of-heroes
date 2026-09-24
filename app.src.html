@@ -35203,7 +35203,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.399';
+const APP_VERSION = 'v10.400';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -40706,14 +40706,23 @@ function AdminBingo() {
   const [matches, setMatches] = React.useState([]);
   const [bWinner, setBWinner] = React.useState({ enabled: false, deadline: '', correct: '' });
   const [bScorer, setBScorer] = React.useState({ enabled: false, deadline: '', correct: '' });
+  // DNR a tortán (v10.400): csapatok (2 fős párok a profilokból) + alkalmak (házigazda + 2 vendégcsapat)
+  const [tortaTitle, setTortaTitle] = React.useState('DNR a tortán');
+  const [tortaTeams, setTortaTeams] = React.useState([]);
+  const [tortaEvenings, setTortaEvenings] = React.useState([]);
+  const [profiles, setProfiles] = React.useState([]);
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
   const [dirty, setDirty] = React.useState(false);
   const [confirmReset, setConfirmReset] = React.useState(false);
   React.useEffect(() => {
+    if (typeof window.getProfiles === 'function') window.getProfiles().then(ps => setProfiles(ps || [])).catch(() => {});
     (window.getBingoConfig ? window.getBingoConfig() : Promise.resolve(null)).then(c => {
       setEnabled(c ? c.enabled !== false : true);
-      setMode((c && c.mode === 'tipp') ? 'tipp' : 'bingo');
+      setMode((c && (c.mode === 'tipp' || c.mode === 'torta')) ? c.mode : 'bingo');
+      setTortaTitle((c && c.tortaTitle) || 'DNR a tortán');
+      setTortaTeams((c && Array.isArray(c.tortaTeams)) ? c.tortaTeams.map(t => ({ id: t.id, name: t.name || '', members: [((t.members || [])[0]) || '', ((t.members || [])[1]) || ''] })) : []);
+      setTortaEvenings((c && Array.isArray(c.tortaEvenings)) ? c.tortaEvenings.map(ev => ({ id: ev.id, date: ev.date || '', hostId: ev.hostId || '', guestIds: [((ev.guestIds || [])[0]) || '', ((ev.guestIds || [])[1]) || ''], locked: !!ev.locked })) : []);
       setTitle((c && c.title) || 'VB Bingó');
       setTippTitle((c && c.tippTitle) || 'Tippbajnokság');
       setTippRequireCode(!!(c && c.tippRequireCode));
@@ -40736,6 +40745,20 @@ function AdminBingo() {
 
   const teamsArr = teamsText.split('\n').map(s => s.trim()).filter(Boolean);
 
+  // ── DNR a tortán szerkesztők ──
+  const newId = p => p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  const addTortaTeam = () => { setTortaTeams(l => [...l, { id: newId('t'), name: '', members: ['', ''] }]); markDirty(); };
+  const updTortaTeam = (i, patch) => { setTortaTeams(l => l.map((t, j) => j === i ? { ...t, ...patch } : t)); markDirty(); };
+  const setTortaMember = (i, slot, pid) => { setTortaTeams(l => l.map((t, j) => { if (j !== i) return t; const m = [...(t.members || ['', ''])]; m[slot] = pid; return { ...t, members: m }; })); markDirty(); };
+  const delTortaTeam = (i) => { setTortaTeams(l => l.filter((_, j) => j !== i)); markDirty(); };
+  const addTortaEvening = () => { setTortaEvenings(l => [...l, { id: newId('e'), date: '', hostId: '', guestIds: ['', ''], locked: false }]); markDirty(); };
+  const updTortaEvening = (i, patch) => { setTortaEvenings(l => l.map((ev, j) => j === i ? { ...ev, ...patch } : ev)); markDirty(); };
+  const setTortaGuest = (i, slot, tid) => { setTortaEvenings(l => l.map((ev, j) => { if (j !== i) return ev; const g = [...(ev.guestIds || ['', ''])]; g[slot] = tid; return { ...ev, guestIds: g }; })); markDirty(); };
+  const delTortaEvening = (i) => { setTortaEvenings(l => l.filter((_, j) => j !== i)); markDirty(); };
+  const profName = pid => { const p = profiles.find(x => x.id === pid); return p ? p.name : ''; };
+  // egy profil CSAK egy csapatban lehet — a már foglaltak más csapat választójában nem jelennek meg
+  const takenBy = pid => tortaTeams.findIndex(t => (t.members || []).includes(pid));
+
   const persist = (payload) => {
     setSaving(true);
     (window.setBingoConfig ? window.setBingoConfig(payload) : Promise.resolve())
@@ -40751,13 +40774,26 @@ function AdminBingo() {
     })).filter(m => m.home && m.away && m.kickoff);
     const bw = { enabled: !!bWinner.enabled, deadline: bWinner.deadline || '', correct: (bWinner.correct || '').trim(), teams: teamsArr };
     const bs = { enabled: !!bScorer.enabled, deadline: bScorer.deadline || '', correct: (bScorer.correct || '').trim(), teams: teamsArr };
-    return Object.assign({ enabled, mode, title: (title || '').trim() || 'VB Bingó', items: cleanItems, tippTitle: (tippTitle || '').trim() || 'Tippbajnokság', tippRequireCode, tippMailUrl: (tippMailUrl || '').trim(), teams: teamsArr, matches: cleanM, bonusWinner: bw, bonusScorer: bs, questions: [] }, over || {});
+    // DNR a tortán: üres név helyett a tagok nevéből („Sere & Kecsi"); tag nélküli csapat kiesik
+    const cleanTT = (tortaTeams || []).map(t => {
+      const members = (t.members || []).filter(Boolean);
+      const name = (t.name || '').trim() || members.map(profName).filter(Boolean).join(' & ');
+      return { id: t.id, name, members };
+    }).filter(t => t.members.length > 0);
+    const ttIds = new Set(cleanTT.map(t => t.id));
+    const cleanTE = (tortaEvenings || []).map(ev => ({
+      id: ev.id, date: ev.date || '', hostId: ttIds.has(ev.hostId) ? ev.hostId : '',
+      guestIds: (ev.guestIds || []).filter(g => g && ttIds.has(g) && g !== ev.hostId).filter((g, i, a) => a.indexOf(g) === i),
+      locked: !!ev.locked,
+    })).filter(ev => ev.hostId);
+    return Object.assign({ enabled, mode, title: (title || '').trim() || 'VB Bingó', items: cleanItems, tippTitle: (tippTitle || '').trim() || 'Tippbajnokság', tippRequireCode, tippMailUrl: (tippMailUrl || '').trim(), teams: teamsArr, matches: cleanM, bonusWinner: bw, bonusScorer: bs, questions: [], tortaTitle: (tortaTitle || '').trim() || 'DNR a tortán', tortaTeams: cleanTT, tortaEvenings: cleanTE }, over || {});
   };
   const save = () => persist(buildPayload());
   const reset = () => {
     const d = BINGO_ITEMS.map(it => ({ e: it.e, t: it.t }));
     setEnabled(true); setMode('bingo'); setTitle('VB Bingó'); setItems(d); setTippTitle('Tippbajnokság'); setTippRequireCode(false); setMatches([]); setTeamsText(''); setBWinner({ enabled:false, deadline:'', correct:'' }); setBScorer({ enabled:false, deadline:'', correct:'' });
-    persist({ enabled: true, mode: 'bingo', title: 'VB Bingó', items: d, tippTitle: 'Tippbajnokság', tippRequireCode: false, tippMailUrl: (tippMailUrl || '').trim(), teams: [], matches: [], bonusWinner: { enabled:false }, bonusScorer: { enabled:false }, questions: [] });
+    setTortaTitle('DNR a tortán'); setTortaTeams([]); setTortaEvenings([]);
+    persist({ enabled: true, mode: 'bingo', title: 'VB Bingó', items: d, tippTitle: 'Tippbajnokság', tippRequireCode: false, tippMailUrl: (tippMailUrl || '').trim(), teams: [], matches: [], bonusWinner: { enabled:false }, bonusScorer: { enabled:false }, questions: [], tortaTitle: 'DNR a tortán', tortaTeams: [], tortaEvenings: [] });
   };
 
   if (items === null) return <div style={{ textAlign:'center', padding:30, fontFamily:T.font, color:T.sub }}>Betöltés…</div>;
@@ -40767,6 +40803,24 @@ function AdminBingo() {
   const inpS = { boxSizing:'border-box', padding:'9px 11px', borderRadius:10, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:13.5, color:T.ink, outline:'none' };
   const dtS = { ...inpS, WebkitAppearance:'none', appearance:'none' };
   const lbl = txt => <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:7 }}>{txt}</div>;
+  // Kódos védelem kapcsoló — a Tipp ÉS a DNR a tortán mód közös (ugyanaz a tippRequireCode/tippMailUrl)
+  const renderCodeGateAdmin = (onTxt, offTxt) => (
+    <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
+        <div>
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>E-mailes kódvédelem</div>
+          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>{tippRequireCode ? onTxt : offTxt}</div>
+        </div>
+        <Toggle on={tippRequireCode} onChange={() => { setTippRequireCode(v => !v); markDirty(); }} />
+      </div>
+      {tippRequireCode && (
+        <div style={{ marginTop:11 }}>
+          {lbl('E-mail küldő URL (Google Apps Script)')}
+          <input value={tippMailUrl} onChange={e => { setTippMailUrl(e.target.value); markDirty(); }} placeholder="https://script.google.com/macros/s/…/exec" style={{ ...inpS, width:'100%' }} />
+        </div>
+      )}
+    </div>
+  );
   const BonusCard = ({ title:bt, emoji, bn, setBn }) => (
     <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:10 }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
@@ -40790,12 +40844,12 @@ function AdminBingo() {
   return (
     <div style={{ padding:16 }}>
       <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
-        <span style={{ fontSize:20, lineHeight:1 }}>{mode === 'tipp' ? '🎯' : '⚽'}</span>
-        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>Bingó / Tipp bajnokság</span>
+        <span style={{ fontSize:20, lineHeight:1 }}>{mode === 'torta' ? '🍽️' : mode === 'tipp' ? '🎯' : '⚽'}</span>
+        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>Bingó / Tipp / DNR a tortán</span>
       </div>
-      <div style={{ display:'flex', gap:8, marginBottom:12 }}>
-        {[['bingo','⚽ Bingó'],['tipp','🎯 Tipp bajnokság']].map(([k,l]) => (
-          <button key={k} onClick={() => { setMode(k); markDirty(); }} style={{ flex:1, padding:'11px 0', borderRadius:13, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:13.5, background: mode === k ? T.mint : T.surface, color: mode === k ? '#fff' : T.inkSoft, boxShadow: mode === k ? `0 4px 12px ${T.mint}55` : T.shadow }}>{l}</button>
+      <div style={{ display:'flex', gap:6, marginBottom:12 }}>
+        {[['bingo','⚽ Bingó'],['tipp','🎯 Tipp'],['torta','🍽️ Tortán']].map(([k,l]) => (
+          <button key={k} data-bingo-mode={k} onClick={() => { setMode(k); markDirty(); }} style={{ flex:1, padding:'11px 0', borderRadius:13, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:13, whiteSpace:'nowrap', background: mode === k ? T.mint : T.surface, color: mode === k ? '#fff' : T.inkSoft, boxShadow: mode === k ? `0 4px 12px ${T.mint}55` : T.shadow }}>{l}</button>
         ))}
       </div>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
@@ -40826,6 +40880,76 @@ function AdminBingo() {
           </div>
           <button onClick={addItem} style={{ width:'100%', padding:'12px', borderRadius:14, border:`2px dashed ${T.border}`, background:'transparent', fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft, cursor:'pointer', marginBottom:14 }}>+ Új mező</button>
         </React.Fragment>
+      ) : mode === 'torta' ? (
+        <React.Fragment>
+          <div style={{ fontFamily:T.font, fontSize:12.5, color:T.sub, marginBottom:12, lineHeight:1.5 }}>Főzős-vendéglátós sorozat. Vegyél fel <b>csapatokat</b> (2 fős párok a profilokból), majd <b>alkalmakat</b>: egy házigazda + 2 vendégcsapat. A 4 vendég 5 kategóriában 1–10 ponttal értékel (max. {TORTA_EVENING_MAX} pont/alkalom); a ranglista élőben frissül.</div>
+          <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
+            {lbl('Sorozat neve')}
+            <input value={tortaTitle} onChange={e => { setTortaTitle(e.target.value); markDirty(); }} placeholder="DNR a tortán" style={{ ...inpS, width:'100%' }} />
+          </div>
+          {renderCodeGateAdmin('A pontozáshoz kód kell (e-mailben)', 'Bárki pontozhat kód nélkül')}
+
+          {/* Csapatok */}
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>Csapatok · {tortaTeams.length}</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:10 }}>
+            {tortaTeams.map((t, ti) => (
+              <div key={t.id} data-torta-admin-team={ti} style={{ background:T.surface, borderRadius:14, padding:'11px 12px', boxShadow:T.shadowPill }}>
+                <div style={{ display:'flex', gap:6, alignItems:'center', marginBottom:7 }}>
+                  <input value={t.name} onChange={e => updTortaTeam(ti, { name: e.target.value })} placeholder={(t.members || []).filter(Boolean).map(profName).join(' & ') || 'Csapat neve'} style={{ ...inpS, flex:1, minWidth:0 }} />
+                  <button onClick={() => delTortaTeam(ti)} style={{ padding:'8px 9px', borderRadius:9, border:'none', background:T.coralSoft, color:T.coral, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center' }}><BohIcon name="trash" size={13} /></button>
+                </div>
+                <div style={{ display:'flex', gap:6 }}>
+                  {[0, 1].map(slot => (
+                    <select key={slot} value={(t.members || [])[slot] || ''} onChange={e => setTortaMember(ti, slot, e.target.value)} style={{ ...inpS, flex:1, minWidth:0, height:40 }}>
+                      <option value="">— {slot + 1}. tag —</option>
+                      {profiles.filter(p => { const tb = takenBy(p.id); return (tb === -1 || tb === ti) && (t.members || [])[1 - slot] !== p.id; }).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <button onClick={addTortaTeam} style={{ width:'100%', padding:'12px', borderRadius:14, border:`2px dashed ${T.border}`, background:'transparent', fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft, cursor:'pointer', marginBottom:16 }}>+ Új csapat</button>
+
+          {/* Alkalmak */}
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>Alkalmak · {tortaEvenings.length}</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:10 }}>
+            {tortaEvenings.map((ev, ei) => {
+              const teamLabel = t => (t.name || '').trim() || (t.members || []).filter(Boolean).map(profName).join(' & ') || 'Névtelen csapat';
+              const g = ev.guestIds || ['', ''];
+              const warn = !ev.hostId ? 'Válassz házigazdát.' : (g.filter(Boolean).length < 2 ? 'Két vendégcsapat kell.' : '');
+              return (
+                <div key={ev.id} data-torta-admin-ev={ei} style={{ background:T.surface, borderRadius:14, padding:'11px 12px', boxShadow:T.shadowPill }}>
+                  <div style={{ display:'flex', gap:6, alignItems:'center', marginBottom:7 }}>
+                    <input type="datetime-local" value={ev.date || ''} onChange={e => updTortaEvening(ei, { date: e.target.value })} style={{ ...dtS, flex:1, minWidth:0, height:40 }} />
+                    <button onClick={() => delTortaEvening(ei)} style={{ padding:'8px 9px', borderRadius:9, border:'none', background:T.coralSoft, color:T.coral, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center' }}><BohIcon name="trash" size={13} /></button>
+                  </div>
+                  <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, fontWeight:700, marginBottom:4 }}>🏠 Házigazda</div>
+                  <select value={ev.hostId || ''} onChange={e => { const h = e.target.value; updTortaEvening(ei, { hostId: h, guestIds: (ev.guestIds || ['', '']).map(x => x === h ? '' : x) }); }} style={{ ...inpS, width:'100%', height:40, marginBottom:7 }}>
+                    <option value="">— válassz —</option>
+                    {tortaTeams.map(t => <option key={t.id} value={t.id}>{teamLabel(t)}</option>)}
+                  </select>
+                  <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, fontWeight:700, marginBottom:4 }}>🍽️ Vendégcsapatok</div>
+                  <div style={{ display:'flex', gap:6, marginBottom:8 }}>
+                    {[0, 1].map(slot => (
+                      <select key={slot} value={g[slot] || ''} onChange={e => setTortaGuest(ei, slot, e.target.value)} style={{ ...inpS, flex:1, minWidth:0, height:40 }}>
+                        <option value="">— {slot + 1}. vendég —</option>
+                        {tortaTeams.filter(t => t.id !== ev.hostId && t.id !== g[1 - slot]).map(t => <option key={t.id} value={t.id}>{teamLabel(t)}</option>)}
+                      </select>
+                    ))}
+                  </div>
+                  <label style={{ display:'flex', alignItems:'center', gap:6, fontFamily:T.font, fontWeight:700, fontSize:12, color:T.inkSoft, cursor:'pointer' }}>
+                    <input type="checkbox" checked={!!ev.locked} onChange={e => updTortaEvening(ei, { locked: e.target.checked })} /> 🔒 Lezárva (már nem pontozható)
+                  </label>
+                  {warn && <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:T.coral, marginTop:6 }}>{warn}</div>}
+                </div>
+              );
+            })}
+          </div>
+          <button onClick={addTortaEvening} disabled={tortaTeams.length < 3} style={{ width:'100%', padding:'12px', borderRadius:14, border:`2px dashed ${T.border}`, background:'transparent', fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft, cursor: tortaTeams.length < 3 ? 'default' : 'pointer', opacity: tortaTeams.length < 3 ? 0.5 : 1, marginBottom:6 }}>+ Új alkalom</button>
+          {tortaTeams.length < 3 && <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginBottom:14 }}>Egy alkalomhoz legalább 3 csapat kell (1 házigazda + 2 vendég).</div>}
+          <div style={{ height:8 }} />
+        </React.Fragment>
       ) : (
         <React.Fragment>
           <div style={{ fontFamily:T.font, fontSize:12.5, color:T.sub, marginBottom:12 }}>Mérkőzés-eredmény tippelés. Vegyél fel mérkőzéseket kezdési idővel; a döntő/meccs után írd be a <b>végeredményt</b> — a pontok (5/3/2/1) automatikusan kiszámolódnak. <span style={{ fontWeight:800, color: validM ? T.mint : T.coral }}>{validM} mérkőzés</span></div>
@@ -40837,22 +40961,7 @@ function AdminBingo() {
             {lbl('Csapatok (soronként egy) — a bónuszokhoz')}
             <textarea value={teamsText} onChange={e => { setTeamsText(e.target.value); markDirty(); }} rows={3} placeholder={'Argentína\nFranciaország\nSpanyolország'} style={{ ...inpS, width:'100%', resize:'vertical', lineHeight:1.5 }} />
           </div>
-          {/* Kódos védelem */}
-          <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
-              <div>
-                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>E-mailes kódvédelem</div>
-                <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>{tippRequireCode ? 'A tippeléshez kód kell (e-mailben)' : 'Bárki tippelhet kód nélkül'}</div>
-              </div>
-              <Toggle on={tippRequireCode} onChange={() => { setTippRequireCode(v => !v); markDirty(); }} />
-            </div>
-            {tippRequireCode && (
-              <div style={{ marginTop:11 }}>
-                {lbl('E-mail küldő URL (Google Apps Script)')}
-                <input value={tippMailUrl} onChange={e => { setTippMailUrl(e.target.value); markDirty(); }} placeholder="https://script.google.com/macros/s/…/exec" style={{ ...inpS, width:'100%' }} />
-              </div>
-            )}
-          </div>
+          {renderCodeGateAdmin('A tippeléshez kód kell (e-mailben)', 'Bárki tippelhet kód nélkül')}
           {/* Mérkőzések */}
           <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>Mérkőzések</div>
           <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:12 }}>
@@ -41119,6 +41228,47 @@ function tippFmtKick(iso) {
   catch (e) { return String(iso); }
 }
 
+// ── DNR a tortán (a DNR Bingó 3. módja, v10.400) ──
+// Párok/csapatok vendégül látnak 2 másik csapatot; a 4 vendég 5 kategóriában 1–10
+// ponttal értékeli a házigazdát → alkalmanként max. 4 × 50 = 200 pont. A pontok a
+// config/tortaScores doksiban: { [alkalomId]: { [vendégProfilId]: { etel, kreativ, … } } }.
+const TORTA_CATS = [
+  { k: 'etel',    e: '🍴', t: 'Ételek',       d: 'Íz, elkészítés, tálalás és a két fogás összhangja' },
+  { k: 'kreativ', e: '💡', t: 'Kreativitás',  d: 'Mennyire volt ötletes és emlékezetes a menü?' },
+  { k: 'vendeg',  e: '🏠', t: 'Vendéglátás',  d: 'Hangulat, figyelmesség és a vendégek fogadása' },
+  { k: 'elmeny',  e: '🎉', t: 'Élmény',       d: 'Programok, hangulat, meglepetések és az este összképe' },
+  { k: 'ossz',    e: '⭐', t: 'Összhatás',     d: 'Mennyire érezted jól magad ezen az estén?' },
+];
+const TORTA_CAT_MAX = 10;
+const TORTA_GUESTS_PER_EVENING = 4;
+const TORTA_EVENING_MAX = TORTA_GUESTS_PER_EVENING * TORTA_CATS.length * TORTA_CAT_MAX; // 200
+function tortaCatVal(r, k) { const v = r ? +r[k] : 0; return (v >= 1 && v <= TORTA_CAT_MAX) ? v : 0; }
+function tortaRatingSum(r) { return TORTA_CATS.reduce((s, c) => s + tortaCatVal(r, c.k), 0); }
+function tortaRatingComplete(r) { return TORTA_CATS.every(c => tortaCatVal(r, c.k) > 0); }
+// Az alkalom vendégei (profil-id-k) a 2 vendégcsapat tagjaiból — a házigazda NEM pontoz.
+function tortaGuestIds(ev, teams) {
+  const out = [];
+  (ev && Array.isArray(ev.guestIds) ? ev.guestIds : []).forEach(tid => {
+    const tm = (teams || []).find(t => t.id === tid);
+    (tm && Array.isArray(tm.members) ? tm.members : []).forEach(pid => { if (pid && !out.includes(pid)) out.push(pid); });
+  });
+  return out;
+}
+// Egy alkalom összpontja: csak a jogosult vendégek értékelése számít (egy törölt/áthelyezett
+// vendég régi pontja nem torzít). Élőben számol — a félkész értékelés is beleszámít.
+function tortaEveningTotal(ev, teams, scores) {
+  const sc = (scores && ev && scores[ev.id]) || {};
+  const guests = tortaGuestIds(ev, teams);
+  let pts = 0, done = 0, started = 0;
+  guests.forEach(pid => { const r = sc[pid]; if (!r) return; const s = tortaRatingSum(r); if (s > 0) { started++; pts += s; } if (tortaRatingComplete(r)) done++; });
+  return { pts, done, started, guests: guests.length };
+}
+function tortaFmtDate(iso) {
+  if (!iso) return 'Időpont később';
+  try { return new Date(iso).toLocaleString('hu-HU', { month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' }); }
+  catch (e) { return String(iso); }
+}
+
 function BingoScreen({ go, deepLink }) {
   const [profiles, setProfiles] = React.useState([]);
   const [who, setWho] = React.useState(() => { try { return localStorage.getItem('boh_bingo_who') || null; } catch(e) { return null; } });
@@ -41135,6 +41285,7 @@ function BingoScreen({ go, deepLink }) {
   const [celebrate, setCelebrate] = React.useState(null);
   const [confirmReset, setConfirmReset] = React.useState(false);
   const [cfg, setCfg] = React.useState(null);
+  const [tortaScores, setTortaScores] = React.useState({});   // DNR a tortán — { alkalomId: { profilId: értékelés } }
   const prevBingos = React.useRef(null);
   const db = (typeof firebase !== 'undefined') ? firebase.firestore() : null;
 
@@ -41145,15 +41296,17 @@ function BingoScreen({ go, deepLink }) {
     const un2 = db.collection('config').doc('bingoConfig').onSnapshot(d => setCfg((d && d.exists && d.data()) || null), () => {});
     const un3 = db.collection('config').doc('tippAnswers').onSnapshot(d => setTippAll((d && d.exists && d.data()) || {}), () => {});
     const un4 = db.collection('config').doc('tippAuth').onSnapshot(d => setTippAuth((d && d.exists && d.data()) || {}), () => {});
-    return () => { try { un(); } catch(e) {} try { un2(); } catch(e) {} try { un3(); } catch(e) {} try { un4(); } catch(e) {} };
+    const un5 = db.collection('config').doc('tortaScores').onSnapshot(d => setTortaScores((d && d.exists && d.data()) || {}), () => {});
+    return () => { try { un(); } catch(e) {} try { un2(); } catch(e) {} try { un3(); } catch(e) {} try { un4(); } catch(e) {} try { un5(); } catch(e) {} };
   }, []);
 
-  const mode = (cfg && cfg.mode === 'tipp') ? 'tipp' : 'bingo';
+  const mode = (cfg && (cfg.mode === 'tipp' || cfg.mode === 'torta')) ? cfg.mode : 'bingo';
   const ITEMS = (cfg && Array.isArray(cfg.items) && cfg.items.length >= 24) ? cfg.items : BINGO_ITEMS;
   const bingoTitle = (cfg && cfg.title) ? cfg.title : 'VB Bingó';
   const tippTitle = (cfg && cfg.tippTitle) ? cfg.tippTitle : 'Tippbajnokság';
+  const tortaTitle = (cfg && cfg.tortaTitle) ? cfg.tortaTitle : 'DNR a tortán';
   const questions = (cfg && Array.isArray(cfg.questions)) ? cfg.questions : [];
-  const headTitle = (mode === 'tipp' ? tippTitle : bingoTitle) + (mode === 'tipp' ? ' 🎯' : ' ⚽');
+  const headTitle = mode === 'torta' ? (tortaTitle + ' 🍽️') : (mode === 'tipp' ? tippTitle : bingoTitle) + (mode === 'tipp' ? ' 🎯' : ' ⚽');
 
   const pickWho = id => { setWho(id); prevBingos.current = null; setConfirmReset(false); setGateEmail(''); setGateCode(''); setGateSent(false); setGateErr(''); try { localStorage.setItem('boh_bingo_who', id || ''); } catch(e) {} };
   const whoProf = profiles.find(p => p.id === who) || null;
@@ -41207,7 +41360,7 @@ function BingoScreen({ go, deepLink }) {
   const genCode = () => { let s = ''; const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; for (let i = 0; i < 6; i++) s += A[Math.floor(Math.random() * A.length)]; return s; };
   const sendCodeMail = (to, code) => {
     if (!mailUrl) return Promise.resolve();
-    const payload = { to, name: (whoProf && whoProf.name) || '', code, title: tippTitle };
+    const payload = { to, name: (whoProf && whoProf.name) || '', code, title: mode === 'torta' ? tortaTitle : tippTitle };
     return fetch(mailUrl, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }).catch(() => {});
   };
   const requestCode = () => {
@@ -41276,15 +41429,74 @@ function BingoScreen({ go, deepLink }) {
   const tippMedal = {};
   if (anyResolved) standings.slice(0, 3).forEach((x, i) => { if (x.s.pts > 0) tippMedal[x.p.id] = ['🥇','🥈','🥉'][i]; });
 
+  // ── DNR a tortán logika (v10.400) ──
+  const tortaTeams = (cfg && Array.isArray(cfg.tortaTeams)) ? cfg.tortaTeams : [];
+  const tortaEvenings = ((cfg && Array.isArray(cfg.tortaEvenings)) ? cfg.tortaEvenings : [])
+    .slice().sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
+  const tortaTeamOf = pid => tortaTeams.find(t => Array.isArray(t.members) && t.members.includes(pid)) || null;
+  const tortaTeamById = tid => tortaTeams.find(t => t.id === tid) || null;
+  const myTortaTeam = who ? tortaTeamOf(who) : null;
+  // Az én pontozandó estéim: ahol a csapatom VENDÉG (a házigazda a saját estéjét nem pontozza).
+  const myGuestEvenings = who ? tortaEvenings.filter(ev => tortaGuestIds(ev, tortaTeams).includes(who)) : [];
+  const writeTortaRating = (evId, catKey, val) => {
+    const ev = tortaEvenings.find(x => x.id === evId);
+    if (!canEdit || !ev || ev.locked || !tortaGuestIds(ev, tortaTeams).includes(who)) return;
+    const cur = { ...(((tortaScores[evId] || {})[who]) || {}) };
+    cur[catKey] = (cur[catKey] === val) ? null : val;   // ugyanarra koppintva törlődik
+    cur.at = Date.now();
+    setTortaScores(prev => ({ ...prev, [evId]: { ...(prev[evId] || {}), [who]: cur } }));
+    // beágyazott set+merge (nem dotted path) — v10.323 mintája
+    if (db) db.collection('config').doc('tortaScores').set({ [evId]: { [who]: cur } }, { merge: true }).catch(() => {});
+  };
+  // Ranglista: házigazda-csapatonként az estéik összpontja (mindig 4 vendég pontoz, így az összeg fair)
+  const tortaStandings = tortaTeams.map(tm => {
+    const hosted = tortaEvenings.filter(ev => ev.hostId === tm.id);
+    const pts = hosted.reduce((s, ev) => s + tortaEveningTotal(ev, tortaTeams, tortaScores).pts, 0);
+    return { tm, pts, hosted: hosted.length };
+  }).filter(x => x.hosted > 0).sort((a, b) => b.pts - a.pts);
+  const tortaMedal = {};
+  tortaStandings.slice(0, 3).forEach((x, i) => { if (x.pts > 0) tortaMedal[x.tm.id] = ['🥇','🥈','🥉'][i]; });
+  const teamMembers = tm => (tm && Array.isArray(tm.members) ? tm.members : []).map(pid => profiles.find(p => p.id === pid)).filter(Boolean);
+
   const Avatar = ({ pr, size }) => (
     <div style={{ width:size, height:size, borderRadius:'50%', background:(pr && pr.color) || '#98A2B3', overflow:'hidden', display:'grid', placeItems:'center', flexShrink:0 }}>
       {pr && pr.img ? <img src={pr.img} style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : <span style={{ fontFamily:T.font, fontWeight:900, fontSize:size*0.42, color:'#fff' }}>{((pr && pr.name) || '?').charAt(0).toUpperCase()}</span>}
     </div>
   );
 
-  const pickerSub = mode === 'tipp'
+  const pickerSub = mode === 'torta'
+    ? 'Válaszd ki magad — vendégként pontozhatod a házigazdákat, és követheted a ranglistát!'
+    : mode === 'tipp'
     ? 'Válaszd ki magad — add le a tippjeidet a döntő eseményeire, és versenyezz a pontokért!'
     : 'Válaszd ki magad — mindenki saját kártyát kap, és X-elheti, ami a döntőben megtörténik.';
+
+  // Kódos védelem kártyája — a Tipp ÉS a DNR a tortán mód közös (sima függvényhívás, nem JSX-komponens)
+  const renderGate = (what) => (
+    <div style={{ background:T.surface, borderRadius:16, padding:'14px', boxShadow:T.shadow, marginBottom:12, border:`1.5px solid ${T.coral}44` }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+        <span style={{ fontSize:18, lineHeight:1 }}>🔒</span>
+        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink }}>Kód kell a szerkesztéshez</span>
+      </div>
+      <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, lineHeight:1.5, marginBottom:11 }}>Add meg az e-mail címed — küldünk egy egyedi kódot, amivel csak te tudod szerkeszteni {what}.</div>
+      {gateSent && (
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.mintDeep || T.mint, background:T.mintSoft, borderRadius:10, padding:'9px 11px', marginBottom:10 }}>✉️ Elküldtük a kódot ide: {gateEmail || (authRec && authRec.email) || ''}. Nézd meg a postafiókod (a Spam mappát is)!</div>
+      )}
+      <div style={{ display:'flex', gap:7, marginBottom:9 }}>
+        <input value={gateEmail} onChange={e => { setGateEmail(e.target.value); setGateErr(''); }} placeholder="pl. te@email.hu" type="email" style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'11px 12px', borderRadius:11, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
+        <button onClick={requestCode} disabled={gateSending} style={{ padding:'11px 14px', borderRadius:11, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:13, cursor:'pointer', flexShrink:0, opacity: gateSending ? 0.6 : 1 }}>{gateSending ? '…' : (authRec ? 'Újraküldés' : 'Kód kérése')}</button>
+      </div>
+      <div style={{ display:'flex', alignItems:'center', gap:8, margin:'4px 0 9px' }}>
+        <div style={{ flex:1, height:1, background:T.border }} />
+        <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkMute }}>Már van kódod?</span>
+        <div style={{ flex:1, height:1, background:T.border }} />
+      </div>
+      <div style={{ display:'flex', gap:7 }}>
+        <input value={gateCode} onChange={e => { setGateCode(e.target.value); setGateErr(''); }} placeholder="6 jegyű kód" maxLength={8} style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'11px 12px', borderRadius:11, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:15, fontWeight:800, letterSpacing:'0.14em', textTransform:'uppercase', color:T.ink, outline:'none' }} />
+        <button onClick={submitCode} style={{ padding:'11px 18px', borderRadius:11, border:'none', background:T.ink, color:onInk(), fontFamily:T.font, fontWeight:900, fontSize:13, cursor:'pointer', flexShrink:0 }}>Feloldás</button>
+      </div>
+      {gateErr && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11.5, color:T.coral, marginTop:8 }}>{gateErr}</div>}
+    </div>
+  );
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
@@ -41294,7 +41506,7 @@ function BingoScreen({ go, deepLink }) {
       <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'14px 16px max(40px, calc(env(safe-area-inset-bottom) + 24px))', maxWidth:560, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
         {!who ? (
           <div style={{ background:T.surface, borderRadius:20, padding:'24px 18px', boxShadow:T.shadow, textAlign:'center' }}>
-            <div style={{ fontSize:42, lineHeight:1, marginBottom:10 }}>{mode === 'tipp' ? '🎯' : '🏆'}</div>
+            <div style={{ fontSize:42, lineHeight:1, marginBottom:10 }}>{mode === 'torta' ? '🍽️' : mode === 'tipp' ? '🎯' : '🏆'}</div>
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, marginBottom:5 }}>Ki vagy?</div>
             <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, lineHeight:1.5, marginBottom:18 }}>{pickerSub}</div>
             {profiles.length ? (
@@ -41310,6 +41522,140 @@ function BingoScreen({ go, deepLink }) {
               <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkMute }}>Nincs profil — hozz létre egyet a Statisztika oldalon.</div>
             )}
           </div>
+        ) : mode === 'torta' ? (
+          <React.Fragment>
+            {/* Saját sáv */}
+            <div style={{ display:'flex', alignItems:'center', gap:9, marginBottom:12 }}>
+              <Avatar pr={whoProf} size={30} />
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13.5, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{(whoProf && whoProf.name) || '—'}</div>
+                <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkSoft, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{myTortaTeam ? `${myTortaTeam.name} · ` : ''}{myGuestEvenings.length ? `${myGuestEvenings.length} pontozandó este` : (myTortaTeam ? 'Még nincs pontozandó estéd' : 'Nem vagy egyik csapatban sem')}{requireCode && myGuestEvenings.length ? (unlocked ? ' · 🔓' : ' · 🔒') : ''}</div>
+              </div>
+            </div>
+            {requireCode && !unlocked && myGuestEvenings.length > 0 && renderGate('a pontozásodat')}
+
+            {/* Pontozandó estéim — ahol vendég vagyok */}
+            {myGuestEvenings.map(ev => {
+              const host = tortaTeamById(ev.hostId);
+              const mine = ((tortaScores[ev.id] || {})[who]) || {};
+              const mySum = tortaRatingSum(mine);
+              const doneCats = TORTA_CATS.filter(c => tortaCatVal(mine, c.k) > 0).length;
+              const editable = canEdit && !ev.locked;
+              return (
+                <div key={ev.id} data-torta-ev={ev.id} style={{ background:T.surface, borderRadius:18, padding:'14px', boxShadow:T.shadow, marginBottom:12, borderLeft: tortaRatingComplete(mine) ? `4px solid ${T.mint}` : '4px solid transparent' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+                    <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkMute }}>{tortaFmtDate(ev.date)}</span>
+                    <div style={{ flex:1 }} />
+                    {ev.locked ? <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.inkMute }}>🔒 lezárva</span> : <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.mintDeep || T.mint }}>pontozható</span>}
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+                    <div style={{ display:'flex' }}>{teamMembers(host).map((pr, i) => <div key={pr.id} style={{ marginLeft: i ? -8 : 0, borderRadius:'50%', border:`2px solid ${T.surface}` }}><Avatar pr={pr} size={30} /></div>)}</div>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.05em' }}>Házigazda</div>
+                      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{host ? host.name : '?'}</div>
+                    </div>
+                  </div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
+                    {TORTA_CATS.map(c => {
+                      const val = tortaCatVal(mine, c.k);
+                      return (
+                        <div key={c.k} data-torta-cat={c.k}>
+                          <div style={{ display:'flex', alignItems:'baseline', gap:6, marginBottom:5 }}>
+                            <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:T.ink }}>{c.e} {c.t}</span>
+                            <div style={{ flex:1 }} />
+                            <span style={{ fontFamily:T.font, fontWeight:900, fontSize:12.5, color: val ? (T.mintDeep || T.mint) : T.inkMute }}>{val || '–'} / {TORTA_CAT_MAX}</span>
+                          </div>
+                          <div style={{ fontFamily:T.font, fontSize:10.5, color:T.inkMute, marginBottom:6, lineHeight:1.35 }}>{c.d}</div>
+                          <div style={{ display:'grid', gridTemplateColumns:`repeat(${TORTA_CAT_MAX}, 1fr)`, gap:4 }}>
+                            {Array.from({ length: TORTA_CAT_MAX }, (_, i) => i + 1).map(n => {
+                              const sel = val === n;
+                              return <button key={n} data-torta-val={n} disabled={!editable} onClick={() => writeTortaRating(ev.id, c.k, n)} style={{ height:32, padding:0, borderRadius:9, border:'none', cursor: editable ? 'pointer' : 'default', fontFamily:T.font, fontWeight:900, fontSize:13, background: sel ? T.mint : (n <= val ? `${T.mint}2a` : 'rgba(20,30,50,0.06)'), color: sel ? '#fff' : T.ink, opacity: (!editable && !sel) ? 0.55 : 1, WebkitTapHighlightColor:'transparent' }}>{n}</button>;
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:12, paddingTop:10, borderTop:`1px solid ${T.inkMute}1f` }}>
+                    <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11.5, color:T.inkSoft }}>{tortaRatingComplete(mine) ? 'Értékelés kész' : `${doneCats}/${TORTA_CATS.length} kategória`}</span>
+                    <div style={{ flex:1 }} />
+                    <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.coral }}>{mySum} / {TORTA_CATS.length * TORTA_CAT_MAX} pont</span>
+                  </div>
+                </div>
+              );
+            })}
+
+            {tortaTeams.length === 0 || tortaEvenings.length === 0 ? (
+              <div style={{ background:T.surface, borderRadius:18, padding:'26px 18px', boxShadow:T.shadow, textAlign:'center' }}>
+                <div style={{ fontSize:38, marginBottom:8 }}>🍽️</div>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:5 }}>Még nincs alkalom</div>
+                <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, lineHeight:1.5 }}>Az admin a Bingó fülön (DNR a tortán mód) tudja felvenni a csapatokat és az alkalmakat.</div>
+              </div>
+            ) : (
+              <React.Fragment>
+                {/* Ranglista */}
+                <div data-torta-rank style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
+                  <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:9 }}>🏆 {tortaTitle} ranglista</div>
+                  {tortaStandings.length === 0 ? (
+                    <div style={{ fontFamily:T.font, fontSize:12, color:T.inkMute }}>Még nincs házigazda-alkalom.</div>
+                  ) : (
+                    <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                      {tortaStandings.map(({ tm, pts, hosted }, i) => (
+                        <div key={tm.id} data-torta-team={tm.id} style={{ display:'flex', alignItems:'center', gap:8, background: myTortaTeam && myTortaTeam.id === tm.id ? T.mintSoft : 'transparent', borderRadius:10, padding:'6px 8px' }}>
+                          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkMute, width:22, textAlign:'center', flexShrink:0 }}>{tortaMedal[tm.id] || (i + 1)}</span>
+                          <div style={{ display:'flex', flexShrink:0 }}>{teamMembers(tm).map((pr, j) => <div key={pr.id} style={{ marginLeft: j ? -7 : 0, borderRadius:'50%', border:`2px solid ${T.surface}` }}><Avatar pr={pr} size={22} /></div>)}</div>
+                          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12.5, color:T.ink, flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{tm.name}</span>
+                          {hosted > 1 && <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.inkMute }}>{hosted} este</span>}
+                          <span data-torta-pts style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:T.coral }}>{pts}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Alkalmak — élő állás */}
+                <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.06em', margin:'4px 2px 8px' }}>Alkalmak</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {tortaEvenings.map(ev => {
+                    const host = tortaTeamById(ev.hostId);
+                    const guestTeams = (ev.guestIds || []).map(tortaTeamById).filter(Boolean);
+                    const tot = tortaEveningTotal(ev, tortaTeams, tortaScores);
+                    const sc = tortaScores[ev.id] || {};
+                    return (
+                      <div key={ev.id} data-torta-overview={ev.id} style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadowPill }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
+                          <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkMute }}>{tortaFmtDate(ev.date)}</span>
+                          <div style={{ flex:1 }} />
+                          {ev.locked && <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.inkMute }}>🔒 lezárva</span>}
+                        </div>
+                        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                          <span style={{ fontSize:15 }}>🏠</span>
+                          <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{host ? host.name : '?'}</span>
+                          <span data-torta-evtotal style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.coral, flexShrink:0 }}>{tot.pts} / {TORTA_EVENING_MAX}</span>
+                        </div>
+                        <div style={{ fontFamily:T.font, fontSize:11, color:T.inkSoft, marginTop:3 }}>Vendégek: {guestTeams.map(t => t.name).join(' · ') || '—'} · {tot.done}/{tot.guests} értékelt</div>
+                        {tot.started > 0 && (
+                          <div style={{ display:'flex', flexWrap:'wrap', gap:'5px 12px', marginTop:8, paddingTop:8, borderTop:`1px solid ${T.inkMute}1f` }}>
+                            {tortaGuestIds(ev, tortaTeams).filter(pid => tortaRatingSum(sc[pid]) > 0).map(pid => {
+                              const pr = profiles.find(p => p.id === pid);
+                              return (
+                                <div key={pid} style={{ display:'flex', alignItems:'center', gap:5 }}>
+                                  <Avatar pr={pr} size={18} />
+                                  <span style={{ fontFamily:T.font, fontWeight:700, fontSize:11.5, color:T.ink }}>{pr ? pr.name : '?'}</span>
+                                  <span style={{ fontFamily:T.font, fontWeight:800, fontSize:11.5, color:T.inkSoft }}>{tortaRatingSum(sc[pid])}{tortaRatingComplete(sc[pid]) ? '' : '…'}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </React.Fragment>
+            )}
+            <div style={{ fontFamily:T.font, fontSize:10.5, color:T.inkMute, textAlign:'center', marginTop:12, lineHeight:1.5 }}>Minden vendég külön értékel: 5 kategória × 1–10 pont = max. 50 pont. Egy alkalmon 4 vendég × 50 = max. {TORTA_EVENING_MAX} pont. A házigazda a saját estéjét nem pontozza; lezárásig módosíthatsz.</div>
+          </React.Fragment>
         ) : mode === 'tipp' ? (
           <React.Fragment>
             {/* Saját sáv */}
@@ -41320,32 +41666,7 @@ function BingoScreen({ go, deepLink }) {
                 <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkSoft }}>{myScore.tipped}/{matches.length} tippelve · {myScore.pts} pont{myScore.tele ? ` · ${myScore.tele}× telitalálat 🎯` : ''}{requireCode && (unlocked ? ' · 🔓' : ' · 🔒')}</div>
               </div>
             </div>
-            {requireCode && !unlocked && (
-              <div style={{ background:T.surface, borderRadius:16, padding:'14px', boxShadow:T.shadow, marginBottom:12, border:`1.5px solid ${T.coral}44` }}>
-                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                  <span style={{ fontSize:18, lineHeight:1 }}>🔒</span>
-                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink }}>Kód kell a szerkesztéshez</span>
-                </div>
-                <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, lineHeight:1.5, marginBottom:11 }}>Add meg az e-mail címed — küldünk egy egyedi kódot, amivel csak te tudod szerkeszteni a tippjeidet.</div>
-                {gateSent && (
-                  <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.mintDeep || T.mint, background:T.mintSoft, borderRadius:10, padding:'9px 11px', marginBottom:10 }}>✉️ Elküldtük a kódot ide: {gateEmail || (authRec && authRec.email) || ''}. Nézd meg a postafiókod (a Spam mappát is)!</div>
-                )}
-                <div style={{ display:'flex', gap:7, marginBottom:9 }}>
-                  <input value={gateEmail} onChange={e => { setGateEmail(e.target.value); setGateErr(''); }} placeholder="pl. te@email.hu" type="email" style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'11px 12px', borderRadius:11, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:14, color:T.ink, outline:'none' }} />
-                  <button onClick={requestCode} disabled={gateSending} style={{ padding:'11px 14px', borderRadius:11, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:13, cursor:'pointer', flexShrink:0, opacity: gateSending ? 0.6 : 1 }}>{gateSending ? '…' : (authRec ? 'Újraküldés' : 'Kód kérése')}</button>
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:8, margin:'4px 0 9px' }}>
-                  <div style={{ flex:1, height:1, background:T.border }} />
-                  <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkMute }}>Már van kódod?</span>
-                  <div style={{ flex:1, height:1, background:T.border }} />
-                </div>
-                <div style={{ display:'flex', gap:7 }}>
-                  <input value={gateCode} onChange={e => { setGateCode(e.target.value); setGateErr(''); }} placeholder="6 jegyű kód" maxLength={8} style={{ flex:1, minWidth:0, boxSizing:'border-box', padding:'11px 12px', borderRadius:11, border:`1.5px solid ${T.border}`, background:T.bg, fontFamily:T.font, fontSize:15, fontWeight:800, letterSpacing:'0.14em', textTransform:'uppercase', color:T.ink, outline:'none' }} />
-                  <button onClick={submitCode} style={{ padding:'11px 18px', borderRadius:11, border:'none', background:T.ink, color:onInk(), fontFamily:T.font, fontWeight:900, fontSize:13, cursor:'pointer', flexShrink:0 }}>Feloldás</button>
-                </div>
-                {gateErr && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11.5, color:T.coral, marginTop:8 }}>{gateErr}</div>}
-              </div>
-            )}
+            {requireCode && !unlocked && renderGate('a tippjeidet')}
             {/* Plusz pontok — végső győztes / gólkirály csapat */}
             {(bonusWinner.enabled || bonusScorer.enabled) && (
               <div style={{ background:T.surface, borderRadius:16, padding:'13px 14px', boxShadow:T.shadow, marginBottom:12 }}>
@@ -43544,7 +43865,7 @@ const DNR_APPS = [
   { screen:'log',     name:'DNR Events', icon:'assets/dnr_events_icon.png', sub: c => c.ev },
   { screen:'jukebox', name:'DNR BOX',    icon:'assets/dnr_box_icon.png',    sub: c => c.box },
   { screen:'bar',     name:'DNR Pub',    icon:'assets/dnr_pub_icon.png',    sub: () => 'Koktél & shot receptek, saját keverések' },
-  { screen:'bingo',   name:'DNR Bingó',  icon:'assets/dnr_bingo_icon.png',  sub: () => 'Meccs- és bulibingó · tipp bajnokság' },
+  { screen:'bingo',   name:'DNR Bingó',  icon:'assets/dnr_bingo_icon.png',  sub: () => 'Meccs- és bulibingó · tipp bajnokság · DNR a tortán' },
   { screen:'stats',   name:'DNR Liga',   icon:'assets/dnr_liga_icon.png',   sub: c => c.liga ? `Ranglista · ${c.liga}` : 'Ranglista, szezonok, szintek' },
 ];
 function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resumeRoomData, onResume, onOpenSeason }) {
@@ -43584,12 +43905,14 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
     return () => { try { un(); } catch(e) {} };
   }, []);
   const bingoOn = !bingoCfg || bingoCfg.enabled !== false;
-  const bingoMode = (bingoCfg && bingoCfg.mode === 'tipp') ? 'tipp' : 'bingo';
-  const bingoLabel = bingoMode === 'tipp'
+  const bingoMode = (bingoCfg && (bingoCfg.mode === 'tipp' || bingoCfg.mode === 'torta')) ? bingoCfg.mode : 'bingo';
+  const bingoLabel = bingoMode === 'torta'
+    ? ((bingoCfg && bingoCfg.tortaTitle) ? bingoCfg.tortaTitle : 'DNR a tortán')
+    : bingoMode === 'tipp'
     ? ((bingoCfg && bingoCfg.tippTitle) ? bingoCfg.tippTitle : 'Tippbajnokság')
     : ((bingoCfg && bingoCfg.title) ? bingoCfg.title : 'VB Bingó');
-  const bingoEmoji = bingoMode === 'tipp' ? '🎯' : '⚽';
-  const bingoSub = bingoMode === 'tipp' ? 'Tippelj a döntőre — ki lesz a bajnok?' : 'X-eld ki, ami megtörténik a döntőben!';
+  const bingoEmoji = bingoMode === 'torta' ? '🍽️' : bingoMode === 'tipp' ? '🎯' : '⚽';
+  const bingoSub = bingoMode === 'torta' ? 'Pontozd a házigazdákat — ki lesz a bajnok?' : bingoMode === 'tipp' ? 'Tippelj a döntőre — ki lesz a bajnok?' : 'X-eld ki, ami megtörténik a döntőben!';
   React.useEffect(() => {
     const pickNext = (list) => {
       const now = new Date(); now.setHours(0,0,0,0);
