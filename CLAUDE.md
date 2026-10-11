@@ -3031,3 +3031,53 @@ ez csak akkor él, ha a csapatok ÉS a profilok már betöltődtek, különben b
 közben mindenkit kidobna. Csapat nélkül a választó az admin-teendőt írja ki. Bingó és
 Tipp módban változatlanul minden profil választható.
 Teszt: `torta_test.js` 8b. blokk (kontrollal: Tipp módban mind a 7 profil).
+
+## DNR a tortán: animált SORSOLÁS, zsákutca nélkül (v10.404)
+Egy húzás = egy alkalom: **1 házigazda + pontosan 2 vendégpáros**. Egy szezon egy kör:
+mindenki **egyszer** házigazda, és csapatonként **max. 2** vendégség.
+
+**⚠️ A keret PONTOSAN kifogy, ezért a vak húzás elakad.** N csapat → N este × 2 =
+2N vendéghely, és N × 2 = 2N vendégjegy, tehát mindenki PONTOSAN 2-szer vendég. A
+véletlen „húzz a maradékból" módszer az utolsó estére gyakran csak a házigazda SAJÁT
+jegyét hagyja meg → 1 vendég. Mérve: 5 csapatnál a vak húzás a szezonok **~46%-ában**
+akad el (`torta_draw_test` 1b — ez a kontroll, enélkül az 1. blokk akkor is zöld lenne,
+ha a feladat eleve nem tudna elakadni).
+
+**A megoldás: `tortaFeasible(hosts, cap)`** — maximális folyam (forrás → hátralévő
+házigazda [2] → vendég [1, ha nem önmaga] → nyelő [maradék keret]). A `tortaDrawPick`
+a házigazdát szabadon húzza (a hátralévők úgyis mind sorra kerülnek), a vendégpárt
+viszont CSAK azok közül, amelyek után a maradék még kiosztható. Ha már a felvett
+alkalmak zsákutcát okoztak, a `tortaDrawBlocker` „Zsákutca" hibát ad — 1 vendéget soha.
+
+**Felület:**
+- „🎲 Sorsolás" kártya a Tortán képernyőn → **admin PIN** (ugyanaz a `config/adminPin`
+  és `boh_admin_ok`, mint az Admin felületen; a telefon megjegyzi) → panel a csapatok
+  állásával (🏠 volt-e házigazda, 🍽️ n/2 vendégség).
+- **Próba húzás**: csak az adott telefonon, NEM ír semmit.
+- **Éles sorsolás**: az eredmény AZONNAL eldől és a `config/tortaDraw`-ba kerül
+  (`{ id, hostId, guestIds, hostPool, guestPool, startedAt, status:'pending' }`) —
+  minden telefon ugyanazt animálja. Az animáció csak lejátssza; a tárcsa sorrendje és a
+  keverés a `draw.id`-ből seedelt (`tortaSeeded`), így mindenhol ugyanaz a mozdulat.
+- **Az „Elfogadom"** új alkalmat fűz a `bingoConfig.tortaEvenings` végére (`date:''`
+  → „Időpont később", az admin utána állítja be), a draw → `accepted`. Előtte ÚJRA
+  ellenőriz: ha közben kézzel változtak az alkalmak, „elavult" hibát ad.
+  **„Újrasorsolás"** = új húzás új azonosítóval.
+
+Amit könnyű elrontani:
+- **Ki lássa az animációt?** Az ELSŐ pillanatképben érkező függő húzást NEM animáljuk
+  (`drawInitRef`) — az már megtörtént, a később nyitó rögtön az eredményt kapja. Csak a
+  menet közben beérkező húzás animál. Ez óra-eltérés-független (nem `startedAt`-ot
+  hasonlít a helyi órához).
+- **A kártyán NINCS csapatnév** (tulajdonosi kérés) — `TortaPairCard` a két tag nevét és
+  avatarját mutatja.
+- **`TortaDrawShow` / `TortaPairCard` / `TortaAv` modul-szintű** (v10.335 — a törzsben
+  minden render újramountolná az animációt).
+- ⚠️ A Firestore-szabályoknak a `config/tortaDraw` írását is engedniük kell.
+- ⚠️ Az `AdminBingo` a saját szerkesztő-állapotából menti a `tortaEvenings`-t: ha az admin
+  felület nyitva volt a sorsolás elfogadásakor, egy ottani mentés felülírhatja — sorsolás
+  után az admin lapot újra kell nyitni.
+
+Teszt: `node tests/torta_draw_test.js` — 3…8 csapattal 400-400 teljes szezon (mind
+szabályos), a vak húzás kontrollja, kézzel elrontott állás, PIN, próba (nem ment), éles
+sorsolás + elfogadás (az animáció PONTOSAN a mentett húzást mutatja), késői megnyitás
+animáció nélkül, újrasorsolás, zsákutca a panelen.

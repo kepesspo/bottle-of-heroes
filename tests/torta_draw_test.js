@@ -1,0 +1,179 @@
+// v10.404 — DNR a tortán: SORSOLÁS (zsákutca-mentes húzás + animált show)
+//
+// Szabályok: egy szezon = egy kör; minden csapat PONTOSAN egyszer házigazda, estéként
+// 2 vendégpáros (soha nem 1), és egy csapat legfeljebb 2-szer megy vendégségbe.
+//
+// Fogódzók:
+//  1) LOGIKA — 3…8 csapattal sok ezer teljes szezont végigsorsol: soha nincs hiba,
+//     mindenki 1× házigazda, mindenki PONTOSAN 2× vendég, mindig 2 vendég, nem önmaga
+//  1b) KONTROLL — a vak (ellenőrzés nélküli) húzás 5 csapatnál TÉNYLEG zsákutcába fut
+//     néha; enélkül az 1) akkor is zöld lenne, ha a feladat eleve nem tudna elakadni
+//  1c) egy kézzel elrontott állás (az utolsó házigazdához csak a saját jegye maradt)
+//     → a sorsolás „Zsákutca" hibát ad, nem húz 1 vendéget
+//  2) FELÜLET — a Sorsolás gomb admin PIN-t kér (hibás PIN → nem enged)
+//  3) Próba húzás: lefut az animáció (tárcsa → házigazda → 2 vendég felfordul), és
+//     SEMMI nem kerül a store-ba
+//  4) Éles sorsolás: config/tortaDraw pending, az „Elfogadom" új alkalmat ír a
+//     tortaEvenings-be (a húzott házigazdával és 2 vendéggel), a draw → accepted
+//  5) aki később nyit rá egy függő húzásra, animáció nélkül, rögtön az eredményt látja
+//  6) zsákutcás állásnál a panel kiírja a hibát, a gombok tiltva
+const { chromium } = require('/opt/node22/lib/node_modules/playwright');
+const fs = require('fs');
+const ROOT = '/home/user/bottle-of-heroes';
+const stub = fs.readFileSync(ROOT + '/tests/fbstub.js', 'utf8');
+let fail = 0;
+const ok = (c, l, e) => { console.log((c ? '  OK   ' : '  HIBA ') + l + (e !== undefined ? '  → ' + e : '')); if (!c) fail++; };
+
+const PROFILES = Array.from({ length: 10 }, (_, i) => ({ id: 'p' + i, name: ['Sere','Kecsi','Vivi','Robi','Luca','Béla','Anna','Gergő','Dóri','Máté'][i], color: '#5BA0DB' }));
+const TEAMS = [0, 1, 2, 3, 4].map(i => ({ id: 't' + 'ABCDE'[i], name: 'Csapat ' + 'ABCDE'[i], members: ['p' + (2 * i), 'p' + (2 * i + 1)] }));
+const CFG = { enabled: true, mode: 'torta', tortaTitle: 'DNR a tortán', tippRequireCode: false, tortaTeams: TEAMS, tortaEvenings: [] };
+const store = (p, doc) => p.evaluate(d => JSON.parse(JSON.stringify(((window.__fbStore['config'] || {})[d]) || null)), doc);
+const click = (p, sel) => p.evaluate(s => { const b = document.querySelector(s); if (!b) return false; b.click(); return true; }, sel);
+const setInput = (p, sel, v) => p.evaluate(({ s, v }) => { const i = document.querySelector(s); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, v); i.dispatchEvent(new Event('input', { bubbles: true })); }, { s: sel, v });
+const waitPhase = async (p, ph, ms) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if ((await p.evaluate(() => { const d = document.querySelector('[data-torta-draw]'); return d ? d.getAttribute('data-torta-phase') : null; })) === ph) return true; await p.waitForTimeout(150); } return false; };
+const mount = (p) => p.evaluate(() => { window.__bRoot.render(React.createElement(BingoScreen, { key: 'k' + Math.random(), go: () => {}, deepLink: true })); });
+
+(async () => {
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const p = await b.newPage({ viewport: { width: 402, height: 1400 } });
+  const errs = []; p.on('pageerror', e => { if (!/ServiceWorker/.test(e.message)) errs.push(e.message); });
+  await p.route('**://**', r => r.request().url().startsWith('file://') ? r.continue() : r.abort());
+  await p.addInitScript(stub);
+  await p.addInitScript(`try{localStorage.setItem('boh_onboarded','1');localStorage.setItem('boh_splash','0');localStorage.setItem('boh_bingo_who','p0');localStorage.removeItem('boh_admin_ok');}catch(e){}`);
+  await p.goto('file://' + ROOT + '/index.html', { waitUntil: 'domcontentloaded' });
+  await p.waitForTimeout(3200);
+
+  // ── 1. LOGIKA ──
+  console.log('\n===== 1. LOGIKA — TELJES SZEZONOK =====');
+  const sim = await p.evaluate(() => {
+    const out = {};
+    for (let n = 3; n <= 8; n++) {
+      const teams = Array.from({ length: n }, (_, i) => ({ id: 'T' + i, members: [] }));
+      let bad = 0, runs = 0;
+      for (let k = 0; k < 400; k++) {
+        runs++;
+        const evs = [];
+        for (let e = 0; e < n; e++) {
+          const r = tortaDrawPick(teams, evs);
+          if (r.error || r.guestIds.length !== 2 || r.guestIds.includes(r.hostId) || r.guestIds[0] === r.guestIds[1]) { bad++; break; }
+          evs.push({ id: 'e' + e, hostId: r.hostId, guestIds: r.guestIds });
+        }
+        const hostCnt = {}, gCnt = {};
+        evs.forEach(ev => { hostCnt[ev.hostId] = (hostCnt[ev.hostId] || 0) + 1; ev.guestIds.forEach(g => gCnt[g] = (gCnt[g] || 0) + 1); });
+        if (evs.length !== n || teams.some(t => hostCnt[t.id] !== 1 || gCnt[t.id] !== 2)) bad++;
+        if (!tortaDrawPick(teams, evs).error) bad++;   // a szezon végén nincs több húzás
+      }
+      out[n] = { runs, bad };
+    }
+    return out;
+  });
+  Object.keys(sim).forEach(n => ok(sim[n].bad === 0, `⚠️ ${n} csapat: ${sim[n].runs} szezon, mind szabályos (1× házigazda, pontosan 2× vendég, mindig 2 vendég)`, JSON.stringify(sim[n])));
+
+  console.log('\n===== 1b. KONTROLL — VAK HÚZÁS ELAKAD =====');
+  const naive = await p.evaluate(() => {
+    let stuck = 0; const N = 2000, ids = ['A','B','C','D','E'];
+    for (let k = 0; k < N; k++) {
+      const hosts = ids.slice().sort(() => Math.random() - 0.5); const cap = { A:2, B:2, C:2, D:2, E:2 };
+      for (const h of hosts) {
+        const pool = ids.filter(g => g !== h && cap[g] > 0).sort(() => Math.random() - 0.5);
+        if (pool.length < 2) { stuck++; break; }
+        cap[pool[0]]--; cap[pool[1]]--;
+      }
+    }
+    return { stuck, N };
+  });
+  ok(naive.stuck > 0, 'a vak húzás 5 csapatnál TÉNYLEG elakad néha (a probléma valós)', `${naive.stuck}/${naive.N} szezon`);
+
+  console.log('\n===== 1c. ZSÁKUTCÁS ÁLLÁS =====');
+  const dead = await p.evaluate(teams => {
+    // A–D már házigazda volt, és A–D mind 2× vendég → E-hez csak E jegye maradna
+    const evs = [
+      { hostId:'tA', guestIds:['tB','tC'] }, { hostId:'tB', guestIds:['tC','tD'] },
+      { hostId:'tC', guestIds:['tD','tA'] }, { hostId:'tD', guestIds:['tA','tB'] },
+    ];
+    return tortaDrawPick(teams, evs);
+  }, TEAMS);
+  ok(dead.error && /Zsákutca/.test(dead.error), '⚠️ elrontott állásnál „Zsákutca" hiba, NEM 1 vendég', JSON.stringify(dead).slice(0, 90));
+
+  // ── FELÜLET ──
+  await p.evaluate(({ profiles, cfg }) => {
+    window.__fbStore['config'] = Object.assign(window.__fbStore['config'] || {}, { bingoConfig: JSON.parse(JSON.stringify(cfg)) });
+    window.getProfiles = () => Promise.resolve(profiles);
+    window.getAdminPin = () => Promise.resolve('1234');
+    const r0 = document.getElementById('root'); if (r0) r0.style.display = 'none';
+    const d = document.createElement('div'); d.id = '__b';
+    d.style.cssText = 'position:absolute;left:0;top:0;width:402px;height:1400px;overflow:auto;z-index:9;background:#fff;display:flex;flex-direction:column';
+    document.body.appendChild(d);
+    window.__bRoot = ReactDOM.createRoot(d);
+  }, { profiles: PROFILES, cfg: CFG });
+  await mount(p); await p.waitForTimeout(900);
+
+  console.log('\n===== 2. ADMIN PIN =====');
+  ok(await click(p, '[data-torta-drawbtn]'), 'a Sorsolás gomb ott van a Tortán képernyőn');
+  await p.waitForTimeout(400);
+  ok(await p.evaluate(() => !!document.querySelector('[data-torta-pin]')), '⚠️ PIN-t kér');
+  await setInput(p, '[data-torta-pin]', '0000'); await click(p, '[data-torta-pinok]'); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => !!document.querySelector('[data-torta-pin]') && !document.querySelector('[data-torta-livebtn]')), 'hibás PIN-nel NEM enged tovább');
+  await setInput(p, '[data-torta-pin]', '1234'); await click(p, '[data-torta-pinok]'); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => document.querySelectorAll('[data-torta-drawstate]').length === 5), 'helyes PIN → a panel mind az 5 csapat állását mutatja');
+
+  console.log('\n===== 3. PRÓBA HÚZÁS =====');
+  await click(p, '[data-torta-practicebtn]');
+  await p.waitForTimeout(300);
+  ok(await p.evaluate(() => { const d = document.querySelector('[data-torta-draw]'); return d && d.getAttribute('data-torta-draw') === 'practice' && !!document.querySelector('[data-torta-practice]'); }), 'a próba-show elindul, PRÓBA címkével');
+  ok(await waitPhase(p, 'reel', 1500), 'pörög a házigazda-tárcsa');
+  ok(await waitPhase(p, 'host', 5000), 'a tárcsa megáll a házigazdán');
+  ok(await waitPhase(p, 'done', 9000), 'a vendégek is kijönnek (done)');
+  const pr = await p.evaluate(() => ({ host: (document.querySelector('[data-torta-host]') || {}).getAttribute && document.querySelector('[data-torta-host]').getAttribute('data-torta-host'), open: [...document.querySelectorAll('[data-torta-gcard][data-open="1"]')].map(x => x.getAttribute('data-torta-gcard')), hostTxt: (document.querySelector('[data-torta-host]') || {}).innerText || '' }));
+  ok(pr.open.length === 2 && !pr.open.includes(pr.host), '⚠️ pontosan 2 vendégkártya fordult fel, és nem a házigazda', JSON.stringify(pr.open) + ' / ' + pr.host);
+  ok(!/Csapat [A-E]/.test(pr.hostTxt) && /&/.test(pr.hostTxt), 'a házigazda-kártyán NINCS csapatnév, csak a két tag neve', pr.hostTxt.replace(/\s+/g, ' '));
+  ok((await store(p, 'tortaDraw')) === null && ((await store(p, 'bingoConfig')).tortaEvenings || []).length === 0, '⚠️ a próba SEMMIT nem mentett');
+  await p.evaluate(() => { const b = [...document.querySelectorAll('[data-torta-draw] button')].find(x => x.textContent.trim() === 'Bezárás'); b && b.click(); });
+  await p.waitForTimeout(300);
+  ok(await p.evaluate(() => !document.querySelector('[data-torta-draw]')), 'a próba bezárható');
+
+  console.log('\n===== 4. ÉLES SORSOLÁS + ELFOGADÁS =====');
+  await click(p, '[data-torta-drawbtn]'); await p.waitForTimeout(400);
+  ok(await p.evaluate(() => !document.querySelector('[data-torta-pin]')), 'ezen a telefonon a PIN már megvolt — nem kéri újra');
+  await click(p, '[data-torta-livebtn]'); await p.waitForTimeout(400);
+  const d1 = await store(p, 'tortaDraw');
+  ok(d1 && d1.status === 'pending' && d1.guestIds.length === 2, '⚠️ a húzás a config/tortaDraw-ba került (pending, 2 vendég)', JSON.stringify(d1 && { h: d1.hostId, g: d1.guestIds, s: d1.status }));
+  ok(await p.evaluate(() => (document.querySelector('[data-torta-draw]') || {}).getAttribute && document.querySelector('[data-torta-draw]').getAttribute('data-torta-draw') === 'live'), 'az éles show elindul');
+  ok(await waitPhase(p, 'done', 11000), 'az éles show végigfut');
+  const shown = await p.evaluate(() => ({ host: document.querySelector('[data-torta-host]').getAttribute('data-torta-host'), open: [...document.querySelectorAll('[data-torta-gcard][data-open="1"]')].map(x => x.getAttribute('data-torta-gcard')).sort() }));
+  ok(shown.host === d1.hostId && shown.open.join() === d1.guestIds.slice().sort().join(), '⚠️ az animáció PONTOSAN a mentett húzást mutatja', JSON.stringify(shown));
+  ok(await click(p, '[data-torta-accept]'), 'az admin „Elfogadom"-ot nyom');
+  await p.waitForTimeout(500);
+  const cfg1 = await store(p, 'bingoConfig'); const d2 = await store(p, 'tortaDraw');
+  const ev = (cfg1.tortaEvenings || [])[0] || {};
+  ok(cfg1.tortaEvenings.length === 1 && ev.hostId === d1.hostId && JSON.stringify(ev.guestIds) === JSON.stringify(d1.guestIds), '⚠️ új alkalom a tortaEvenings-ben a húzott felállással', JSON.stringify(ev));
+  ok(d2.status === 'accepted', 'a húzás „accepted" lett', d2.status);
+  ok(await p.evaluate(() => !document.querySelector('[data-torta-draw]')), 'a show bezárult');
+
+  console.log('\n===== 5. KÉSŐBB NYITÓ TELEFON — NINCS ANIMÁCIÓ =====');
+  await p.evaluate(() => { try { localStorage.removeItem('boh_torta_draw_seen'); } catch(e) {}
+    window.__fbStore['config'].tortaDraw = { id: 'dLATE', hostId: 'tB', guestIds: ['tC', 'tD'], hostPool: ['tB','tC','tD','tE'], guestPool: ['tA','tC','tD','tE'], startedAt: Date.now() - 60000, status: 'pending' }; });
+  await mount(p); await p.waitForTimeout(800);
+  const late = await p.evaluate(() => { const d = document.querySelector('[data-torta-draw]'); return d ? { ph: d.getAttribute('data-torta-phase'), open: document.querySelectorAll('[data-torta-gcard][data-open="1"]').length } : null; });
+  ok(late && late.ph === 'done' && late.open === 2, '⚠️ a függő húzás rögtön eredményként jön fel (nincs újrajátszott sorsolás)', JSON.stringify(late));
+  await p.evaluate(() => { const b = [...document.querySelectorAll('[data-torta-draw] button')].find(x => /Újrasorsolás/.test(x.textContent)); b && b.click(); });
+  await p.waitForTimeout(400);
+  const d3 = await store(p, 'tortaDraw');
+  ok(d3.id !== 'dLATE' && d3.status === 'pending', 'Újrasorsolás → új húzás (új azonosító)', d3.id);
+  ok(await p.evaluate(() => { const d = document.querySelector('[data-torta-draw]'); return d && d.getAttribute('data-torta-phase') !== 'done'; }), 'az újrasorsolás újra animál');
+
+  console.log('\n===== 6. ZSÁKUTCA A FELÜLETEN =====');
+  await p.evaluate(() => { window.__fbStore['config'].tortaDraw = null;
+    window.__fbStore['config'].bingoConfig.tortaEvenings = [
+      { id:'x1', hostId:'tA', guestIds:['tB','tC'] }, { id:'x2', hostId:'tB', guestIds:['tC','tD'] },
+      { id:'x3', hostId:'tC', guestIds:['tD','tA'] }, { id:'x4', hostId:'tD', guestIds:['tA','tB'] } ]; });
+  await mount(p); await p.waitForTimeout(800);
+  await click(p, '[data-torta-drawbtn]'); await p.waitForTimeout(400);
+  const blk = await p.evaluate(() => ({ err: (document.querySelector('[data-torta-drawerr]') || {}).innerText || '', dis: document.querySelector('[data-torta-livebtn]').disabled && document.querySelector('[data-torta-practicebtn]').disabled }));
+  ok(/Zsákutca/.test(blk.err) && blk.dis, '⚠️ a panel kiírja a zsákutcát, mindkét gomb tiltva', blk.err.slice(0, 60));
+
+  ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
+  await b.close();
+  console.log(fail ? '\n❌ ' + fail + ' HIBA' : '\n✅ MINDEN ELLENORZES RENDBEN');
+  process.exit(fail ? 1 : 0);
+})().catch(e => { console.error('CRASH', e); process.exit(1); });
