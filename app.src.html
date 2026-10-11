@@ -35239,7 +35239,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.419';
+const APP_VERSION = 'v10.420';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -38473,18 +38473,33 @@ ${S} input[type=checkbox], ${S} input[type=radio] { accent-color:${T.mint}; widt
 `;
 }
 function AdminScreen({ go, setTheme, currentTheme }) {
+  // v10.420: APPOK szerint kategorizálva (tulajdonosi kérés). Az „Általános" az, ami
+  // MINDEN appot érint (profilok, hirdetmény, a központ kapcsolói, rendszer); utána az
+  // appok a központ sorrendjében. Egy-fülű appnál az oldalsávon nincs al-elem: maga
+  // az app sora a gomb. (Belül marad, mert a TORTA_LOGO később deklarált const.)
   const CATEGORIES = [
-    { key:'content', label:'Tartalom', tabs:[
-      ['profiles','Profilok'],['events','Események'],['feladatok','Feladatok'],
+    { key:'general', label:'Általános', tabs:[
+      ['profiles','Profilok'],['message','Hirdetmény'],['hub','DNR központ'],['settings','Rendszer'],['growth','Növekedés'],['feladatok','Fejlesztés'],
     ]},
-    { key:'game', label:'Játék', tabs:[
-      ['games','Játékok'],['wildcards','Wildcard'],['xp','XP & Szint'],['bingo','Bingó'],['tipp','Tipp'],['torta','Tortán'],
+    { key:'games', label:'DNR Games', icon:'assets/dnr_games_icon.png', zoom:1.25, tabs:[
+      ['games','Játékok'],['wildcards','Wildcard'],['partik','Partik'],['rooms','Szobák'],['zene','Zene'],['gamesSettings','Beállítások'],
     ]},
-    { key:'system', label:'Rendszer', tabs:[
-      ['growth','Növekedés'],['stats','Statisztika'],['partik','Partik'],['seasons','Szezonok'],['zene','Zene'],['rooms','Szobák'],['message','Hirdetmény'],['settings','Beállítások'],
-    ]},
+    { key:'events', label:'DNR Events', icon:'assets/dnr_events_icon.png', zoom:1.9, tabs:[['events','Események'],['eventsTheme','Téma']] },
+    { key:'torta', label:'DNR a tortán', icon:TORTA_LOGO, tabs:[['torta','DNR a tortán']] },
+    { key:'tipp', label:'DNR Tipp', icon:'assets/dnr_tipp_icon.png', zoom:1.9, tabs:[['tipp','DNR Tipp']] },
+    { key:'bingo', label:'DNR Bingó', icon:'assets/dnr_bingo_icon.png', zoom:1.9, tabs:[['bingo','DNR Bingó']] },
+    { key:'box', label:'DNR BOX', icon:'assets/dnr_box_icon.png', tabs:[['boxTheme','Téma']] },
+    { key:'pub', label:'DNR Pub', icon:'assets/dnr_pub_icon.png', zoom:1.9, tabs:[['pubTheme','Téma']] },
+    { key:'liga', label:'DNR Liga', icon:'assets/dnr_liga_icon.png', zoom:1.9, tabs:[['seasons','Szezonok'],['stats','Statisztika'],['xp','XP & Szint']] },
   ];
-  const [category, setCategory] = React.useState('content');
+  // A négyzetes app-ikonokon a rajz a kép közepén ül, nagy fehér margóval — kicsiben
+  // alig látszana, ezért a `zoom` rávág (a kerek Tortán/BOX logó kitölti a helyét).
+  const catIcon = (c, size) => c.icon
+    ? <span style={{ position:'relative', width:size, height:size, borderRadius:'28%', overflow:'hidden', background:'#fff', flexShrink:0, display:'inline-block' }}>
+        <img src={c.icon} alt="" style={{ position:'absolute', left:'50%', top:'50%', transform:'translate(-50%, -50%)', width:size * (c.zoom || 1), height:size * (c.zoom || 1), maxWidth:'none', objectFit:'contain' }} />
+      </span>
+    : <span style={{ width:size, height:size, borderRadius:'28%', background:DNR_HUB_INK, color:'#fff', display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:Math.round(size * 0.34), letterSpacing:'0.02em', flexShrink:0 }}>DNR</span>;
+  const [category, setCategory] = React.useState('general');
   const [tab, setTab] = React.useState('profiles');
   const activeCategory = CATEGORIES.find(c => c.key === category) || CATEGORIES[0];
   // v10.415: széles kijelzőn (web) oldalsáv + KESKENY tartalom-oszlop. Eddig minden
@@ -38546,11 +38561,16 @@ function AdminScreen({ go, setTheme, currentTheme }) {
         {tab === 'growth'   && <AdminGrowth />}
         {tab === 'stats'    && <AdminStats />}
         {tab === 'partik'   && <AdminParties />}
-        {tab === 'seasons'  && <AdminSeasons />}
+        {tab === 'seasons'  && <React.Fragment><AdminSeasons /><div style={{ padding:'0 16px 16px' }}><AdminHomeToggles only="season" /></div></React.Fragment>}
         {tab === 'zene'     && <AdminZene />}
         {tab === 'rooms'    && <AdminRooms />}
         {tab === 'message'  && <AdminMessage />}
-        {tab === 'settings' && <AdminSettings setTheme={setTheme} currentTheme={currentTheme} />}
+        {tab === 'hub'      && <div style={{ padding:'2px 16px 16px' }}><AdminHomeToggles only="hub" /></div>}
+        {tab === 'settings' && <AdminSettings />}
+        {tab === 'gamesSettings' && <AdminGamesSettings setTheme={setTheme} currentTheme={currentTheme} />}
+        {tab === 'eventsTheme' && <AdminAppTheme app="events" />}
+        {tab === 'pubTheme'    && <AdminAppTheme app="pub" />}
+        {tab === 'boxTheme'    && <AdminAppTheme app="box" />}
     </React.Fragment>
   );
   return (
@@ -38563,15 +38583,28 @@ function AdminScreen({ go, setTheme, currentTheme }) {
              között 2000 px-en ~500 px üres rés maradt. Az oldalsáv sticky, a lap görget. */}
          <div style={{ display:'flex', alignItems:'flex-start', maxWidth:236 + ADMIN_BODY_MAX + 24, margin:'0 auto', padding:'0 12px', boxSizing:'border-box' }}>
           {/* Oldalsáv: a három kategória fejléc, alattuk a fülek — egy pillantásra minden */}
-          <nav data-admin-nav aria-label="Admin menü" style={{ position:'sticky', top:0, width:236, flexShrink:0, padding:'18px 10px 32px 8px', boxSizing:'border-box', display:'flex', flexDirection:'column', gap:18 }}>
-            {CATEGORIES.map(c => (
-              <div key={c.key} style={{ display:'flex', flexDirection:'column', gap:2 }}>
-                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:11, letterSpacing:'0.14em', textTransform:'uppercase', color:T.inkSoft, padding:'0 12px 6px' }}>{c.label}</div>
+          <nav data-admin-nav aria-label="Admin menü" style={{ position:'sticky', top:0, maxHeight:'calc(var(--app-h, 100dvh) - 80px)', overflowY:'auto', scrollbarWidth:'thin', width:236, flexShrink:0, padding:'18px 10px 32px 8px', boxSizing:'border-box', display:'flex', flexDirection:'column', gap:14 }}>
+            {CATEGORIES.map(c => c.tabs.length === 1 ? (() => {
+              const k = c.tabs[0][0], on = tab === k;
+              return (
+                <button key={c.key} data-admin-tab={k} data-admin-cat={c.key} aria-current={on ? 'page' : undefined} onClick={() => { setCategory(c.key); setTab(k); }}
+                  style={{ display:'flex', alignItems:'center', gap:10, textAlign:'left', padding:'7px 12px 7px 8px', margin:'-7px 0', borderRadius:12, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:13.5, background: on ? T.surface : 'transparent', color:T.ink, boxShadow: on ? T.shadowPill : 'none' }}>
+                  {catIcon(c, 28)}
+                  <span style={{ flex:1, minWidth:0 }}>{c.label}</span>
+                  {on && <span style={{ width:4, height:16, borderRadius:2, background:T.mint, flexShrink:0 }} />}
+                </button>
+              );
+            })() : (
+              <div key={c.key} data-admin-cat={c.key} style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, fontFamily:T.font, fontWeight:900, fontSize:13.5, color:T.ink, padding:'0 12px 6px 8px' }}>
+                  {catIcon(c, 28)}
+                  <span>{c.label}</span>
+                </div>
                 {c.tabs.map(([k, label]) => {
                   const on = tab === k;
                   return (
                     <button key={k} data-admin-tab={k} aria-current={on ? 'page' : undefined} onClick={() => { setCategory(c.key); setTab(k); }}
-                      style={{ textAlign:'left', padding:'9px 12px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight: on ? 900 : 700, fontSize:14, background: on ? T.surface : 'transparent', color: on ? T.ink : T.inkSoft, boxShadow: on ? (T.shadowPill || T.shadow) : 'none', display:'flex', alignItems:'center', gap:8, WebkitTapHighlightColor:'transparent' }}>
+                      style={{ textAlign:'left', padding:'7px 12px 7px 30px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight: on ? 900 : 700, fontSize:13.5, background: on ? T.surface : 'transparent', color: on ? T.ink : T.inkSoft, boxShadow: on ? (T.shadowPill || T.shadow) : 'none', display:'flex', alignItems:'center', gap:8, WebkitTapHighlightColor:'transparent' }}>
                       <span style={{ width:4, height:16, borderRadius:2, background: on ? T.mint : 'transparent', flexShrink:0 }} />
                       {label}
                     </button>
@@ -38581,26 +38614,32 @@ function AdminScreen({ go, setTheme, currentTheme }) {
             ))}
           </nav>
           <div data-admin-body style={{ flex:1, minWidth:0, maxWidth:ADMIN_BODY_MAX, padding:'10px 0 48px', boxSizing:'border-box' }}>
-            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, padding:'8px 16px 4px' }}>{(activeCategory.tabs.find(([k]) => k === tab) || [])[1]}</div>
+            <div data-admin-title style={{ display:'flex', alignItems:'center', gap:12, fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, padding:'8px 16px 4px' }}>
+              {catIcon(activeCategory, 34)}
+              <span>{activeCategory.tabs.length === 1 ? activeCategory.label : <React.Fragment><span style={{ color:T.inkSoft }}>{activeCategory.label} · </span>{(activeCategory.tabs.find(([k]) => k === tab) || [])[1]}</React.Fragment>}</span>
+            </div>
             {adminBody}
           </div>
          </div>
         </div>
       ) : (
         <React.Fragment>
-        {/* Fix kategória-sáv — mindig 3 elem, nem görgethető */}
+        {/* App-sáv (v10.420): kilenc kategória nem fér egy sorba — vízszintesen görget,
+            minden app az ikonjával. A kiválasztott kártya tömör menta. */}
         <div style={{ padding:'10px 16px 0', width:'100%', maxWidth:ADMIN_BODY_MAX, margin:'0 auto', boxSizing:'border-box' }}>
-          <div style={{ display:'flex', background:T.surface, borderRadius:16, padding:4, gap:4, boxShadow:T.shadow }}>
+          <div data-admin-catbar style={{ display:'flex', background:T.surface, borderRadius:16, padding:4, gap:4, boxShadow:T.shadow, overflowX:'scroll', scrollbarWidth:'none', WebkitOverflowScrolling:'touch' }}>
             {CATEGORIES.map(c => (
-              <button key={c.key} onClick={() => selectCategory(c.key)} style={{ flex:1, padding:'10px 0', borderRadius:12, border:'none', fontFamily:T.font, fontWeight:900, fontSize:13.5, cursor:'pointer', background: category===c.key ? T.mint : 'transparent', color: category===c.key ? '#fff' : T.inkSoft, transition:'all .2s', WebkitTapHighlightColor:'transparent' }}>
+              <button key={c.key} data-admin-cat={c.key} onClick={e => { selectCategory(c.key); try { e.currentTarget.scrollIntoView({ inline:'center', block:'nearest', behavior:'smooth' }); } catch(err) {} }} style={{ flexShrink:0, display:'flex', alignItems:'center', gap:7, whiteSpace:'nowrap', padding:'7px 12px 7px 7px', borderRadius:12, border:'none', fontFamily:T.font, fontWeight:900, fontSize:13, cursor:'pointer', background: category===c.key ? T.mint : 'transparent', color: category===c.key ? '#fff' : T.inkSoft, transition:'all .2s', WebkitTapHighlightColor:'transparent' }}>
+                {catIcon(c, 26)}
                 {c.label}
               </button>
             ))}
           </div>
         </div>
-        {/* Dinamikus al-sáv — a kiválasztott kategória elemei, szükség esetén görgethető */}
+        {/* Dinamikus al-sáv — a kiválasztott app fülei; egy-fülű appnál nincs mit választani */}
+        {activeCategory.tabs.length > 1 ? (
         <div style={{ padding:'14px 16px 14px', width:'100%', maxWidth:ADMIN_BODY_MAX, margin:'0 auto', boxSizing:'border-box' }}>
-          <div style={{ display:'flex', gap:8, overflowX:'auto', WebkitOverflowScrolling:'touch', scrollbarWidth:'none', padding:'3px 2px 7px' }}>
+          <div data-admin-subtabs style={{ display:'flex', gap:8, overflowX:'auto', WebkitOverflowScrolling:'touch', scrollbarWidth:'none', padding:'3px 2px 7px' }}>
             {activeCategory.tabs.map(([k,label]) => (
               <button key={k} onClick={() => setTab(k)} style={{ flexShrink:0, padding:'9px 16px', borderRadius:999, border:'none', fontFamily:T.font, fontWeight:800, fontSize:12.5, cursor:'pointer', background: tab===k ? T.mint : T.surface, color: tab===k ? '#fff' : T.inkSoft, boxShadow: tab===k ? 'none' : (T.shadowPill || T.shadow), transition:'all .2s', WebkitTapHighlightColor:'transparent', whiteSpace:'nowrap' }}>
                 {label}
@@ -38608,6 +38647,7 @@ function AdminScreen({ go, setTheme, currentTheme }) {
             ))}
           </div>
         </div>
+        ) : <div style={{ height:8, flexShrink:0 }} />}
           <div style={{ flex:1, overflowY:'auto' }}>
             <div data-admin-body style={{ maxWidth:ADMIN_BODY_MAX, margin:'0 auto' }}>{adminBody}</div>
           </div>
@@ -39878,18 +39918,34 @@ function ThemeSelector({ title, urlHint, getFn, setFn, onFn, cacheKey, defaultKe
   );
 }
 
-function AdminSettings({ setTheme, currentTheme }) {
+// v10.420: az admin APPOK szerint kategorizált. Itt csak az marad, ami MINDEN appot
+// érint (admin PIN, kényszerített frissítés); a témák és az app-specifikus kapcsolók
+// a saját appjuk kategóriájába költöztek (AdminAppTheme, AdminGamesSettings, Szezonok).
+const ADMIN_APP_THEMES = {
+  events: { title:'Events témája', urlHint:'?screen=events', get:'getEventsTheme', set:'setEventsTheme', on:'onEventsTheme', cacheKey:'boh_events_theme', defaultKey:'ice' },
+  pub:    { title:'Pub témája',    urlHint:'?screen=bar',    get:'getBarTheme',    set:'setBarTheme',    on:'onBarTheme',    cacheKey:'boh_bar_theme',    defaultKey:'warm' },
+  box:    { title:'BOX témája',    urlHint:'?screen=dnrbox', get:'getBoxTheme',    set:'setBoxTheme',    on:'onBoxTheme',    cacheKey:'boh_dnrbox_theme', defaultKey:'warm' },
+};
+function AdminAppTheme({ app }) {
+  const c = ADMIN_APP_THEMES[app];
   return (
     <div style={{ padding:16 }}>
-      <ThemeSelector title="Események oldal témája" urlHint="?screen=events" getFn={window.getEventsTheme} setFn={window.setEventsTheme} onFn={window.onEventsTheme} cacheKey="boh_events_theme" defaultKey="ice" />
-      <ThemeSelector title="Pub oldal témája" urlHint="?screen=bar" getFn={window.getBarTheme} setFn={window.setBarTheme} onFn={window.onBarTheme} cacheKey="boh_bar_theme" defaultKey="warm" />
-      <ThemeSelector title="Box oldal témája" urlHint="?screen=dnrbox" getFn={window.getBoxTheme} setFn={window.setBoxTheme} onFn={window.onBoxTheme} cacheKey="boh_dnrbox_theme" defaultKey="warm" />
-
+      <ThemeSelector title={c.title} urlHint={c.urlHint} getFn={window[c.get]} setFn={window[c.set]} onFn={window[c.on]} cacheKey={c.cacheKey} defaultKey={c.defaultKey} />
+    </div>
+  );
+}
+function AdminGamesSettings({ setTheme, currentTheme }) {
+  return (
+    <div style={{ padding:16 }}>
+      <AdminHomeToggles only="setup" />
       {setTheme && <ThemeCyclerCard setTheme={setTheme} currentTheme={currentTheme} />}
-
+    </div>
+  );
+}
+function AdminSettings() {
+  return (
+    <div style={{ padding:16 }}>
       <AdminPinCard />
-
-      <AdminHomeToggles />
 
       <div style={{ background:T.surface, borderRadius:16, padding:16, boxShadow:T.shadow, marginTop:14 }}>
         <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:4 }}>Kényszerített frissítés</div>
@@ -40143,7 +40199,11 @@ function AdminGrowth() {
   );
 }
 
-function AdminHomeToggles() {
+// v10.420: az admin appok szerint kategorizált — a kártya három szakasza három
+// helyre megy: 'hub' (Általános → DNR központ), 'setup' (DNR Games → Beállítások),
+// 'season' (DNR Liga → Szezonok). `only` nélkül mind a három (régi hívók, tesztek).
+function AdminHomeToggles({ only } = {}) {
+  const show = k => !only || only === k;
   const bingoCfg = useBingoCfg();
   const [cfg, setCfg] = React.useState(null);
   const [loaded, setLoaded] = React.useState(false);
@@ -40163,13 +40223,14 @@ function AdminHomeToggles() {
   const set = (val) => write({ dnrAppsEnabled: val });
   return (
     <div style={{ background:T.surface, borderRadius:16, padding:16, boxShadow:T.shadow, marginTop:14 }}>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:4 }}>Főoldal</div>
-      <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginBottom:12 }}>Mi jelenjen meg a Bottle of Heroes főoldalán.</div>
+      {show('hub') && (<React.Fragment>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:4 }}>DNR központ</div>
+      <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginBottom:12 }}>Melyik app kártyája jelenjen meg a DNR központban (az app nyitóképernyőjén).</div>
       <div style={{ display:'flex', alignItems:'center', gap:12 }}>
         <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>„További DNR" gomb</div>
+          <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>DNR appok a központban</div>
           <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginTop:2 }}>
-            A főoldal alján a nyíllal jelzett felirat, ami a DNR appok listáját nyitja. Kikapcsolva a főoldalról a többi app nem érhető el.
+            Kikapcsolva a központban csak a DNR Games marad — ilyenkor az app egyenesen a Games-szel nyit.
           </div>
         </div>
         <Toggle on={on} onChange={() => set(!on)} />
@@ -40201,8 +40262,10 @@ function AdminHomeToggles() {
         </div>
       )}
 
-      <div style={{ height:1, background:`${T.inkMute}22`, margin:'14px 0' }} />
+      </React.Fragment>)}
+      {!only && <div style={{ height:1, background:`${T.inkMute}22`, margin:'14px 0' }} />}
 
+      {show('setup') && (<React.Fragment>
       <div style={{ display:'flex', alignItems:'center', gap:12 }}>
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>Játékmenet oldal</div>
@@ -40220,8 +40283,10 @@ function AdminHomeToggles() {
           : 'Játékosok → Játékok → Játék'}
       </div>
 
-      <div style={{ height:1, background:`${T.inkMute}22`, margin:'14px 0' }} />
+      </React.Fragment>)}
+      {!only && <div style={{ height:1, background:`${T.inkMute}22`, margin:'14px 0' }} />}
 
+      {show('season') && (<React.Fragment>
       <div style={{ fontFamily:T.font, fontWeight:700, fontSize:14, color:T.ink }}>Szezonzáró ablak</div>
       <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginTop:2, marginBottom:10 }}>
         A lezárult szezon győztesét mutató összefoglaló. Legfeljebb 2 héttel a szezon vége után jelenik meg.
@@ -40246,6 +40311,7 @@ function AdminHomeToggles() {
             ? 'Készülékenként egyszer, utána nem jön elő többé.'
             : 'Nem jelenik meg. A végeredmény a Ligában továbbra is megnézhető.'}
       </div>
+      </React.Fragment>)}
     </div>
   );
 }
@@ -40374,7 +40440,7 @@ function AdminMessage() {
     <div style={{ padding:'16px' }}>
       <div style={{ background:T.surface, borderRadius:16, padding:'16px', boxShadow:T.shadow }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink }}>Hirdetmény a főoldalon</div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink }}>Hirdetmény a DNR központban</div>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
             <div style={{ fontFamily:T.font, fontSize:12, color: active ? T.mint : T.sub, fontWeight:700 }}>{active ? 'Aktív' : 'Inaktív'}</div>
             <Toggle on={active} onToggle={() => setActive(v => !v)} sm />
@@ -44813,6 +44879,44 @@ function HubGreeting() {
     </div>
   );
 }
+// ── Hirdetmény (v10.420) ────────────────────────────────────────────────────
+// MINDEN appot érint, ezért a DNR KÖZPONTBAN áll (eddig a DNR Games főoldalán volt,
+// és aki egyenesen egy másik appot nyitott, sosem látta). A sáv bezárható: a bezárás
+// a TARTALOMRA szól (cím + szöveg), tehát egy új hirdetmény megint előjön.
+function useAnnouncement() {
+  const [a, setA] = React.useState(null);
+  React.useEffect(() => {
+    if (typeof window.onAnnouncement !== 'function') return;
+    const unsub = window.onAnnouncement(d => {
+      const ok = d && d.active && d.title && (!d.until || new Date(d.until + 'T23:59:59') >= new Date()) ? d : null;
+      if (ok && typeof window._bohAnnounceNotif === 'function') window._bohAnnounceNotif(ok);
+      setA(ok);
+    });
+    return () => { try { unsub(); } catch(e) {} };
+  }, []);
+  return a;
+}
+function HubAnnouncement() {
+  const a = useAnnouncement();
+  const key = a ? (a.title || '') + '|' + (a.body || '') : '';
+  const [closed, setClosed] = React.useState(() => { try { return localStorage.getItem('boh_ann_closed') || ''; } catch(e) { return ''; } });
+  if (!a || closed === key) return null;
+  const close = () => { setClosed(key); try { localStorage.setItem('boh_ann_closed', key); } catch(e) {} };
+  return (
+    <div data-hub-announcement role="status" style={{ flexShrink:0, display:'flex', alignItems:'flex-start', gap:10, background:T.accent, borderRadius:16, padding:'10px 8px 10px 14px', boxShadow:`0 4px 16px ${T.accent}55`, maxWidth:560, width:'100%', alignSelf:'center', boxSizing:'border-box' }}>
+      {/* a sablonok címe többnyire emojival indul — ott a 📣 dupla jel lenne */}
+      {!((a.title || '').codePointAt(0) > 0x2100) && <span aria-hidden="true" style={{ fontSize:18, lineHeight:1.2 }}>📣</span>}
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13.5, color:'#fff', lineHeight:1.3, display:'-webkit-box', WebkitLineClamp:1, WebkitBoxOrient:'vertical', overflow:'hidden', wordBreak:'break-word' }}>{a.title}</div>
+        {a.body && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:'rgba(255,255,255,0.92)', marginTop:2, lineHeight:1.35, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden', wordBreak:'break-word' }}>{a.body}</div>}
+      </div>
+      <button data-hub-announcement-close aria-label="Hirdetmény bezárása" onClick={close}
+        style={{ width:30, height:30, flexShrink:0, borderRadius:10, border:'none', background:'rgba(255,255,255,0.22)', color:'#fff', display:'grid', placeItems:'center', cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+  );
+}
 function DnrHubScreen({ onOpen }) {
   const bingoDoc = useBingoCfgDoc();
   const bingoCfg = bingoDoc.v;
@@ -44893,6 +44997,7 @@ function DnrHubScreen({ onOpen }) {
           </div>
           {adminPin && <AdminPinModal onClose={() => setAdminPin(false)} onOk={() => { setAdminPin(false); onOpen('admin'); }} />}
           <HubGreeting />
+          <HubAnnouncement />
 
             <React.Fragment>
               {/* ⚠️ A sáv NEM nyúlhat negatív margóval a nyíl-sor alá: a position:relative
@@ -44948,17 +45053,6 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
   const [splashOn, setSplashOn] = React.useState(() => localStorage.getItem('boh_splash') !== '0');
   const [sndOn, setSndOn] = React.useState(() => { try { return localStorage.getItem('boh_snd') !== '0'; } catch(e) { return true; } });
   const toggleSnd = () => { const n = !sndOn; setSndOn(n); try { localStorage.setItem('boh_snd', n ? '1' : '0'); } catch(e) {} if (n && typeof window.bohSound === 'function') window.bohSound('zsulli'); };
-  const [announcement, setAnnouncement] = React.useState(null);
-  React.useEffect(() => {
-    if (typeof window.onAnnouncement === 'function') {
-      const unsub = window.onAnnouncement(d => {
-        const ok = d && d.active && d.title && (!d.until || new Date(d.until + 'T23:59:59') >= new Date()) ? d : null;
-        if (ok && typeof window._bohAnnounceNotif === 'function') window._bohAnnounceNotif(ok);
-        setAnnouncement(ok);
-      });
-      return () => unsub();
-    }
-  }, []);
   const toggleSplash = () => {
     const next = !splashOn;
     setSplashOn(next);
@@ -45047,12 +45141,6 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
       <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', display:'flex', flexDirection:'column' }}>
       <div className="home-inner">
         <div className="home-brand">
-          {announcement && (
-            <div style={{ width:'100%', maxWidth:360, boxSizing:'border-box', background:T.accent, borderRadius:14, padding:'9px 14px', boxShadow:`0 4px 16px ${T.accent}66` }}>
-              <div style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', lineHeight:1.3, display:'-webkit-box', WebkitLineClamp:1, WebkitBoxOrient:'vertical', overflow:'hidden', wordBreak:'break-word' }}>{announcement.title}</div>
-              {announcement.body && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:'rgba(255,255,255,0.9)', marginTop:3, display:'-webkit-box', WebkitLineClamp:3, WebkitBoxOrient:'vertical', overflow:'hidden', wordBreak:'break-word' }}>{announcement.body}</div>}
-            </div>
-          )}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:9, marginBottom:2 }}>
             <span style={{ width:24, height:2, background:T.ink, opacity:0.22, borderRadius:2 }} />
             <span style={{ fontFamily:T.font, fontWeight:800, fontSize:14.5, letterSpacing:'0.24em', textTransform:'uppercase', color:T.ink }}>Parti<span style={{ color:T.mint }}>játékok</span></span>

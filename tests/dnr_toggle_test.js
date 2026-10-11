@@ -26,7 +26,10 @@ async function home(b, homeCfg) {
   p.__errs = errs;
   return p;
 }
-const hasRow = (p) => p.evaluate(() => /TOVÁBBI DNR/i.test(document.body.innerText));
+// v10.409 óta a „TOVÁBBI DNR" sor helyett a DNR KÖZPONT kártyái viszik a többi appot:
+// a kapcsoló BE → a Games mellett más app-kártya is áll; KI → csak a Games, és az app
+// egyenesen a Games főoldalával nyit. (A régi felirat-kereső v10.409 óta tartósan piros volt.)
+const hasRow = (p) => p.evaluate(() => [...document.querySelectorAll('[data-hub-card]')].some(c => c.getAttribute('data-hub-card') !== 'home'));
 
 (async () => {
   let fail = 0;
@@ -69,7 +72,7 @@ const hasRow = (p) => p.evaluate(() => /TOVÁBBI DNR/i.test(document.body.innerT
   });
   await p.waitForTimeout(900);
   const admTxt = await p.evaluate(() => document.getElementById('__adm').innerText);
-  ok('van "Főoldal" kartya a kapcsoloval', /Főoldal/.test(admTxt) && /További DNR/.test(admTxt), admTxt.replace(/\n/g, ' | ').slice(0, 120));
+  ok('van "DNR központ" kartya a kapcsoloval (v10.420)', /DNR központ/.test(admTxt) && /DNR appok a központban/.test(admTxt), admTxt.replace(/\n/g, ' | ').slice(0, 120));
   const toggleState = () => p.evaluate(() => {
     const t = document.querySelector('#__adm div[style*="border-radius: 16px"][style*="width: 52px"]') ||
       Array.from(document.querySelectorAll('#__adm div')).find(d => d.style.width === '52px' && d.style.height === '32px');

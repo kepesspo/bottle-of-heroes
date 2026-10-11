@@ -121,7 +121,8 @@ const view = p => p.evaluate(() => {
 
   console.log('\n===== 8. ADMIN: HÁROM KÜLÖN FÜL =====');
   const src = fs.readFileSync(ROOT + '/app.src.html', 'utf8');
-  ok(/\['bingo','Bingó'\],\['tipp','Tipp'\],\['torta','Tortán'\]/.test(src), 'az admin fülsorában külön Bingó / Tipp / Tortán');
+  // v10.420 óta mindhárom SAJÁT app-kategória az adminban (admin_apps_test méri a felületet)
+  ok(/key:'torta'[^\n]*tabs:\[\['torta'/.test(src) && /key:'tipp'[^\n]*tabs:\[\['tipp'/.test(src) && /key:'bingo'[^\n]*tabs:\[\['bingo'/.test(src), 'az adminban külön Bingó / Tipp / Tortán kategória');
   ok(/tab === 'tipp'\s+&& <AdminBingo key="tipp"\s+app="tipp"/.test(src) && /tab === 'torta' && <AdminBingo key="torta" app="torta"/.test(src), 'mindegyik fül a saját appjával mountolja a szerkesztőt');
   ok(!/data-bingo-mode=/.test(src), 'nincs többé mód-váltó gomb');
 

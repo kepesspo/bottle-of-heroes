@@ -3396,3 +3396,44 @@ vissza, apponkénti „Ki vagy?", apponkénti Alaphelyzet, admin fülek) és
 `tests/torta_home_test.js` (régi config = csak a Tortán, három sor a beállításokban,
 apponkénti kapcsoló, materializált `apps`). A `torta_test` / `torta_draw_test` már
 `app:'torta'`-val mountol; az `adminpress_test` 17 fület vár.
+
+## ⚠️ Admin: APPOK szerint kategorizálva + a Hirdetmény a DNR központban (v10.420)
+Tulajdonosi kérés: „a különböző appokra vonatkozó dolgok be legyenek kategorizálva,
+ami mindent érint, az legyen kivezetve — ilyen a Hirdetmény. Az most a játékban
+jelenik meg, ezt is ki kell vezetni."
+
+**A kategóriák** (`AdminScreen` `CATEGORIES`, a központ sorrendjében):
+| kategória | fülek |
+|---|---|
+| **Általános** (mindent érint) | Profilok · Hirdetmény · DNR központ · Rendszer · Növekedés · Fejlesztés |
+| DNR Games | Játékok · Wildcard · Partik · Szobák · Zene · Beállítások |
+| DNR Events | Események · Téma |
+| DNR a tortán / Tipp / Bingó | egy-egy fül (a szerkesztő) |
+| DNR BOX / Pub | Téma |
+| DNR Liga | Szezonok · Statisztika · XP & Szint |
+
+- **Egy-fülű appnál** az oldalsávon nincs „fejléc + al-elem" duplázás: maga az app
+  sora a gomb (`data-admin-tab` a fejlécen). Telefonon a kilenc app egy **görgethető
+  sáv** (`data-admin-catbar`), az al-fül sor (`data-admin-subtabs`) csak több fülnél van.
+- **Szétszedett kártyák:** a régi „Beállítások" mindent egy lapon vitt. Az
+  `AdminHomeToggles({ only })` három szakasza három helyre megy: `hub` (Általános →
+  DNR központ), `setup` (Games → Beállítások), `season` (Liga → Szezonok); `only`
+  nélkül mind a három (régi hívók). A témák az appjukhoz (`AdminAppTheme`), a
+  téma-pörgető a Games-hez (az a Games témája); a Rendszerben csak az admin PIN és a
+  kényszerített frissítés maradt.
+- Az app-ikonok négyzetes képén nagy a fehér margó — a `zoom` rávág, abszolút
+  középre igazítva (gridben a túllógó kép a bal felső sarokhoz igazodott).
+- ⚠️ A `CATEGORIES` a komponensen BELÜL marad: a `TORTA_LOGO` később deklarált `const`
+  — modul-szinten a betöltéskor TDZ-hibát dobna.
+
+**Hirdetmény → DNR központ.** Eddig a DNR Games főoldalán állt, tehát aki egyenesen
+egy másik appot nyitott, sosem látta. Most a központ köszöntése alatt
+(`HubAnnouncement`, `useAnnouncement`), a Games főoldaláról kikerült. **Bezárható**: a
+bezárás a TARTALOMRA szól (`boh_ann_closed` = cím|szöveg), tehát egy új hirdetmény
+megint előjön. A push-értesítés (`_bohAnnounceNotif`) is innen megy (és az Eventsből).
+A 📣 jel csak akkor áll elöl, ha a cím maga nem emojival indul.
+
+Teszt: `node tests/admin_apps_test.js` (sorrend, egy-fülű appok, mi hova került —
+és mi NINCS az Általánosban —, telefonos sáv, hirdetmény a központban és NEM a Games-en,
+bezárás + új hirdetmény). Igazítva: `adminpress_test` (22 fül, `data-admin-subtabs`),
+`setupflow_test` (DNR Games → Beállítások), `dnr_toggle_test` („DNR központ" kártya; a v10.409 óta piros „TOVÁBBI DNR" kereső helyett a központ kártyáit nézi).

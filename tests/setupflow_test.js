@@ -377,7 +377,8 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
         { go:()=>{}, setTheme:()=>{}, currentTheme:'warm' }));
     });
     await p.waitForTimeout(1400);
-    for (const lab of ['Rendszer', 'Beállítások']) {
+    // v10.420: az admin appok szerint kategorizált — a kapcsoló a DNR Games → Beállítások alatt
+    for (const lab of ['DNR Games', 'Beállítások']) {
       await p.evaluate(l => {
         const btn = [...document.querySelectorAll('#__ad button')].find(x => x.innerText.trim() === l);
         if (btn) btn.click();
@@ -385,7 +386,7 @@ const txt = (p) => p.evaluate(() => document.querySelector('#__g').innerText.rep
       await p.waitForTimeout(800);
     }
     const before = await p.evaluate(() => document.querySelector('#__ad').innerText.replace(/\s+/g, ' '));
-    ok('a kapcsoló megjelenik az Admin > Rendszer > Beállítások alatt', /Játékmenet oldal/.test(before));
+    ok('a kapcsoló megjelenik az Admin > DNR Games > Beállítások alatt', /Játékmenet oldal/.test(before));
     ok('kikapcsolva a régi utat mutatja', /Játékosok → Játékok → Játék(?! ?menet)/.test(before),
        (before.match(/Játékosok → Játékok[^A-ZÁ]{0,20}/) || ['—'])[0]);
 
