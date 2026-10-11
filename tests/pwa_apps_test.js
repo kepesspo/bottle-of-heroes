@@ -226,13 +226,15 @@ const head = (p) => p.evaluate(() => ({
     // A nyito-kepernyo logoja MAS: az a meleg app-hatteren all, arnyekkal —
     // ha feher hatteru kepet teszunk oda (pl. ugyanazt, mint az app-ikon),
     // egy feher negyzet jelenik meg a helyen. Ezert alfa-csatorna kell.
-    const splash = ['assets/splash_logo.png', 'assets/splash_events_logo.png']
+    // v10.414: a fő splash logó a DNR logó (splash_dnr_logo.png, NEM négyzetes — a CSS
+    // height:auto-val rajzolja); a négyzetesség csak a fixen 200×200-as Events logóra áll.
+    const splash = ['assets/splash_dnr_logo.png', 'assets/splash_events_logo.png']
       .filter(f => fs.existsSync(path.join(root, f)));
     const noAlpha = [], notSq = [];
     splash.forEach(f => {
       const buf = fs.readFileSync(path.join(root, f));
       const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20), colorType = buf[25];
-      if (w !== h) notSq.push(f + ' (' + w + '×' + h + ')');
+      if (w !== h && !/splash_dnr_logo/.test(f)) notSq.push(f + ' (' + w + '×' + h + ')');
       if (colorType !== 6 && colorType !== 4) noAlpha.push(f);   // 6=RGBA, 4=szurke+alfa
     });
     ok('a splash logók átlátszó hátterűek', noAlpha.length === 0,

@@ -3277,3 +3277,16 @@ A kártyák sorrendje a központban: **Games · Events · Bingó/Tortán · BOX 
 (`HUB_ORDER`). Csak a központé — a `DNR_APPS` (admin „Melyik app látszódjon" lista)
 sorrendje változatlan. A Bingó helye módtól független (Bingó/Tipp/Tortán ugyanott).
 Teszt: `dnr_hub_test` (a 3. kártya a `bingo`).
+
+### Splash: DNR logó + „DNR" felirat (v10.414)
+A nyitóképernyőn a „Bottle of Heroes" helyett a **DNR logó** (`assets/splash_dnr_logo.png`)
+és a **„DNR"** felirat áll (három betű, `.splash-word-dnr` — 44 px), alatta változatlanul
+a szlogen („Ivós kalandjáték"). A logó a kapott JPG-ből készült: a fehér háttér a
+**sarkokból elárasztva** került ki (csak a külső fehér — a címkék és kártyák belső
+fehérje marad, mert a fekete kontúr megállítja), szorosra vágva, 720×547, RGBA.
+- ⚠️ **A logó NEM négyzetes**, ezért a `#splash-logo` `height:auto` (és `max-width:86vw`).
+  Fix 346×346-tal torzulna. A négyzetes app-ikonok (Bingó, Liga, Pub, Box deep-link)
+  így is 346×346-ban állnak.
+- A `pwa_apps_test` splash-őre a DNR logót nézi (átlátszó háttér); a négyzetesség csak
+  a fixen 200×200-as Events logóra kötelező.
+- A régi `assets/splash_logo.png` a repóban maradt, de már semmi nem hivatkozza.
