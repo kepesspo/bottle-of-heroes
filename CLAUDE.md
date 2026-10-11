@@ -3098,3 +3098,24 @@ Beállítások → Melyik app látszódjon).
 
 Teszt: `torta_home_test.js` 7–8. blokk (Mentés nélkül is eltűnik; elutasított írásnál
 hibaüzenet, nem „Mentve").
+
+### Sorsolás: lassú, weben nagy, 2/3–1/3, és MINDIG PIN (v10.406)
+- **Lassú (~22 mp)** — a tárcsa 8,5 mp-ig pörög (`TORTA_REEL_MS`), a házigazda 2,6 mp-ig
+  kimerevítve, 10 keverés, a két vendég 2,8 mp különbséggel fordul fel, és mindkettő
+  előtt 1,1 mp-ig felizzik (`hot`). Az idővonal egy helyen: `tortaDrawTimeline()`.
+- **Weben (≥ `TORTA_WIDE_MIN` = 860 px) 2/3–1/3**: balra a sorsolás, jobbra a „📜
+  KISORSOLT ESTÉK" (`history` = a `tortaEvenings` hozzáfűzési sorrendben; a show végén a
+  mostani húzás „ÚJ"/„PRÓBA" címkével a lista tetejére kerül). Mobilon a lista a sorsolás
+  ALATT áll.
+- **⚠️ A nagyítás (`k`) a szélességhez ÉS a magassághoz is igazodik**, és weben a
+  házigazda meg a vendégek EGYMÁS MELLETT állnak. Egymás alatt, csak szélességre
+  skálázva egy 900 px magas képernyőn a vendégkártyák lelógtak. A vendég-blokk helye
+  az elejétől fenn van tartva (`visibility:hidden`), különben a házigazda oldalra ugrana.
+- **⚠️ A PIN-t MINDEN panelnyitáskor kéri.** Korábban az Admin felület eltárolt
+  feloldását (`boh_admin_ok`) is elfogadta — azon a telefonon soha nem kért jelszót. Az
+  `adminOk` most csak a munkamenetre él. Beállított admin PIN nélkül NEM lehet sorsolni.
+  Egy újratöltés után a függő húzás a panelből (PIN után) fogadható el.
+
+Teszt: `torta_draw_test.js` — a lassúság mérve (tárcsa > 7 mp, egész > 18 mp), a PIN a
+`boh_admin_ok` ellenére is, PIN nélkül tiltás, és weben az arány (2/3 ± 3%), az oldalsáv
+sorai, a nagyítás, és hogy a vendég-blokk kifér.

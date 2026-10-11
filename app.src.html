@@ -35211,7 +35211,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.405';
+const APP_VERSION = 'v10.406';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -41402,18 +41402,35 @@ function TortaPairCard({ team, profiles, w, h, avatar, glow }) {
 }
 
 // A teljes képernyős sorsolás-show. Két felvonás: (1) pörgő tárcsa a házigazdára,
-// (2) lefordított kártyák keverése, majd a két vendég felfordul. `skipAnim` = aki
-// később nyitja meg, rögtön az eredményt látja. A tárcsa/keverés a draw.id-ből seedelt.
-const TORTA_REEL_H = 132, TORTA_REEL_MS = 3400;
-const TORTA_GCARD_W = 96, TORTA_GCARD_H = 112, TORTA_GGAP = 10;
-function TortaDrawShow({ draw, teams, profiles, isAdmin, skipAnim, onClose, onAccept, onRedraw, onPracticeAgain }) {
+// (2) lefordított kártyák keverése, majd a két vendég egyenként felfordul. Szándékosan
+// LASSÚ (~22 mp, v10.406) — közös képernyőn nézik, a feszültség a lényeg. `skipAnim` =
+// aki később nyitja meg, rögtön az eredményt látja. A tárcsa/keverés a draw.id-ből seedelt.
+// Széles képernyőn (web) 2/3–1/3: balra a sorsolás nagyban, jobbra az eddigi esték.
+const TORTA_REEL_MS = 8500;          // a tárcsa pörgése — hosszú, lassan kifutó
+const TORTA_HOST_HOLD = 2600;        // a házigazda kimerevítve, mielőtt a vendégek jönnek
+const TORTA_SHUFFLE_STEPS = 10, TORTA_SHUFFLE_MS = 450;
+const TORTA_FLIP_GAP = 2800;         // a két vendég felfordulása közt
+const TORTA_WIDE_MIN = 860;          // ettől 2/3–1/3 elrendezés és nagyított kártyák
+function tortaDrawTimeline() {
+  const tReel = 300, tHost = tReel + TORTA_REEL_MS, tShuffle = tHost + TORTA_HOST_HOLD;
+  const tFlip = tShuffle + 600 + TORTA_SHUFFLE_STEPS * TORTA_SHUFFLE_MS + 900;
+  return { tReel, tHost, tShuffle, tFlip, tFlip2: tFlip + TORTA_FLIP_GAP, tDone: tFlip + TORTA_FLIP_GAP + 2200 };
+}
+function TortaDrawShow({ draw, teams, profiles, history, isAdmin, skipAnim, onClose, onAccept, onRedraw, onPracticeAgain }) {
   const teamById = id => (teams || []).find(t => t.id === id) || null;
+  const namesOf = id => ((teamById(id) || {}).members || []).map(pid => ((profiles || []).find(p => p.id === pid) || {}).name).filter(Boolean).join(' & ') || '?';
+  const membersOf = id => ((teamById(id) || {}).members || []).map(pid => (profiles || []).find(p => p.id === pid)).filter(Boolean);
+  const [vp, setVp] = React.useState(() => ({ w: typeof window !== 'undefined' ? window.innerWidth : 400, h: typeof window !== 'undefined' ? window.innerHeight : 800 }));
+  React.useEffect(() => { const f = () => setVp({ w: window.innerWidth, h: window.innerHeight }); window.addEventListener('resize', f); return () => window.removeEventListener('resize', f); }, []);
+  const wide = vp.w >= TORTA_WIDE_MIN;
+
   const rnd = React.useMemo(() => tortaSeeded(draw.id), [draw.id]);
-  // tárcsa: a hostPool többször, seedelt sorrendben, a VÉGÉN a házigazda
+  // tárcsa: a hostPool sokszor, seedelt sorrendben, a VÉGÉN a házigazda
   const reel = React.useMemo(() => {
     const pool = (draw.hostPool && draw.hostPool.length) ? draw.hostPool : [draw.hostId];
     const out = [];
-    for (let k = 0; k < 7; k++) { const a = pool.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } out.push(...a); }
+    const loops = Math.max(6, Math.ceil(26 / pool.length));
+    for (let n = 0; n < loops; n++) { const a = pool.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } out.push(...a); }
     out.push(draw.hostId);
     return out;
   }, [draw.id]);
@@ -41422,99 +41439,149 @@ function TortaDrawShow({ draw, teams, profiles, isAdmin, skipAnim, onClose, onAc
     draw.guestIds.forEach(g => { if (!p.includes(g)) p.push(g); });
     return p;
   }, [draw.id]);
+  // Weben a házigazda és a vendégek EGYMÁS MELLETT állnak a bal 2/3-ban, és a nagyítás a
+  // szélességhez ÉS a magassághoz is igazodik — különben a vendégkártyák lelógnának.
+  const cols = gPool.length === 4 ? 2 : Math.min(3, gPool.length);   // 4 kártya 2×2-ben
+  const rows = Math.ceil(gPool.length / cols);
+  const gWb = cols * 96 + (cols - 1) * 10, gHb = rows * 112 + (rows - 1) * 10;
+  const k = wide ? Math.max(1, Math.min(2.4,
+    (vp.w * 2 / 3 - 160) / (230 + gWb),                  // szélesség: tárcsa + rés + rács
+    (vp.h - 150) / (90 + Math.max(132, gHb)))) : 1;      // magasság: fejléc + felirat + magasabbik blokk
+  const REEL_H = Math.round(132 * k), REEL_W = Math.round(230 * k);
+  const GW = Math.round(96 * k), GH = Math.round(112 * k), GG = Math.round(10 * k);
   const [phase, setPhase] = React.useState(skipAnim ? 'done' : 'reel0');
   const [order, setOrder] = React.useState(() => gPool.map((_, i) => i));
   const [flipped, setFlipped] = React.useState(skipAnim ? 2 : 0);
+  const [hot, setHot] = React.useState(null);   // a következő felforduló kártya — előtte felizzik
   React.useEffect(() => {
     if (skipAnim) return;
-    const T0 = [];
-    const at = (ms, fn) => T0.push(setTimeout(fn, ms));
-    at(60, () => setPhase('reel'));
-    at(60 + TORTA_REEL_MS, () => setPhase('host'));
-    at(60 + TORTA_REEL_MS + 1100, () => setPhase('shuffle'));
-    for (let s = 0; s < 5; s++) at(60 + TORTA_REEL_MS + 1300 + s * 330, () => setOrder(o => { const a = o.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }));
-    const tFlip = 60 + TORTA_REEL_MS + 1300 + 5 * 330 + 350;
-    at(tFlip, () => { setPhase('flip'); setFlipped(1); });
-    at(tFlip + 1000, () => setFlipped(2));
-    at(tFlip + 1900, () => setPhase('done'));
-    return () => T0.forEach(clearTimeout);
+    const TL = tortaDrawTimeline(), timers = [];
+    const at = (ms, fn) => timers.push(setTimeout(fn, ms));
+    at(TL.tReel, () => setPhase('reel'));
+    at(TL.tHost, () => setPhase('host'));
+    at(TL.tShuffle, () => setPhase('shuffle'));
+    for (let s = 0; s < TORTA_SHUFFLE_STEPS; s++) at(TL.tShuffle + 600 + s * TORTA_SHUFFLE_MS, () => setOrder(o => { const a = o.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }));
+    at(TL.tFlip - 1100, () => { setPhase('flip'); setHot(draw.guestIds[0]); });
+    at(TL.tFlip, () => { setFlipped(1); setHot(null); });
+    at(TL.tFlip2 - 1100, () => setHot(draw.guestIds[1]));
+    at(TL.tFlip2, () => { setFlipped(2); setHot(null); });
+    at(TL.tDone, () => setPhase('done'));
+    return () => timers.forEach(clearTimeout);
   }, [draw.id, skipAnim]);
 
   const host = teamById(draw.hostId);
   const showGuests = phase === 'shuffle' || phase === 'flip' || phase === 'done';
-  const cols = gPool.length === 4 ? 2 : Math.min(3, gPool.length);   // 4 kártya 2×2-ben, ne lógjon egy
-  const rows = Math.ceil(gPool.length / cols);
-  const gW = cols * TORTA_GCARD_W + (cols - 1) * TORTA_GGAP;
-  const gH = rows * TORTA_GCARD_H + (rows - 1) * TORTA_GGAP;
+  const gW = cols * GW + (cols - 1) * GG, gH = rows * GH + (rows - 1) * GG;
   const slotOf = idx => {
     const pos = order.indexOf(idx), row = Math.floor(pos / cols);
     const inRow = Math.min(cols, gPool.length - row * cols);   // a csonka utolsó sor középre
-    const off = (cols - inRow) * (TORTA_GCARD_W + TORTA_GGAP) / 2;
-    return { x: off + (pos % cols) * (TORTA_GCARD_W + TORTA_GGAP), y: row * (TORTA_GCARD_H + TORTA_GGAP) };
+    const off = (cols - inRow) * (GW + GG) / 2;
+    return { x: off + (pos % cols) * (GW + GG), y: row * (GH + GG) };
   };
-  const revealN = gid => { const k = draw.guestIds.indexOf(gid); return k >= 0 && k < flipped; };
+  const revealN = gid => { const i = draw.guestIds.indexOf(gid); return i >= 0 && i < flipped; };
   const gold = '#C49A45';
-  const btn = (bg, fg) => ({ flex:1, padding:'13px 10px', borderRadius:14, border:'none', background:bg, color:fg, fontFamily:T.font, fontWeight:900, fontSize:14, cursor:'pointer' });
+  const btn = (bg, fg) => ({ flex:1, padding:`${Math.round(13 * Math.min(k, 1.4))}px 10px`, borderRadius:14, border:'none', background:bg, color:fg, fontFamily:T.font, fontWeight:900, fontSize:Math.round(14 * Math.min(k, 1.4)), cursor:'pointer' });
+  const label = (txt, mt) => <div style={{ fontFamily:T.font, fontWeight:800, fontSize:Math.round(12 * k), color:gold, letterSpacing:'0.14em', margin:`${mt}px 0 ${Math.round(9 * k)}px` }}>{txt}</div>;
+
+  // Oldalsáv: az eddig elfogadott esték, és (a show végén) a most kihúzott — kiemelve
+  const past = (history || []).filter(ev => ev && ev.hostId);
+  const histRow = (key, n, hostId, guestIds, tag) => (
+    <div key={key} data-torta-hist={tag ? 'new' : n} style={{ background: tag ? 'rgba(196,154,69,0.18)' : 'rgba(255,255,255,0.06)', border: tag ? `1.5px solid ${gold}` : '1.5px solid transparent', borderRadius:14, padding:'10px 12px', animation: tag ? 'tortaPop .5s ease' : 'none' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:11, color:gold, letterSpacing:'0.08em' }}>{n}. ESTE</span>
+        {tag && <span style={{ fontFamily:T.font, fontWeight:900, fontSize:9.5, color:'#14202F', background:gold, borderRadius:999, padding:'2px 7px' }}>{tag}</span>}
+      </div>
+      <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+        <span style={{ fontSize:14 }}>🏠</span>
+        <div style={{ display:'flex', flexShrink:0 }}>{membersOf(hostId).map((pr, i) => <div key={pr.id} style={{ marginLeft: i ? -6 : 0 }}><TortaAv pr={pr} size={24} /></div>)}</div>
+        <span style={{ fontFamily:T.font, fontWeight:900, fontSize:13, color:'#fff', minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{namesOf(hostId)}</span>
+      </div>
+      {(guestIds || []).map(g => (
+        <div key={g} style={{ display:'flex', alignItems:'center', gap:7, marginTop:4, paddingLeft:2 }}>
+          <span style={{ fontSize:12, opacity:0.8 }}>🍽️</span>
+          <span style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:'rgba(255,255,255,0.82)', minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{namesOf(g)}</span>
+        </div>
+      ))}
+    </div>
+  );
+  const sidebar = (
+    <div data-torta-history style={{ flex: wide ? '1 1 0' : 'none', width: wide ? 'auto' : '100%', maxWidth: wide ? 'none' : 420, minWidth:0, boxSizing:'border-box', overflowY: wide ? 'auto' : 'visible', background:'rgba(0,0,0,0.18)', borderLeft: wide ? `1px solid ${gold}55` : 'none', borderRadius: wide ? 0 : 18, padding: wide ? '28px 20px' : '14px', marginTop: wide ? 0 : 26, alignSelf: wide ? 'stretch' : 'center' }}>
+      <div style={{ fontFamily:T.font, fontWeight:900, fontSize: wide ? 15 : 13, color:'#fff', letterSpacing:'0.06em', marginBottom:4 }}>📜 KISORSOLT ESTÉK</div>
+      <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:'rgba(255,255,255,0.6)', marginBottom:12 }}>{past.length} / {(teams || []).length} este</div>
+      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+        {phase === 'done' && histRow('now', past.length + 1, draw.hostId, draw.guestIds, draw.practice ? 'PRÓBA' : 'ÚJ')}
+        {past.length === 0 && phase !== 'done' && <div style={{ fontFamily:T.font, fontSize:12, color:'rgba(255,255,255,0.55)' }}>Még nincs kisorsolt este.</div>}
+        {past.map((ev, i) => histRow(ev.id || i, i + 1, ev.hostId, ev.guestIds, null)).reverse()}
+      </div>
+    </div>
+  );
 
   return ReactDOM.createPortal(
-    <div data-torta-draw={draw.practice ? 'practice' : 'live'} data-torta-phase={phase} style={{ position:'fixed', inset:0, zIndex:9000, background:'linear-gradient(160deg, #121C28, #25384D 55%, #121C28)', display:'flex', flexDirection:'column', alignItems:'center', overflowY:'auto', padding:'calc(env(safe-area-inset-top) + 18px) 16px calc(env(safe-area-inset-bottom) + 20px)', boxSizing:'border-box' }}>
+    <div data-torta-draw={draw.practice ? 'practice' : 'live'} data-torta-phase={phase} data-torta-wide={wide ? '1' : '0'} style={{ position:'fixed', inset:0, zIndex:9000, background:'linear-gradient(160deg, #121C28, #25384D 55%, #121C28)', display:'flex', flexDirection: wide ? 'row' : 'column', overflowY: wide ? 'hidden' : 'auto', boxSizing:'border-box', paddingTop:'env(safe-area-inset-top)', paddingBottom:'env(safe-area-inset-bottom)' }}>
       {phase === 'done' && !skipAnim && <BeerPongConfetti />}
+      <div data-torta-stage style={{ flex: wide ? '2 1 0' : 'none', minWidth:0, overflowY: wide ? 'auto' : 'visible', display:'flex', flexDirection:'column', alignItems:'center', padding: wide ? '28px 24px' : '18px 16px 20px', boxSizing:'border-box' }}>
       <div style={{ margin:'auto 0', width:'100%', display:'flex', flexDirection:'column', alignItems:'center' }}>
-      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-        <img src={TORTA_LOGO} alt="" style={{ width:42, height:42 }} />
-        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:'#fff', letterSpacing:'0.04em' }}>SORSOLÁS</div>
-        {draw.practice && <span data-torta-practice style={{ fontFamily:T.font, fontWeight:900, fontSize:10.5, color:'#14202F', background:'#F4C95A', borderRadius:999, padding:'3px 8px' }}>PRÓBA</span>}
+      <div style={{ display:'flex', alignItems:'center', gap:Math.round(8 * k), marginBottom:6 }}>
+        <img src={TORTA_LOGO} alt="" style={{ width:Math.round(42 * k), height:Math.round(42 * k) }} />
+        <div style={{ fontFamily:T.font, fontWeight:900, fontSize:Math.round(18 * k), color:'#fff', letterSpacing:'0.04em' }}>SORSOLÁS</div>
+        {draw.practice && <span data-torta-practice style={{ fontFamily:T.font, fontWeight:900, fontSize:Math.round(10.5 * k), color:'#14202F', background:'#F4C95A', borderRadius:999, padding:'3px 8px' }}>PRÓBA</span>}
       </div>
-      {draw.practice && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:'rgba(255,255,255,0.7)', marginBottom:8 }}>Csak ezen a telefonon — semmi nem mentődik.</div>}
+      {draw.practice && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:Math.round(11 * Math.min(k, 1.4)), color:'rgba(255,255,255,0.7)', marginBottom:8 }}>Csak ezen a telefonon — semmi nem mentődik.</div>}
 
+      <div style={{ display:'flex', flexDirection: wide ? 'row' : 'column', alignItems:'center', gap: wide ? 56 : 0 }}>
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
       {/* 1. felvonás — házigazda */}
-      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:gold, letterSpacing:'0.14em', margin:'8px 0 8px' }}>🏠 HÁZIGAZDA</div>
+      {label('🏠 HÁZIGAZDA', Math.round(8 * k))}
       {phase === 'reel0' || phase === 'reel' ? (
-        <div style={{ position:'relative', width:230, height:TORTA_REEL_H, overflow:'hidden', borderRadius:20, background:'rgba(255,255,255,0.08)', boxShadow:`inset 0 0 0 2px ${gold}` }}>
-          <div style={{ transform:`translateY(${phase === 'reel' ? -(reel.length - 1) * TORTA_REEL_H : 0}px)`, transition: phase === 'reel' ? `transform ${TORTA_REEL_MS}ms cubic-bezier(0.12, 0.72, 0.16, 1)` : 'none' }}>
+        <div style={{ position:'relative', width:REEL_W, height:REEL_H, overflow:'hidden', borderRadius:Math.round(20 * k), background:'rgba(255,255,255,0.08)', boxShadow:`inset 0 0 0 ${Math.max(2, Math.round(2 * k))}px ${gold}` }}>
+          <div style={{ transform:`translateY(${phase === 'reel' ? -(reel.length - 1) * REEL_H : 0}px)`, transition: phase === 'reel' ? `transform ${TORTA_REEL_MS}ms cubic-bezier(0.06, 0.55, 0.1, 1)` : 'none' }}>
             {reel.map((tid, i) => (
-              <div key={i} style={{ height:TORTA_REEL_H, display:'grid', placeItems:'center' }}>
-                <TortaPairCard team={teamById(tid)} profiles={profiles} w={206} h={TORTA_REEL_H - 16} avatar={52} />
+              <div key={i} style={{ height:REEL_H, display:'grid', placeItems:'center' }}>
+                <TortaPairCard team={teamById(tid)} profiles={profiles} w={REEL_W - Math.round(24 * k)} h={REEL_H - Math.round(16 * k)} avatar={Math.round(52 * k)} />
               </div>
             ))}
           </div>
           <div style={{ position:'absolute', inset:0, background:'linear-gradient(#121C28cc, transparent 28%, transparent 72%, #121C28cc)', pointerEvents:'none' }} />
         </div>
       ) : (
-        <div data-torta-host={draw.hostId} style={{ position:'relative', animation: phase === 'host' ? 'tortaPop .55s cubic-bezier(.2,1.6,.4,1)' : 'none' }}>
-          <TortaPairCard team={host} profiles={profiles} w={230} h={TORTA_REEL_H} avatar={58} glow />
-          <div style={{ position:'absolute', right:-10, bottom:-14, transform:'rotate(12deg)', background:gold, color:'#14202F', fontFamily:T.font, fontWeight:900, fontSize:11, letterSpacing:'0.06em', borderRadius:10, padding:'5px 9px', boxShadow:'0 4px 10px rgba(0,0,0,0.3)', animation: phase === 'host' ? 'tortaStamp .45s .25s both' : 'none' }}>🏠 HÁZIGAZDA</div>
+        <div data-torta-host={draw.hostId} style={{ position:'relative', animation: phase === 'host' ? 'tortaPop .7s cubic-bezier(.2,1.6,.4,1)' : 'none' }}>
+          <TortaPairCard team={host} profiles={profiles} w={REEL_W} h={REEL_H} avatar={Math.round(58 * k)} glow />
+          <div style={{ position:'absolute', right:-10, bottom:-14, transform:'rotate(12deg)', background:gold, color:'#14202F', fontFamily:T.font, fontWeight:900, fontSize:Math.round(11 * k), letterSpacing:'0.06em', borderRadius:10, padding:`${Math.round(5 * k)}px ${Math.round(9 * k)}px`, boxShadow:'0 4px 10px rgba(0,0,0,0.3)', animation: phase === 'host' ? 'tortaStamp .5s .45s both' : 'none' }}>🏠 HÁZIGAZDA</div>
         </div>
       )}
 
-      {/* 2. felvonás — vendégek */}
-      {showGuests && (
-        <React.Fragment>
-          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:gold, letterSpacing:'0.14em', margin:'22px 0 10px' }}>🍽️ VENDÉGEK</div>
+      </div>
+      {/* 2. felvonás — vendégek. Weben a helye a sorsolás elejétől fenn van tartva (rejtve),
+          különben a házigazda-blokk oldalra ugrana, amikor a vendégek megjelennek. */}
+      {(showGuests || wide) && (
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', visibility: showGuests ? 'visible' : 'hidden' }}>
+          {label('🍽️ VENDÉGEK', wide ? Math.round(8 * k) : Math.round(22 * k))}
           <div style={{ position:'relative', width:gW, height:gH }}>
             {gPool.map((tid, idx) => {
               const s = slotOf(idx);
               const open = revealN(tid);
+              const isHot = hot === tid;
               const dim = phase === 'done' && !draw.guestIds.includes(tid);
               return (
-                <div key={tid} data-torta-gcard={tid} data-open={open ? '1' : '0'} style={{ position:'absolute', left:0, top:0, width:TORTA_GCARD_W, height:TORTA_GCARD_H, transform:`translate(${s.x}px, ${s.y}px)`, transition:'transform .3s ease, opacity .4s', opacity: dim ? 0.18 : 1, perspective:600 }}>
-                  <div style={{ position:'relative', width:'100%', height:'100%', transformStyle:'preserve-3d', transition:'transform .6s cubic-bezier(.3,1.3,.5,1)', transform: open ? 'rotateY(180deg)' : 'none' }}>
-                    <div style={{ position:'absolute', inset:0, backfaceVisibility:'hidden', WebkitBackfaceVisibility:'hidden', borderRadius:16, background:`repeating-linear-gradient(45deg, #2C4560, #2C4560 8px, #33506F 8px, #33506F 16px)`, boxShadow:`inset 0 0 0 2px ${gold}`, display:'grid', placeItems:'center' }}>
-                      <img src={TORTA_LOGO} alt="" style={{ width:46, height:46, opacity:0.85 }} />
+                <div key={tid} data-torta-gcard={tid} data-open={open ? '1' : '0'} style={{ position:'absolute', left:0, top:0, width:GW, height:GH, transform:`translate(${s.x}px, ${s.y}px) scale(${isHot ? 1.1 : 1})`, transition:'transform .4s ease, opacity .5s', opacity: dim ? 0.18 : 1, perspective:700, zIndex: isHot ? 2 : 1 }}>
+                  <div style={{ position:'relative', width:'100%', height:'100%', transformStyle:'preserve-3d', transition:'transform .9s cubic-bezier(.3,1.3,.5,1)', transform: open ? 'rotateY(180deg)' : 'none' }}>
+                    <div style={{ position:'absolute', inset:0, backfaceVisibility:'hidden', WebkitBackfaceVisibility:'hidden', borderRadius:Math.round(16 * k), background:`repeating-linear-gradient(45deg, #2C4560, #2C4560 ${Math.round(8 * k)}px, #33506F ${Math.round(8 * k)}px, #33506F ${Math.round(16 * k)}px)`, boxShadow: isHot ? `inset 0 0 0 3px ${gold}, 0 0 28px ${gold}` : `inset 0 0 0 2px ${gold}`, display:'grid', placeItems:'center', transition:'box-shadow .4s' }}>
+                      <img src={TORTA_LOGO} alt="" style={{ width:Math.round(46 * k), height:Math.round(46 * k), opacity:0.85 }} />
                     </div>
                     <div style={{ position:'absolute', inset:0, backfaceVisibility:'hidden', WebkitBackfaceVisibility:'hidden', transform:'rotateY(180deg)' }}>
-                      <TortaPairCard team={teamById(tid)} profiles={profiles} w={TORTA_GCARD_W} h={TORTA_GCARD_H} avatar={36} glow />
+                      <TortaPairCard team={teamById(tid)} profiles={profiles} w={GW} h={GH} avatar={Math.round(36 * k)} glow />
                     </div>
                   </div>
                 </div>
               );
             })}
           </div>
-        </React.Fragment>
+        </div>
       )}
+      </div>
 
       {phase === 'done' && (
-        <div style={{ width:'100%', maxWidth:360, marginTop:24, display:'flex', flexDirection:'column', gap:10, position:'relative', zIndex:2 }}>
+        <div style={{ width:'100%', maxWidth: Math.round(360 * Math.min(k, 1.5)), marginTop:Math.round(24 * k), display:'flex', flexDirection:'column', gap:10, position:'relative', zIndex:2 }}>
           {draw.practice ? (
             <div style={{ display:'flex', gap:10 }}>
               <button onClick={onClose} style={btn('rgba(255,255,255,0.14)', '#fff')}>Bezárás</button>
@@ -41533,7 +41600,10 @@ function TortaDrawShow({ draw, teams, profiles, isAdmin, skipAnim, onClose, onAc
           )}
         </div>
       )}
+      {!wide && sidebar}
       </div>
+      </div>
+      {wide && sidebar}
     </div>,
     document.body
   );
@@ -41741,29 +41811,16 @@ function BingoScreen({ go, deepLink }) {
   const drawBlocker = tortaDrawBlocker(tortaTeams, tortaEveningsRaw);
   const drawState = tortaSeasonState(tortaTeams, tortaEveningsRaw);
   const newDrawId = () => 'd' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
-  // Admin PIN: ugyanaz, mint az Admin felületen; ha ezen a telefonon már megvolt, nem kéri újra.
+  // Admin PIN: ugyanaz a config/adminPin, mint az Admin felületen — de a Sorsolás MINDEN
+  // megnyitáskor kéri (v10.406). Korábban az Admin felület eltárolt feloldását
+  // (boh_admin_ok) is elfogadta, így azon a telefonon soha nem kért jelszót.
+  // PIN nélkül (nincs beállítva) NEM enged sorsolni: a védelem a lényeg.
   const openDrawPanel = () => {
-    setDrawErr(''); setPinIn(''); setPinBad(false); setDrawPanel(true);
-    (window.getAdminPin ? window.getAdminPin() : Promise.resolve('')).then(pin => {
-      setAdminPin(pin || '');
-      let ok = !pin;
-      try { if (pin && localStorage.getItem('boh_admin_ok') === pin) ok = true; } catch(e) {}
-      setAdminOk(ok);
-    }).catch(() => { setAdminPin(''); setAdminOk(true); });
+    setDrawErr(''); setPinIn(''); setPinBad(false); setAdminOk(false); setAdminPin(null); setDrawPanel(true);
+    (window.getAdminPin ? window.getAdminPin() : Promise.resolve('')).then(pin => setAdminPin(pin || '')).catch(() => setAdminPin(''));
   };
-  // Betöltéskor is megnézzük: ha ezen a telefonon már megvolt a PIN, az „Elfogadom" egy
-  // újratöltés után is az admin kezében marad (nem csak a panel megnyitása után).
-  React.useEffect(() => {
-    if (mode !== 'torta') return;
-    (window.getAdminPin ? window.getAdminPin() : Promise.resolve('')).then(pin => {
-      setAdminPin(pin || '');
-      let ok = !pin;
-      try { if (pin && localStorage.getItem('boh_admin_ok') === pin) ok = true; } catch(e) {}
-      if (ok) setAdminOk(true);
-    }).catch(() => {});
-  }, [mode]);
   const submitPin = () => {
-    if (adminPin !== null && pinIn === adminPin) { try { localStorage.setItem('boh_admin_ok', adminPin); } catch(e) {} setAdminOk(true); setPinBad(false); }
+    if (adminPin && pinIn === adminPin) { setAdminOk(true); setPinBad(false); }
     else setPinBad(true);
   };
   const startPractice = () => {
@@ -41868,6 +41925,8 @@ function BingoScreen({ go, deepLink }) {
           <div data-torta-drawpanel style={{ padding:'0 16px 20px' }}>
             {adminPin === null ? (
               <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', padding:'20px 0' }}>Betöltés…</div>
+            ) : !adminPin ? (
+              <div data-torta-nopin style={{ fontFamily:T.font, fontSize:13, color:T.coral, fontWeight:700, textAlign:'center', padding:'16px 4px', lineHeight:1.5 }}>Nincs admin PIN beállítva — a sorsolás csak PIN-nel indítható. Állítsd be: Admin → Rendszer → Beállítások → Admin PIN.</div>
             ) : !adminOk ? (
               <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12, padding:'8px 0 6px' }}>
                 <BohIcon name="lock" size={34} />
@@ -41892,6 +41951,17 @@ function BingoScreen({ go, deepLink }) {
                     </div>
                   ))}
                 </div>
+                {tortaDraw && tortaDraw.status === 'pending' && (
+                  <div data-torta-pendingpanel style={{ background:T.surface, borderRadius:12, padding:'10px 12px', boxShadow:T.shadowPill, marginBottom:12, border:'1.5px solid #C49A45' }}>
+                    <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:'#A07A30', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>Függő sorsolás</div>
+                    <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12.5, color:T.ink }}>🏠 {teamMembers(tortaTeamById(tortaDraw.hostId)).map(p => p.name).join(' & ')}</div>
+                    {(tortaDraw.guestIds || []).map(g => <div key={g} style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.inkSoft, marginTop:2 }}>🍽️ {teamMembers(tortaTeamById(g)).map(p => p.name).join(' & ')}</div>)}
+                    <div style={{ display:'flex', gap:8, marginTop:9 }}>
+                      <button onClick={() => { setDrawPanel(false); setReplayDraw(true); }} style={{ flex:1, padding:'9px', borderRadius:10, border:`1.5px solid ${T.border}`, background:'transparent', fontFamily:T.font, fontWeight:800, fontSize:12.5, color:T.ink, cursor:'pointer' }}>Megnézem</button>
+                      <button data-torta-panelaccept onClick={() => { setDrawPanel(false); acceptDraw(); }} style={{ flex:1, padding:'9px', borderRadius:10, border:'none', background:'#C49A45', fontFamily:T.font, fontWeight:900, fontSize:12.5, color:'#14202F', cursor:'pointer' }}>Elfogadom</button>
+                    </div>
+                  </div>
+                )}
                 {(drawErr || drawBlocker) && <div data-torta-drawerr style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.coral, background:`${T.coral}14`, borderRadius:10, padding:'9px 11px', marginBottom:12, lineHeight:1.45 }}>{drawErr || drawBlocker}</div>}
                 <div style={{ display:'flex', gap:10 }}>
                   <button data-torta-practicebtn disabled={!!drawBlocker} onClick={startPractice} style={{ flex:1, padding:'13px 8px', borderRadius:14, border:`2px solid ${T.border}`, background:'transparent', fontFamily:T.font, fontWeight:900, fontSize:13.5, color:T.ink, cursor: drawBlocker ? 'default' : 'pointer', opacity: drawBlocker ? 0.45 : 1 }}>Próba húzás</button>
@@ -41904,11 +41974,11 @@ function BingoScreen({ go, deepLink }) {
         </SheetOverlay>
       )}
       {practiceDraw && (
-        <TortaDrawShow key={practiceDraw.id} draw={practiceDraw} teams={tortaTeams} profiles={profiles} isAdmin={adminOk}
+        <TortaDrawShow key={practiceDraw.id} draw={practiceDraw} teams={tortaTeams} profiles={profiles} history={tortaEveningsRaw} isAdmin={adminOk}
           onClose={() => setPracticeDraw(null)} onPracticeAgain={startPractice} />
       )}
       {!practiceDraw && liveDrawOpen && (
-        <TortaDrawShow key={tortaDraw.id + (replayDraw ? '-r' : '')} draw={tortaDraw} teams={tortaTeams} profiles={profiles} isAdmin={adminOk} skipAnim={liveDrawSkip}
+        <TortaDrawShow key={tortaDraw.id + (replayDraw ? '-r' : '')} draw={tortaDraw} teams={tortaTeams} profiles={profiles} history={tortaEveningsRaw} isAdmin={adminOk} skipAnim={liveDrawSkip}
           onClose={closeLiveDraw} onAccept={acceptDraw} onRedraw={startLiveDraw} />
       )}
       <AppBar title={headTitle} onBack={deepLink ? null : () => go('home')} right={who ? (
