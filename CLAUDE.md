@@ -3000,3 +3000,25 @@ tetején (96 px), és a főképernyő gombján az emoji helyett (40 px). A fők�
 Tortán módban **a logó színeit viszi** (sötétkék gradiens, arany alsó él), nem a
 Bingó/Tipp zöldjét. A PWA-ikon (`dnr_bingo_icon.png`, manifest) szándékosan NEM
 változik — az a DNR Bingó app ikonja, módtól függetlenül.
+
+### A Tortán mód a főképernyőn és a beállításokban (v10.402)
+Két bejelentett hiba: (1) Tortán módban a „DNR appok" lapon és az admin „Melyik app
+látszódjon" listán még a **DNR Bingó ikonja és neve** állt; (2) a Bingó app
+kikapcsolása a beállításokban (`homeConfig.dnrApps.bingo = false`) csak a lap sorát
+rejtette el — a **főképernyő nagy gombja maradt**, mert az csak a `bingoOn`-t
+(`bingoConfig.enabled`) nézte.
+
+- A főképernyő gombja mostantól `bingoOn && dnrAppEnabled(homeCfg, 'bingo')`.
+- **`dnrAppView(app, bingoCfg)`** — a Bingó bejegyzés MEGJELENÍTETT alakja: Tortán
+  módban `TORTA_LOGO` + `tortaTitle`. A `DNR_APPS` maga statikus marad; a lap ÉS az
+  admin lista a `dnrAppView`-n át rajzol (a főképernyő gombja eddig is mód-függő volt).
+- **`useBingoCfg()`** — közös `config/bingoConfig` figyelő (HomeScreen, AdminHomeToggles).
+- **A nyitóképernyő és a „Főképernyőhöz adás" ikonja** a config ELŐTT fut, ezért a mód
+  `localStorage`-ba kerül (`boh_bingo_mode`, `boh_torta_title` — `bohRememberBingoMode`,
+  a `useBingoCfg` és a `BingoScreen` is írja). A `?screen=bingo` splash és az
+  `apple-touch-icon` ebből dönt — tehát **az első megnyitás után** lesz torta.
+  ⚠️ A `manifest-bingo.json` ikonja statikus, és egy **már telepített** PWA ikonját
+  semmi nem cseréli: azt újra kell a főképernyőre tenni.
+
+Teszt: `node tests/torta_home_test.js`. (A `dnr_button_test` 5 helyett 6 DNR
+játékot vár — a Beer Pong 2.0 óta tartósan piros volt.)

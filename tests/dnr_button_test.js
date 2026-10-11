@@ -31,7 +31,8 @@ let fail = 0;
 const ok = (c, l, e) => { console.log((c ? '  OK   ' : '  HIBA ') + l + (e !== undefined ? '  → ' + e : '')); if (!c) fail++; };
 
 // A DNR exkluziv kor — UGYANAZ a szabaly, amit a gameorder_test oriz.
-const DNR_NAMES = ['Beer Pong Torna', 'Blackjack', 'Busz', 'Ország-Város', 'Power Hour'];
+// v10.376 óta a Beer Pong 2.0 is DNR (hat játék)
+const DNR_NAMES = ['Beer Pong 2.0', 'Beer Pong Torna', 'Blackjack', 'Busz', 'Ország-Város', 'Power Hour'];
 
 const open = async (b, W) => {
   const p = await b.newPage({ viewport: { width: W, height: 1400 } });
@@ -141,10 +142,10 @@ const listState = p => p.evaluate(() => {
     console.log('\n===== 2. A DNR LISTA (ALAPERTELMEZES) =====');
     const first = await listState(p);
     ok(first.names.sort().join(' | ') === DNR_NAMES.join(' | '),
-       'megnyitáskor pontosan az öt DNR exkluzív játék áll', first.names.join(' | '));
+       'megnyitáskor pontosan a DNR exkluzív játékok állnak', first.names.join(' | '));
     // ⚠️ EZ a fogodzo az ALAKRA: rács-csempekent visszaallitva azonnal elbukik.
     ok(first.grids === 0, 'NINCS rács — a játékok kedvenc-soros alakban állnak', first.grids);
-    ok(first.rowCount === 5, 'öt széles sor', first.rowCount);
+    ok(first.rowCount === DNR_NAMES.length, DNR_NAMES.length + ' széles sor', first.rowCount);
     ok(first.sections.length === 0, 'a kategória- és Kedvencek szekciók nem látszanak', first.sections.join(','));
     ok(await p.evaluate(() => /DNR EXKLUZÍV/.test(document.querySelector('#__g').innerText)),
        'ott a „★ DNR EXKLUZÍV" fejléc');

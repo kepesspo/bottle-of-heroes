@@ -48,8 +48,9 @@
       document.write('<link rel="apple-touch-icon" sizes="1024x1024" href="assets/dnr_pub_icon.png"/>');
       document.write('<link rel="icon" type="image/png" sizes="512x512" href="assets/dnr_pub_icon.png"/>');
     } else if(isBingo){
-      document.write('<link rel="apple-touch-icon" sizes="1024x1024" href="assets/dnr_bingo_icon.png"/>');
-      document.write('<link rel="icon" type="image/png" sizes="512x512" href="assets/dnr_bingo_icon.png"/>');
+      var _bIco='assets/dnr_bingo_icon.png'; try{ if(localStorage.getItem('boh_bingo_mode')==='torta') _bIco='assets/dnr_torta_logo.png'; }catch(e){}
+      document.write('<link rel="apple-touch-icon" sizes="1024x1024" href="'+_bIco+'"/>');
+      document.write('<link rel="icon" type="image/png" sizes="512x512" href="'+_bIco+'"/>');
     } else if(isLiga){
       document.write('<link rel="apple-touch-icon" sizes="1024x1024" href="assets/dnr_liga_icon.png"/>');
       document.write('<link rel="icon" type="image/png" sizes="512x512" href="assets/dnr_liga_icon.png"/>');
@@ -33801,8 +33802,12 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
     var q=location.search, brand=null;
     if(q.indexOf('screen=events')!==-1||q.indexOf('screen=calendar')!==-1)
       brand={icon:'assets/dnr_events_icon.png', title:'DNR Events', tag:'Bulik. Csapatok. Emlékek.'};
-    else if(q.indexOf('screen=bingo')!==-1)
-      brand={icon:'assets/dnr_bingo_icon.png', title:'DNR Bingó', tag:'Meccs. Buli. Tele.'};
+    else if(q.indexOf('screen=bingo')!==-1){
+      var _bm=null,_bt=null; try{_bm=localStorage.getItem('boh_bingo_mode');_bt=localStorage.getItem('boh_torta_title');}catch(e){}
+      brand=_bm==='torta'
+        ? {icon:'assets/dnr_torta_logo.png', title:_bt||'DNR a tortán', tag:'Főz. Vendégül lát. Pontoz.'}
+        : {icon:'assets/dnr_bingo_icon.png', title:'DNR Bingó', tag:'Meccs. Buli. Tele.'};
+    }
     else if(q.indexOf('screen=liga')!==-1)
       brand={icon:'assets/dnr_liga_icon.png', title:'DNR Liga', tag:'Ranglista. Szezonok. Szintek.'};
     if(!brand) return;
@@ -35203,7 +35208,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.401';
+const APP_VERSION = 'v10.402';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -40041,6 +40046,7 @@ function AdminGrowth() {
 }
 
 function AdminHomeToggles() {
+  const bingoCfg = useBingoCfg();
   const [cfg, setCfg] = React.useState(null);
   const [loaded, setLoaded] = React.useState(false);
   React.useEffect(() => {
@@ -40083,7 +40089,7 @@ function AdminHomeToggles() {
         <div style={{ marginTop:14 }}>
           <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>Melyik app látszódjon</div>
           <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-            {DNR_APPS.map(app => {
+            {DNR_APPS.map(a0 => dnrAppView(a0, bingoCfg)).map(app => {
               const appOn = dnrAppEnabled(cfg, app.screen);
               return (
                 <div key={app.screen} style={{ display:'flex', alignItems:'center', gap:11, padding:'7px 0' }}>
@@ -41294,7 +41300,7 @@ function BingoScreen({ go, deepLink }) {
     if (typeof window.getProfiles === 'function') window.getProfiles().then(ps => setProfiles(ps || [])).catch(() => {});
     if (!db) { setLoaded(true); return; }
     const un = db.collection('config').doc('bingo').onSnapshot(d => { setMarksAll((d && d.exists && d.data()) || {}); setLoaded(true); }, () => setLoaded(true));
-    const un2 = db.collection('config').doc('bingoConfig').onSnapshot(d => setCfg((d && d.exists && d.data()) || null), () => {});
+    const un2 = db.collection('config').doc('bingoConfig').onSnapshot(d => { const v = (d && d.exists && d.data()) || null; setCfg(v); bohRememberBingoMode(v); }, () => {});
     const un3 = db.collection('config').doc('tippAnswers').onSnapshot(d => setTippAll((d && d.exists && d.data()) || {}), () => {});
     const un4 = db.collection('config').doc('tippAuth').onSnapshot(d => setTippAuth((d && d.exists && d.data()) || {}), () => {});
     const un5 = db.collection('config').doc('tortaScores').onSnapshot(d => setTortaScores((d && d.exists && d.data()) || {}), () => {});
@@ -43872,6 +43878,35 @@ const DNR_APPS = [
   { screen:'bingo',   name:'DNR Bingó',  icon:'assets/dnr_bingo_icon.png',  sub: () => 'Meccs- és bulibingó · tipp bajnokság · DNR a tortán' },
   { screen:'stats',   name:'DNR Liga',   icon:'assets/dnr_liga_icon.png',   sub: c => c.liga ? `Ranglista · ${c.liga}` : 'Ranglista, szezonok, szintek' },
 ];
+// Egy DNR app MEGJELENÍTETT alakja. A Bingó app a módja szerint öltözik: Tortán
+// módban a „DNR a tortán" logóját és nevét viszi (a lista, a beállítások ÉS a
+// főképernyő gombja ugyanazt mutatja). A mód a nyitóképernyőnek is el van téve
+// (boh_bingo_mode) — az a config megérkezése ELŐTT fut.
+function dnrAppView(app, bingoCfg) {
+  if (app.screen !== 'bingo' || !bingoCfg || bingoCfg.mode !== 'torta') return app;
+  return Object.assign({}, app, {
+    name: bingoCfg.tortaTitle || 'DNR a tortán',
+    icon: TORTA_LOGO,
+    sub: () => 'Főzős vendéglátó-bajnokság · pontozás',
+  });
+}
+function bohRememberBingoMode(cfg) {
+  try {
+    const m = (cfg && (cfg.mode === 'tipp' || cfg.mode === 'torta')) ? cfg.mode : 'bingo';
+    localStorage.setItem('boh_bingo_mode', m);
+    if (m === 'torta') localStorage.setItem('boh_torta_title', (cfg && cfg.tortaTitle) || 'DNR a tortán');
+  } catch(e) {}
+}
+function useBingoCfg() {
+  const [c, setC] = React.useState(null);
+  React.useEffect(() => {
+    if (typeof firebase === 'undefined') return;
+    const un = firebase.firestore().collection('config').doc('bingoConfig')
+      .onSnapshot(d => { const v = (d && d.exists && d.data()) || null; setC(v); bohRememberBingoMode(v); }, () => {});
+    return () => { try { un(); } catch(e) {} };
+  }, []);
+  return c;
+}
 function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resumeRoomData, onResume, onOpenSeason }) {
   const [splashOn, setSplashOn] = React.useState(() => localStorage.getItem('boh_splash') !== '0');
   const [sndOn, setSndOn] = React.useState(() => { try { return localStorage.getItem('boh_snd') !== '0'; } catch(e) { return true; } });
@@ -43902,12 +43937,7 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
   // DNR dokk — élő infók: következő esemény + jukebox állapot
   const [nextEvent, setNextEvent] = React.useState(null);
   const [boxInfo, setBoxInfo] = React.useState(null);
-  const [bingoCfg, setBingoCfg] = React.useState(null);
-  React.useEffect(() => {
-    if (typeof firebase === 'undefined') return;
-    const un = firebase.firestore().collection('config').doc('bingoConfig').onSnapshot(d => setBingoCfg((d && d.exists && d.data()) || null), () => {});
-    return () => { try { un(); } catch(e) {} };
-  }, []);
+  const bingoCfg = useBingoCfg();
   const bingoOn = !bingoCfg || bingoCfg.enabled !== false;
   const bingoMode = (bingoCfg && (bingoCfg.mode === 'tipp' || bingoCfg.mode === 'torta')) ? bingoCfg.mode : 'bingo';
   const bingoLabel = bingoMode === 'torta'
@@ -44051,7 +44081,7 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
       {showMoreApps && (
         <SheetOverlay onClose={() => setShowMoreApps(false)} title="DNR appok">
           <div style={{ padding:'0 16px 24px', display:'flex', flexDirection:'column', gap:10 }}>
-            {DNR_APPS.filter(app => dnrAppEnabled(homeCfg, app.screen)).map(app => (
+            {DNR_APPS.filter(app => dnrAppEnabled(homeCfg, app.screen)).map(a0 => dnrAppView(a0, bingoCfg)).map(app => (
               <button key={app.screen} onClick={() => { setShowMoreApps(false); go(app.screen); }}
                 style={{ display:'flex', alignItems:'center', gap:13, width:'100%', boxSizing:'border-box', background:T.surface, border:'none', borderRadius:16, padding:'12px 14px', cursor:'pointer', textAlign:'left', boxShadow:T.shadowPill, WebkitTapHighlightColor:'transparent' }}>
                 <img src={app.icon} style={{ width:44, height:44, borderRadius:13, flexShrink:0 }} />
@@ -44345,7 +44375,7 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
                 <span style={{ fontFamily:T.font, fontWeight:700, fontSize:9.5, color:T.inkSoft }}>{t('quickGameSub')}</span>
               </button>
             </div>
-            {bingoOn && (
+            {bingoOn && dnrAppEnabled(homeCfg, 'bingo') && (
             <button onClick={() => go('bingo')} style={{ position:'relative', overflow:'hidden', display:'flex', alignItems:'center', gap:12, border:'none', background: bingoMode === 'torta' ? 'linear-gradient(115deg, #121C28, #25384D 55%, #121C28)' : 'linear-gradient(115deg, #1E7A46, #2FA35F 55%, #1E7A46)', borderRadius:18, padding:'13px 16px', cursor:'pointer', boxShadow: bingoMode === 'torta' ? '0 4px 0 #C49A45, 0 11px 24px rgba(18,28,40,0.35)' : '0 4px 0 rgba(20,83,45,0.6), 0 11px 24px rgba(20,83,45,0.35)', transform:'rotate(0.5deg)', WebkitTapHighlightColor:'transparent', textAlign:'left' }}>
               {bingoMode === 'torta'
                 ? <img data-torta-logo src={TORTA_LOGO} alt="" style={{ width:40, height:40, flexShrink:0, filter:'drop-shadow(0 2px 5px rgba(0,0,0,0.25))' }} />
