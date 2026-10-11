@@ -35217,7 +35217,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.416';
+const APP_VERSION = 'v10.417';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -41355,6 +41355,15 @@ function tortaEveningTotal(ev, teams, scores) {
   guests.forEach(pid => { const r = sc[pid]; if (!r) return; const s = tortaRatingSum(r); if (s > 0) { started++; pts += s; } if (tortaRatingComplete(r)) done++; });
   return { pts, done, started, guests: guests.length };
 }
+// v10.417: egy este CSAK a beállított időpont után pontozható. Dátum nélkül
+// („Időpont később" — pl. friss sorsolás) még nem: a vendégek különben az este
+// ELŐTT is beírhattak pontot. A dátum datetime-local alak (helyi idő), a Date.parse
+// is helyi időként olvassa.
+function tortaScoringOpen(ev, now) {
+  if (!ev || !ev.date) return false;
+  const t = Date.parse(ev.date);
+  return !isNaN(t) && t <= (now == null ? Date.now() : now);
+}
 function tortaFmtDate(iso) {
   if (!iso) return 'Időpont később';
   try { return new Date(iso).toLocaleString('hu-HU', { month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' }); }
@@ -41924,9 +41933,18 @@ function BingoScreen({ go, deepLink }) {
   const myTortaTeam = who ? tortaTeamOf(who) : null;
   // Az én pontozandó estéim: ahol a csapatom VENDÉG (a házigazda a saját estéjét nem pontozza).
   const myGuestEvenings = who ? tortaEvenings.filter(ev => tortaGuestIds(ev, tortaTeams).includes(who)) : [];
+  // Ha van még nem nyílt estém, félpercenként újrarajzolunk — így a pontozás magától
+  // megnyílik, amikor elérkezik az időpont (újratöltés nélkül).
+  const [, setTortaTick] = React.useState(0);
+  const _tortaWaiting = myGuestEvenings.some(ev => !ev.locked && ev.date && !tortaScoringOpen(ev));
+  React.useEffect(() => {
+    if (!_tortaWaiting) return;
+    const id = setInterval(() => setTortaTick(n => n + 1), 30000);
+    return () => clearInterval(id);
+  }, [_tortaWaiting]);
   const writeTortaRating = (evId, catKey, val) => {
     const ev = tortaEvenings.find(x => x.id === evId);
-    if (!canEdit || !ev || ev.locked || !tortaGuestIds(ev, tortaTeams).includes(who)) return;
+    if (!canEdit || !ev || ev.locked || !tortaScoringOpen(ev) || !tortaGuestIds(ev, tortaTeams).includes(who)) return;
     const cur = { ...(((tortaScores[evId] || {})[who]) || {}) };
     cur[catKey] = (cur[catKey] === val) ? null : val;   // ugyanarra koppintva törlődik
     cur.at = Date.now();
@@ -42222,14 +42240,22 @@ function BingoScreen({ go, deepLink }) {
               const mine = ((tortaScores[ev.id] || {})[who]) || {};
               const mySum = tortaRatingSum(mine);
               const doneCats = TORTA_CATS.filter(c => tortaCatVal(mine, c.k) > 0).length;
-              const editable = canEdit && !ev.locked;
+              const open = tortaScoringOpen(ev);
+              const editable = canEdit && !ev.locked && open;
               return (
-                <div key={ev.id} data-torta-ev={ev.id} style={{ background:T.surface, borderRadius:18, padding:'14px', boxShadow:T.shadow, marginBottom:12, borderLeft: tortaRatingComplete(mine) ? `4px solid ${T.mint}` : '4px solid transparent' }}>
+                <div key={ev.id} data-torta-ev={ev.id} data-torta-open={open ? '1' : '0'} style={{ background:T.surface, borderRadius:18, padding:'14px', boxShadow:T.shadow, marginBottom:12, borderLeft: tortaRatingComplete(mine) ? `4px solid ${T.mint}` : '4px solid transparent' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
                     <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:T.inkMute }}>{tortaFmtDate(ev.date)}</span>
                     <div style={{ flex:1 }} />
-                    {ev.locked ? <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.inkMute }}>🔒 lezárva</span> : <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.mintDeep || T.mint }}>pontozható</span>}
+                    {ev.locked ? <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.inkMute }}>🔒 lezárva</span>
+                      : !open ? <span data-torta-notyet style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.coral }}>⏳ még nem pontozható</span>
+                      : <span style={{ fontFamily:T.font, fontWeight:700, fontSize:10, color:T.mintDeep || T.mint }}>pontozható</span>}
                   </div>
+                  {!ev.locked && !open && (
+                    <div style={{ fontFamily:T.font, fontWeight:700, fontSize:11.5, color:T.inkSoft, background:`${T.coral}14`, borderRadius:10, padding:'8px 10px', marginBottom:10, lineHeight:1.4 }}>
+                      {ev.date ? `A pontozás az este kezdetekor nyílik meg (${tortaFmtDate(ev.date)}).` : 'Az este időpontja még nincs beállítva — a pontozás az időpont után nyílik meg.'}
+                    </div>
+                  )}
                   <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
                     <div style={{ display:'flex' }}>{teamMembers(host).map((pr, i) => <div key={pr.id} style={{ marginLeft: i ? -8 : 0, borderRadius:'50%', border:`2px solid ${T.surface}` }}><Avatar pr={pr} size={30} /></div>)}</div>
                     <div style={{ minWidth:0 }}>

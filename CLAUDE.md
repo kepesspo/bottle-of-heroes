@@ -3320,3 +3320,19 @@ Teszt: `adminpress_test` utolsó blokkja (2000 px: 15 fül az oldalsávban, a ta
 - **A splash szlogenje: „Do not reject"** (a DNR feloldása), a „Ivós kalandjáték" helyett.
 Teszt: `torta_draw_test` 14. blokk (a választón is ott a gomb a jobb felső sarokban,
 nincs régi kártya, profil nélkül is PIN-t kér).
+
+### DNR a tortán: pontozni CSAK az este időpontja után lehet (v10.417)
+Eddig egy este az elfogadás pillanatától pontozható volt — a vendégek az este ELŐTT is
+beírhattak pontot. Innentől **`tortaScoringOpen(ev)`**: van `date`, és az már elmúlt.
+- **Időpont nélkül** (friss sorsolás: „Időpont később") **nem** pontozható — az admin
+  előbb beállítja a dátumot (Admin → Játék → Bingó → Alkalmak).
+- A kapu KÉT helyen él: a gombok `editable`-jében ÉS a `writeTortaRating`-ben (egy régi,
+  nyitva hagyott képernyő se tudjon írni).
+- A kártya kiírja: „⏳ még nem pontozható" + „A pontozás az este kezdetekor nyílik meg
+  (…)". Ha van várakozó estém, a képernyő **30 mp-enként újrarajzol**, így a pontozás
+  újratöltés nélkül megnyílik, amikor elérkezik az időpont.
+- A `date` `datetime-local` alak → a `Date.parse` HELYI időként olvassa.
+- A visszavonás (v10.407) feltétele, hogy „még senki nem pontozott" — ez így a dátumig
+  biztosan teljesül.
+Teszt: `torta_test.js` 6b. blokk (jövőbeli és dátum nélküli este tiltva, kiírja,
+kontrollal: a múltbeli újra pontozható).

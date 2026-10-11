@@ -115,6 +115,21 @@ const setCfg = (p, patch) => p.evaluate(patch => firebase.firestore().collection
   ok((await scoreOf(p, 'e1', 'p2')).etel === 8, 'a korábbi pont változatlan (8)');
   await setCfg(p, { tortaEvenings: CFG.tortaEvenings });
 
+  // ── 6b. v10.417: csak az este időpontja UTÁN pontozható ──
+  console.log('\n===== 6b. PONTOZÁS CSAK AZ IDŐPONT UTÁN =====');
+  const fut = (() => { const d = new Date(Date.now() + 3 * 864e5); const z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T19:00`; })();
+  await setCfg(p, { tortaEvenings: [ { ...CFG.tortaEvenings[0], date: fut } ] });
+  await mountAs(p, 'p2'); await p.waitForTimeout(700);
+  ok((await tap(p, 'e1', 'etel', 3)) === 'tiltva', '⚠️ jövőbeli estére még NEM lehet pontozni');
+  ok(await p.evaluate(() => !!document.querySelector('[data-torta-ev="e1"] [data-torta-notyet]')) && /este kezdetekor nyílik meg/.test(await txt(p)), 'a kártya kiírja, mikor nyílik a pontozás');
+  ok((await scoreOf(p, 'e1', 'p2')).etel === 8, 'a pont nem változott (8)');
+  await setCfg(p, { tortaEvenings: [ { ...CFG.tortaEvenings[0], date: '' } ] });
+  await mountAs(p, 'p2'); await p.waitForTimeout(700);
+  ok((await tap(p, 'e1', 'etel', 3)) === 'tiltva' && /időpontja még nincs beállítva/.test(await txt(p)), '⚠️ időpont nélküli estére (friss sorsolás) sem lehet pontozni');
+  await setCfg(p, { tortaEvenings: CFG.tortaEvenings });
+  await mountAs(p, 'p2'); await p.waitForTimeout(700);
+  ok(await p.evaluate(() => document.querySelector('[data-torta-ev="e1"]').getAttribute('data-torta-open') === '1'), 'kontroll: a múltbeli estére újra pontozható');
+
   // ── 7. Kódvédelem ──
   console.log('\n===== 7. KÓDVÉDELEM =====');
   await setCfg(p, { tippRequireCode: true });
