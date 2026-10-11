@@ -69,6 +69,8 @@ async function open(b, query, init) {
   console.log('\n===== 5. KÁRTYÁK NÉZET =====');
   const c1 = await p.evaluate(() => ({ active: (document.querySelector('[data-hub-card][data-active="1"]') || {}).getAttribute && document.querySelector('[data-hub-card][data-active="1"]').getAttribute('data-hub-card'), n: document.querySelectorAll('[data-hub-card]').length }));
   ok(c1.active === 'home' && c1.n === 6, 'az első aktív kártya a DNR Games, összesen 6 kártya', JSON.stringify(c1));
+  const order = await p.evaluate(() => [...document.querySelectorAll('[data-hub-card]')].map(x => x.getAttribute('data-hub-card')));
+  ok(order[2] === 'bingo', '⚠️ a Bingó / DNR a tortán a harmadik kártya (v10.413)', order.join(','));
   // ⚠️ v10.410: VALÓDI egérkattintás a nyíl közepére (hit-test). Az element.click()
   // átment akkor is, amikor a kártya-sáv rálógott a nyíl-sorra és elnyelte a koppintást.
   const hit = await p.evaluate(() => { const b = document.querySelector('[data-hub-next]'); const r = b.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2; const top = document.elementFromPoint(x, y); return { x, y, own: !!top && (top === b || b.contains(top)) }; });

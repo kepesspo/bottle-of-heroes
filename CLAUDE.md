@@ -3271,3 +3271,9 @@ Weben (2000 px) a „DNR" és az admin gomb egy 720 px-es középső oszlopban �
 a kép közepére került. A belső konténernek nincs `maxWidth`-je, a vízszintes padding
 `clamp(18px, 2.5vw, 40px)`. A kártya-sáv amúgy is `100vw`, a nyíl-sor középre igazít.
 Teszt: `dnr_hub_test` (2000 px-en mindkettő ≤ 60 px-re a széltől).
+
+### Központ: a „DNR a tortán" a harmadik kártya (v10.413)
+A kártyák sorrendje a központban: **Games · Events · Bingó/Tortán · BOX · Pub · Liga**
+(`HUB_ORDER`). Csak a központé — a `DNR_APPS` (admin „Melyik app látszódjon" lista)
+sorrendje változatlan. A Bingó helye módtól független (Bingó/Tipp/Tortán ugyanott).
+Teszt: `dnr_hub_test` (a 3. kártya a `bingo`).
