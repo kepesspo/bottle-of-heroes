@@ -3119,3 +3119,23 @@ hibaüzenet, nem „Mentve").
 Teszt: `torta_draw_test.js` — a lassúság mérve (tárcsa > 7 mp, egész > 18 mp), a PIN a
 `boh_admin_ok` ellenére is, PIN nélkül tiltás, és weben az arány (2/3 ± 3%), az oldalsáv
 sorai, a nagyítás, és hogy a vendég-blokk kifér.
+
+### Sorsolás: egymás utáni húzások, elvetés, visszavonás (v10.407)
+- **Nem kell kilépni.** Az „Elfogadom" után a show NYITVA marad (`keepOpenId`), a
+  „🎲 Következő sorsolás" ugyanitt indítja a következőt; az oldalsávon az épp elfogadott
+  este „ELFOGADVA" jelölést kap. A többi telefonon az elfogadott show bezárul, és a
+  következő függő húzás megint animál náluk.
+- **Próbaszezon.** A „Következő próba" a már kihúzott PRÓBA-estékre (`practiceHist`) építve
+  húz tovább — a zsákutca-szabály ezekre is él, tehát egy teljes szezon végigpróbálható.
+  Semmi nem mentődik; bezáráskor elvész. A végén „🏁 … minden estéje kisorsolva".
+- **Véletlen éles húzás:**
+  - függő → **„Elvetés"** (a show alján és a panelben): `status:'discarded'`, nem lesz
+    belőle este;
+  - már elfogadott → a panelben **„Visszavonás"** az UTOLSÓ elfogadott sorsolásra
+    (törli az estét, `status:'undone'`) — DE csak ha még senki nem pontozott rá; ha
+    igen, az Admin → Bingó → Alkalmak alatt törölhető (pontokkal együtt döntés kérdése).
+- Teszt-fogódzó: `window.__tortaDrawSpeed` (pl. 0.06) az egész idővonalat skálázza.
+
+Teszt: `torta_draw_test.js` 4. (nyitva marad, Következő, Elvetés), 9. (5 próba-húzás
+egymás után, más-más házigazdával, semmi nem mentődik) és 10. (visszavonás; pontozott
+estére nincs) blokk.
