@@ -21,7 +21,8 @@ const ok = (c, l, e) => { console.log((c ? '  OK   ' : '  HIBA ') + l + (e !== u
 const TORTA = 'assets/dnr_torta_logo.png', BINGO = 'assets/dnr_bingo_icon.png';
 
 const homeBtn = p => p.evaluate(() => {
-  const b = document.querySelector('#__h [data-hub-open="bingo"]');
+  // v10.411: csak Kártya nézet — a kártya viszi az ikont és a nevet, a gomb csak „Megnyitás"
+  const b = document.querySelector('#__h [data-hub-card="bingo"]');
   if (!b) return null;
   const i = b.querySelector('img'); return { txt: (b.textContent || '').trim(), src: i ? i.getAttribute('src') : null };
 });
@@ -55,7 +56,6 @@ const setDoc = (p, doc, data) => p.evaluate(({ doc, data }) => firebase.firestor
     const mk = (id, left) => { const d = document.createElement('div'); d.id = id;
       d.style.cssText = `position:absolute;left:${left}px;top:0;width:402px;height:1400px;overflow:auto;z-index:9;background:#fff;display:flex;flex-direction:column`;
       document.body.appendChild(d); return ReactDOM.createRoot(d); };
-    try { localStorage.setItem('boh_hub_view', 'grid'); } catch(e) {}
     mk('__h', 0).render(React.createElement(DnrHubScreen, { onOpen: () => {} }));
     mk('__s', 410).render(React.createElement(AdminHomeToggles));
   });

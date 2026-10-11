@@ -3247,3 +3247,21 @@ kerüljenek felülre, a görgetést vegyük ki, a nyilak nem léptetnek."
   lóghat ki függőlegesen (vízszintesen vág).
 Teszt: `dnr_hub_test` — valódi egérkattintás a nyílra + `elementFromPoint`, három
 kijelzőméreten nincs görgető elem, a kártya a nyilak fölött végződik, a fejléc felül.
+
+### Központ: csak Kártyák, köszöntés a központban, ikonok a körben (v10.411)
+- **A Rács nézet és a nézetváltó KIKERÜLT** (tulajdonosi döntés: „csak a kártya
+  opció legyen"). A `boh_hub_view` már nem számít; a `data-dnr-hub` mindig `cards`.
+  Vele ment a „Kód beírása" gomb is (az a DNR Games főoldalán megvan).
+  ⚠️ Kártyán a NEM aktív app „Megnyitás" gombja előbb odalapoz, csak a második
+  koppintás nyit — a tesztek (`dnr_hub`, `pwa_apps`) ezért kétszer kattintanak.
+- **A köszöntés a központba költözött** (`HubGreeting`, modul-szintű): „👋 Szia,
+  csapat!" + `nap · verzió`, és vele a **rejtett TESZT DB kapcsoló** (3 koppintás a
+  verzió-soron) és a TESZT DB pirula. A Games főoldalán már nincs; a `testdb_test`
+  ezért a központtal nyit (`?screen=games` nélkül).
+- **Kör-ikon:** a négyzetes app-ikonok (Events, Pub, Bingó, Liga) díszpöttyei és a Pub
+  habja a 160 px-es kör szélén túl ültek és levágódtak. Most **112 px-en, a körön
+  belül** állnak (`circleImg`, 28%-os saroklekerekítéssel — a fehér PNG sarka
+  látszott); a BOX lemeze kerek, az kitölti a kört (`ICON_FILL`). A Games és a
+  Tortán logó marad 134.
+Teszt: `dnr_hub_test` (nincs váltó, köszöntés a központban és nem a Games-en, az
+ikonok aránya a körhöz).

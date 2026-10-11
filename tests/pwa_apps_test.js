@@ -137,6 +137,9 @@ const head = (p) => p.evaluate(() => ({
       ok('a DNR Games is a központban', hub.open.includes('home'));
       ok('a Liga csempe a futo szezont mutatja', /Ranglista · S2 · Nyár/.test(hub.text), (hub.text.match(/Ranglista[^\n]*/) || ['NINCS'])[0]);
       await pp.screenshot({ path: __dirname + '/pwa_home_dock.png', fullPage: true });
+      // a nem aktív kártya gombja előbb odalapoz, a második koppintás nyit (v10.411: csak Kártyák)
+      await pp.evaluate(() => { const b = document.querySelector('[data-hub-open="bingo"]'); if (b) b.click(); });
+      await pp.waitForTimeout(500);
       await pp.evaluate(() => { const b = document.querySelector('[data-hub-open="bingo"]'); if (b) b.click(); });
       await pp.waitForTimeout(1200);
       const after = await pp.evaluate(() => ({ text: document.body.innerText, hub: !!document.querySelector('[data-dnr-hub]') }));

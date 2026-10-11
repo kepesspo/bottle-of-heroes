@@ -48,7 +48,7 @@ const open = async (b, testMode) => {
     ['stats','game_stats','statEvents','gameStatEvents','seasons','usage','config']
       .forEach(k => window.__fbStore[k] = {});
   `);
-  await p.goto(BASE + '?screen=games', { waitUntil: 'domcontentloaded', timeout: 90000 });  // v10.409: a Games főoldaláról (a nyitóképernyő a DNR központ)
+  await p.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 90000 });  // v10.411: a köszöntés + verzió-sor (a TESZT DB kapcsoló) a DNR KÖZPONTBAN van
   await p.waitForTimeout(3600);
   return p;
 };

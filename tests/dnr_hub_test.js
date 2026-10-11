@@ -2,7 +2,8 @@
 //
 // Fogódzók:
 //  1) az app a DNR központtal nyit (nem a DNR Games főoldallal), „DNR" felirattal
-//  2) Rács nézet (alap): kiemelt DNR Games + a többi engedélyezett app csempeként
+//  2) v10.411: csak a Kártya nézet van (nincs Rács, nincs váltó); a köszöntés
+//     („Szia, csapat!" + nap · verzió) a központ fejléce alatt áll
 //  3) a központból nyitott app „vissza"-ja a KÖZPONTBA visz (nem a Games főoldalra)
 //  4) DNR Games → a régi főoldal, „‹ DNR" gombbal vissza a központba; a „További DNR"
 //     sor és a Bingó-gomb már NINCS a Games főoldalon
@@ -34,34 +35,38 @@ async function open(b, query, init) {
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
   let p = await open(b, '');
 
-  console.log('\n===== 1–2. NYITÓKÉPERNYŐ: DNR KÖZPONT, RÁCS =====');
-  ok((await hubView(p)) === 'grid', '⚠️ az app a DNR központtal nyit, Rács nézetben', await hubView(p));
+  console.log('\n===== 1–2. NYITÓKÉPERNYŐ: DNR KÖZPONT, CSAK KÁRTYÁK =====');
+  ok((await hubView(p)) === 'cards', '⚠️ az app a DNR központtal nyit, Kártya nézetben', await hubView(p));
+  ok(await p.evaluate(() => !document.querySelector('[data-hub-view]')), '⚠️ nincs nézetváltó (a Rács kikerült)');
+  const gr = await p.evaluate(() => { const g = document.querySelector('[data-hub-greet]'); return g ? g.innerText.replace(/\s+/g, ' ') : null; });
+  ok(!!gr && /Szia, csapat!/.test(gr) && /· v\d+\.\d+/.test(gr), '⚠️ a köszöntés és a nap · verzió a központban', gr);
   ok(await p.evaluate(() => /^DNR$/.test((document.querySelector('[data-hub-wordmark]') || {}).textContent || '')), 'a fejlécben „DNR" felirat');
   const hd = await p.evaluate(() => { const h = document.querySelector('[data-hub-header]').getBoundingClientRect(); const hub = document.querySelector('[data-dnr-hub]'); const sc = [...hub.querySelectorAll('div')].filter(d => d.scrollHeight > d.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(d).overflowY)); return { top: Math.round(h.top), admin: !!document.querySelector('[data-hub-header] [data-hub-admin]'), scroll: sc.length }; });
   ok(hd.top < 40 && hd.admin, '⚠️ a fejléc (DNR + váltó + admin) a képernyő tetején', JSON.stringify(hd));
-  ok(hd.scroll === 0, 'Rács nézet 390×844-en nem görget', JSON.stringify(hd));
+  ok(hd.scroll === 0, 'a központ 390×844-en nem görget', JSON.stringify(hd));
   const tiles = await p.evaluate(() => [...document.querySelectorAll('[data-dnr-hub] [data-hub-open]')].map(x => x.getAttribute('data-hub-open')));
   ok(tiles.includes('home') && ['log','jukebox','bar','bingo','stats'].every(s => tiles.includes(s)), 'kiemelt DNR Games + mind az 5 DNR app', tiles.join(','));
 
   console.log('\n===== 3. APP A KÖZPONTBÓL → VISSZA A KÖZPONTBA =====');
+  // a nem aktív kártya gombja előbb odalapoz, a második koppintás nyit
+  await click(p, '[data-hub-open="bar"]'); await p.waitForTimeout(500);
   await click(p, '[data-hub-open="bar"]'); await p.waitForTimeout(900);
   ok((await hubView(p)) === null, 'megnyílt a Pub (a központ eltűnt)');
   ok(await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => { const r = x.getBoundingClientRect(); return r.top < 140 && r.left < 80 && r.width > 0 && x.querySelector('svg'); }); if (b) { b.click(); return true; } return false; }), 'a Pub vissza gombja');
   await p.waitForTimeout(800);
-  ok((await hubView(p)) === 'grid', '⚠️ a vissza gomb a KÖZPONTBA vitt', await hubView(p));
+  ok((await hubView(p)) === 'cards', '⚠️ a vissza gomb a KÖZPONTBA vitt', await hubView(p));
 
   console.log('\n===== 4. DNR GAMES ↔ KÖZPONT =====');
   await click(p, '[data-hub-open="home"]'); await p.waitForTimeout(900);
   const home = await p.evaluate(() => ({ back: !!document.querySelector('[data-home-hub]'), txt: document.body.innerText }));
   ok(home.back && /DNR GAMES/i.test(home.txt), 'a DNR Games főoldal, „‹ DNR" gombbal', home.back);
+  ok(!/Szia, csapat!/.test(home.txt), 'a köszöntés már NINCS a Games főoldalon (a központba költözött)');
   ok(!/További\s*DNR/i.test(home.txt), '⚠️ a „További DNR" sor már nincs a Games főoldalon');
   ok(await p.evaluate(() => ![...document.querySelectorAll('button')].some(x => /🏆/.test(x.textContent || ''))), 'a Bingó-gomb sincs a Games főoldalon');
   await click(p, '[data-home-hub]'); await p.waitForTimeout(800);
-  ok((await hubView(p)) === 'grid', '„‹ DNR" → vissza a központba');
+  ok((await hubView(p)) === 'cards', '„‹ DNR" → vissza a központba');
 
   console.log('\n===== 5. KÁRTYÁK NÉZET =====');
-  await click(p, '[data-hub-view="cards"]'); await p.waitForTimeout(500);
-  ok((await hubView(p)) === 'cards', 'átvált Kártyák nézetre');
   const c1 = await p.evaluate(() => ({ active: (document.querySelector('[data-hub-card][data-active="1"]') || {}).getAttribute && document.querySelector('[data-hub-card][data-active="1"]').getAttribute('data-hub-card'), n: document.querySelectorAll('[data-hub-card]').length }));
   ok(c1.active === 'home' && c1.n === 6, 'az első aktív kártya a DNR Games, összesen 6 kártya', JSON.stringify(c1));
   // ⚠️ v10.410: VALÓDI egérkattintás a nyíl közepére (hit-test). Az element.click()
@@ -88,15 +93,24 @@ async function open(b, query, init) {
   await p.setViewportSize({ width: 390, height: 844 });
   await click(p, '[data-hub-next]'); await p.waitForTimeout(400);
   ok(await p.evaluate(() => !document.querySelector('nav[aria-label="Gyorsváltó"]') && document.querySelectorAll('[data-dnr-hub] img').length <= 7), '⚠️ nincs alsó kerek ikonsor (csak a kártyák ikonjai)');
+  // a régi „Rács" beállítás (boh_hub_view=grid) sem hozza vissza a rácsot
+  await p.evaluate(() => localStorage.setItem('boh_hub_view', 'grid'));
   await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForTimeout(3200);
-  ok((await hubView(p)) === 'cards', 'újratöltés után is Kártyák (megjegyezve)');
+  ok((await hubView(p)) === 'cards', 'régi boh_hub_view=grid mellett is Kártyák');
+  // ⚠️ v10.411: a Pub és az Events ikonja a KÖRÖN BELÜL (nem lóg ki, nem vágódik)
+  const fit = await p.evaluate(() => ['log','bar','bingo','stats','jukebox'].map(sc => {
+    const img = document.querySelector(`[data-hub-card="${sc}"] img`); const c = img.parentElement;
+    const ri = img.getBoundingClientRect(), rc = c.getBoundingClientRect();
+    return { sc, r: Math.round(ri.width / rc.width * 100) };
+  }));
+  ok(fit.filter(f => f.sc !== 'jukebox').every(f => f.r <= 72) && fit.find(f => f.sc === 'jukebox').r >= 95, '⚠️ a négyzetes ikonok (Events, Pub, Bingó, Liga) beférnek a körbe, a kerek BOX kitölti', JSON.stringify(fit));
   ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
   await p.close();
 
   console.log('\n===== 6. KIKAPCSOLT APP NEM JELENIK MEG =====');
-  p = await open(b, '', `window.__fbStore=window.__fbStore||{};window.__fbStore.config=Object.assign(window.__fbStore.config||{},{homeConfig:{dnrAppsEnabled:true,dnrApps:{bar:false}}});try{localStorage.setItem('boh_hub_view','grid');}catch(e){}`);
+  p = await open(b, '', `window.__fbStore=window.__fbStore||{};window.__fbStore.config=Object.assign(window.__fbStore.config||{},{homeConfig:{dnrAppsEnabled:true,dnrApps:{bar:false}}});`);
   const t2 = await p.evaluate(() => [...document.querySelectorAll('[data-dnr-hub] [data-hub-open]')].map(x => x.getAttribute('data-hub-open')));
-  ok(!t2.includes('bar') && t2.includes('bingo'), '⚠️ a kikapcsolt Pub nincs a központban, a többi ott van', t2.join(','));
+  ok(!t2.includes('bar') && t2.includes('bingo') && t2.includes('home'), '⚠️ a kikapcsolt Pub nincs a központban, a többi ott van', t2.join(','));
   await p.close();
 
   console.log('\n===== 7. ÖNÁLLÓ APP-LINK =====');
