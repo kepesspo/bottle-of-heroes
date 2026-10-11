@@ -355,6 +355,20 @@ const mount = (p) => p.evaluate(() => { window.__bRoot.render(React.createElemen
   ok(evs.length === 5 && Object.values(hc).every(v => v === 1) && ['tA','tB','tC','tD','tE'].every(t => gc[t] === 2), '⚠️ automatán élesben is végigment: 5 este, mindenki 1× házigazda, 2× vendég', JSON.stringify({ n: evs.length, gc }));
   await p.evaluate(() => { try { localStorage.setItem('boh_torta_auto', '0'); } catch(e) {} });
 
+  console.log('\n===== 14. SORSOLÁS PROFILVÁLASZTÁS NÉLKÜL, A JOBB FELSŐ SAROKBÓL (v10.416) =====');
+  await p.evaluate(() => { try { localStorage.removeItem('boh_bingo_who'); } catch(e) {} });
+  await mount(p); await p.waitForTimeout(900);
+  const top = await p.evaluate(() => {
+    const picker = !!document.querySelector('[data-who-pick]');
+    const btn = document.querySelector('[data-torta-drawbtn]'); if (!btn) return { picker, btn:false };
+    const r = btn.getBoundingClientRect(), host = document.getElementById('__b').getBoundingClientRect();
+    return { picker, btn:true, top: Math.round(r.top - host.top), right: Math.round(host.right - r.right), card: !!document.querySelector('[data-torta-drawcard]') };
+  });
+  ok(top.picker && top.btn && top.top < 70 && top.right < 40, '⚠️ a „Ki vagy?" választón is ott a 🎲 gomb, a jobb felső sarokban', JSON.stringify(top));
+  ok(!top.card, 'a régi Sorsolás-kártya (profil után) már nincs', JSON.stringify(top));
+  await click(p, '[data-torta-drawbtn]'); await p.waitForTimeout(400);
+  ok(await p.evaluate(() => !!document.querySelector('[data-torta-pin]')), 'profil nélkül is PIN-t kér');
+
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
   console.log(fail ? '\n❌ ' + fail + ' HIBA' : '\n✅ MINDEN ELLENORZES RENDBEN');

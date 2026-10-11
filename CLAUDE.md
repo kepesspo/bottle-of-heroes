@@ -3309,3 +3309,14 @@ narancs) vitték fehér kártyán.
   különben mindig nyer). Új admin mezőnél nem kell stílus: a lap elkapja.
 Teszt: `adminpress_test` utolsó blokkja (2000 px: 15 fül az oldalsávban, a tartalom
 ≤ 820 px, nincs rés, a mező háttere fehér).
+
+### Sorsolás a jobb felső sarokban + „Do not reject" (v10.416)
+- **A 🎲 Sorsolás gomb az `AppBar` jobb oldalán** (`data-torta-drawbtn`), Tortán módban
+  mindig — a „Ki vagy?" választón is, profil NÉLKÜL (úgyis admin PIN védi). A régi
+  `data-torta-drawcard` kártya (profilválasztás UTÁN, a pontozó lap közepén) kikerült.
+  Függő húzásnál arany pötty a gombon (`data-torta-pendingdot`), és a tartalom tetején
+  egy sáv („Friss sorsolás · jóváhagyásra vár" + `data-torta-replay` „Megnézem") —
+  ez is látszik profil nélkül.
+- **A splash szlogenje: „Do not reject"** (a DNR feloldása), a „Ivós kalandjáték" helyett.
+Teszt: `torta_draw_test` 14. blokk (a választón is ott a gomb a jobb felső sarokban,
+nincs régi kártya, profil nélkül is PIN-t kér).

@@ -33804,7 +33804,7 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
       <span class="splash-letter">D</span><span class="splash-letter">N</span><span class="splash-letter">R</span>
     </div>
   </div>
-  <div id="splash-tagline">Ivós kalandjáték</div>
+  <div id="splash-tagline">Do not reject</div>
   <script>(function(){
     // Onallo appok sajat nyito-kepernyoje — kulonben mindegyik a DNR logot villantana
     var q=location.search, brand=null;
@@ -35217,7 +35217,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.415';
+const APP_VERSION = 'v10.416';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -42159,10 +42159,30 @@ function BingoScreen({ go, deepLink }) {
         <TortaDrawShow key={tortaDraw.id + (replayDraw ? '-r' : '')} draw={tortaDraw} teams={tortaTeams} profiles={profiles} history={tortaEveningsRaw} isAdmin={adminOk} skipAnim={liveDrawSkip}
           onClose={closeLiveDraw} onAccept={acceptDraw} onRedraw={startLiveDraw} onDiscard={discardDraw} onNext={startLiveDraw} nextBlocked={drawBlocker} auto={autoActive && adminOk} onStopAuto={() => setAutoActive(false)} />
       )}
-      <AppBar title={headTitle} onBack={deepLink ? null : () => go('home')} right={who ? (
-        <button onClick={() => pickWho(null)} style={{ border:'none', background:T.surfaceMuted, color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:11.5, borderRadius:999, padding:'7px 12px', cursor:'pointer' }}>Váltás</button>
+      {/* v10.416: a Sorsolás a jobb felső sarokban — profilválasztás NÉLKÜL is elérhető
+          (úgyis admin PIN védi). Függő húzásnál arany pötty jelzi. */}
+      <AppBar title={headTitle} onBack={deepLink ? null : () => go('home')} right={(who || (mode === 'torta' && tortaTeams.length > 0)) ? (
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          {who && <button onClick={() => pickWho(null)} style={{ border:'none', background:T.surfaceMuted, color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:11.5, borderRadius:999, padding:'7px 12px', cursor:'pointer' }}>Váltás</button>}
+          {mode === 'torta' && tortaTeams.length > 0 && (
+            <button data-torta-drawbtn aria-label="Sorsolás" title="Sorsolás" onClick={openDrawPanel}
+              style={{ position:'relative', width:40, height:40, borderRadius:12, border:'none', background:'#14202F', color:'#fff', fontSize:19, lineHeight:1, cursor:'pointer', display:'grid', placeItems:'center', boxShadow:'0 2px 0 #C49A45', WebkitTapHighlightColor:'transparent' }}>
+              🎲
+              {tortaDraw && tortaDraw.status === 'pending' && <span data-torta-pendingdot style={{ position:'absolute', top:-3, right:-3, width:12, height:12, borderRadius:'50%', background:'#F2A93B', border:`2px solid ${T.surface}` }} />}
+            </button>
+          )}
+        </div>
       ) : null} />
       <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'14px 16px max(40px, calc(env(safe-area-inset-bottom) + 24px))', maxWidth:560, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
+        {mode === 'torta' && tortaDraw && tortaDraw.status === 'pending' && (
+          <div data-torta-pending style={{ display:'flex', alignItems:'center', gap:8, background:'#14202F', borderRadius:14, padding:'10px 12px', marginBottom:12, boxShadow:'0 3px 0 #C49A45' }}>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, color:'#C49A45', letterSpacing:'0.08em', textTransform:'uppercase' }}>🎲 Friss sorsolás · jóváhagyásra vár</div>
+              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12.5, color:'#fff', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>🏠 {teamMembers(tortaTeamById(tortaDraw.hostId)).map(p => p.name).join(' & ') || '?'}</div>
+            </div>
+            <button data-torta-replay onClick={() => setReplayDraw(true)} style={{ border:'none', background:'rgba(255,255,255,0.14)', color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:12, borderRadius:999, padding:'8px 12px', cursor:'pointer', flexShrink:0 }}>Megnézem</button>
+          </div>
+        )}
         {showPicker ? (
           <div style={{ background:T.surface, borderRadius:20, padding:'24px 18px', boxShadow:T.shadow, textAlign:'center' }}>
             {mode === 'torta'
@@ -42246,29 +42266,6 @@ function BingoScreen({ go, deepLink }) {
                 </div>
               );
             })}
-
-            {/* Sorsolás (v10.404) */}
-            {tortaTeams.length > 0 && (
-              <div data-torta-drawcard style={{ background:'linear-gradient(115deg, #121C28, #25384D 55%, #121C28)', borderRadius:18, padding:'12px 14px', boxShadow:'0 4px 0 #C49A45, 0 10px 22px rgba(18,28,40,0.3)', marginBottom:14 }}>
-                {tortaDraw && tortaDraw.status === 'pending' && (
-                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10, paddingBottom:10, borderBottom:'1px solid rgba(255,255,255,0.14)' }}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, color:'#C49A45', letterSpacing:'0.08em', textTransform:'uppercase' }}>Friss sorsolás · jóváhagyásra vár</div>
-                      <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12.5, color:'#fff', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>🏠 {teamMembers(tortaTeamById(tortaDraw.hostId)).map(p => p.name).join(' & ') || '?'}</div>
-                    </div>
-                    <button data-torta-replay onClick={() => setReplayDraw(true)} style={{ border:'none', background:'rgba(255,255,255,0.14)', color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:12, borderRadius:999, padding:'8px 12px', cursor:'pointer', flexShrink:0 }}>Megnézem</button>
-                  </div>
-                )}
-                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                  <span style={{ fontSize:24, lineHeight:1 }}>🎲</span>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontFamily:T.font, fontWeight:900, fontSize:14.5, color:'#fff' }}>Sorsolás</div>
-                    <div style={{ fontFamily:T.font, fontWeight:700, fontSize:10.5, color:'rgba(255,255,255,0.75)', marginTop:1 }}>{drawState.remainingHosts.length ? `Még ${drawState.remainingHosts.length} házigazda van hátra` : 'Mindenki volt már házigazda'}</div>
-                  </div>
-                  <button data-torta-drawbtn onClick={openDrawPanel} style={{ border:'none', background:'#C49A45', color:'#14202F', fontFamily:T.font, fontWeight:900, fontSize:13, borderRadius:12, padding:'10px 14px', cursor:'pointer', flexShrink:0 }}>Sorsolás</button>
-                </div>
-              </div>
-            )}
 
             {tortaTeams.length === 0 || tortaEvenings.length === 0 ? (
               <div style={{ background:T.surface, borderRadius:18, padding:'26px 18px', boxShadow:T.shadow, textAlign:'center' }}>
