@@ -37,6 +37,9 @@ async function open(b, query, init) {
   console.log('\n===== 1–2. NYITÓKÉPERNYŐ: DNR KÖZPONT, RÁCS =====');
   ok((await hubView(p)) === 'grid', '⚠️ az app a DNR központtal nyit, Rács nézetben', await hubView(p));
   ok(await p.evaluate(() => /^DNR$/.test((document.querySelector('[data-hub-wordmark]') || {}).textContent || '')), 'a fejlécben „DNR" felirat');
+  const hd = await p.evaluate(() => { const h = document.querySelector('[data-hub-header]').getBoundingClientRect(); const hub = document.querySelector('[data-dnr-hub]'); const sc = [...hub.querySelectorAll('div')].filter(d => d.scrollHeight > d.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(d).overflowY)); return { top: Math.round(h.top), admin: !!document.querySelector('[data-hub-header] [data-hub-admin]'), scroll: sc.length }; });
+  ok(hd.top < 40 && hd.admin, '⚠️ a fejléc (DNR + váltó + admin) a képernyő tetején', JSON.stringify(hd));
+  ok(hd.scroll === 0, 'Rács nézet 390×844-en nem görget', JSON.stringify(hd));
   const tiles = await p.evaluate(() => [...document.querySelectorAll('[data-dnr-hub] [data-hub-open]')].map(x => x.getAttribute('data-hub-open')));
   ok(tiles.includes('home') && ['log','jukebox','bar','bingo','stats'].every(s => tiles.includes(s)), 'kiemelt DNR Games + mind az 5 DNR app', tiles.join(','));
 
@@ -61,8 +64,29 @@ async function open(b, query, init) {
   ok((await hubView(p)) === 'cards', 'átvált Kártyák nézetre');
   const c1 = await p.evaluate(() => ({ active: (document.querySelector('[data-hub-card][data-active="1"]') || {}).getAttribute && document.querySelector('[data-hub-card][data-active="1"]').getAttribute('data-hub-card'), n: document.querySelectorAll('[data-hub-card]').length }));
   ok(c1.active === 'home' && c1.n === 6, 'az első aktív kártya a DNR Games, összesen 6 kártya', JSON.stringify(c1));
-  await click(p, '[data-hub-next]'); await p.waitForTimeout(500);
-  ok(await p.evaluate(() => document.querySelector('[data-hub-card][data-active="1"]').getAttribute('data-hub-card') !== 'home'), 'a nyíl a következő kártyára lapoz');
+  // ⚠️ v10.410: VALÓDI egérkattintás a nyíl közepére (hit-test). Az element.click()
+  // átment akkor is, amikor a kártya-sáv rálógott a nyíl-sorra és elnyelte a koppintást.
+  const hit = await p.evaluate(() => { const b = document.querySelector('[data-hub-next]'); const r = b.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2; const top = document.elementFromPoint(x, y); return { x, y, own: !!top && (top === b || b.contains(top)) }; });
+  ok(hit.own, '⚠️ a „Következő" nyíl közepén a nyíl áll (semmi nem takarja)', JSON.stringify(hit));
+  await p.mouse.click(hit.x, hit.y); await p.waitForTimeout(500);
+  ok(await p.evaluate(() => document.querySelector('[data-hub-card][data-active="1"]').getAttribute('data-hub-card') !== 'home'), '⚠️ a nyíl (valódi kattintással) a következő kártyára lapoz');
+  const hp = await p.evaluate(() => { const b = document.querySelector('[data-hub-prev]'); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  await p.mouse.click(hp.x, hp.y); await p.waitForTimeout(500);
+  ok(await p.evaluate(() => document.querySelector('[data-hub-card][data-active="1"]').getAttribute('data-hub-card') === 'home'), 'az „Előző" nyíl visszalapoz');
+  for (const [w, h] of [[390, 844], [375, 667], [430, 932]]) {
+    await p.setViewportSize({ width: w, height: h }); await p.waitForTimeout(400);
+    const g = await p.evaluate(() => {
+      const hub = document.querySelector('[data-dnr-hub]');
+      const sc = [...hub.querySelectorAll('div')].filter(d => d.scrollHeight > d.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(d).overflowY));
+      const card = document.querySelector('[data-hub-card][data-active="1"]').getBoundingClientRect();
+      const arr = document.querySelector('[data-hub-arrows]').getBoundingClientRect();
+      const head = document.querySelector('[data-hub-header]').getBoundingClientRect();
+      return { scroll: sc.length, docScroll: document.scrollingElement.scrollHeight > innerHeight + 1, headTop: Math.round(head.top), cardBottom: Math.round(card.bottom), arrTop: Math.round(arr.top), arrBottom: Math.round(arr.bottom), vh: innerHeight };
+    });
+    ok(g.scroll === 0 && !g.docScroll && g.cardBottom <= g.arrTop && g.arrBottom <= g.vh && g.headTop < 40, `${w}×${h}: nem görget, a kártya a nyilak fölött végződik, a fejléc felül`, JSON.stringify(g));
+  }
+  await p.setViewportSize({ width: 390, height: 844 });
+  await click(p, '[data-hub-next]'); await p.waitForTimeout(400);
   ok(await p.evaluate(() => !document.querySelector('nav[aria-label="Gyorsváltó"]') && document.querySelectorAll('[data-dnr-hub] img').length <= 7), '⚠️ nincs alsó kerek ikonsor (csak a kártyák ikonjai)');
   await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForTimeout(3200);
   ok((await hubView(p)) === 'cards', 'újratöltés után is Kártyák (megjegyezve)');

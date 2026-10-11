@@ -35213,7 +35213,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.409';
+const APP_VERSION = 'v10.410';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -44561,6 +44561,34 @@ function useDnrLiveInfo() {
     liga: info.liga,
   };
 }
+// Admin belépés PIN-nel — v10.410 óta a DNR KÖZPONT fejlécéből nyílik (onnan
+// irányít a tulajdonos), nem a Games főoldal fogaskerekének hosszú nyomásából.
+function AdminPinModal({ onOk, onClose }) {
+  const [pinVal, setPinVal] = React.useState('');
+  const [pinErr, setPinErr] = React.useState(false);
+  const submitPin = () => {
+    if (pinVal === '199509') { setPinVal(''); onOk(); }
+    else { setPinErr(true); setPinVal(''); }
+  };
+  return ReactDOM.createPortal(
+    <div data-admin-pin style={{position:'fixed',inset:0,zIndex:9000,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'center',justifyContent:'center'}} onClick={e2=>{if(e2.target===e2.currentTarget) onClose();}}>
+      <div style={{background:T.surface,borderRadius:24,padding:'32px 28px',width:280,boxShadow:'0 20px 60px rgba(0,0,0,0.3)',display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
+        <div style={{fontFamily:T.font,fontWeight:900,fontSize:20,color:T.ink}}><BohIcon name="lock" size={17} style={{ marginRight:6 }} />Admin belépés</div>
+        <div style={{fontFamily:T.font,fontSize:14,color:T.sub,textAlign:'center'}}>Add meg a PIN kódot</div>
+        <input
+          type="password" inputMode="numeric" maxLength={6}
+          value={pinVal} onChange={e2=>{setPinVal(e2.target.value);setPinErr(false);}}
+          onKeyDown={e2=>{if(e2.key==='Enter')submitPin();}}
+          autoFocus
+          style={{width:'100%',boxSizing:'border-box',padding:'14px 16px',borderRadius:14,border:`2px solid ${pinErr?T.coral:T.border}`,background:T.bg,fontFamily:T.font,fontSize:22,color:T.ink,textAlign:'center',letterSpacing:8,outline:'none'}}
+          placeholder="······"
+        />
+        {pinErr && <div style={{fontFamily:T.font,fontSize:13,color:T.coral,fontWeight:700}}>Helytelen PIN</div>}
+        <button onClick={submitPin} style={{width:'100%',padding:'14px',borderRadius:14,border:'none',background:T.mint,color:'#fff',fontFamily:T.font,fontWeight:900,fontSize:16,cursor:'pointer'}}>Belépés</button>
+      </div>
+    </div>
+  , document.body);
+}
 // A két nézet ikonja a váltóban (vonalas, nem emoji)
 function HubViewIcon({ kind, color }) {
   return kind === 'grid'
@@ -44608,6 +44636,26 @@ function DnrHubScreen({ onOpen }) {
     if (Math.abs(dx) > 40) step(dx < 0 ? 1 : -1);
   };
   const CW = 280, CH = 440, GAP = 18;
+  // ⚠️ A központ NEM görget (v10.410): a kártya a rendelkezésre álló sávba
+  // skálázódik. A kártya belseje a 280×440-es alapon rajzol, és egyetlen `k`
+  // szorzó viszi a sáv méretére — így kis telefonon sem lóg ki semmi.
+  const trackRef = React.useRef(null);
+  const [trackH, setTrackH] = React.useState(CH + 40);
+  const [trackW, setTrackW] = React.useState(390);
+  React.useLayoutEffect(() => {
+    const el = trackRef.current; if (!el) return;
+    const m = () => { setTrackH(el.clientHeight || CH + 40); setTrackW(el.clientWidth || 390); };
+    m();
+    if (typeof ResizeObserver === 'function') { const ro = new ResizeObserver(m); ro.observe(el); return () => ro.disconnect(); }
+    window.addEventListener('resize', m); return () => window.removeEventListener('resize', m);
+  }, [view]);
+  // Magas kijelzőn kicsit nőhet is (a szomszéd kártyák széle még kilógjon: ±40 px)
+  const k = Math.max(0.55, Math.min(1.15, (trackH - 64) / CH, (trackW - 80) / CW));
+  // Rács nézet: alacsony kijelzőn (SE, mini) tömörebb csempék, hogy ne kelljen görgetni
+  const [vh, setVh] = React.useState(() => window.innerHeight || 800);
+  React.useEffect(() => { const r = () => setVh(window.innerHeight || 800); window.addEventListener('resize', r); return () => window.removeEventListener('resize', r); }, []);
+  const tight = vh < 760;
+  const [adminPin, setAdminPin] = React.useState(false);
 
   const seg = (v, label) => (
     <button data-hub-view={v} aria-pressed={view === v} aria-label={label} onClick={() => pickView(v)}
@@ -44620,16 +44668,26 @@ function DnrHubScreen({ onOpen }) {
     : <img src={a.icon} alt="" style={{ width:size, height:size, borderRadius:size * 0.28, flexShrink:0 }} />;
 
   return (
-    <div data-dnr-hub={view} style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg }}>
-      <div style={{ flex:1, minHeight:0, overflowY:'auto', overflowX:'hidden', WebkitOverflowScrolling:'touch' }}>
-        <div style={{ maxWidth: view === 'cards' ? 720 : 560, margin:'0 auto', padding:'calc(env(safe-area-inset-top) + 22px) 20px calc(env(safe-area-inset-bottom) + 26px)', boxSizing:'border-box', display:'flex', flexDirection:'column', gap:18 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-            <HubWordmark size={40} />
-            <div role="group" aria-label="Nézet" style={{ display:'flex', gap:2, padding:3, borderRadius:14, background:T.surface, boxShadow:T.shadowPill }}>
-              {seg('grid', 'Rács nézet')}
-              {seg('cards', 'Kártya nézet')}
+    <div data-dnr-hub={view} style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
+      {/* ⚠️ A safe-area-t a gyökér konténer már levonja (a Games főoldal is top:14-gyel
+          indul) — itt még egy env(safe-area-inset-top) a fejlécet a képernyő közepe felé
+          tolta iPhone-on. A Rács nézet csak végszükségben görget (nagyon kicsi kijelző). */}
+      <div style={{ flex:1, minHeight:0, overflowY: view === 'cards' ? 'hidden' : 'auto', overflowX:'hidden', overscrollBehavior:'none', display:'flex', flexDirection:'column' }}>
+        <div style={{ width:'100%', maxWidth: view === 'cards' ? 720 : 560, margin:'0 auto', flex: view === 'cards' ? 1 : 'none', minHeight:0, padding:'14px 18px calc(env(safe-area-inset-bottom) + 16px)', boxSizing:'border-box', display:'flex', flexDirection:'column', gap: view === 'cards' ? 10 : 16 }}>
+          <div data-hub-header style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, minHeight:52, flexShrink:0 }}>
+            <HubWordmark size={38} />
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <div role="group" aria-label="Nézet" style={{ display:'flex', gap:2, padding:3, borderRadius:14, background:T.surface, boxShadow:T.shadowPill }}>
+                {seg('grid', 'Rács nézet')}
+                {seg('cards', 'Kártya nézet')}
+              </div>
+              <button data-hub-admin aria-label="Admin" onClick={() => setAdminPin(true)}
+                style={{ width:44, height:44, borderRadius:14, border:'none', background:T.surface, boxShadow:T.shadowPill, display:'grid', placeItems:'center', cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+              </button>
             </div>
           </div>
+          {adminPin && <AdminPinModal onClose={() => setAdminPin(false)} onOk={() => { setAdminPin(false); onOpen('admin'); }} />}
 
           {view === 'grid' ? (
             <React.Fragment>
@@ -44649,14 +44707,15 @@ function DnrHubScreen({ onOpen }) {
                 </div>
               </div>
               {others.length > 0 && <div style={{ fontFamily:T.font, fontSize:12, fontWeight:800, letterSpacing:'0.14em', color:T.inkSoft, margin:'4px 2px -6px' }}>TOVÁBBI DNR APPOK</div>}
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(2, minmax(0, 1fr))', gap:12 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(2, minmax(0, 1fr))', gap: tight ? 10 : 12 }}>
                 {others.map((a, i) => {
                   const wide = others.length % 2 === 1 && i === others.length - 1;   // páratlan darabszámnál az utolsó teljes széles
+                  const row = wide || tight;   // alacsony kijelzőn minden csempe vízszintes (ikon balra)
                   return (
                     <button key={a.screen} data-hub-open={a.screen} onClick={() => onOpen(a.screen)}
-                      style={{ gridColumn: wide ? 'span 2' : 'auto', background:T.surface, border:'none', borderRadius:22, padding:14, display:'flex', flexDirection: wide ? 'row' : 'column', alignItems: wide ? 'center' : 'flex-start', gap: wide ? 12 : 10, textAlign:'left', cursor:'pointer', boxShadow:T.shadowPill, WebkitTapHighlightColor:'transparent' }}>
-                      {iconTile(a, 52)}
-                      <span style={{ display:'flex', flexDirection:'column', gap:2, minWidth:0, flex: wide ? 1 : 'none', width: wide ? 'auto' : '100%' }}>
+                      style={{ gridColumn: wide ? 'span 2' : 'auto', background:T.surface, border:'none', borderRadius: tight ? 18 : 22, padding: tight ? 10 : 14, display:'flex', flexDirection: row ? 'row' : 'column', alignItems: row ? 'center' : 'flex-start', gap: row ? (tight ? 10 : 12) : 10, textAlign:'left', cursor:'pointer', boxShadow:T.shadowPill, WebkitTapHighlightColor:'transparent' }}>
+                      {iconTile(a, tight ? 42 : 52)}
+                      <span style={{ display:'flex', flexDirection:'column', gap:2, minWidth:0, flex: row ? 1 : 'none', width: row ? 'auto' : '100%' }}>
                         <span style={{ fontFamily:T.font, fontSize:16, fontWeight:900, color:T.ink }}>{shortName(a)}</span>
                         <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{subOf(a)}</span>
                       </span>
@@ -44668,15 +44727,18 @@ function DnrHubScreen({ onOpen }) {
           ) : (
             <React.Fragment>
               {/* B · Kártyák */}
-              <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:T.inkSoft, textAlign:'center', marginTop:-6 }}>Válassz appot — lapozz oldalra</div>
-              <div data-hub-track onTouchStart={onDown} onTouchEnd={onUp} onMouseDown={onDown} onMouseUp={onUp}
-                style={{ position:'relative', height:CH + 120, width:'100vw', marginLeft:'calc(50% - 50vw)', marginTop:-30, marginBottom:-74, overflow:'hidden', touchAction:'pan-y', userSelect:'none' }}>
+              {/* ⚠️ A sáv NEM nyúlhat negatív margóval a nyíl-sor alá: a position:relative
+                  sáv a később jövő, nem pozicionált sor FÖLÉ festődik, és elnyeli a
+                  koppintást (v10.410 — „a nyilak nem léptetnek"). A tesztek element.click()-je
+                  ezt nem fogta meg, ezért a dnr_hub_test elementFromPoint-tal is mér. */}
+              <div ref={trackRef} data-hub-track onTouchStart={onDown} onTouchEnd={onUp} onMouseDown={onDown} onMouseUp={onUp}
+                style={{ position:'relative', flex:1, minHeight:0, width:'100vw', marginLeft:'calc(50% - 50vw)', overflow:'visible', clipPath:'inset(-80px 0px)', touchAction:'none', userSelect:'none' }}>
                 {apps.map((a, i) => {
                   const off = i - cur, active = off === 0;
                   return (
                     <div key={a.screen} data-hub-card={a.screen} data-active={active ? '1' : '0'}
                       onClick={() => { if (!active) setIdx(i); }}
-                      style={{ position:'absolute', left:'50%', top:38, width:CW, height:CH, marginLeft:-CW / 2, transform:`translateX(${off * (CW + GAP)}px) scale(${active ? 1 : 0.9})`, transition:'transform .35s cubic-bezier(.2,.8,.2,1), opacity .35s', opacity: Math.abs(off) > 2 ? 0 : active ? 1 : Math.abs(off) === 1 ? 0.55 : 0.3, cursor: active ? 'default' : 'pointer',
+                      style={{ position:'absolute', left:'50%', top:'50%', width:CW, height:CH, marginLeft:-CW / 2, marginTop:-CH / 2, transform:`translateX(${off * (CW + GAP) * k}px) scale(${(active ? 1 : 0.9) * k})`, transition:'transform .35s cubic-bezier(.2,.8,.2,1), opacity .35s', opacity: Math.abs(off) > 2 ? 0 : active ? 1 : Math.abs(off) === 1 ? 0.55 : 0.3, cursor: active ? 'default' : 'pointer',
                         borderRadius:32, background: a.screen === 'home' ? DNR_HUB_INK : T.surface, color: a.screen === 'home' ? '#fff' : T.ink, boxSizing:'border-box', padding:'26px 22px 22px', display:'flex', flexDirection:'column', alignItems:'center', gap:14, boxShadow: active ? '0 22px 46px rgba(20,32,47,0.28)' : 'none' }}>
                       {a.screen === 'home' && <span style={{ fontFamily:T.font, fontSize:12, fontWeight:900, letterSpacing:'0.14em', color:DNR_HUB_INK, background:DNR_HUB_GOLD, borderRadius:999, padding:'5px 12px' }}>FŐ APP</span>}
                       <span style={{ width:160, height:160, borderRadius:'50%', background:'#fff', display:'grid', placeItems:'center', marginTop: a.screen === 'home' ? 0 : 30, boxShadow:'inset 0 0 0 6px rgba(242,169,59,0.35)', overflow:'hidden' }}>
@@ -44693,7 +44755,7 @@ function DnrHubScreen({ onOpen }) {
                   );
                 })}
               </div>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:14 }}>
+              <div data-hub-arrows style={{ position:'relative', zIndex:2, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', gap:14 }}>
                 <button aria-label="Előző app" data-hub-prev onClick={() => step(-1)} disabled={cur === 0} style={{ width:44, height:44, borderRadius:'50%', border:'none', background:T.surface, boxShadow:T.shadowPill, cursor: cur === 0 ? 'default' : 'pointer', opacity: cur === 0 ? 0.35 : 1, display:'grid', placeItems:'center' }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
                 </button>
@@ -44949,66 +45011,12 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
         </div>
         {/* Top-right: grouped pill */}
         <div style={{ position:'absolute', top:14, right:18, zIndex:10, display:'flex', background:T.surface, borderRadius:18, boxShadow:T.shadow, overflow:'hidden' }}>
-          {(() => {
-            const [gPct, setGPct] = React.useState(0);
-            const [showPin, setShowPin] = React.useState(false);
-            const [pinVal, setPinVal] = React.useState('');
-            const [pinErr, setPinErr] = React.useState(false);
-            const gRef = React.useRef(null);
-            const gStart = React.useRef(null);
-            const GDUR = 2000;
-            function gStartPress() {
-              gStart.current = Date.now();
-              gRef.current = setInterval(() => {
-                const e = Date.now() - gStart.current;
-                const p = Math.min(100, (e / GDUR) * 100);
-                setGPct(p);
-                if (p >= 100) { clearInterval(gRef.current); setGPct(0); setShowPin(true); setPinVal(''); setPinErr(false); }
-              }, 30);
-            }
-            function gEndPress() { clearInterval(gRef.current); if (gPct < 100) setGPct(0); }
-            function submitPin() {
-              if (pinVal === '199509') { setShowPin(false); setPinVal(''); go('admin'); }
-              else { setPinErr(true); setPinVal(''); }
-            }
-            const GCIRC = 2 * Math.PI * 16;
-            return (
-              <React.Fragment>
-                <button onClick={() => setShowSettings(true)}
-                  onMouseDown={gStartPress} onMouseUp={gEndPress} onMouseLeave={gEndPress}
-                  onTouchStart={e2 => { e2.preventDefault(); gStartPress(); }} onTouchEnd={gEndPress} onTouchCancel={gEndPress}
-                  style={{ position:'relative', display:'flex', alignItems:'center', justifyContent:'center', width:52, height:52, border:'none', background:'transparent', cursor:'pointer', WebkitTapHighlightColor:'transparent', userSelect:'none' }}>
-                  {gPct > 0 && (
-                    <svg width="36" height="36" viewBox="0 0 36 36" style={{ position:'absolute' }}>
-                      <circle cx="18" cy="18" r="16" fill="none" stroke={T.border} strokeWidth="2.5"/>
-                      <circle cx="18" cy="18" r="16" fill="none" stroke={T.mint} strokeWidth="2.5"
-                        strokeDasharray={GCIRC} strokeDashoffset={GCIRC*(1-gPct/100)}
-                        strokeLinecap="round" transform="rotate(-90 18 18)" style={{transition:'stroke-dashoffset 0.03s linear'}}/>
-                    </svg>
-                  )}
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{position:'relative',zIndex:1}}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-                </button>
-                {showPin && ReactDOM.createPortal(
-                  <div style={{position:'fixed',inset:0,zIndex:9000,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'center',justifyContent:'center'}} onClick={e2=>{if(e2.target===e2.currentTarget){setShowPin(false);setPinVal('');}}}>
-                    <div style={{background:T.surface,borderRadius:24,padding:'32px 28px',width:280,boxShadow:'0 20px 60px rgba(0,0,0,0.3)',display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
-                      <div style={{fontFamily:T.font,fontWeight:900,fontSize:20,color:T.ink}}><BohIcon name="lock" size={17} style={{ marginRight:6 }} />Admin belépés</div>
-                      <div style={{fontFamily:T.font,fontSize:14,color:T.sub,textAlign:'center'}}>Add meg a PIN kódot</div>
-                      <input
-                        type="password" inputMode="numeric" maxLength={6}
-                        value={pinVal} onChange={e2=>{setPinVal(e2.target.value);setPinErr(false);}}
-                        onKeyDown={e2=>{if(e2.key==='Enter')submitPin();}}
-                        autoFocus
-                        style={{width:'100%',boxSizing:'border-box',padding:'14px 16px',borderRadius:14,border:`2px solid ${pinErr?T.coral:T.border}`,background:T.bg,fontFamily:T.font,fontSize:22,color:T.ink,textAlign:'center',letterSpacing:8,outline:'none'}}
-                        placeholder="······"
-                      />
-                      {pinErr && <div style={{fontFamily:T.font,fontSize:13,color:T.coral,fontWeight:700}}>Helytelen PIN</div>}
-                      <button onClick={submitPin} style={{width:'100%',padding:'14px',borderRadius:14,border:'none',background:T.mint,color:'#fff',fontFamily:T.font,fontWeight:900,fontSize:16,cursor:'pointer'}}>Belépés</button>
-                    </div>
-                  </div>
-                , document.body)}
-              </React.Fragment>
-            );
-          })()}
+          {/* v10.410: a hosszú nyomásos admin-belépő a DNR KÖZPONT fejlécébe költözött
+              (AdminPinModal) — itt a fogaskerék már csak a Beállításokat nyitja. */}
+          <button onClick={() => setShowSettings(true)}
+            style={{ position:'relative', display:'flex', alignItems:'center', justifyContent:'center', width:52, height:52, border:'none', background:'transparent', cursor:'pointer', WebkitTapHighlightColor:'transparent', userSelect:'none' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{position:'relative',zIndex:1}}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          </button>
           <div style={{ width:1, background:T.inkMute+'25', margin:'12px 0' }} />
           <button onClick={() => go('stats')} style={{ display:'flex', alignItems:'center', justifyContent:'center', width:52, height:52, border:'none', background:'transparent', cursor:'pointer' }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
@@ -76950,7 +76958,7 @@ function BottleApp() {
   // DNR Games főoldalára. Csak a központból indított útra él: a Games főoldaláról
   // nyitott Liga (szezonzáró) továbbra is oda tér vissza.
   const hubReturnRef = React.useRef(false);
-  const HUB_APP_SCREENS = ['log', 'create', 'jukebox', 'bar', 'bingo', 'stats'];
+  const HUB_APP_SCREENS = ['log', 'create', 'jukebox', 'bar', 'bingo', 'stats', 'admin', 'observer'];
   const openFromHub = (target) => { hubReturnRef.current = target !== 'home'; go(target, true); };
   const go = (next, _fromHub) => {
     if (next === 'home' && hubReturnRef.current && HUB_APP_SCREENS.includes(screen)) next = 'hub';

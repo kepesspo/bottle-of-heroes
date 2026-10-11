@@ -3223,3 +3223,27 @@ központba nyit.
 **Ami még HÁTRAVAN a DNR refaktorból:** a repó átnevezése (`/bottle-of-heroes/` →
 `/DNR/`) + átirányító régi repó + takarító service worker, a manifestek `start_url`-ja
 (relatívra), a Spotify redirect URI, és egy valódi DNR logó (most betűs „DNR" + arany pont).
+
+### Központ: admin a fejlécben, nincs görgetés, a nyilak léptetnek (v10.410)
+Bejelentés (iPhone): „az admin gomb kerüljön ki a főképernyőre, a DNR és a gombok
+kerüljenek felülre, a görgetést vegyük ki, a nyilak nem léptetnek."
+- **Admin a központ fejlécében** (`data-hub-admin`, fogaskerék a nézetváltó mellett):
+  koppintásra a közös **`AdminPinModal`** (modul-szintű) → `onOpen('admin')`. Az
+  `'admin'` és az `'observer'` bekerült a `HUB_APP_SCREENS`-be, így a vissza a
+  központba visz. A **Games főoldal fogaskereke innentől CSAK a Beállítások** — a
+  2 mp-es hosszú nyomás kikerült (egy belépő, ne kettő). `adminpress_test` átírva.
+- **⚠️ Dupla safe-area.** A központ `calc(env(safe-area-inset-top) + 22px)` felső
+  paddinget vitt, de a gyökér konténer a safe-area-t már levonja (a Games főoldal is
+  `top:14`-gyel indul) — iPhone-on a fejléc ~50 px-szel lejjebb csúszott. Most `14px`.
+- **Nincs görgetés.** A Kártyák nézetben a sáv `flex:1`, mért magasságú, és a kártya
+  a 280×440-es alapon rajzol, egyetlen `k` szorzóval (`min(1.15, (trackH−64)/CH,
+  (trackW−80)/CW)`) skálázva. A Rács nézet `vh < 760` alatt (`tight`) vízszintes,
+  42 px-es ikonú csempékre vált — 375×667-en is kifér görgetés nélkül.
+- **⚠️ A nyilak nem léptettek:** a kártya-sáv `position:relative` + `marginBottom:-74`
+  rálógott a (nem pozicionált) nyíl-sorra, és mivel a pozicionált elem a később jövő
+  nem-pozicionált testvér FÖLÉ festődik, elnyelte a koppintást. A teszt
+  `element.click()`-je ezt nem látta. Most nincs negatív margó, a nyíl-sor
+  `position:relative; zIndex:2`, és a sáv árnyéka `clipPath:'inset(-80px 0px)'`-szel
+  lóghat ki függőlegesen (vízszintesen vág).
+Teszt: `dnr_hub_test` — valódi egérkattintás a nyílra + `elementFromPoint`, három
+kijelzőméreten nincs görgető elem, a kártya a nyilak fölött végződik, a fejléc felül.

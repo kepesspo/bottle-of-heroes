@@ -15,13 +15,13 @@ const seed = `
   window.__fbStore['seasons'] = {}; window.__fbStore['config'] = {}; window.__fbStore['usage'] = {};
 `;
 
-async function home(b) {
+async function home(b, q) {
   const p = await b.newPage({ viewport: { width: 390, height: 900 } });
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.route('**://**', r => r.request().url().startsWith('file://') ? r.continue() : r.abort());
   await p.addInitScript(stub);
   await p.addInitScript(seed);
-  await p.goto(BASE + '?screen=games', { waitUntil: 'domcontentloaded' });  // v10.409: a Games főoldaláról (a nyitóképernyő a DNR központ)
+  await p.goto(BASE + (q === undefined ? '?screen=games' : q), { waitUntil: 'domcontentloaded' });  // v10.409: a Games főoldaláról (a nyitóképernyő a DNR központ)
   await p.waitForTimeout(3400);
   p.__errs = errs;
   return p;
@@ -54,52 +54,41 @@ const pinOpen = (p) => p.evaluate(() => /PIN|Admin belépés|admin/i.test(docume
   const ok = (l, c, e) => { console.log((c ? '  OK   ' : '  HIBA ') + l + (e !== undefined ? '  → ' + e : '')); if (!c) fail++; };
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
 
-  console.log('===== HOSSZU NYOMAS: 2 MP =====');
-  let p = await home(b);
-  const g = await gearBox(p);
-  ok('megvan a fogaskerek gomb a fejlecben', !!g, JSON.stringify(g));
-  if (!g) { await b.close(); process.exit(1); }
-
-  // ── 1,5 mp: MEG NEM nyilhat meg ────────────────────────────────────────
-  await p.mouse.move(g.x, g.y);
-  await p.mouse.down();
-  await p.waitForTimeout(700);
-  const midRing = await ringPct(p);
-  ok('nyomás közben fut a körgyűrű', midRing != null && midRing > 20 && midRing < 60, `${midRing}%`);
-  await p.waitForTimeout(800);            // osszesen ~1,5 mp
-  ok('1,5 mp-nél MÉG NEM nyílt meg', (await pinOpen(p)) === false);
-  await p.mouse.up();
-  await p.waitForTimeout(300);
-  ok('elengedésre eltűnik a körgyűrű', (await ringPct(p)) === null);
-  ok('elengedés után sem nyílt meg', (await pinOpen(p)) === false);
-
+  // v10.410: az admin-belépő a DNR KÖZPONT fejlécébe költözött (tulajdonosi kérés:
+  // „onnan szeretném irányítani"). Koppintásra PIN, a Games fogaskereke már csak a
+  // Beállítások — hosszú nyomásra sem nyit admint.
+  console.log('===== ADMIN A DNR KÖZPONTBÓL =====');
+  let p = await home(b, '');
+  const ab = await p.evaluate(() => { const x = document.querySelector('[data-hub-admin]'); if (!x) return null; const r = x.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, top: r.top }; });
+  ok('a központ fejlécében ott az admin gomb', !!ab && ab.top < 80, JSON.stringify(ab));
+  if (!ab) { await b.close(); process.exit(1); }
+  // valódi egérkattintás (hit-test), nem element.click()
+  await p.mouse.click(ab.x, ab.y);
+  await p.waitForTimeout(400);
+  ok('koppintásra megnyílik a PIN', await pinOpen(p));
+  await p.fill('[data-admin-pin] input', '1111'); await p.keyboard.press('Enter');
+  await p.waitForTimeout(200);
+  ok('rossz PIN: hibaüzenet, marad a központ', await p.evaluate(() => /Helytelen PIN/.test(document.body.innerText) && !!document.querySelector('[data-dnr-hub]')));
+  await p.fill('[data-admin-pin] input', '199509'); await p.keyboard.press('Enter');
+  await p.waitForTimeout(900);
+  ok('helyes PIN → Admin', await p.evaluate(() => !document.querySelector('[data-dnr-hub]') && /Admin/.test(document.body.innerText)));
+  await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => { const r = x.getBoundingClientRect(); return r.top < 140 && r.left < 80 && r.width > 0 && x.querySelector('svg'); }); b && b.click(); });
+  await p.waitForTimeout(900);
+  ok('az Admin vissza gombja a KÖZPONTBA visz', await p.evaluate(() => !!document.querySelector('[data-dnr-hub]')));
+  ok('nincs JS hiba', p.__errs.filter(e => !/ServiceWorker/.test(e)).length === 0, p.__errs.join(' | '));
   await p.close();
 
-  // ── 2 mp: meg KELL nyilnia ─────────────────────────────────────────────
-  // FONTOS: friss lap. Az elozo nyomas elengedese `click`-et is kivalt, ami
-  // megnyitja a Beallitasokat — az pedig eltakarja a fogaskereket.
+  console.log('\n===== GAMES FOGASKERÉK: CSAK BEÁLLÍTÁSOK =====');
   p = await home(b);
-  const g2 = await gearBox(p);
-  await p.mouse.move(g2.x, g2.y);
-  const t0 = Date.now();
+  const g = await gearBox(p);
+  ok('megvan a fogaskerek gomb a Games fejlecben', !!g, JSON.stringify(g));
+  await p.mouse.move(g.x, g.y);
   await p.mouse.down();
-  let opened = false, elapsed = null;
-  for (let i = 0; i < 40; i++) {
-    await p.waitForTimeout(100);
-    if (await pinOpen(p)) { opened = true; elapsed = Date.now() - t0; break; }
-  }
+  await p.waitForTimeout(2600);
+  ok('2,6 mp nyomásra SEM nyílik admin PIN (átköltözött)', (await pinOpen(p)) === false);
   await p.mouse.up();
-  ok('hosszú nyomásra megnyílik', opened);
-  ok('2 mp körül nyílik (1,9–2,5 mp)', elapsed != null && elapsed >= 1900 && elapsed <= 2500, `${elapsed} ms`);
-
-  // ── Rovid koppintas a beallitasokat nyitja, NEM az admint ──────────────
-  await p.evaluate(() => {
-    const btn = Array.from(document.querySelectorAll('button')).find(x => /Bezár|Mégse|×|✕/.test(x.innerText || ''));
-    if (btn) btn.click();
-  });
-  await p.waitForTimeout(600);
-  ok('nincs JS hiba', p.__errs.filter(e => !/ServiceWorker/.test(e)).length === 0, p.__errs.join(' | '));
-  await p.screenshot({ path: __dirname + '/adminpress.png' });
+  await p.waitForTimeout(500);
+  ok('koppintás/elengedés a Beállításokat nyitja', await p.evaluate(() => /Beállítások|Settings/.test(document.body.innerText)));
   await p.close();
 
   // ── Az al-fulek arnyeka a PIRULARA legyen szabva ────────────────────────
