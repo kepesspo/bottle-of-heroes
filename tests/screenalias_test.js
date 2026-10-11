@@ -71,6 +71,8 @@ const BASE = `http://127.0.0.1:${PORT}${SUB}`;
     ['?screen=bar',     'DNR Pub',    'manifest-bar.json'],
     ['?screen=events',  'DNR Events', 'manifest-events.json'],
     ['?screen=bingo',   'DNR Bingó',  'manifest-bingo.json'],
+    ['?screen=tipp',    'DNR Tipp',   'manifest-tipp.json'],      // v10.419: külön app
+    ['?screen=torta',   'DNR a tortán', 'manifest-torta.json'],   // v10.419: külön app
     ['?screen=liga',    'DNR Liga',   'manifest-liga.json'],
   ]) {
     const r = await open(q);
@@ -88,6 +90,8 @@ const BASE = `http://127.0.0.1:${PORT}${SUB}`;
     ['kocsma',   'bar',    'DNR Pub',   'manifest-bar.json'],
     ['stats',    'liga',   'DNR Liga',  'manifest-liga.json'],
     ['esemenyek','events', 'DNR Events','manifest-events.json'],
+    ['tippbajnoksag','tipp', 'DNR Tipp', 'manifest-tipp.json'],
+    ['tortan',   'torta',  'DNR a tortán','manifest-torta.json'],
   ]) {
     const r = await open('?screen=' + alias);
     ok(`?screen=${alias.padEnd(10)} → ${title}`, r.title === title, `${r.title} | ${r.body}`);

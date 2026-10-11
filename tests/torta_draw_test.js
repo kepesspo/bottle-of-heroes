@@ -31,7 +31,7 @@ const store = (p, doc) => p.evaluate(d => JSON.parse(JSON.stringify(((window.__f
 const click = (p, sel) => p.evaluate(s => { const b = document.querySelector(s); if (!b) return false; b.click(); return true; }, sel);
 const setInput = (p, sel, v) => p.evaluate(({ s, v }) => { const i = document.querySelector(s); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, v); i.dispatchEvent(new Event('input', { bubbles: true })); }, { s: sel, v });
 const waitPhase = async (p, ph, ms) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if ((await p.evaluate(() => { const d = document.querySelector('[data-torta-draw]'); return d ? d.getAttribute('data-torta-phase') : null; })) === ph) return true; await p.waitForTimeout(150); } return false; };
-const mount = (p) => p.evaluate(() => { window.__bRoot.render(React.createElement(BingoScreen, { key: 'k' + Math.random(), go: () => {}, deepLink: true })); });
+const mount = (p) => p.evaluate(() => { window.__bRoot.render(React.createElement(BingoScreen, { key: 'k' + Math.random(), go: () => {}, deepLink: true, app: 'torta' })); });
 
 (async () => {
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
@@ -356,7 +356,7 @@ const mount = (p) => p.evaluate(() => { window.__bRoot.render(React.createElemen
   await p.evaluate(() => { try { localStorage.setItem('boh_torta_auto', '0'); } catch(e) {} });
 
   console.log('\n===== 14. SORSOLÁS PROFILVÁLASZTÁS NÉLKÜL, A JOBB FELSŐ SAROKBÓL (v10.416) =====');
-  await p.evaluate(() => { try { localStorage.removeItem('boh_bingo_who'); } catch(e) {} });
+  await p.evaluate(() => { try { localStorage.removeItem('boh_bingo_who'); localStorage.removeItem('boh_torta_who'); } catch(e) {} });
   await mount(p); await p.waitForTimeout(900);
   const top = await p.evaluate(() => {
     const picker = !!document.querySelector('[data-who-pick]');

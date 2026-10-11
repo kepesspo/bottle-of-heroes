@@ -1,17 +1,17 @@
 // v10.402 — DNR a tortán a főképernyőn: ikon + a beállítás-kapcsoló
-// v10.409 óta a „főképernyő" a DNR KÖZPONT (DnrHubScreen): a Bingó-gomb és a
-// „DNR appok" lap ott egy csempe lett — a fogódzók ezért a központ csempéjét nézik.
+// v10.409 óta a „főképernyő" a DNR KÖZPONT (DnrHubScreen).
+// v10.419 óta a Bingó, a Tipp és a Tortán KÜLÖN app: saját csempe, saját láthatóság
+// (`bingoConfig.apps.<app>`), saját admin-fül. A régi config (enabled + mode, `apps`
+// nélkül) a régi szabály szerint látszik: CSAK a kiválasztott mód appja.
 //
-// Bejelentés: „Nem a DNR a tortán ikon jelenik meg. Illetve ha beállításokba kinyomom,
-// hogy ne látszódjon, akkor is megjelenik."
-//
-// Fogódzók (bingoConfig.mode = 'torta'):
-//  1) a főképernyő gombja a torta-logót viszi
-//  2) a „DNR appok" lapon a Bingó sor a torta-logóval és a „DNR a tortán" névvel áll
-//  3) az admin beállítás („Melyik app látszódjon") sora is a torta-logót mutatja
-//  4) ⚠️ homeConfig.dnrApps.bingo = false → a főképernyő gombja ELTŰNIK (eddig maradt)
-//  5) a mód el van téve a nyitóképernyőnek (localStorage boh_bingo_mode = 'torta')
-//  6) kontroll: bingo módban a lapon a régi Bingó ikon és név áll
+// Fogódzók:
+//  1) régi config (mode=torta, apps nélkül) → a központban CSAK a Tortán csempe, a torta-logóval
+//  2) a „Melyik app látszódjon" listán mind a HÁROM app külön sor
+//  3) ⚠️ homeConfig.dnrApps.torta = false → a Tortán csempe eltűnik
+//  4) a régi ?screen=bingo ikon emlékezete (boh_bingo_mode) a Tortánra mutat
+//  5) apps: mindhárom BE → három csempe, sorrendben Tortán · Tipp · Bingó
+//  6) az app admin-fülének kapcsolója AZONNAL rejt, a teljes apps térképet írja ki
+//  7) sikertelen mentés nem ír „Mentve"-t
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const ROOT = '/home/user/bottle-of-heroes';
@@ -20,20 +20,14 @@ let fail = 0;
 const ok = (c, l, e) => { console.log((c ? '  OK   ' : '  HIBA ') + l + (e !== undefined ? '  → ' + e : '')); if (!c) fail++; };
 const TORTA = 'assets/dnr_torta_logo.png', BINGO = 'assets/dnr_bingo_icon.png';
 
-const homeBtn = p => p.evaluate(() => {
-  // v10.411: csak Kártya nézet — a kártya viszi az ikont és a nevet, a gomb csak „Megnyitás"
-  const b = document.querySelector('#__h [data-hub-card="bingo"]');
+const TIPP = 'assets/dnr_tipp_icon.png';
+const card = (p, key) => p.evaluate(key => {
+  const b = document.querySelector(`#__h [data-hub-card="${key}"]`);
   if (!b) return null;
   const i = b.querySelector('img'); return { txt: (b.textContent || '').trim(), src: i ? i.getAttribute('src') : null };
-});
-const sheetRow = (p, sel) => p.evaluate(sel => {
-  const imgs = [...document.querySelectorAll(sel + ' img')];
-  // a főképernyő nagy gombja (🏆) NEM a lap sora — azt kihagyjuk
-  const i = imgs.find(x => /dnr_torta_logo|dnr_bingo_icon/.test(x.getAttribute('src') || '') && !/🏆/.test(((x.closest('button') || {}).textContent) || ''));
-  if (!i) return null;
-  const row = i.closest('button') || i.parentElement;
-  return { src: i.getAttribute('src'), txt: (row.textContent || '').trim() };
-}, sel);
+}, key);
+const hubKeys = p => p.evaluate(() => [...document.querySelectorAll('#__h [data-hub-card]')].map(x => x.getAttribute('data-hub-card')));
+const setRows = p => p.evaluate(() => [...document.querySelectorAll('#__s img')].map(i => ({ src: i.getAttribute('src'), txt: ((i.parentElement || {}).textContent || '').trim() })));
 const setDoc = (p, doc, data) => p.evaluate(({ doc, data }) => firebase.firestore().collection('config').doc(doc).set(data), { doc, data });
 
 (async () => {
@@ -61,55 +55,70 @@ const setDoc = (p, doc, data) => p.evaluate(({ doc, data }) => firebase.firestor
   });
   await p.waitForTimeout(1200);
 
-  console.log('\n===== 1–2. A KÖZPONT CSEMPÉJE =====');
-  const hb = await homeBtn(p);
-  ok(hb && hb.src === TORTA, '⚠️ a központ Bingó-csempéje a torta-logót viszi', JSON.stringify(hb));
-  ok(hb && /DNR a tortán/.test(hb.txt) && !/DNR Bingó/.test(hb.txt), 'a csempe neve a TELJES „DNR a tortán" (nem csonka „a tortán")', hb && hb.txt);
+  console.log('\n===== 1. RÉGI CONFIG: CSAK A TORTÁN =====');
+  ok(JSON.stringify((await hubKeys(p)).filter(k => ['bingo','tipp','torta'].includes(k))) === '["torta"]', '⚠️ régi config (mode=torta, apps nélkül) → csak a Tortán csempe', JSON.stringify(await hubKeys(p)));
+  const tc = await card(p, 'torta');
+  ok(tc && tc.src === TORTA && /DNR a tortán/.test(tc.txt), 'a Tortán csempe a torta-logót és a TELJES nevet viszi', JSON.stringify(tc));
 
-  console.log('\n===== 3. ADMIN BEÁLLÍTÁS SORA =====');
-  const srow = await sheetRow(p, '#__s');
-  ok(srow && srow.src === TORTA && /DNR a tortán/.test(srow.txt), '⚠️ a „Melyik app látszódjon" sorban is a torta-logó és név', JSON.stringify(srow));
+  console.log('\n===== 2. BEÁLLÍTÁSOK: HÁROM KÜLÖN SOR =====');
+  const rows = await setRows(p);
+  ok(rows.some(r => r.src === BINGO && /DNR Bingó/.test(r.txt)) && rows.some(r => r.src === TIPP && /DNR Tipp/.test(r.txt)) && rows.some(r => r.src === TORTA && /DNR a tortán/.test(r.txt)),
+     '⚠️ a „Melyik app látszódjon" listán a Bingó, a Tipp és a Tortán külön sor', JSON.stringify(rows.map(r => r.txt)));
 
-  console.log('\n===== 4. KIKAPCSOLVA ELTŰNIK A FŐKÉPERNYŐRŐL =====');
-  await setDoc(p, 'homeConfig', { dnrAppsEnabled: true, dnrApps: { bingo: false } });
+  console.log('\n===== 3. KIKAPCSOLVA ELTŰNIK =====');
+  await setDoc(p, 'homeConfig', { dnrAppsEnabled: true, dnrApps: { torta: false } });
   await p.waitForTimeout(600);
-  ok((await homeBtn(p)) === null, '⚠️ dnrApps.bingo=false → a központ csempéje eltűnt', JSON.stringify(await homeBtn(p)));
-  await setDoc(p, 'homeConfig', { dnrAppsEnabled: true, dnrApps: { bingo: true } });
-  await p.waitForTimeout(600);
-  ok(!!(await homeBtn(p)), 'visszakapcsolva újra ott a csempe (kontroll)');
-
-  console.log('\n===== 5. NYITÓKÉPERNYŐ-EMLÉKEZET =====');
-  ok((await p.evaluate(() => localStorage.getItem('boh_bingo_mode'))) === 'torta', 'boh_bingo_mode = torta');
-
-  console.log('\n===== 6. KONTROLL: BINGÓ MÓD =====');
-  await setDoc(p, 'bingoConfig', { enabled: true, mode: 'bingo' });
-  await p.waitForTimeout(600);
-  const row2 = await sheetRow(p, '#__s');
-  ok(row2 && row2.src === BINGO && /DNR Bingó/.test(row2.txt), 'bingó módban a régi ikon és név', JSON.stringify(row2));
-  ok((await p.evaluate(() => localStorage.getItem('boh_bingo_mode'))) === 'bingo', 'a mód-emlékezet követi (bingo)');
-
-  console.log('\n===== 7. ADMIN → BINGÓ: A KAPCSOLÓ AZONNAL REJT (v10.405) =====');
-  await setDoc(p, 'bingoConfig', { enabled: true, mode: 'torta', tortaTitle: 'DNR a tortán' });
+  ok((await card(p, 'torta')) === null, '⚠️ dnrApps.torta=false → a Tortán csempe eltűnt');
   await setDoc(p, 'homeConfig', { dnrAppsEnabled: true });
+  await p.waitForTimeout(600);
+  ok(!!(await card(p, 'torta')), 'visszakapcsolva újra ott (kontroll)');
+
+  console.log('\n===== 4. A RÉGI ?screen=bingo IKON EMLÉKEZETE =====');
+  ok((await p.evaluate(() => localStorage.getItem('boh_bingo_mode'))) === 'torta', 'boh_bingo_mode = torta (a régi telepített ikon a Tortánt nyitja)');
+
+  console.log('\n===== 5. MINDHÁROM BE =====');
+  await setDoc(p, 'bingoConfig', { enabled: true, mode: 'torta', tortaTitle: 'DNR a tortán', apps: { bingo: true, tipp: true, torta: true } });
+  await p.waitForTimeout(700);
+  const ks = (await hubKeys(p)).filter(k => ['bingo','tipp','torta'].includes(k));
+  ok(JSON.stringify(ks) === '["torta","tipp","bingo"]', '⚠️ három külön csempe: Tortán · Tipp · Bingó', JSON.stringify(ks));
+  ok(((await card(p, 'tipp')) || {}).src === TIPP && ((await card(p, 'bingo')) || {}).src === BINGO, 'a Tipp és a Bingó a saját ikonját viszi');
+  ok((await p.evaluate(() => localStorage.getItem('boh_bingo_mode'))) === 'bingo', 'a Bingó be van kapcsolva → a ?screen=bingo már a Bingót nyitja');
+
+  console.log('\n===== 6. ADMIN → TORTÁN: A KAPCSOLÓ AZONNAL REJT =====');
   await p.evaluate(() => {
     const d = document.createElement('div'); d.id = '__ab';
     d.style.cssText = 'position:absolute;left:820px;top:0;width:402px;height:1400px;overflow:auto;background:#fff';
     document.body.appendChild(d); window.__abRoot = ReactDOM.createRoot(d);
-    window.__abRoot.render(React.createElement(AdminBingo));
+    window.__abRoot.render(React.createElement(AdminBingo, { app: 'torta' }));
   });
   await p.waitForTimeout(1000);
-  ok(!!(await homeBtn(p)), 'kiinduláskor ott a központ csempéje');
+  ok(await p.evaluate(() => !document.querySelector('#__ab [data-bingo-mode]') && !!document.querySelector('#__ab [data-bingo-admin-app="torta"]')), 'az admin-fülön nincs mód-váltó, a fül maga a Tortán');
   const tg = await p.evaluate(() => {
-    const row = [...document.querySelectorAll('#__ab div')].find(d => d.children.length === 2 && /Megjelenítés a főképernyőn/.test(d.textContent) && d.textContent.length < 90);
+    const row = [...document.querySelectorAll('#__ab div')].find(d => d.children.length === 2 && /Megjelenítés a DNR központban/.test(d.textContent) && d.textContent.length < 90);
     if (!row) return false; row.children[1].click(); return true;
   });
-  ok(tg, 'a „Megjelenítés a főképernyőn" kapcsolót átbillentjük (Mentés NÉLKÜL)');
+  ok(tg, 'a „Megjelenítés a DNR központban" kapcsolót átbillentjük (Mentés NÉLKÜL)');
   await p.waitForTimeout(700);
-  ok((await p.evaluate(() => window.__fbStore.config.bingoConfig.enabled)) === false, '⚠️ a kapcsoló azonnal kiírta: enabled=false');
-  ok((await homeBtn(p)) === null, '⚠️ a központ csempéje eltűnt — Mentés nélkül is');
-  ok((await p.evaluate(() => window.__fbStore.config.bingoConfig.mode)) === 'torta', 'a többi mező érintetlen (merge)');
+  const st = await p.evaluate(() => window.__fbStore.config.bingoConfig);
+  ok(st.apps && st.apps.torta === false && st.apps.tipp === true && st.apps.bingo === true, '⚠️ csak a Tortán ment ki, a másik kettő marad', JSON.stringify(st.apps));
+  ok((await card(p, 'torta')) === null && !!(await card(p, 'tipp')) && !!(await card(p, 'bingo')), '⚠️ a központból CSAK a Tortán csempe tűnt el');
+  ok(st.mode === 'torta' && st.enabled === true, 'a többi mező érintetlen (merge)');
 
-  console.log('\n===== 8. SIKERTELEN MENTÉS NEM ÍR „MENTVE"-T =====');
+  console.log('\n===== 6b. RÉGI CONFIG + ADMIN-KAPCSOLÓ =====');
+  await setDoc(p, 'bingoConfig', { enabled: true, mode: 'torta', tortaTitle: 'DNR a tortán' });
+  await p.evaluate(() => window.__abRoot.render(React.createElement(AdminBingo, { key: 'b' + Math.random(), app: 'bingo' })));
+  await p.waitForTimeout(900);
+  await p.evaluate(() => {
+    const row = [...document.querySelectorAll('#__ab div')].find(d => d.children.length === 2 && /Megjelenítés a DNR központban/.test(d.textContent) && d.textContent.length < 90);
+    row && row.children[1].click();
+  });
+  await p.waitForTimeout(700);
+  const st2 = await p.evaluate(() => window.__fbStore.config.bingoConfig.apps);
+  ok(st2 && st2.bingo === true && st2.torta === true && st2.tipp === false, '⚠️ a Bingó bekapcsolása a régi configon a Tortánt NEM rejti el (a térkép materializálva megy ki)', JSON.stringify(st2));
+
+  console.log('\n===== 7. SIKERTELEN MENTÉS NEM ÍR „MENTVE"-T =====');
+  await p.evaluate(() => window.__abRoot.render(React.createElement(AdminBingo, { key: 't' + Math.random(), app: 'torta' })));
+  await p.waitForTimeout(900);
   await p.evaluate(() => { window.setBingoConfig = () => Promise.reject({ code: 'permission-denied' }); });
   await p.evaluate(() => { const i = [...document.querySelectorAll('#__ab input')].find(x => x.value === 'DNR a tortán'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, 'DNR a tortán 2'); i.dispatchEvent(new Event('input', { bubbles: true })); });
   await p.waitForTimeout(200);

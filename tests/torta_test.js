@@ -35,10 +35,11 @@ const CFG = {
 const scoreOf = (p, ev, pid) => p.evaluate(({ ev, pid }) => (((window.__fbStore['config'] || {}).tortaScores || {})[ev] || {})[pid] || null, { ev, pid });
 const txt = p => p.evaluate(() => (document.getElementById('__b').innerText || '').replace(/\s+/g, ' '));
 const tap = (p, ev, cat, n) => p.evaluate(({ ev, cat, n }) => { const b = document.querySelector(`[data-torta-ev="${ev}"] [data-torta-cat="${cat}"] [data-torta-val="${n}"]`); if (!b) return 'nincs'; if (b.disabled) return 'tiltva'; b.click(); return 'ok'; }, { ev, cat, n });
-const mountAs = (p, who) => p.evaluate(who => {
-  try { localStorage.setItem('boh_bingo_who', who || ''); } catch(e) {}
-  window.__bRoot.render(React.createElement(BingoScreen, { key: 'k' + who + Math.random(), go: () => {}, deepLink: true }));
-}, who);
+// v10.419: a Tortán és a Tipp KÜLÖN app — az `app` prop adja a módot, és a „Ki vagy?" apponként mentődik
+const mountAs = (p, who, app = 'torta') => p.evaluate(({ who, app }) => {
+  try { localStorage.setItem(app === 'bingo' ? 'boh_bingo_who' : 'boh_' + app + '_who', who || ''); } catch(e) {}
+  window.__bRoot.render(React.createElement(BingoScreen, { key: 'k' + who + Math.random(), go: () => {}, deepLink: true, app }));
+}, { who, app });
 const setCfg = (p, patch) => p.evaluate(patch => firebase.firestore().collection('config').doc('bingoConfig').set(patch, { merge: true }), patch);
 
 (async () => {
@@ -140,12 +141,12 @@ const setCfg = (p, patch) => p.evaluate(patch => firebase.firestore().collection
 
   // ── 8. Tipp mód — a közös gate regresszió ──
   console.log('\n===== 8. TIPP MÓD (REGRESSZIÓ) =====');
-  await setCfg(p, { mode: 'tipp', matches: [] });
-  await mountAs(p, 'p3'); await p.waitForTimeout(700);
+  await setCfg(p, { matches: [] });
+  await mountAs(p, 'p3', 'tipp'); await p.waitForTimeout(700);
   const t8 = await txt(p);
   ok(/Kód kell a szerkesztéshez/.test(t8) && /a tippjeidet/.test(t8), 'Tipp módban is a kód-kártya („…a tippjeidet")');
   ok(!(await p.evaluate(() => !!document.querySelector('[data-torta-rank]'))), 'Tipp módban nincs Tortán-ranglista');
-  await setCfg(p, { mode: 'torta', tippRequireCode: false });
+  await setCfg(p, { tippRequireCode: false });
 
   // ── 8b. „Ki vagy?" — Tortán módban CSAK a csapattagok (v10.403) ──
   console.log('\n===== 8b. KI VAGY? — CSAK CSAPATTAGOK =====');
@@ -157,17 +158,15 @@ const setCfg = (p, patch) => p.evaluate(patch => firebase.firestore().collection
   await mountAs(p, 'p6'); await p.waitForTimeout(800);
   ok(await p.evaluate(() => document.querySelectorAll('[data-who-pick]').length === 6), 'a csapaton kívüli elmentett játékos a választót kapja');
   // kontroll: Tipp módban mindenki választható
-  await setCfg(p, { mode: 'tipp' });
-  await mountAs(p, ''); await p.waitForTimeout(700);
+  await mountAs(p, '', 'tipp'); await p.waitForTimeout(700);
   ok(await p.evaluate(() => document.querySelectorAll('[data-who-pick]').length === 7), 'kontroll: Tipp módban mind a 7 profil választható');
-  await setCfg(p, { mode: 'torta' });
   await p.evaluate(profiles => { window.getProfiles = () => Promise.resolve(profiles); }, PROFILES);
 
   // ── 9. Admin szerkesztő ──
   console.log('\n===== 9. ADMIN =====');
-  await p.evaluate(() => { window.__bRoot.render(React.createElement(AdminBingo, { key: 'adm' })); });
+  await p.evaluate(() => { window.__bRoot.render(React.createElement(AdminBingo, { key: 'adm', app: 'torta' })); });
   await p.waitForTimeout(900);
-  const adm = await p.evaluate(() => ({ modeBtn: !!document.querySelector('[data-bingo-mode="torta"]'), teams: document.querySelectorAll('[data-torta-admin-team]').length, evs: document.querySelectorAll('[data-torta-admin-ev]').length }));
+  const adm = await p.evaluate(() => ({ modeBtn: !!document.querySelector('[data-bingo-admin-app="torta"]') && !document.querySelector('[data-bingo-mode]'), teams: document.querySelectorAll('[data-torta-admin-team]').length, evs: document.querySelectorAll('[data-torta-admin-ev]').length }));
   ok(adm.modeBtn && adm.teams === 3 && adm.evs === 1, 'az admin Tortán nézete: 3 csapat, 1 alkalom', JSON.stringify(adm));
   // új csapat: név nélkül, 2 taggal → mentéskor „Sere & Kecsi"-szerű auto-név
   await p.evaluate(() => { const b = [...document.querySelectorAll('#__b button')].find(x => /Új csapat/.test(x.textContent)); b && b.click(); });
@@ -192,7 +191,8 @@ const setCfg = (p, patch) => p.evaluate(patch => firebase.firestore().collection
   await p.waitForTimeout(600);
   const saved = await p.evaluate(() => (window.__fbStore['config'] || {}).bingoConfig || {});
   const newT = (saved.tortaTeams || []).find(t => (t.members || []).join() === 'p4,p5');
-  ok(saved.mode === 'torta', 'mentés után a mód „torta"', saved.mode);
+  ok(saved.mode === 'torta', 'mentés után a régi mód-mező érintetlen („torta")', saved.mode);
+  ok(saved.apps && saved.apps.torta === true && saved.apps.bingo === false && saved.apps.tipp === false, 'mentéskor a láthatóság appokra bontva megy ki (régi szabályból materializálva)', JSON.stringify(saved.apps));
   ok(!!newT && newT.name === 'Luca & Béla', '⚠️ név nélküli csapat auto-nevet kap a tagokból („Luca & Béla")', newT && newT.name);
   ok((saved.tortaTeams || []).length === 3, 'a tag nélküli (kiürített) csapat kiesik mentéskor', (saved.tortaTeams || []).length);
   const ev1 = (saved.tortaEvenings || [])[0] || {};

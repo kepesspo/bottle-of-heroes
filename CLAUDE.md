@@ -3350,3 +3350,49 @@ szigorúan felváltva** jönnek. A hossz változatlan (≈ max(6 kör, 26 elem))
 (utolsó este) értelemszerűen csak az az egy csapat pörög.
 Teszt: `torta_draw_test.js` 15. blokk (1080 sor 2/3/5/8 csapattal: nincs szomszédos
 ismétlés, a végén a házigazda, 2 csapatnál felváltva, determinisztikus).
+
+## ⚠️ Bingó, Tipp, Tortán: három KÜLÖN app (v10.419)
+Tulajdonosi kérés: „szét kellene szedni … külön appokra. Mögötte megmaradhat ugyanaz
+a mechanika, de külön akarom kezelni őket." Eddig EGY app volt (`screen === 'bingo'`)
+három móddal (`bingoConfig.mode`), és egyszerre csak a kiválasztott mód látszott.
+
+**Ami külön lett:**
+- **képernyő**: `bingo` / `tipp` / `torta` — mind a `BingoScreen`, az **`app` prop**
+  adja a módot (`bingoScreenMode`). Külön `key`, tehát váltáskor újramountol.
+- **deep link + PWA**: `?screen=tipp` / `?screen=torta` (aliasok: `tippbajnoksag`,
+  `tortan`…), saját `manifest-tipp.json` / `manifest-torta.json`, ikon
+  (`dnr_tipp_icon.png`, `dnr_torta_icon.png` — a `make_bingo_app_icons.py`
+  generálja), cím és nyitókép.
+- **láthatóság**: `bingoConfig.apps = { bingo, tipp, torta }` (`bingoAppOn`). A
+  központban KÉT kapcsoló rejthet: ez ÉS a `homeConfig.dnrApps.<app>`.
+- **admin**: három fül (Bingó / Tipp / Tortán), mindegyik `<AdminBingo app=…>`; a
+  mód-váltó megszűnt. A „Megjelenítés a DNR központban" kapcsoló a TELJES `apps`
+  térképet írja ki (materializálva). Az **Alaphelyzet csak a saját app** adatait
+  nullázza — a Bingó fülön nem törölheti a Tortán csapatait.
+- **„Ki vagy?"**: `boh_bingo_who` / `boh_tipp_who` / `boh_torta_who`; az új kulcs
+  első nyitáskor a régi közös `boh_bingo_who`-t veszi át.
+- **központ sorrend**: Games · Events · **Tortán** · Tipp · Bingó · BOX · Pub · Liga.
+
+**Ami KÖZÖS maradt:** a `config/bingoConfig` doksi (a Tortán csapatai, a Tipp
+meccsei, a Bingó mezői mind benne), a `config/bingo` / `tippAnswers` / `tortaScores`
+/ `tortaDraw`, és az **e-mailes kódvédelem** (`tippRequireCode` — a Tipp és a Tortán
+fülön ugyanaz a kapcsoló, a felirat ki is írja).
+
+**⚠️ Migráció — ezt könnyű elrontani:**
+- **hiányzó `apps` (vagy kulcs) = a RÉGI szabály**: csak a `mode` appja látszik, és
+  csak ha `enabled !== false`. Így a frissítés után pontosan az látszik, ami addig.
+  Aki az `apps` hiányát „mind BE"-nek venné, egy Tortánt használó csapatnak hirtelen
+  felbukkanna a Bingó és a Tipp is.
+- **régi, telepített ikon**: a `?screen=bingo` linkkel indul. Ha a Bingó nincs
+  bekapcsolva, de a régi mód (pl. Tortán) appja igen, AZ nyílik (`bingoScreenMode`,
+  csak `deepLink` mellett) — különben a telefonon lévő „DNR a tortán" ikon csendben
+  Bingót nyitna. A splash/ikon ezt a `boh_bingo_mode`-ból tudja (a config előtt fut).
+  Új ikonhoz a Tortánt a központból újra a főképernyőre kell tenni (`?screen=torta`).
+- A `bingoConfig.mode` és `enabled` mezőt a mentés **változatlanul visszaírja** —
+  csak a régi ikon átirányításához kell.
+
+Teszt: `node tests/bingo_split_test.js` (deep linkek, régi ikon + kontroll, központ →
+vissza, apponkénti „Ki vagy?", apponkénti Alaphelyzet, admin fülek) és
+`tests/torta_home_test.js` (régi config = csak a Tortán, három sor a beállításokban,
+apponkénti kapcsoló, materializált `apps`). A `torta_test` / `torta_draw_test` már
+`app:'torta'`-val mountol; az `adminpress_test` 17 fület vár.
