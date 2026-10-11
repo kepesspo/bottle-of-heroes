@@ -1,4 +1,6 @@
 // v10.402 — DNR a tortán a főképernyőn: ikon + a beállítás-kapcsoló
+// v10.409 óta a „főképernyő" a DNR KÖZPONT (DnrHubScreen): a Bingó-gomb és a
+// „DNR appok" lap ott egy csempe lett — a fogódzók ezért a központ csempéjét nézik.
 //
 // Bejelentés: „Nem a DNR a tortán ikon jelenik meg. Illetve ha beállításokba kinyomom,
 // hogy ne látszódjon, akkor is megjelenik."
@@ -19,7 +21,7 @@ const ok = (c, l, e) => { console.log((c ? '  OK   ' : '  HIBA ') + l + (e !== u
 const TORTA = 'assets/dnr_torta_logo.png', BINGO = 'assets/dnr_bingo_icon.png';
 
 const homeBtn = p => p.evaluate(() => {
-  const b = [...document.querySelectorAll('#__h button')].find(x => /🏆/.test(x.textContent || ''));
+  const b = document.querySelector('#__h [data-hub-open="bingo"]');
   if (!b) return null;
   const i = b.querySelector('img'); return { txt: (b.textContent || '').trim(), src: i ? i.getAttribute('src') : null };
 });
@@ -53,25 +55,16 @@ const setDoc = (p, doc, data) => p.evaluate(({ doc, data }) => firebase.firestor
     const mk = (id, left) => { const d = document.createElement('div'); d.id = id;
       d.style.cssText = `position:absolute;left:${left}px;top:0;width:402px;height:1400px;overflow:auto;z-index:9;background:#fff;display:flex;flex-direction:column`;
       document.body.appendChild(d); return ReactDOM.createRoot(d); };
-    mk('__h', 0).render(React.createElement(HomeScreen, { go: () => {}, onStartGame: () => {}, onQuickGame: () => {}, setTheme: () => {}, currentTheme: 'peach' }));
+    try { localStorage.setItem('boh_hub_view', 'grid'); } catch(e) {}
+    mk('__h', 0).render(React.createElement(DnrHubScreen, { onOpen: () => {} }));
     mk('__s', 410).render(React.createElement(AdminHomeToggles));
   });
   await p.waitForTimeout(1200);
 
-  console.log('\n===== 1. FŐKÉPERNYŐ GOMB =====');
+  console.log('\n===== 1–2. A KÖZPONT CSEMPÉJE =====');
   const hb = await homeBtn(p);
-  ok(hb && hb.src === TORTA, 'a főképernyő gombja a torta-logót viszi', JSON.stringify(hb));
-
-  console.log('\n===== 2. „DNR APPOK" LAP =====');
-  await p.evaluate(() => { const el = [...document.querySelectorAll('#__h [role="button"]')].find(x => /További/i.test(x.textContent || '')); if (el) el.click(); });
-  await p.waitForTimeout(500);
-  // a lap sora GOMB (az admin sor nem az), és alcímet is visz
-  const row = await p.evaluate(() => {
-    const i = [...document.querySelectorAll('img')].find(x => /dnr_torta_logo|dnr_bingo_icon/.test(x.getAttribute('src') || '') && x.closest('button') && !x.closest('#__s') && !/🏆/.test(x.closest('button').textContent || ''));
-    return i ? { src: i.getAttribute('src'), txt: (i.closest('button').textContent || '').trim() } : null;
-  });
-  ok(row && row.src === TORTA, '⚠️ a lapon a Bingó sor a torta-logót mutatja', JSON.stringify(row));
-  ok(row && /DNR a tortán/.test(row.txt) && !/DNR Bingó/.test(row.txt), 'a sor neve „DNR a tortán"', row && row.txt);
+  ok(hb && hb.src === TORTA, '⚠️ a központ Bingó-csempéje a torta-logót viszi', JSON.stringify(hb));
+  ok(hb && /DNR a tortán/.test(hb.txt) && !/DNR Bingó/.test(hb.txt), 'a csempe neve a TELJES „DNR a tortán" (nem csonka „a tortán")', hb && hb.txt);
 
   console.log('\n===== 3. ADMIN BEÁLLÍTÁS SORA =====');
   const srow = await sheetRow(p, '#__s');
@@ -80,10 +73,10 @@ const setDoc = (p, doc, data) => p.evaluate(({ doc, data }) => firebase.firestor
   console.log('\n===== 4. KIKAPCSOLVA ELTŰNIK A FŐKÉPERNYŐRŐL =====');
   await setDoc(p, 'homeConfig', { dnrAppsEnabled: true, dnrApps: { bingo: false } });
   await p.waitForTimeout(600);
-  ok((await homeBtn(p)) === null, '⚠️ dnrApps.bingo=false → a főképernyő gombja eltűnt', JSON.stringify(await homeBtn(p)));
+  ok((await homeBtn(p)) === null, '⚠️ dnrApps.bingo=false → a központ csempéje eltűnt', JSON.stringify(await homeBtn(p)));
   await setDoc(p, 'homeConfig', { dnrAppsEnabled: true, dnrApps: { bingo: true } });
   await p.waitForTimeout(600);
-  ok(!!(await homeBtn(p)), 'visszakapcsolva újra ott a gomb (kontroll)');
+  ok(!!(await homeBtn(p)), 'visszakapcsolva újra ott a csempe (kontroll)');
 
   console.log('\n===== 5. NYITÓKÉPERNYŐ-EMLÉKEZET =====');
   ok((await p.evaluate(() => localStorage.getItem('boh_bingo_mode'))) === 'torta', 'boh_bingo_mode = torta');
@@ -105,7 +98,7 @@ const setDoc = (p, doc, data) => p.evaluate(({ doc, data }) => firebase.firestor
     window.__abRoot.render(React.createElement(AdminBingo));
   });
   await p.waitForTimeout(1000);
-  ok(!!(await homeBtn(p)), 'kiinduláskor ott a főképernyő gombja');
+  ok(!!(await homeBtn(p)), 'kiinduláskor ott a központ csempéje');
   const tg = await p.evaluate(() => {
     const row = [...document.querySelectorAll('#__ab div')].find(d => d.children.length === 2 && /Megjelenítés a főképernyőn/.test(d.textContent) && d.textContent.length < 90);
     if (!row) return false; row.children[1].click(); return true;
@@ -113,7 +106,7 @@ const setDoc = (p, doc, data) => p.evaluate(({ doc, data }) => firebase.firestor
   ok(tg, 'a „Megjelenítés a főképernyőn" kapcsolót átbillentjük (Mentés NÉLKÜL)');
   await p.waitForTimeout(700);
   ok((await p.evaluate(() => window.__fbStore.config.bingoConfig.enabled)) === false, '⚠️ a kapcsoló azonnal kiírta: enabled=false');
-  ok((await homeBtn(p)) === null, '⚠️ a főképernyő gombja eltűnt — Mentés nélkül is');
+  ok((await homeBtn(p)) === null, '⚠️ a központ csempéje eltűnt — Mentés nélkül is');
   ok((await p.evaluate(() => window.__fbStore.config.bingoConfig.mode)) === 'torta', 'a többi mező érintetlen (merge)');
 
   console.log('\n===== 8. SIKERTELEN MENTÉS NEM ÍR „MENTVE"-T =====');

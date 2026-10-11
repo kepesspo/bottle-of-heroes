@@ -51,7 +51,8 @@ async function open(b, { file, standalone, screenH, innerH }) {
     Object.defineProperty(window.screen,'height',{get:()=>${screenH},configurable:true});`;
   if (standalone) init += `Object.defineProperty(navigator,'standalone',{get:()=>true,configurable:true});`;
   await p.addInitScript(init);
-  await p.goto('file://' + file, { waitUntil: 'domcontentloaded' });
+  // v10.409 óta a központ a nyitóképernyő — ezek a mérések a DNR Games főoldalról indulnak
+  await p.goto('file://' + file + (/\?/.test(file) ? '' : '?screen=games'), { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(3200);
   return p;
 }

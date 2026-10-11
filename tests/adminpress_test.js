@@ -21,7 +21,7 @@ async function home(b) {
   await p.route('**://**', r => r.request().url().startsWith('file://') ? r.continue() : r.abort());
   await p.addInitScript(stub);
   await p.addInitScript(seed);
-  await p.goto(BASE, { waitUntil: 'domcontentloaded' });
+  await p.goto(BASE + '?screen=games', { waitUntil: 'domcontentloaded' });  // v10.409: a Games főoldaláról (a nyitóképernyő a DNR központ)
   await p.waitForTimeout(3400);
   p.__errs = errs;
   return p;

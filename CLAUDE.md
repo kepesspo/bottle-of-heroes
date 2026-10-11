@@ -3164,3 +3164,62 @@ Teszt: `torta_draw_test.js` 11. (pecsét vs név geometriája két szélességen
 (automata próba: 5 este gombnyomás nélkül, semmi nem mentődik) és 13. (automata éles:
 elfogad és továbbmegy; a Megállítás után nem nő a szám; végigfuttatva 5 este, mindenki
 1× házigazda és 2× vendég).
+
+## ⚠️ DNR KÖZPONT: az app nyitóképernyője (v10.409) — a DNR refaktor 1. lépése
+Az app mostantól a **`DnrHubScreen`**-nel nyit (`screen === 'hub'`), nem a DNR Games
+főoldallal. A központ a DNR család indítója: a **DNR Games** (a régi `HomeScreen`) és a
+többi DNR app (Events, BOX, Pub, Bingó/Tortán, Liga) innen nyílik.
+
+**Két nézet, a fejléc váltójával** (tulajdonosi döntés: „A és B is, váltó gombbal"):
+- **`grid` (A · Rács, alap)** — kiemelt sötét DNR Games kártya („Megnyitás" + „Kód
+  beírása"), alatta a többi app 2 oszlopos csempékben (páratlan darabszámnál az utolsó
+  teljes széles);
+- **`cards` (B · Kártyák)** — egy aktív kártya középen, a szomszédok kilógnak; lapozás
+  húzással, nyilakkal és pöttyökkel. **NINCS alsó kerek ikonsor** — tulajdonosi döntés:
+  duplikáció lett volna a kártyák mellett. A sáv a teljes képernyőszélességet kapja
+  (`100vw`), és függőleges ráhagyással, különben az aktív kártya árnyéka egyenes élen
+  levágódik.
+A nézet eszközönként megjegyezve: `boh_hub_view`.
+
+**Melyik app látszik — UGYANAZ a két kapcsoló, mint eddig:** `homeConfig.dnrAppsEnabled`
+(mester) + `homeConfig.dnrApps.<screen>`, a Bingónál a `bingoConfig.enabled` is
+(v10.402/405). A DNR Games mindig ott van. Ha csak a Games maradna, a központ a config
+betöltése után egyenesen a Games-t nyitja (fölösleges lépés lenne).
+
+**Ami a DNR Games főoldaláról KIKERÜLT** (a központba költözött): a „TOVÁBBI DNR" sor
+és a „DNR appok" lap (`showMoreApps`), valamint a nagy Bingó/Tortán gomb. Helyettük a
+bal felső sarokban **„‹ DNR"** gomb (`data-home-hub`) visz vissza a központba. A főoldal
+nagy címe „Bottle of Heroes" → **„DNR Games"**, a kis felirat „DNR GAMES" →
+„PARTIJÁTÉKOK".
+
+**Navigáció — amit könnyű elrontani:**
+- **A központból nyitott app „vissza"-ja a KÖZPONTBA vigyen**, ne a Games főoldalra. Az
+  appok `go('home')`-ot hívnak vissza; a `go` ezt `hubReturnRef` alapján `'hub'`-ra
+  fordítja (`openFromHub` állítja, csak a `HUB_APP_SCREENS` képernyőkről). A Games
+  főoldaláról nyitott Liga (szezonzáró badge) továbbra is a Games főoldalra tér vissza.
+- **A router `order` listájába a `'hub'` is bekerült** (lapozás iránya — `setupflow_test`
+  6. blokk őrzi: ami kimarad, mindig balról csúszik be).
+- **`?screen=games` (és `game`/`jatek`/`jatekok`) → egyenesen a DNR Games főoldal.** A
+  `<head>` eleji alias-normalizáló eddig TÖRÖLTE ezeket (régen a Games volt az alap); most
+  `games`-re normalizál, a `BottleApp` `_gamesApp` ága nyitja a `home`-ot. `hub`/`dnr` →
+  törlődik (= központ). Az önálló appok (`?screen=bingo|bar|dnrbox|events|liga`) és a
+  szoba-link (`?room=`) változatlanul a saját képernyőjükkel nyitnak.
+- A státuszsáv a központban is a téma hátterét kapja (`baseBarBg`-ben a `'hub'`).
+
+**⚠️ A Games főoldalán maradt dolgok** (a központban NINCSENEK): az admin fogaskerék, a
+szezonzáró felugró, a hirdetmény, a verziószám/teszt-DB kapcsoló. Ezek a „Megnyitás"
+után jönnek elő — ha a központba kellenek, a `HomeScreen`-ből kell átemelni őket.
+
+**Tesztek:** a Games főoldalról induló tesztek (`roomcreate`, `roomcreate_fn`,
+`safearea`, `adminpress`, `season_close`, `testdb`) mostantól `?screen=games`-szel
+nyitnak; a `pwa_apps_test` a „TOVÁBBI DNR" lap helyett a központ csempéit méri; a
+`torta_home_test` a központ Bingó-csempéjét (`data-hub-open="bingo"`); a
+`screenalias_test` a `games`-aliasok új célját (`?screen=games`).
+Új: `node tests/dnr_hub_test.js` — nyitás a központtal, Rács (Games + 5 app), app →
+vissza a központba, Games ↔ központ („‹ DNR"), Kártyák (6 kártya, nyíl-lapozás, nincs
+alsó ikonsor, a nézet megmarad), kikapcsolt app nem jelenik meg, `?screen=bingo` nem a
+központba nyit.
+
+**Ami még HÁTRAVAN a DNR refaktorból:** a repó átnevezése (`/bottle-of-heroes/` →
+`/DNR/`) + átirányító régi repó + takarító service worker, a manifestek `start_url`-ja
+(relatívra), a Spotify redirect URI, és egy valódi DNR logó (most betűs „DNR" + arany pont).

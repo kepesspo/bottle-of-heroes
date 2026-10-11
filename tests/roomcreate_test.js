@@ -46,7 +46,7 @@ const tap = async (p, re, wait) => {
   await p.route('**://**', r => r.request().url().startsWith('file://') ? r.continue() : r.abort());
   await p.addInitScript(stub);
   await p.addInitScript(`try{localStorage.setItem('boh_onboarded','1');localStorage.setItem('boh_splash','0');}catch(e){}`);
-  await p.goto('file://' + path.join(ROOT, 'index.html'), { waitUntil: 'domcontentloaded' });
+  await p.goto('file://' + path.join(ROOT, 'index.html') + '?screen=games', { waitUntil: 'domcontentloaded' });
   await p.waitForTimeout(3400);
 
   // A szoba-iras SOSEM nyugtazodik — pont mint rossz halon.

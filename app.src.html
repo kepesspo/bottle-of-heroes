@@ -17,7 +17,8 @@
         pub:'bar', kocsma:'bar', drinks:'bar',
         liga:'liga', league:'liga', stats:'liga', statisztika:'liga',
         bingo:'bingo', events:'events', esemenyek:'events', calendar:'calendar',
-        games:'', game:'', jatek:'', jatekok:'',
+        // v10.409 óta a DNR KÖZPONT az alap; a games-aliasok a DNR Games főoldalra visznek
+        games:'games', game:'games', jatek:'games', jatekok:'games', hub:'', dnr:'',
       };
       var q = new URLSearchParams(location.search);
       var raw = (q.get('screen') || '').trim().toLowerCase();
@@ -35212,7 +35213,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.408';
+const APP_VERSION = 'v10.409';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -44513,7 +44514,208 @@ function useBingoCfg() {
   }, []);
   return c;
 }
-function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resumeRoomData, onResume, onOpenSeason }) {
+// ── DNR KÖZPONT (v10.409) ─────────────────────────────────────────────────
+// Az app nyitóképernyője: innen nyílik a DNR Games (a régi főoldal) és a többi
+// DNR app. Két nézet, a fejléc váltójával, eszközönként megjegyezve
+// (`boh_hub_view`): 'grid' (A · Rács, alap) és 'cards' (B · Kártyák, lapozós).
+// Hogy melyik app látszik, UGYANAZ a két kapcsoló dönti el, mint eddig a
+// „További DNR" sornál: `homeConfig.dnrAppsEnabled` + `dnrApps.<screen>`, a
+// Bingónál a `bingoConfig.enabled` is (v10.402/405). A DNR Games mindig ott van.
+const DNR_HUB_INK = '#14202F';     // fix sötét kártya — témától független márka-szín
+const DNR_HUB_GOLD = '#F2A93B';    // a „DNR" pont és a kiemelő gomb
+const DNR_GAMES_APP = { screen:'home', name:'DNR Games', icon:'assets/dnr_games_icon.png', sub: () => 'Partijátékok, tornák, kör-ivók' };
+function useHomeCfgDoc() {
+  const [c, setC] = React.useState({ v: null, loaded: false });
+  React.useEffect(() => {
+    if (typeof firebase === 'undefined') { setC({ v: null, loaded: true }); return; }
+    const un = firebase.firestore().collection('config').doc('homeConfig').onSnapshot(
+      d => setC({ v: (d && d.exists && d.data()) || null, loaded: true }), () => setC(x => ({ v: x.v, loaded: true })));
+    return () => { try { un(); } catch(e) {} };
+  }, []);
+  return c;
+}
+// Élő alcímek (következő esemény, jukebox, szezon) — ugyanaz, amit a régi dokk mutatott.
+function useDnrLiveInfo() {
+  const [info, setInfo] = React.useState({ ev: null, box: null, liga: '' });
+  React.useEffect(() => {
+    const pickNext = (list) => {
+      const now = new Date(); now.setHours(0,0,0,0);
+      return (list || []).filter(e => e && e.date && !e.cancelled && new Date(e.date) >= now)
+        .sort((a,b) => new Date(a.date) - new Date(b.date))[0] || null;
+    };
+    try { const n = pickNext(evLoad()); setInfo(x => ({ ...x, ev: n })); } catch(e) {}
+    const col = typeof evDb === 'function' ? evDb() : null;
+    if (col) col.get().then(snap => setInfo(x => ({ ...x, ev: pickNext(snap.docs.map(d => ({ id:d.id, ...d.data() }))) }))).catch(() => {});
+    if (typeof firebase !== 'undefined') {
+      const boxDoc = firebase.firestore().collection('jukebox').doc('main');
+      boxDoc.get().then(d => setInfo(x => ({ ...x, box: { np: (d.data() || {}).nowPlaying || null } }))).catch(() => {});
+    }
+    if (typeof window.getSeasons === 'function') window.getSeasons().then(ss => {
+      const now = Date.now(); const s = (ss || []).find(x => (x.from || 0) <= now && now <= (x.to || 0));
+      setInfo(x => ({ ...x, liga: s ? s.name : '' }));
+    }).catch(() => {});
+  }, []);
+  return {
+    ev: info.ev ? `Köv: ${new Date(info.ev.date).toLocaleDateString('hu-HU', { month:'short', day:'numeric' })}` : 'Bulinaptár · RSVP',
+    box: info.box ? (info.box.np ? 'Aktív — szól a zene' : 'Nem aktív') : 'Közös jukebox',
+    liga: info.liga,
+  };
+}
+// A két nézet ikonja a váltóban (vonalas, nem emoji)
+function HubViewIcon({ kind, color }) {
+  return kind === 'grid'
+    ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>
+    : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinejoin="round" aria-hidden="true"><rect x="7" y="4" width="10" height="16" rx="2.4"/><path d="M3.5 7v10M20.5 7v10" strokeLinecap="round"/></svg>;
+}
+function HubWordmark({ size }) {
+  return (
+    <span data-hub-wordmark style={{ display:'inline-flex', alignItems:'baseline', gap:Math.round(size * 0.06) }}>
+      <span style={{ fontFamily:T.font, fontWeight:900, fontSize:size, letterSpacing:'-0.01em', lineHeight:1, color:T.ink }}>DNR</span>
+      <span style={{ width:Math.round(size * 0.25), height:Math.round(size * 0.25), borderRadius:'50%', background:DNR_HUB_GOLD, display:'inline-block' }} />
+    </span>
+  );
+}
+function DnrHubScreen({ onOpen }) {
+  const bingoCfg = useBingoCfg();
+  const homeCfg = useHomeCfgDoc();
+  const live = useDnrLiveInfo();
+  const [view, setView] = React.useState(() => { try { return localStorage.getItem('boh_hub_view') === 'cards' ? 'cards' : 'grid'; } catch(e) { return 'grid'; } });
+  const pickView = v => { setView(v); try { localStorage.setItem('boh_hub_view', v); } catch(e) {} };
+  const hc = homeCfg.v;
+  const master = !hc || hc.dnrAppsEnabled !== false;
+  const bingoOn = !bingoCfg || bingoCfg.enabled !== false;
+  const others = master ? DNR_APPS.filter(a => dnrAppEnabled(hc, a.screen) && (a.screen !== 'bingo' || bingoOn)).map(a => dnrAppView(a, bingoCfg)) : [];
+  const subOf = a => a.sub({ ev: live.ev, box: live.box, liga: live.liga });
+  // A fejléc már „DNR", ezért a csempén elég „Events", „BOX"… — kivéve, ahol a „DNR"
+  // a név része („DNR a tortán"): ott levágva csonka maradna.
+  const shortName = a => a.screen === 'home' || a.icon === TORTA_LOGO ? a.name : a.name.replace(/^DNR /, '');
+  const apps = [DNR_GAMES_APP].concat(others);
+  // Egyetlen engedélyezett app (csak a Games) mellett a központ fölösleges lépés:
+  // a betöltött config után egyenesen a DNR Games nyílik.
+  React.useEffect(() => { if (homeCfg.loaded && others.length === 0) onOpen('home'); }, [homeCfg.loaded, others.length]);
+
+  // ── B · Kártyák: egy kártya középen, a szomszédok kilógnak; lapozás húzással,
+  //    nyilakkal (web) és a pöttyökkel. Nincs alsó ikonsor (tulajdonosi döntés:
+  //    duplikáció lett volna a kártyák mellett).
+  const [idx, setIdx] = React.useState(0);
+  const cur = Math.min(idx, apps.length - 1);
+  const dragRef = React.useRef(null);
+  const step = d => setIdx(i => Math.max(0, Math.min(apps.length - 1, i + d)));
+  const onDown = e => { dragRef.current = { x: (e.touches ? e.touches[0] : e).clientX }; };
+  const onUp = e => {
+    const s = dragRef.current; dragRef.current = null; if (!s) return;
+    const x = (e.changedTouches ? e.changedTouches[0] : e).clientX, dx = x - s.x;
+    if (Math.abs(dx) > 40) step(dx < 0 ? 1 : -1);
+  };
+  const CW = 280, CH = 440, GAP = 18;
+
+  const seg = (v, label) => (
+    <button data-hub-view={v} aria-pressed={view === v} aria-label={label} onClick={() => pickView(v)}
+      style={{ width:44, height:38, borderRadius:11, border:'none', cursor:'pointer', display:'grid', placeItems:'center', background: view === v ? DNR_HUB_INK : 'transparent', WebkitTapHighlightColor:'transparent' }}>
+      <HubViewIcon kind={v} color={view === v ? '#fff' : T.inkSoft} />
+    </button>
+  );
+  const iconTile = (a, size) => a.screen === 'home' || a.icon === TORTA_LOGO
+    ? <span style={{ width:size, height:size, borderRadius:size * 0.28, background:'#fff', display:'grid', placeItems:'center', flexShrink:0 }}><img src={a.icon} alt="" style={{ width:size * 0.88, height:size * 0.88 }} /></span>
+    : <img src={a.icon} alt="" style={{ width:size, height:size, borderRadius:size * 0.28, flexShrink:0 }} />;
+
+  return (
+    <div data-dnr-hub={view} style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', background:T.bg }}>
+      <div style={{ flex:1, minHeight:0, overflowY:'auto', overflowX:'hidden', WebkitOverflowScrolling:'touch' }}>
+        <div style={{ maxWidth: view === 'cards' ? 720 : 560, margin:'0 auto', padding:'calc(env(safe-area-inset-top) + 22px) 20px calc(env(safe-area-inset-bottom) + 26px)', boxSizing:'border-box', display:'flex', flexDirection:'column', gap:18 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <HubWordmark size={40} />
+            <div role="group" aria-label="Nézet" style={{ display:'flex', gap:2, padding:3, borderRadius:14, background:T.surface, boxShadow:T.shadowPill }}>
+              {seg('grid', 'Rács nézet')}
+              {seg('cards', 'Kártya nézet')}
+            </div>
+          </div>
+
+          {view === 'grid' ? (
+            <React.Fragment>
+              {/* A · Rács: kiemelt DNR Games + a többi app csempékben */}
+              <div style={{ background:DNR_HUB_INK, color:'#fff', borderRadius:26, padding:20, display:'flex', flexDirection:'column', gap:14, boxShadow:'0 10px 26px rgba(20,32,47,0.25)' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+                  {iconTile(DNR_GAMES_APP, 72)}
+                  <div style={{ display:'flex', flexDirection:'column', gap:3, minWidth:0 }}>
+                    <span style={{ fontFamily:T.font, fontSize:12, fontWeight:800, letterSpacing:'0.12em', color:DNR_HUB_GOLD }}>FŐ APP</span>
+                    <span style={{ fontFamily:T.font, fontSize:24, fontWeight:900, lineHeight:1.1 }}>DNR Games</span>
+                    <span style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:'rgba(255,255,255,0.78)' }}>Partijátékok, tornák, kör-ivók</span>
+                  </div>
+                </div>
+                <div style={{ display:'flex', gap:10 }}>
+                  <button data-hub-open="home" onClick={() => onOpen('home')} style={{ flex:1, height:48, borderRadius:14, border:'none', background:DNR_HUB_GOLD, color:DNR_HUB_INK, fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer' }}>Megnyitás</button>
+                  <button data-hub-open="observer" onClick={() => onOpen('observer')} style={{ width:132, height:48, borderRadius:14, border:'none', background:'rgba(255,255,255,0.12)', color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:14, cursor:'pointer' }}>{t('enterCode')}</button>
+                </div>
+              </div>
+              {others.length > 0 && <div style={{ fontFamily:T.font, fontSize:12, fontWeight:800, letterSpacing:'0.14em', color:T.inkSoft, margin:'4px 2px -6px' }}>TOVÁBBI DNR APPOK</div>}
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(2, minmax(0, 1fr))', gap:12 }}>
+                {others.map((a, i) => {
+                  const wide = others.length % 2 === 1 && i === others.length - 1;   // páratlan darabszámnál az utolsó teljes széles
+                  return (
+                    <button key={a.screen} data-hub-open={a.screen} onClick={() => onOpen(a.screen)}
+                      style={{ gridColumn: wide ? 'span 2' : 'auto', background:T.surface, border:'none', borderRadius:22, padding:14, display:'flex', flexDirection: wide ? 'row' : 'column', alignItems: wide ? 'center' : 'flex-start', gap: wide ? 12 : 10, textAlign:'left', cursor:'pointer', boxShadow:T.shadowPill, WebkitTapHighlightColor:'transparent' }}>
+                      {iconTile(a, 52)}
+                      <span style={{ display:'flex', flexDirection:'column', gap:2, minWidth:0, flex: wide ? 1 : 'none', width: wide ? 'auto' : '100%' }}>
+                        <span style={{ fontFamily:T.font, fontSize:16, fontWeight:900, color:T.ink }}>{shortName(a)}</span>
+                        <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:T.inkSoft, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{subOf(a)}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </React.Fragment>
+          ) : (
+            <React.Fragment>
+              {/* B · Kártyák */}
+              <div style={{ fontFamily:T.font, fontSize:13, fontWeight:700, color:T.inkSoft, textAlign:'center', marginTop:-6 }}>Válassz appot — lapozz oldalra</div>
+              <div data-hub-track onTouchStart={onDown} onTouchEnd={onUp} onMouseDown={onDown} onMouseUp={onUp}
+                style={{ position:'relative', height:CH + 120, width:'100vw', marginLeft:'calc(50% - 50vw)', marginTop:-30, marginBottom:-74, overflow:'hidden', touchAction:'pan-y', userSelect:'none' }}>
+                {apps.map((a, i) => {
+                  const off = i - cur, active = off === 0;
+                  return (
+                    <div key={a.screen} data-hub-card={a.screen} data-active={active ? '1' : '0'}
+                      onClick={() => { if (!active) setIdx(i); }}
+                      style={{ position:'absolute', left:'50%', top:38, width:CW, height:CH, marginLeft:-CW / 2, transform:`translateX(${off * (CW + GAP)}px) scale(${active ? 1 : 0.9})`, transition:'transform .35s cubic-bezier(.2,.8,.2,1), opacity .35s', opacity: Math.abs(off) > 2 ? 0 : active ? 1 : Math.abs(off) === 1 ? 0.55 : 0.3, cursor: active ? 'default' : 'pointer',
+                        borderRadius:32, background: a.screen === 'home' ? DNR_HUB_INK : T.surface, color: a.screen === 'home' ? '#fff' : T.ink, boxSizing:'border-box', padding:'26px 22px 22px', display:'flex', flexDirection:'column', alignItems:'center', gap:14, boxShadow: active ? '0 22px 46px rgba(20,32,47,0.28)' : 'none' }}>
+                      {a.screen === 'home' && <span style={{ fontFamily:T.font, fontSize:12, fontWeight:900, letterSpacing:'0.14em', color:DNR_HUB_INK, background:DNR_HUB_GOLD, borderRadius:999, padding:'5px 12px' }}>FŐ APP</span>}
+                      <span style={{ width:160, height:160, borderRadius:'50%', background:'#fff', display:'grid', placeItems:'center', marginTop: a.screen === 'home' ? 0 : 30, boxShadow:'inset 0 0 0 6px rgba(242,169,59,0.35)', overflow:'hidden' }}>
+                        <img src={a.icon} alt="" style={{ width:(a.screen === 'home' || a.icon === TORTA_LOGO) ? 134 : 160, height:(a.screen === 'home' || a.icon === TORTA_LOGO) ? 134 : 160 }} />
+                      </span>
+                      <span style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, textAlign:'center' }}>
+                        <span style={{ fontFamily:T.font, fontSize:28, fontWeight:900, lineHeight:1.05 }}>{shortName(a)}</span>
+                        <span style={{ fontFamily:T.font, fontSize:14, fontWeight:700, color: a.screen === 'home' ? 'rgba(255,255,255,0.78)' : T.inkSoft }}>{subOf(a)}</span>
+                      </span>
+                      <span style={{ flex:1 }} />
+                      <button data-hub-open={a.screen} tabIndex={active ? 0 : -1} onClick={e => { e.stopPropagation(); if (active) onOpen(a.screen); else setIdx(i); }}
+                        style={{ width:'100%', height:52, borderRadius:16, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:16, background: a.screen === 'home' ? DNR_HUB_GOLD : DNR_HUB_INK, color: a.screen === 'home' ? DNR_HUB_INK : '#fff' }}>Megnyitás</button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:14 }}>
+                <button aria-label="Előző app" data-hub-prev onClick={() => step(-1)} disabled={cur === 0} style={{ width:44, height:44, borderRadius:'50%', border:'none', background:T.surface, boxShadow:T.shadowPill, cursor: cur === 0 ? 'default' : 'pointer', opacity: cur === 0 ? 0.35 : 1, display:'grid', placeItems:'center' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <div style={{ display:'flex', gap:7 }}>
+                  {apps.map((a, i) => (
+                    <button key={a.screen} aria-label={`${i + 1}. app: ${a.name}`} onClick={() => setIdx(i)}
+                      style={{ width: i === cur ? 22 : 9, height:9, borderRadius:999, border:'none', padding:0, cursor:'pointer', background: i === cur ? DNR_HUB_GOLD : T.inkMute + '66', transition:'width .25s' }} />
+                  ))}
+                </div>
+                <button aria-label="Következő app" data-hub-next onClick={() => step(1)} disabled={cur === apps.length - 1} style={{ width:44, height:44, borderRadius:'50%', border:'none', background:T.surface, boxShadow:T.shadowPill, cursor: cur === apps.length - 1 ? 'default' : 'pointer', opacity: cur === apps.length - 1 ? 0.35 : 1, display:'grid', placeItems:'center' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+                </button>
+              </div>
+            </React.Fragment>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resumeRoomData, onResume, onOpenSeason, onHub }) {
   const [splashOn, setSplashOn] = React.useState(() => localStorage.getItem('boh_splash') !== '0');
   const [sndOn, setSndOn] = React.useState(() => { try { return localStorage.getItem('boh_snd') !== '0'; } catch(e) { return true; } });
   const toggleSnd = () => { const n = !sndOn; setSndOn(n); try { localStorage.setItem('boh_snd', n ? '1' : '0'); } catch(e) {} if (n && typeof window.bohSound === 'function') window.bohSound('zsulli'); };
@@ -44536,47 +44738,9 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
 
 
   const [showInstall, setShowInstall] = React.useState(false);
-  const [showMoreApps, setShowMoreApps] = React.useState(false);
   const [showSettings, setShowSettings] = React.useState(false);
   const isStandalone = typeof window !== 'undefined' && (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches);
 
-  // DNR dokk — élő infók: következő esemény + jukebox állapot
-  const [nextEvent, setNextEvent] = React.useState(null);
-  const [boxInfo, setBoxInfo] = React.useState(null);
-  const bingoCfg = useBingoCfg();
-  const bingoOn = !bingoCfg || bingoCfg.enabled !== false;
-  const bingoMode = (bingoCfg && (bingoCfg.mode === 'tipp' || bingoCfg.mode === 'torta')) ? bingoCfg.mode : 'bingo';
-  const bingoLabel = bingoMode === 'torta'
-    ? ((bingoCfg && bingoCfg.tortaTitle) ? bingoCfg.tortaTitle : 'DNR a tortán')
-    : bingoMode === 'tipp'
-    ? ((bingoCfg && bingoCfg.tippTitle) ? bingoCfg.tippTitle : 'Tippbajnokság')
-    : ((bingoCfg && bingoCfg.title) ? bingoCfg.title : 'VB Bingó');
-  const bingoEmoji = bingoMode === 'torta' ? '🍽️' : bingoMode === 'tipp' ? '🎯' : '⚽';
-  const bingoSub = bingoMode === 'torta' ? 'Pontozd a házigazdákat — ki lesz a bajnok?' : bingoMode === 'tipp' ? 'Tippelj a döntőre — ki lesz a bajnok?' : 'X-eld ki, ami megtörténik a döntőben!';
-  React.useEffect(() => {
-    const pickNext = (list) => {
-      const now = new Date(); now.setHours(0,0,0,0);
-      return (list || [])
-        .filter(e => e && e.date && !e.cancelled && new Date(e.date) >= now)
-        .sort((a,b) => new Date(a.date) - new Date(b.date))[0] || null;
-    };
-    try { setNextEvent(pickNext(evLoad())); } catch(e) {}
-    const col = typeof evDb === 'function' ? evDb() : null;
-    if (col) col.get().then(snap => setNextEvent(pickNext(snap.docs.map(d => ({ id:d.id, ...d.data() }))))).catch(() => {});
-    if (typeof firebase !== 'undefined') {
-      const boxDoc = firebase.firestore().collection('jukebox').doc('main');
-      boxDoc.get().then(d => {
-        const np = (d.data() || {}).nowPlaying || null;
-        boxDoc.collection('queue').get().then(qs => setBoxInfo({ np, queueLen: qs.size })).catch(() => setBoxInfo({ np, queueLen: 0 }));
-      }).catch(() => {});
-    }
-  }, []);
-  const _evDockSub = nextEvent
-    ? `${'Köv'}: ${new Date(nextEvent.date).toLocaleDateString('hu-HU',{ month:'short', day:'numeric' })}`
-    : ('Bulinaptár · RSVP');
-  const _boxDockSub = boxInfo
-    ? (boxInfo.np ? ('🟢 Aktív') : ('⚪ Nem aktív'))
-    : ('Közös jukebox');
   // Fooldal-kapcsolok (Admin > Rendszer > Beallitasok)
   const [homeCfg, setHomeCfg] = React.useState(null);
   // Amig a config meg nem erkezett, nem dontunk a szezonzarorol — kulonben
@@ -44589,10 +44753,6 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
       () => setHomeCfgLoaded(true));
     return () => { try { un(); } catch(e) {} };
   }, []);
-  // A sor akkor is elmarad, ha a mester-kapcsolo BE van, de EGYETLEN app sincs
-  // engedelyezve — kulonben egy ures lapra vinne a felhivas.
-  const dnrAppsOn = (!homeCfg || homeCfg.dnrAppsEnabled !== false)
-    && DNR_APPS.some(a2 => dnrAppEnabled(homeCfg, a2.screen));
   // 'always' (alap) = minden app-inditasnal · 'once' = keszulekenkent egyszer · 'off'
   const closeMode = (homeCfg && homeCfg.seasonCloseMode) || 'always';
 
@@ -44684,26 +44844,6 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
             : 'Éles adatbázis — mostantól MINDEN eszközön élesbe megy a statisztika.'}
         </Toast>
       )}
-      {showMoreApps && (
-        <SheetOverlay onClose={() => setShowMoreApps(false)} title="DNR appok">
-          <div style={{ padding:'0 16px 24px', display:'flex', flexDirection:'column', gap:10 }}>
-            {DNR_APPS.filter(app => dnrAppEnabled(homeCfg, app.screen)).map(a0 => dnrAppView(a0, bingoCfg)).map(app => (
-              <button key={app.screen} onClick={() => { setShowMoreApps(false); go(app.screen); }}
-                style={{ display:'flex', alignItems:'center', gap:13, width:'100%', boxSizing:'border-box', background:T.surface, border:'none', borderRadius:16, padding:'12px 14px', cursor:'pointer', textAlign:'left', boxShadow:T.shadowPill, WebkitTapHighlightColor:'transparent' }}>
-                <img src={app.icon} style={{ width:44, height:44, borderRadius:13, flexShrink:0 }} />
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>{app.name}</div>
-                  <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.inkSoft, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{app.sub({ ev:_evDockSub, box:_boxDockSub, liga:ligaSeason ? ligaSeason.name : '' })}</div>
-                </div>
-                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:T.inkMute, flexShrink:0 }}>›</span>
-              </button>
-            ))}
-            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', lineHeight:1.5, marginTop:2 }}>
-              Mindegyik külön appként is telepíthető a saját ikonjával — nyisd meg a linkjét és mentsd a főképernyőre.
-            </div>
-          </div>
-        </SheetOverlay>
-      )}
       <div style={{ flex:1, minHeight:0, overflowY:'auto', WebkitOverflowScrolling:'touch', display:'flex', flexDirection:'column' }}>
       <div className="home-inner">
         <div className="home-brand">
@@ -44715,7 +44855,7 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
           )}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:9, marginBottom:2 }}>
             <span style={{ width:24, height:2, background:T.ink, opacity:0.22, borderRadius:2 }} />
-            <span style={{ fontFamily:T.font, fontWeight:800, fontSize:14.5, letterSpacing:'0.24em', textTransform:'uppercase', color:T.ink }}>DNR <span style={{ color:T.mint }}>GAMES</span></span>
+            <span style={{ fontFamily:T.font, fontWeight:800, fontSize:14.5, letterSpacing:'0.24em', textTransform:'uppercase', color:T.ink }}>Parti<span style={{ color:T.mint }}>játékok</span></span>
             <span style={{ width:24, height:2, background:T.ink, opacity:0.22, borderRadius:2 }} />
           </div>
           {/* Szezon-jelzés — 3 valtozat, a window.__seasonVariant donti el (dontesig) */}
@@ -44778,13 +44918,21 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
           </div>
           <div className="home-brand-text">
             <div style={{ fontFamily:T.font, fontWeight:T.weightDisplay, fontSize:28, lineHeight:1, letterSpacing:'0.05em', color:T.ink, textTransform:'uppercase', whiteSpace:'nowrap' }}>
-              Bottle of Heroes
+              DNR Games
             </div>
           </div>
         </div>
         {/* Top-left: version + announcement */}
         <div style={{ position:'absolute', top:14, left:18, zIndex:20, display:'flex', flexDirection:'column', gap:8, alignItems:'flex-start', maxWidth:'calc(100vw - 220px)', pointerEvents:'none' }}>
           <div style={{ pointerEvents:'auto' }}>
+            {/* Vissza a DNR központba (v10.409) — a többi DNR app innen már nem érhető el közvetlenül */}
+            {onHub && (
+              <button data-home-hub onClick={onHub} aria-label="Vissza a DNR központba"
+                style={{ display:'inline-flex', alignItems:'center', gap:4, height:34, padding:'0 12px 0 8px', marginBottom:8, borderRadius:999, border:'none', background:T.surface, boxShadow:T.shadowPill, cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:13.5, color:T.ink, WebkitTapHighlightColor:'transparent' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.ink} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                DNR<span style={{ width:6, height:6, borderRadius:'50%', background:DNR_HUB_GOLD, display:'inline-block', marginLeft:1 }} />
+              </button>
+            )}
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:19, color:T.ink, letterSpacing:'-0.01em', lineHeight:1.05, whiteSpace:'nowrap' }}>👋 {greetHi}</div>
             <div onClick={tapVersion} style={{ fontFamily:T.font, fontWeight:700, fontSize:11, color:T.inkSoft, marginTop:2, cursor:'pointer', userSelect:'none', WebkitTapHighlightColor:'transparent', display:'flex', alignItems:'center', gap:6 }}>
               {greetSub}
@@ -44981,41 +45129,13 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
                 <span style={{ fontFamily:T.font, fontWeight:700, fontSize:9.5, color:T.inkSoft }}>{t('quickGameSub')}</span>
               </button>
             </div>
-            {bingoOn && dnrAppEnabled(homeCfg, 'bingo') && (
-            <button onClick={() => go('bingo')} style={{ position:'relative', overflow:'hidden', display:'flex', alignItems:'center', gap:12, border:'none', background: bingoMode === 'torta' ? 'linear-gradient(115deg, #121C28, #25384D 55%, #121C28)' : 'linear-gradient(115deg, #1E7A46, #2FA35F 55%, #1E7A46)', borderRadius:18, padding:'13px 16px', cursor:'pointer', boxShadow: bingoMode === 'torta' ? '0 4px 0 #C49A45, 0 11px 24px rgba(18,28,40,0.35)' : '0 4px 0 rgba(20,83,45,0.6), 0 11px 24px rgba(20,83,45,0.35)', transform:'rotate(0.5deg)', WebkitTapHighlightColor:'transparent', textAlign:'left' }}>
-              {bingoMode === 'torta'
-                ? <img data-torta-logo src={TORTA_LOGO} alt="" style={{ width:40, height:40, flexShrink:0, filter:'drop-shadow(0 2px 5px rgba(0,0,0,0.25))' }} />
-                : <span style={{ fontSize:26, lineHeight:1 }}>{bingoEmoji}</span>}
-              <span style={{ flex:1, minWidth:0 }}>
-                <span style={{ display:'block', fontFamily:T.font, fontWeight:900, fontSize:15.5, color:'#fff' }}>{bingoLabel} 🏆</span>
-                <span style={{ display:'block', fontFamily:T.font, fontWeight:700, fontSize:10.5, color:'rgba(255,255,255,0.85)', marginTop:1 }}>{bingoSub}</span>
-              </span>
-              <span style={{ fontFamily:T.font, fontWeight:900, fontSize:16, color:'rgba(255,255,255,0.9)' }}>›</span>
-              <span style={{ position:'absolute', right:-18, top:-18, width:70, height:70, border:'2.5px solid rgba(255,255,255,0.16)', borderRadius:'50%', pointerEvents:'none' }} />
-              <span style={{ position:'absolute', right:16, bottom:-30, width:60, height:60, border:'2.5px solid rgba(255,255,255,0.1)', borderRadius:'50%', pointerEvents:'none' }} />
-            </button>
-            )}
           </div>
         </div>
       </div>
       </div>
-      {/* DNR dokk — a család többi appja, élő infókkal, mindig a képernyő alján, elválasztva a fenti tartalomtól */}
+      {/* Alsó sáv — a „További DNR" sor v10.409 óta a DNR KÖZPONTBA költözött (DnrHubScreen); itt csak a telepítés maradt */}
       <div className="home-dock-wrap" style={{ background:T.bg, position:'relative', zIndex:5 }}>
         <div className="home-dock">
-          {/* Felhívás a "DNR appok" bottom sheetre — középre igazított, nyíllal.
-              Az Adminban kikapcsolható (config/homeConfig.dnrAppsEnabled). */}
-          {dnrAppsOn && (
-          <div onClick={() => setShowMoreApps(true)} role="button" tabIndex={0}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setShowMoreApps(true); }}
-            style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3, padding:'10px 0 6px', cursor:'pointer', WebkitTapHighlightColor:'transparent' }}>
-            <svg width="20" height="12" viewBox="0 0 20 12" fill="none" style={{ animation:'hintUp 2.2s ease-in-out infinite' }}>
-              <path d="M2 10l8-8 8 8" stroke={T.inkSoft} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12.5, letterSpacing:'0.22em', textTransform:'uppercase', color:T.ink, whiteSpace:'nowrap' }}>
-              További <span style={{ color:T.mint }}>DNR</span>
-            </div>
-          </div>
-          )}
           {!isStandalone && (
             <div style={{ display:'flex', justifyContent:'center', marginTop:2 }}>
               <button onClick={() => setShowInstall(true)} style={{ display:'flex', alignItems:'center', gap:5, border:'none', background:'transparent', cursor:'pointer', padding:'2px 4px', fontFamily:T.font, fontWeight:800, fontSize:10.5, color:T.mint, opacity:0.75, WebkitTapHighlightColor:'transparent' }}>
@@ -76654,7 +76774,9 @@ function BottleApp() {
   const _barApp = _initScreen === 'bar';
   const _bingoApp = _initScreen === 'bingo';
   const _ligaApp = _initScreen === 'liga';
-  const [screen, setScreen] = useState(() => _initRoom ? 'observer' : _jukebox ? 'jukebox' : _barApp ? 'bar' : _bingoApp ? 'bingo' : _ligaApp ? 'stats' : _deepLink ? 'log' : 'home');
+  const _gamesApp = _initScreen === 'games';   // ?screen=games — egyenesen a DNR Games főoldala (v10.409)
+  // Alapból a DNR KÖZPONT nyílik (v10.409); az önálló appok (?screen=…) és a szoba-link változatlanul a sajátjukkal.
+  const [screen, setScreen] = useState(() => _initRoom ? 'observer' : _jukebox ? 'jukebox' : _barApp ? 'bar' : _bingoApp ? 'bingo' : _ligaApp ? 'stats' : _deepLink ? 'log' : _gamesApp ? 'home' : 'hub');
   const [editEventId, setEditEventId] = React.useState(null);
   const [statsInitView, setStatsInitView] = React.useState('all');
   const [statsInitSeason, setStatsInitSeason] = React.useState(null);
@@ -76824,7 +76946,15 @@ function BottleApp() {
   };
 
   const goEdit = (eventId) => { setEditEventId(eventId); setScreen('create'); };
-  const go = (next) => {
+  // A központból nyitott app „vissza" gombja (go('home')) a KÖZPONTBA vigyen, ne a
+  // DNR Games főoldalára. Csak a központból indított útra él: a Games főoldaláról
+  // nyitott Liga (szezonzáró) továbbra is oda tér vissza.
+  const hubReturnRef = React.useRef(false);
+  const HUB_APP_SCREENS = ['log', 'create', 'jukebox', 'bar', 'bingo', 'stats'];
+  const openFromHub = (target) => { hubReturnRef.current = target !== 'home'; go(target, true); };
+  const go = (next, _fromHub) => {
+    if (next === 'home' && hubReturnRef.current && HUB_APP_SCREENS.includes(screen)) next = 'hub';
+    if (!_fromHub && (next === 'home' || next === 'hub')) hubReturnRef.current = false;
     if (next !== 'create') setEditEventId(null);
     if (next === 'play') {
       setScoreHistory([]);
@@ -76884,7 +77014,7 @@ function BottleApp() {
   // A sorrend adja a lapozas iranyat: elore jobbrol (slideIn), vissza balrol
   // (slideBack). Ami kimarad, arra az indexOf -1-et adna, es a kepernyo mindig
   // balrol jonne — ezert az ismeretlen kepernyo ELORE szamit, nem vissza.
-  const order = ['home','stats','bingo','bar','log','jukebox','create','admin',
+  const order = ['hub','home','stats','bingo','bar','log','jukebox','create','admin',
                  'players','games','setup','play','end','observer'];
   const posOf = (k) => { const i = order.indexOf(k); return i === -1 ? order.length : i; };
   const dir = posOf(screen) >= posOf(prev || 'home') ? 1 : -1;
@@ -76932,7 +77062,7 @@ function BottleApp() {
   // háttere a helyes. EGY helyen definiálva: a gyökér-konténer háttere és a
   // fix festősáv is ezt használja, így nem tudnak szétcsúszni.
   // A sav alapszine: ahol NINCS fejlec -> a tema hattere, egyebkent feher.
-  const baseBarBg = (creatingRoom || screen === 'home' || screen === 'play') ? T.bg : T.surface;
+  const baseBarBg = (creatingRoom || screen === 'hub' || screen === 'home' || screen === 'play') ? T.bg : T.surface;
   // ...es ha fedo reteg (modal / bottom sheet) van nyitva, UGYANAZT a
   // sotetitest kapja, amit a lap — kulonben a statuszsav vilagos marad, es
   // elvalik a besotetedett laptol (docs/safe-area.md 1.).
@@ -77023,7 +77153,8 @@ function BottleApp() {
           )}
         </div>
         ) : (<>
-        {screen==='home'     && <HomeScreen     go={go} onStartGame={onStartGame} onQuickGame={onQuickGame} setTheme={handleSetTheme} currentTheme={appTheme} resumeRoomData={resumeRoomData} onResume={goResume} onOpenSeason={(sid) => { setStatsInitView('season'); setStatsInitSeason(sid || null); go('stats'); }} />}
+        {screen==='hub'      && <DnrHubScreen   onOpen={openFromHub} />}
+        {screen==='home'     && <HomeScreen     go={go} onHub={() => go('hub')} onStartGame={onStartGame} onQuickGame={onQuickGame} setTheme={handleSetTheme} currentTheme={appTheme} resumeRoomData={resumeRoomData} onResume={goResume} onOpenSeason={(sid) => { setStatsInitView('season'); setStatsInitSeason(sid || null); go('stats'); }} />}
         {screen==='stats'    && <StatsScreen    go={go} onOpenObserver={openObserver} deepLink={_ligaApp} initialView={statsInitView} initialSeasonId={statsInitSeason} />}
         {screen==='bar'      && <BarScreen      go={go} deepLink={_barApp} />}
         {screen==='bingo'    && <BingoScreen    go={go} deepLink={_bingoApp} />}

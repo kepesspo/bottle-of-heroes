@@ -125,50 +125,24 @@ const head = (p) => p.evaluate(() => ({
     ok(`${q || '(alap)'} → ${title}`, hh.title === title, hh.title);
     ok(`${q || '(alap)'} → ${man}`, (hh.manifest || '').split('?')[0] === man, hh.manifest);
     if (!q) {
-      // v10.140: kozepre igazitott "TOVÁBBI DNR" felhivas nyillal — a sheet hozza az appokat
-      const dock = await pp.evaluate(() => {
-        const row = Array.from(document.querySelectorAll('div')).find(d => /TOVÁBBI DNR/i.test(d.innerText || '') && d.getAttribute('role') === 'button');
-        if (!row) return null;
-        const r = row.getBoundingClientRect();
-        const cs = getComputedStyle(row);
-        const svg = row.querySelector('svg');
-        const label = Array.from(row.querySelectorAll('div')).pop();
-        const mint = label && label.querySelector('span');
-        return {
-          text: row.innerText.replace(/\n/g, ' | ').trim(), tag: row.tagName,
-          h: Math.round(r.height), align: cs.alignItems, dir: cs.flexDirection,
-          imgs: row.querySelectorAll('img').length,
-          arrow: svg ? { d: (svg.querySelector('path') || {}).getAttribute && svg.querySelector('path').getAttribute('d'), anim: getComputedStyle(svg).animationName } : null,
-          spacing: label ? getComputedStyle(label).letterSpacing : null,
-          mintWord: mint ? { t: mint.textContent, c: getComputedStyle(mint).color } : null,
-          bg: cs.backgroundColor, shadow: cs.boxShadow,
-        };
-      });
-      ok('van "TOVÁBBI DNR" felhivas', !!dock, JSON.stringify(dock));
-      ok('csak szoveg — nincs app-ikon', dock && dock.imgs === 0, 'img=' + (dock && dock.imgs));
-      ok('kozepre igazitott, egymas ala', dock && dock.align === 'center' && dock.dir === 'column', dock && dock.align + '/' + dock.dir);
-      ok('felfele mutato nyil van folotte', dock && dock.arrow && /^M2 10l8-8 8 8$/.test(dock.arrow.d || ''), JSON.stringify(dock && dock.arrow));
-      ok('a nyil animal (a sheetre utal)', dock && dock.arrow && /hintUp/.test(dock.arrow.anim || ''), dock && dock.arrow && dock.arrow.anim);
-      ok('designolt szedes (ritkitott verzal)', dock && parseFloat(dock.spacing) >= 2, dock && dock.spacing);
-      ok('a "DNR" a marka mentazoldjeben', dock && dock.mintWord && dock.mintWord.t === 'DNR' && dock.mintWord.c === 'rgb(79, 194, 160)', JSON.stringify(dock && dock.mintWord));
-      ok('nincs kartya-kinezet (hatter/arnyek nelkul)', dock && /rgba\(0, 0, 0, 0\)|transparent/.test(dock.bg) && dock.shadow === 'none', dock && dock.bg + ' / ' + dock.shadow);
-      ok('nincs tobb app-csempe a fooldalon', (await pp.evaluate(() => Array.from(document.querySelectorAll('button')).filter(b => /^(Events|Box|Pub|Több|Bingó|Liga)$/.test((b.innerText || '').trim().split('\n')[0])).length)) === 0);
+      // v10.409: a „TOVÁBBI DNR" sor + lap helyett a DNR KÖZPONT a nyitóképernyő —
+      // ugyanaz az öt app (+ a DNR Games) ott áll, élő alcímekkel.
+      const hub = await pp.evaluate(() => ({
+        on: !!document.querySelector('[data-dnr-hub]'),
+        open: [...document.querySelectorAll('[data-dnr-hub] [data-hub-open]')].map(x => x.getAttribute('data-hub-open')),
+        text: document.body.innerText,
+      }));
+      ok('az alap a DNR KÖZPONTTAL nyit', hub.on);
+      for (const [scr, n] of [['log','Events'],['jukebox','BOX'],['bar','Pub'],['bingo','Bingó'],['stats','Liga']]) ok('a központban ott: ' + n, hub.open.includes(scr));
+      ok('a DNR Games is a központban', hub.open.includes('home'));
+      ok('a Liga csempe a futo szezont mutatja', /Ranglista · S2 · Nyár/.test(hub.text), (hub.text.match(/Ranglista[^\n]*/) || ['NINCS'])[0]);
       await pp.screenshot({ path: __dirname + '/pwa_home_dock.png', fullPage: true });
-
-      // koppintasra a sheet — mind az 5 app
-      await pp.evaluate(() => { const row = Array.from(document.querySelectorAll('div')).find(d => /TOVÁBBI DNR/i.test(d.innerText || '') && d.getAttribute('role') === 'button'); if (row) row.click(); });
-      await pp.waitForTimeout(700);
-      const sheet = await pp.evaluate(() => document.body.innerText);
-      ok('a lap "DNR appok" cimmel nyilik', /DNR appok/.test(sheet));
-      for (const n of ['DNR Events', 'DNR BOX', 'DNR Pub', 'DNR Bingó', 'DNR Liga']) ok('a lapon ott: ' + n, sheet.includes(n));
-      ok('a Liga sora a futo szezont mutatja', /Ranglista · S2 · Nyár/.test(sheet), (sheet.match(/Ranglista[^\n]*/) || ['NINCS'])[0]);
-      await pp.screenshot({ path: __dirname + '/pwa_more_sheet.png', fullPage: true });
-      await pp.evaluate(() => { const b = Array.from(document.querySelectorAll('button')).find(x => /DNR Bingó/.test(x.innerText || '')); if (b) b.click(); });
+      await pp.evaluate(() => { const b = document.querySelector('[data-hub-open="bingo"]'); if (b) b.click(); });
       await pp.waitForTimeout(1200);
-      const after = await pp.evaluate(() => document.body.innerText);
-      ok('a lapról el lehet jutni a Bingóba', /Bingó|Ki vagy/i.test(after) && !/DNR appok/.test(after), after.split('\n').slice(0, 3).join(' | '));
-      // ujratoltes a fooldalra a szezon-badge teszthez
-      await pp.goto(BASE, { waitUntil: 'domcontentloaded' });
+      const after = await pp.evaluate(() => ({ text: document.body.innerText, hub: !!document.querySelector('[data-dnr-hub]') }));
+      ok('a központból el lehet jutni a Bingóba', /Bingó|Ki vagy/i.test(after.text) && !after.hub, after.text.split('\n').slice(0, 3).join(' | '));
+      // a DNR Games főoldalára a szezon-badge teszthez (v10.409 óta ?screen=games)
+      await pp.goto(BASE + '?screen=games', { waitUntil: 'domcontentloaded' });
       await pp.waitForTimeout(3200);
 
       // ── Szezon-badge a DNR GAMES alatt ──
@@ -177,7 +151,8 @@ const head = (p) => p.evaluate(() => ({
         if (!b) return null;
         const r = b.getBoundingClientRect();
         const cs = getComputedStyle(b);
-        const brand = Array.from(document.querySelectorAll('span')).find(x => /^DNR GAMES$/.test((x.innerText || '').trim()));
+        // v10.409: a kis felirat „PARTIJÁTÉKOK" (a „DNR Games" a nagy cím lett, a logó alatt)
+        const brand = Array.from(document.querySelectorAll('span')).find(x => /^PARTIJÁTÉKOK$/.test((x.innerText || '').trim()));
         const logo = document.querySelector('.home-brand svg, .home-brand img');
         const ring = b.querySelector('svg circle[stroke-dasharray]');
         return {
@@ -192,7 +167,7 @@ const head = (p) => p.evaluate(() => ({
       ok('van szezon-badge', !!badge, JSON.stringify(badge));
       ok('a szezon nevet mutatja', badge && /S2 · NYÁR|S2 · Nyár/i.test(badge.text), badge && badge.text);
       ok('kiirja a hatralevo napokat', badge && /\d+ nap|Ma zárul/i.test(badge.text), badge && badge.text);
-      ok('a DNR GAMES ALATT van', badge && badge.brandTop != null && badge.top > badge.brandTop, `badge=${badge && badge.top} brand=${badge && badge.brandTop}`);
+      ok('a PARTIJÁTÉKOK felirat ALATT van', badge && badge.brandTop != null && badge.top > badge.brandTop, `badge=${badge && badge.top} brand=${badge && badge.brandTop}`);
       ok('a logo FOLOTT van', badge && badge.logoTop != null && badge.top < badge.logoTop, `badge=${badge && badge.top} logo=${badge && badge.logoTop}`);
       ok('van arany haladás-gyűrű (részben töltött)', badge && badge.ring && /^[\d.]+ [\d.]+$/.test(badge.ring.dash) && parseFloat(badge.ring.dash) > 0 && parseFloat(badge.ring.dash) < parseFloat(badge.ring.dash.split(' ')[1]), JSON.stringify(badge && badge.ring));
       ok('bepattano animacio', badge && /seasonPop/.test(badge.anim), badge && badge.anim);

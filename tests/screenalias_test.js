@@ -95,12 +95,14 @@ const BASE = `http://127.0.0.1:${PORT}${SUB}`;
     ok(`?screen=${alias.padEnd(10)} → a cim atirodik ?screen=${canon}-ra`, r.search === '?screen=' + canon, r.search);
   }
 
-  // ── A "games"-fele aliasok a fooldalra visznek, tiszta cimmel ───────────
+  // ── A "games"-fele aliasok a DNR Games főoldalra visznek (v10.409) ──────
+  // v10.409 óta az alap a DNR KÖZPONT, ezért a games-aliasok NEM tűnnek el a címből,
+  // hanem ?screen=games-re normalizálódnak — ez nyitja egyenesen a Games főoldalt.
   console.log('\n===== FOOLDAL-ALIASOK =====');
   for (const alias of ['games', 'jatek', 'jatekok']) {
     const r = await open('?screen=' + alias);
     ok(`?screen=${alias.padEnd(9)} → DNR Games`, r.title === 'DNR Games', r.title);
-    ok(`?screen=${alias.padEnd(9)} → a screen paraméter eltűnik`, r.search === '', `"${r.search}"`);
+    ok(`?screen=${alias.padEnd(9)} → ?screen=games`, r.search === '?screen=games', `"${r.search}"`);
   }
 
   // ── Ismeretlen ertek: ne omoljon ossze, es NE irja at a cimet ───────────
