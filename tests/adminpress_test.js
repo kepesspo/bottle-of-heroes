@@ -126,6 +126,35 @@ const pinOpen = (p) => p.evaluate(() => /PIN|Admin belépés|admin/i.test(docume
   ok('nincs JS hiba', p.__errs.filter(e => !/ServiceWorker/.test(e)).length === 0, p.__errs.join(' | '));
   await p.close();
 
+  // ── v10.415: széles kijelzőn oldalsáv + keskeny tartalom, és olvasható mezők ──
+  console.log('\n===== ADMIN WEBEN: OLDALSÁV + KESKENY OSZLOP =====');
+  p = await b.newPage({ viewport: { width: 2000, height: 1075 } });
+  p.__errs = []; p.on('pageerror', e => p.__errs.push(e.message));
+  await p.route('**://**', r => r.request().url().startsWith('file://') ? r.continue() : r.abort());
+  await p.addInitScript(stub); await p.addInitScript(seed);
+  await p.goto(BASE + '?screen=games', { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(3000);
+  await p.evaluate(() => {
+    const r = document.getElementById('root'); if (r) r.style.display = 'none';
+    const d = document.createElement('div'); d.id = '__aw'; d.style.cssText = 'position:fixed;inset:0;display:flex;flex-direction:column';
+    document.body.appendChild(d); ReactDOM.createRoot(d).render(React.createElement(window.AdminScreen, { go:()=>{}, setTheme:()=>{}, currentTheme:'classic' }));
+  });
+  await p.waitForTimeout(1000);
+  await p.evaluate(() => document.querySelector('[data-admin-tab="settings"]').click());
+  await p.waitForTimeout(600);
+  const wl = await p.evaluate(() => {
+    const nav = document.querySelector('[data-admin-nav]'), body = document.querySelector('[data-admin-body]');
+    const inp = body && body.querySelector('input:not([type=checkbox])');
+    const rn = nav.getBoundingClientRect(), rb = body.getBoundingClientRect();
+    return { tabs: nav.querySelectorAll('[data-admin-tab]').length, bodyW: Math.round(rb.width), gap: Math.round(rb.left - rn.right),
+             inpBg: inp ? getComputedStyle(inp).backgroundColor : null, surface: (window._T || {}).surface || null };
+  });
+  ok('oldalsáv az összes füllel', wl.tabs === 15, JSON.stringify(wl));
+  ok('⚠️ a tartalom keskeny (≤ 820 px), nem nyúlik a 2000 px-es képernyőre', wl.bodyW <= 820, JSON.stringify(wl));
+  ok('az oldalsáv és a tartalom egymás mellett (nincs nagy rés)', wl.gap >= 0 && wl.gap <= 40, JSON.stringify(wl));
+  ok('⚠️ a mező háttere nem a téma narancsa (fehér/felület)', /rgb\(255, 255, 255\)/.test(wl.inpBg || ''), wl.inpBg);
+  ok('nincs JS hiba', p.__errs.filter(e => !/ServiceWorker/.test(e)).length === 0, p.__errs.join(' | '));
+  await p.close();
+
   await b.close();
   console.log('\n' + (fail === 0 ? '✅ MINDEN ELLENORZES RENDBEN' : '❌ ' + fail + ' ELLENORZES BUKOTT'));
   process.exit(fail === 0 ? 0 : 1);

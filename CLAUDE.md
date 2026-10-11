@@ -3290,3 +3290,22 @@ fehérje marad, mert a fekete kontúr megállítja), szorosra vágva, 720×547, 
 - A `pwa_apps_test` splash-őre a DNR logót nézi (átlátszó háttér); a négyzetesség csak
   a fixen 200×200-as Events logóra kötelező.
 - A régi `assets/splash_logo.png` a repóban maradt, de már semmi nem hivatkozza.
+
+## Admin felület: oldalsáv weben, keskeny oszlop, olvasható mezők (v10.415)
+Bejelentés: „az admin felület olvashatatlan, ennyire széthúzva" — 2000 px-en minden
+mező a teljes szélességre nyúlt, és a mezők a TÉMA HÁTTERÉT (`T.bg`, meleg témán
+narancs) vitték fehér kártyán.
+- **≥ `ADMIN_WIDE_MIN` (960 px): oldalsáv** (`data-admin-nav`, sticky) a három
+  kategória-fejléccel és mind a 15 füllel, mellette a tartalom **legfeljebb
+  `ADMIN_BODY_MAX` (820 px)**, a kettő EGYÜTT középre igazítva (külön igazítva
+  ~500 px üres rés maradt köztük). A fül címe nagy fejlécként áll a tartalom tetején.
+- **Telefonon** a régi kategória-sáv + pirulák maradnak (az `adminpress_test`
+  pirula-árnyék blokkja erre épül), csak a 820 px-es oszlopba fogva.
+- **⚠️ Közös űrlap-stílus egy stíluslapból** (`adminFormCss()`, `<style>` az admin
+  gyökerén, `[data-admin-screen] [data-admin-body]`-re szűkítve): input/select/textarea
+  fehér (`T.surface`) háttér, halvány keret, menta fókuszgyűrű, saját select-nyíl,
+  `accent-color` a checkboxokon. A ~15 admin alfül mind saját inline stílust ír — 15
+  helyen átírni elcsúszna, ezért egy helyről, **`!important`-tal** (az inline style
+  különben mindig nyer). Új admin mezőnél nem kell stílus: a lap elkapja.
+Teszt: `adminpress_test` utolsó blokkja (2000 px: 15 fül az oldalsávban, a tartalom
+≤ 820 px, nincs rés, a mező háttere fehér).

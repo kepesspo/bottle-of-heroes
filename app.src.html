@@ -35217,7 +35217,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.414';
+const APP_VERSION = 'v10.415';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -38429,6 +38429,27 @@ function RoomFillArt({ variant }) {
 }
 
 // ── AdminScreen ────────────────────────────────────────────────────────────────
+// v10.415 — Admin felület: széles kijelzőn oldalsáv + keskeny tartalom-oszlop, és EGY
+// közös űrlap-stílus. A ~15 admin alfül mind saját inline input-stílust ír (a legtöbb
+// T.bg = a TÉMA HÁTTERE háttérrel: meleg témán narancs mező fehér kártyán, alig
+// olvasható). Komponensenként átírni 15 helyen elcsúszna, ezért egy, az admin
+// gyökerére (data-admin-screen) szűkített stíluslap egységesíti a mezőket.
+// ⚠️ !important kell: az inline style másképp mindig nyer.
+const ADMIN_WIDE_MIN = 960;
+const ADMIN_BODY_MAX = 820;
+function adminFormCss() {
+  const chev = encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8" viewBox="0 0 12 8"><path d="M1 1.5l5 5 5-5" fill="none" stroke="${T.inkSoft}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`);
+  const S = '[data-admin-screen] [data-admin-body]';
+  const fld = `${S} input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]), ${S} select, ${S} textarea`;
+  return `
+${fld} { background-color:${T.surface} !important; border:1.5px solid ${T.ink}24 !important; border-radius:10px !important; color:${T.ink} !important; font-size:14px !important; min-height:40px; box-sizing:border-box; transition:border-color .15s, box-shadow .15s; }
+${S} textarea { min-height:72px; line-height:1.4; }
+${fld.split(', ').map(x => x + ':focus').join(', ')} { border-color:${T.mint} !important; box-shadow:0 0 0 3px ${T.mint}33 !important; outline:none !important; }
+${S} input::placeholder, ${S} textarea::placeholder { color:${T.inkSoft}; opacity:0.6; }
+${S} select { -webkit-appearance:none !important; appearance:none !important; padding-right:34px !important; background-image:url("data:image/svg+xml,${chev}") !important; background-repeat:no-repeat !important; background-position:right 12px center !important; cursor:pointer; }
+${S} input[type=checkbox], ${S} input[type=radio] { accent-color:${T.mint}; width:16px; height:16px; }
+`;
+}
 function AdminScreen({ go, setTheme, currentTheme }) {
   const CATEGORIES = [
     { key:'content', label:'Tartalom', tabs:[
@@ -38444,6 +38465,10 @@ function AdminScreen({ go, setTheme, currentTheme }) {
   const [category, setCategory] = React.useState('content');
   const [tab, setTab] = React.useState('profiles');
   const activeCategory = CATEGORIES.find(c => c.key === category) || CATEGORIES[0];
+  // v10.415: széles kijelzőn (web) oldalsáv + KESKENY tartalom-oszlop. Eddig minden
+  // mező a teljes 2000 px-re nyúlt, és olvashatatlan volt.
+  const [adminWide, setAdminWide] = React.useState(() => (window.innerWidth || 0) >= ADMIN_WIDE_MIN);
+  React.useEffect(() => { const r = () => setAdminWide((window.innerWidth || 0) >= ADMIN_WIDE_MIN); window.addEventListener('resize', r); return () => window.removeEventListener('resize', r); }, []);
   function selectCategory(key) {
     setCategory(key);
     const cat = CATEGORIES.find(c => c.key === key);
@@ -38485,30 +38510,8 @@ function AdminScreen({ go, setTheme, currentTheme }) {
     </div>
   );
 
-  return (
-    <div style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
-      <AppBar title="Admin" onBack={() => go('home')} />
-      {/* Fix kategória-sáv — mindig 3 elem, nem görgethető */}
-      <div style={{ padding:'10px 16px 0' }}>
-        <div style={{ display:'flex', background:T.surface, borderRadius:16, padding:4, gap:4, boxShadow:T.shadow }}>
-          {CATEGORIES.map(c => (
-            <button key={c.key} onClick={() => selectCategory(c.key)} style={{ flex:1, padding:'10px 0', borderRadius:12, border:'none', fontFamily:T.font, fontWeight:900, fontSize:13.5, cursor:'pointer', background: category===c.key ? T.mint : 'transparent', color: category===c.key ? '#fff' : T.inkSoft, transition:'all .2s', WebkitTapHighlightColor:'transparent' }}>
-              {c.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      {/* Dinamikus al-sáv — a kiválasztott kategória elemei, szükség esetén görgethető */}
-      <div style={{ padding:'14px 16px 14px' }}>
-        <div style={{ display:'flex', gap:8, overflowX:'auto', WebkitOverflowScrolling:'touch', scrollbarWidth:'none', padding:'3px 2px 7px' }}>
-          {activeCategory.tabs.map(([k,label]) => (
-            <button key={k} onClick={() => setTab(k)} style={{ flexShrink:0, padding:'9px 16px', borderRadius:999, border:'none', fontFamily:T.font, fontWeight:800, fontSize:12.5, cursor:'pointer', background: tab===k ? T.mint : T.surface, color: tab===k ? '#fff' : T.inkSoft, boxShadow: tab===k ? 'none' : (T.shadowPill || T.shadow), transition:'all .2s', WebkitTapHighlightColor:'transparent', whiteSpace:'nowrap' }}>
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div style={{ flex:1, overflowY:'auto' }}>
+  const adminBody = (
+    <React.Fragment>
         {tab === 'profiles' && <AdminProfiles />}
         {tab === 'feladatok' && <AdminTasks />}
         {tab === 'events'   && <AdminEvents go={go} />}
@@ -38524,7 +38527,68 @@ function AdminScreen({ go, setTheme, currentTheme }) {
         {tab === 'rooms'    && <AdminRooms />}
         {tab === 'message'  && <AdminMessage />}
         {tab === 'settings' && <AdminSettings setTheme={setTheme} currentTheme={currentTheme} />}
-      </div>
+    </React.Fragment>
+  );
+  return (
+    <div data-admin-screen style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
+      <style>{adminFormCss()}</style>
+      <AppBar title="Admin" onBack={() => go('home')} />
+      {adminWide ? (
+        <div style={{ flex:1, minHeight:0, overflowY:'auto' }}>
+         {/* Az oldalsáv és a tartalom EGYÜTT középre igazítva — külön igazítva a kettő
+             között 2000 px-en ~500 px üres rés maradt. Az oldalsáv sticky, a lap görget. */}
+         <div style={{ display:'flex', alignItems:'flex-start', maxWidth:236 + ADMIN_BODY_MAX + 24, margin:'0 auto', padding:'0 12px', boxSizing:'border-box' }}>
+          {/* Oldalsáv: a három kategória fejléc, alattuk a fülek — egy pillantásra minden */}
+          <nav data-admin-nav aria-label="Admin menü" style={{ position:'sticky', top:0, width:236, flexShrink:0, padding:'18px 10px 32px 8px', boxSizing:'border-box', display:'flex', flexDirection:'column', gap:18 }}>
+            {CATEGORIES.map(c => (
+              <div key={c.key} style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                <div style={{ fontFamily:T.font, fontWeight:900, fontSize:11, letterSpacing:'0.14em', textTransform:'uppercase', color:T.inkSoft, padding:'0 12px 6px' }}>{c.label}</div>
+                {c.tabs.map(([k, label]) => {
+                  const on = tab === k;
+                  return (
+                    <button key={k} data-admin-tab={k} aria-current={on ? 'page' : undefined} onClick={() => { setCategory(c.key); setTab(k); }}
+                      style={{ textAlign:'left', padding:'9px 12px', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight: on ? 900 : 700, fontSize:14, background: on ? T.surface : 'transparent', color: on ? T.ink : T.inkSoft, boxShadow: on ? (T.shadowPill || T.shadow) : 'none', display:'flex', alignItems:'center', gap:8, WebkitTapHighlightColor:'transparent' }}>
+                      <span style={{ width:4, height:16, borderRadius:2, background: on ? T.mint : 'transparent', flexShrink:0 }} />
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
+          <div data-admin-body style={{ flex:1, minWidth:0, maxWidth:ADMIN_BODY_MAX, padding:'10px 0 48px', boxSizing:'border-box' }}>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:T.ink, padding:'8px 16px 4px' }}>{(activeCategory.tabs.find(([k]) => k === tab) || [])[1]}</div>
+            {adminBody}
+          </div>
+         </div>
+        </div>
+      ) : (
+        <React.Fragment>
+        {/* Fix kategória-sáv — mindig 3 elem, nem görgethető */}
+        <div style={{ padding:'10px 16px 0', width:'100%', maxWidth:ADMIN_BODY_MAX, margin:'0 auto', boxSizing:'border-box' }}>
+          <div style={{ display:'flex', background:T.surface, borderRadius:16, padding:4, gap:4, boxShadow:T.shadow }}>
+            {CATEGORIES.map(c => (
+              <button key={c.key} onClick={() => selectCategory(c.key)} style={{ flex:1, padding:'10px 0', borderRadius:12, border:'none', fontFamily:T.font, fontWeight:900, fontSize:13.5, cursor:'pointer', background: category===c.key ? T.mint : 'transparent', color: category===c.key ? '#fff' : T.inkSoft, transition:'all .2s', WebkitTapHighlightColor:'transparent' }}>
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Dinamikus al-sáv — a kiválasztott kategória elemei, szükség esetén görgethető */}
+        <div style={{ padding:'14px 16px 14px', width:'100%', maxWidth:ADMIN_BODY_MAX, margin:'0 auto', boxSizing:'border-box' }}>
+          <div style={{ display:'flex', gap:8, overflowX:'auto', WebkitOverflowScrolling:'touch', scrollbarWidth:'none', padding:'3px 2px 7px' }}>
+            {activeCategory.tabs.map(([k,label]) => (
+              <button key={k} onClick={() => setTab(k)} style={{ flexShrink:0, padding:'9px 16px', borderRadius:999, border:'none', fontFamily:T.font, fontWeight:800, fontSize:12.5, cursor:'pointer', background: tab===k ? T.mint : T.surface, color: tab===k ? '#fff' : T.inkSoft, boxShadow: tab===k ? 'none' : (T.shadowPill || T.shadow), transition:'all .2s', WebkitTapHighlightColor:'transparent', whiteSpace:'nowrap' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+          <div style={{ flex:1, overflowY:'auto' }}>
+            <div data-admin-body style={{ maxWidth:ADMIN_BODY_MAX, margin:'0 auto' }}>{adminBody}</div>
+          </div>
+        </React.Fragment>
+      )}
     </div>
   );
 }
