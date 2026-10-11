@@ -90,6 +90,10 @@ async function open(b, query, init) {
     });
     ok(g.scroll === 0 && !g.docScroll && g.cardBottom <= g.arrTop && g.arrBottom <= g.vh && g.headTop < 40, `${w}×${h}: nem görget, a kártya a nyilak fölött végződik, a fejléc felül`, JSON.stringify(g));
   }
+  // ⚠️ v10.412: széles kijelzőn a fejléc a képernyő SZÉLEIN (nem egy 720-as oszlopban)
+  await p.setViewportSize({ width: 2000, height: 1071 }); await p.waitForTimeout(400);
+  const edge = await p.evaluate(() => { const w = document.querySelector('[data-hub-wordmark]').getBoundingClientRect(), a = document.querySelector('[data-hub-admin]').getBoundingClientRect(); return { left: Math.round(w.left), right: Math.round(innerWidth - a.right) }; });
+  ok(edge.left <= 60 && edge.right <= 60, '⚠️ 2000 px-en a DNR balra, az admin jobbra a szélen', JSON.stringify(edge));
   await p.setViewportSize({ width: 390, height: 844 });
   await click(p, '[data-hub-next]'); await p.waitForTimeout(400);
   ok(await p.evaluate(() => !document.querySelector('nav[aria-label="Gyorsváltó"]') && document.querySelectorAll('[data-dnr-hub] img').length <= 7), '⚠️ nincs alsó kerek ikonsor (csak a kártyák ikonjai)');

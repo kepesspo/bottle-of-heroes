@@ -3265,3 +3265,9 @@ kijelzőméreten nincs görgető elem, a kártya a nyilak fölött végződik, a
   Tortán logó marad 134.
 Teszt: `dnr_hub_test` (nincs váltó, köszöntés a központban és nem a Games-en, az
 ikonok aránya a körhöz).
+
+### Központ: a fejléc a képernyő szélein (v10.412)
+Weben (2000 px) a „DNR" és az admin gomb egy 720 px-es középső oszlopban állt — a gomb
+a kép közepére került. A belső konténernek nincs `maxWidth`-je, a vízszintes padding
+`clamp(18px, 2.5vw, 40px)`. A kártya-sáv amúgy is `100vw`, a nyíl-sor középre igazít.
+Teszt: `dnr_hub_test` (2000 px-en mindkettő ≤ 60 px-re a széltől).
