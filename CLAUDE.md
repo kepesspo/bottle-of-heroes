@@ -3139,3 +3139,28 @@ sorai, a nagyítás, és hogy a vendég-blokk kifér.
 Teszt: `torta_draw_test.js` 4. (nyitva marad, Következő, Elvetés), 9. (5 próba-húzás
 egymás után, más-más házigazdával, semmi nem mentődik) és 10. (visszavonás; pontozott
 estére nincs) blokk.
+
+### Sorsolás: a pecsét a kártya alatt + automata végigsorsolás (v10.408)
+- **A „🏠 HÁZIGAZDA" pecsét a kártya ALATT áll** (`data-torta-stamp`, `top: 100% + 8k`),
+  a helyét a host-blokk `marginBottom`-ja tartja fenn. A jobb alsó sarokban két soros
+  névnél rácsúszott a második névre. A páros-kártya neve 3 sorig tördel
+  (`WebkitLineClamp:3`, `overflowWrap:'anywhere'`) — a kisebb vendégkártyán két sornál
+  a hosszú nevek „…"-ra vágódtak.
+- **Automata végigsorsolás** — kapcsoló a Sorsolás panelen (`autoMode`, eszközönként
+  `boh_torta_auto`-ban megjegyezve). A FUTÓ állapot külön (`autoActive`): a show
+  „⏸ Megállítás" gombja csak a futást állítja le, a beállítást nem. Bekapcsolva:
+  - **próba**: kész húzás után `TORTA_AUTO_PAUSE` (3,5 mp) szünet, majd magától jön a
+    következő, a szezon végéig;
+  - **éles**: kész húzás után magától **elfogad**, majd 1,2 mp múlva a következő —
+    ugyanaz a komponens marad (a státusz `accepted`-re vált), ezért az effekt a
+    `draw.status`-ra is figyel. Csak az adminnál fut (`auto={autoActive && adminOk}`);
+    a többi telefon ugyanúgy nézi, mint kézi módban.
+  - futás közben a kézi gombok rejtve vannak (`autoRunning`), a szezon végén
+    visszajönnek („🏁 … kisorsolva" + Bezárás).
+- ⚠️ Élesben az automata minden húzást elfogad — véletlen futásnál a „Megállítás" után az
+  utolsó elfogadott este a panelből visszavonható (v10.407), a korábbiak az Adminban.
+
+Teszt: `torta_draw_test.js` 11. (pecsét vs név geometriája két szélességen), 12.
+(automata próba: 5 este gombnyomás nélkül, semmi nem mentődik) és 13. (automata éles:
+elfogad és továbbmegy; a Megállítás után nem nő a szám; végigfuttatva 5 este, mindenki
+1× házigazda és 2× vendég).

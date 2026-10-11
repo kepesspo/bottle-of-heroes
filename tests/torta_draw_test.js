@@ -273,6 +273,88 @@ const mount = (p) => p.evaluate(() => { window.__bRoot.render(React.createElemen
   await setInput(p, '[data-torta-pin]', '1234'); await click(p, '[data-torta-pinok]'); await p.waitForTimeout(300);
   ok(await p.evaluate(() => !!document.querySelector('[data-torta-undopanel]') && !document.querySelector('[data-torta-undo]')), 'pontozott estére nincs visszavonás gomb (az Adminban törölhető)');
 
+  // segédek az automata-blokkokhoz
+  const openPanel = async () => {
+    await click(p, '[data-torta-drawbtn]'); await p.waitForTimeout(400);
+    await setInput(p, '[data-torta-pin]', '1234'); await click(p, '[data-torta-pinok]'); await p.waitForTimeout(300);
+  };
+  const autoToggle = () => p.evaluate(() => { const r = document.querySelector('[data-torta-autorow]'); const t = r && r.children[1]; if (t) t.click(); return !!t; });
+  const closeShow = () => p.evaluate(() => { const x = [...document.querySelectorAll('[data-torta-draw] button')].find(y => y.textContent.trim() === 'Bezárás'); x && x.click(); });
+
+  console.log('\n===== 11. A HÁZIGAZDA-PECSÉT NEM TAKARJA A NEVET (v10.408) =====');
+  for (const vp of [{ width: 1400, height: 900 }, { width: 390, height: 900 }]) {
+    await p.setViewportSize(vp);
+    await p.evaluate(() => {
+      window.__tortaDrawSpeed = 0.05;
+      window.getProfiles = () => Promise.resolve(['Szentpáli-Túri Klaudia','Szentpáli Dániel','Kecskés Dániel','Monoki Luca','Makkay Dóra','Tóth Bence','Szécsi Márk','Szécsi-Cseszlai Réka','Szentpály-Juhász Benjámin','Szabó Anna'].map((n, i) => ({ id: 'p' + i, name: n, color: '#5BA0DB' })));
+      window.__fbStore['config'].bingoConfig.tortaEvenings = []; window.__fbStore['config'].tortaDraw = null; window.__fbStore['config'].tortaScores = {};
+      try { localStorage.setItem('boh_torta_auto', '0'); } catch(e) {}
+    });
+    await mount(p); await p.waitForTimeout(700);
+    await openPanel();
+    await click(p, '[data-torta-practicebtn]');
+    await waitPhase(p, 'done', 5000);
+    const ov = await p.evaluate(() => {
+      const st = document.querySelector('[data-torta-stamp]').getBoundingClientRect();
+      const card = document.querySelector('[data-torta-host] [data-torta-paircard]');
+      const nameEl = [...card.querySelectorAll('div')].find(d => d.children.length === 0 && /&/.test(d.textContent));
+      const nm = nameEl.getBoundingClientRect(), cr = card.getBoundingClientRect();
+      const hit = !(st.right < nm.left || st.left > nm.right || st.bottom < nm.top || st.top > nm.bottom);
+      return { hit, stampTop: Math.round(st.top), cardBottom: Math.round(cr.bottom), nameBottom: Math.round(nm.bottom) };
+    });
+    ok(!ov.hit && ov.stampTop >= ov.cardBottom, `⚠️ ${vp.width} px: a pecsét a kártya ALATT, nem fedi a nevet`, JSON.stringify(ov));
+    await closeShow(); await p.waitForTimeout(300);
+  }
+  await p.evaluate(profiles => { window.getProfiles = () => Promise.resolve(profiles); }, PROFILES);
+
+  console.log('\n===== 12. AUTOMATA PRÓBA — AZ EGÉSZ SZEZON GOMBNYOMÁS NÉLKÜL =====');
+  await p.setViewportSize({ width: 402, height: 1400 });
+  await p.evaluate(() => { window.__tortaDrawSpeed = 0.04; window.__fbStore['config'].bingoConfig.tortaEvenings = []; window.__fbStore['config'].tortaDraw = null; });
+  await mount(p); await p.waitForTimeout(700);
+  await openPanel();
+  ok(await p.evaluate(() => /KI —/.test(document.querySelector('[data-torta-autorow]').textContent)), 'a kapcsoló alapból KI');
+  ok(await autoToggle(), 'bekapcsoljuk az automata végigsorsolást');
+  await p.waitForTimeout(200);
+  ok(await p.evaluate(() => /BE —/.test(document.querySelector('[data-torta-autorow]').textContent)), 'a kapcsoló BE');
+  await click(p, '[data-torta-practicebtn]'); await p.waitForTimeout(400);
+  ok(await p.evaluate(() => !!document.querySelector('[data-torta-autochip]') && !!document.querySelector('[data-torta-stopauto]')), 'AUTO jelzés és „Megállítás" gomb a futás alatt');
+  let ta = Date.now(), done = false;
+  while (Date.now() - ta < 40000) { if (await p.evaluate(() => !!document.querySelector('[data-torta-seasondone]'))) { done = true; break; } await p.waitForTimeout(300); }
+  const ap = await p.evaluate(() => [...document.querySelectorAll('[data-torta-histtag]')].map(x => x.getAttribute('data-torta-histtag')));
+  ok(done && ap.length === 5, '⚠️ automatán mind az 5 próba-este lefutott EGYETLEN gombnyomás nélkül', `kész=${done} · ${ap.length} sor`);
+  ok(await p.evaluate(() => !document.querySelector('[data-torta-stopauto]') && !document.querySelector('[data-torta-next]')), 'a végén nincs Megállítás és nincs Következő');
+  ok((await store(p, 'tortaDraw')) === null, 'a próba-automata sem mentett semmit');
+  await closeShow(); await p.waitForTimeout(300);
+
+  console.log('\n===== 13. AUTOMATA ÉLES — ELFOGAD ÉS TOVÁBBMEGY, MEGÁLLÍTHATÓ =====');
+  await mount(p); await p.waitForTimeout(700);
+  await openPanel();
+  ok(await p.evaluate(() => /BE —/.test(document.querySelector('[data-torta-autorow]').textContent)), 'a kapcsoló állása megmaradt (BE)');
+  await click(p, '[data-torta-livebtn]');
+  ta = Date.now();
+  while (Date.now() - ta < 20000) { if (((await store(p, 'bingoConfig')).tortaEvenings || []).length >= 2) break; await p.waitForTimeout(200); }
+  ok(((await store(p, 'bingoConfig')).tortaEvenings || []).length >= 2, '⚠️ élesben gombnyomás nélkül elfogad és folytatja (legalább 2 este mentve)');
+  await click(p, '[data-torta-stopauto]');
+  await p.waitForTimeout(300);
+  const nStop = ((await store(p, 'bingoConfig')).tortaEvenings || []).length;
+  await p.waitForTimeout(4000);
+  const nAfter = ((await store(p, 'bingoConfig')).tortaEvenings || []).length;
+  ok(nAfter === nStop, '⚠️ „Megállítás" után nem megy tovább', `${nStop} → ${nAfter}`);
+  ok(await p.evaluate(() => !document.querySelector('[data-torta-stopauto]')), 'megállítva eltűnik a Megállítás, visszajönnek a kézi gombok');
+  // a végigfutás: újraindítás automatával, amíg el nem fogy
+  await closeShow(); await p.waitForTimeout(300);
+  await mount(p); await p.waitForTimeout(700);
+  await openPanel();
+  const pend = await p.evaluate(() => !!document.querySelector('[data-torta-pendingpanel]'));
+  if (pend) { await p.evaluate(() => { const b = [...document.querySelectorAll('[data-torta-pendingpanel] button')].find(x => /Elvetés/.test(x.textContent)); b && b.click(); }); await p.waitForTimeout(300); await openPanel(); }
+  await click(p, '[data-torta-livebtn]');
+  ta = Date.now();
+  while (Date.now() - ta < 40000) { if (await p.evaluate(() => !!document.querySelector('[data-torta-seasondone]'))) break; await p.waitForTimeout(300); }
+  const evs = (await store(p, 'bingoConfig')).tortaEvenings || [];
+  const hc = {}, gc = {}; evs.forEach(e => { hc[e.hostId] = (hc[e.hostId] || 0) + 1; (e.guestIds || []).forEach(g => gc[g] = (gc[g] || 0) + 1); });
+  ok(evs.length === 5 && Object.values(hc).every(v => v === 1) && ['tA','tB','tC','tD','tE'].every(t => gc[t] === 2), '⚠️ automatán élesben is végigment: 5 este, mindenki 1× házigazda, 2× vendég', JSON.stringify({ n: evs.length, gc }));
+  await p.evaluate(() => { try { localStorage.setItem('boh_torta_auto', '0'); } catch(e) {} });
+
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
   console.log(fail ? '\n❌ ' + fail + ' HIBA' : '\n✅ MINDEN ELLENORZES RENDBEN');
