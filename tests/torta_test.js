@@ -132,6 +132,22 @@ const setCfg = (p, patch) => p.evaluate(patch => firebase.firestore().collection
   ok(!(await p.evaluate(() => !!document.querySelector('[data-torta-rank]'))), 'Tipp módban nincs Tortán-ranglista');
   await setCfg(p, { mode: 'torta', tippRequireCode: false });
 
+  // ── 8b. „Ki vagy?" — Tortán módban CSAK a csapattagok (v10.403) ──
+  console.log('\n===== 8b. KI VAGY? — CSAK CSAPATTAGOK =====');
+  await p.evaluate(profiles => { window.getProfiles = () => Promise.resolve(profiles.concat([{ id:'p6', name:'Kívülálló', color:'#333333' }])); }, PROFILES);
+  await mountAs(p, ''); await p.waitForTimeout(800);
+  const picks = await p.evaluate(() => [...document.querySelectorAll('[data-who-pick]')].map(b => b.getAttribute('data-who-pick')).sort());
+  ok(picks.join() === 'p0,p1,p2,p3,p4,p5', '⚠️ a választóban csak a 6 csapattag áll (a csapaton kívüli p6 nem)', picks.join());
+  // egy korábban elmentett, csapaton kívüli „who" visszakerül a választóra
+  await mountAs(p, 'p6'); await p.waitForTimeout(800);
+  ok(await p.evaluate(() => document.querySelectorAll('[data-who-pick]').length === 6), 'a csapaton kívüli elmentett játékos a választót kapja');
+  // kontroll: Tipp módban mindenki választható
+  await setCfg(p, { mode: 'tipp' });
+  await mountAs(p, ''); await p.waitForTimeout(700);
+  ok(await p.evaluate(() => document.querySelectorAll('[data-who-pick]').length === 7), 'kontroll: Tipp módban mind a 7 profil választható');
+  await setCfg(p, { mode: 'torta' });
+  await p.evaluate(profiles => { window.getProfiles = () => Promise.resolve(profiles); }, PROFILES);
+
   // ── 9. Admin szerkesztő ──
   console.log('\n===== 9. ADMIN =====');
   await p.evaluate(() => { window.__bRoot.render(React.createElement(AdminBingo, { key: 'adm' })); });

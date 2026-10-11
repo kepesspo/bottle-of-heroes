@@ -3022,3 +3022,12 @@ rejtette el — a **főképernyő nagy gombja maradt**, mert az csak a `bingoOn`
 
 Teszt: `node tests/torta_home_test.js`. (A `dnr_button_test` 5 helyett 6 DNR
 játékot vár — a Beer Pong 2.0 óta tartósan piros volt.)
+
+### „Ki vagy?" Tortán módban: csak a csapattagok (v10.403)
+Tortán módban a választó (`pickProfiles`) CSAK a `tortaTeams`-be felvett profilokat
+mutatja — a többiek se nem pontoznak, se nem házigazdák. Egy korábban elmentett, de
+csapaton kívüli `who` (`boh_bingo_who`) is visszakerül a választóra (`showPicker`);
+ez csak akkor él, ha a csapatok ÉS a profilok már betöltődtek, különben betöltés
+közben mindenkit kidobna. Csapat nélkül a választó az admin-teendőt írja ki. Bingó és
+Tipp módban változatlanul minden profil választható.
+Teszt: `torta_test.js` 8b. blokk (kontrollal: Tipp módban mind a 7 profil).

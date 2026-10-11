@@ -35208,7 +35208,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.402';
+const APP_VERSION = 'v10.403';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -41471,6 +41471,11 @@ function BingoScreen({ go, deepLink }) {
     </div>
   );
 
+  // Tortán módban CSAK a csapatokba felvett játékosok választhatók (v10.403) — a többiek
+  // se nem pontoznak, se nem házigazdák, csak zajt csinálnának a rácsban. Egy korábban
+  // elmentett, de csapaton kívüli „who" is visszakerül a választóra.
+  const pickProfiles = mode === 'torta' ? profiles.filter(pr => tortaTeamOf(pr.id)) : profiles;
+  const showPicker = !who || (mode === 'torta' && tortaTeams.length > 0 && profiles.length > 0 && !tortaTeamOf(who));
   const pickerSub = mode === 'torta'
     ? 'Válaszd ki magad — vendégként pontozhatod a házigazdákat, és követheted a ranglistát!'
     : mode === 'tipp'
@@ -41511,24 +41516,24 @@ function BingoScreen({ go, deepLink }) {
         <button onClick={() => pickWho(null)} style={{ border:'none', background:T.surfaceMuted, color:T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:11.5, borderRadius:999, padding:'7px 12px', cursor:'pointer' }}>Váltás</button>
       ) : null} />
       <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch', padding:'14px 16px max(40px, calc(env(safe-area-inset-bottom) + 24px))', maxWidth:560, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
-        {!who ? (
+        {showPicker ? (
           <div style={{ background:T.surface, borderRadius:20, padding:'24px 18px', boxShadow:T.shadow, textAlign:'center' }}>
             {mode === 'torta'
               ? <img data-torta-logo src={TORTA_LOGO} alt={tortaTitle} style={{ width:132, height:132, display:'block', margin:'0 auto 12px', filter:'drop-shadow(0 6px 14px rgba(0,0,0,0.18))' }} />
               : <div style={{ fontSize:42, lineHeight:1, marginBottom:10 }}>{mode === 'tipp' ? '🎯' : '🏆'}</div>}
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, marginBottom:5 }}>Ki vagy?</div>
             <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkSoft, lineHeight:1.5, marginBottom:18 }}>{pickerSub}</div>
-            {profiles.length ? (
+            {pickProfiles.length ? (
               <div style={{ display:'flex', flexWrap:'wrap', gap:16, justifyContent:'center' }}>
-                {profiles.map(pr => (
-                  <button key={pr.id} onClick={() => pickWho(pr.id)} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5, border:'none', background:'transparent', cursor:'pointer', padding:0, WebkitTapHighlightColor:'transparent' }}>
+                {pickProfiles.map(pr => (
+                  <button key={pr.id} data-who-pick={pr.id} onClick={() => pickWho(pr.id)} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5, border:'none', background:'transparent', cursor:'pointer', padding:0, WebkitTapHighlightColor:'transparent' }}>
                     <Avatar pr={pr} size={58} />
                     <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.ink, maxWidth:70, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pr.name}</span>
                   </button>
                 ))}
               </div>
             ) : (
-              <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkMute }}>Nincs profil — hozz létre egyet a Statisztika oldalon.</div>
+              <div style={{ fontFamily:T.font, fontSize:12.5, color:T.inkMute }}>{mode === 'torta' && profiles.length ? 'Még nincs csapat — az admin a DNR Bingó beállításaiban veheti fel őket.' : 'Nincs profil — hozz létre egyet a Statisztika oldalon.'}</div>
             )}
           </div>
         ) : mode === 'torta' ? (
