@@ -95,6 +95,36 @@ const setDoc = (p, doc, data) => p.evaluate(({ doc, data }) => firebase.firestor
   ok(row2 && row2.src === BINGO && /DNR Bingó/.test(row2.txt), 'bingó módban a régi ikon és név', JSON.stringify(row2));
   ok((await p.evaluate(() => localStorage.getItem('boh_bingo_mode'))) === 'bingo', 'a mód-emlékezet követi (bingo)');
 
+  console.log('\n===== 7. ADMIN → BINGÓ: A KAPCSOLÓ AZONNAL REJT (v10.405) =====');
+  await setDoc(p, 'bingoConfig', { enabled: true, mode: 'torta', tortaTitle: 'DNR a tortán' });
+  await setDoc(p, 'homeConfig', { dnrAppsEnabled: true });
+  await p.evaluate(() => {
+    const d = document.createElement('div'); d.id = '__ab';
+    d.style.cssText = 'position:absolute;left:820px;top:0;width:402px;height:1400px;overflow:auto;background:#fff';
+    document.body.appendChild(d); window.__abRoot = ReactDOM.createRoot(d);
+    window.__abRoot.render(React.createElement(AdminBingo));
+  });
+  await p.waitForTimeout(1000);
+  ok(!!(await homeBtn(p)), 'kiinduláskor ott a főképernyő gombja');
+  const tg = await p.evaluate(() => {
+    const row = [...document.querySelectorAll('#__ab div')].find(d => d.children.length === 2 && /Megjelenítés a főképernyőn/.test(d.textContent) && d.textContent.length < 90);
+    if (!row) return false; row.children[1].click(); return true;
+  });
+  ok(tg, 'a „Megjelenítés a főképernyőn" kapcsolót átbillentjük (Mentés NÉLKÜL)');
+  await p.waitForTimeout(700);
+  ok((await p.evaluate(() => window.__fbStore.config.bingoConfig.enabled)) === false, '⚠️ a kapcsoló azonnal kiírta: enabled=false');
+  ok((await homeBtn(p)) === null, '⚠️ a főképernyő gombja eltűnt — Mentés nélkül is');
+  ok((await p.evaluate(() => window.__fbStore.config.bingoConfig.mode)) === 'torta', 'a többi mező érintetlen (merge)');
+
+  console.log('\n===== 8. SIKERTELEN MENTÉS NEM ÍR „MENTVE"-T =====');
+  await p.evaluate(() => { window.setBingoConfig = () => Promise.reject({ code: 'permission-denied' }); });
+  await p.evaluate(() => { const i = [...document.querySelectorAll('#__ab input')].find(x => x.value === 'DNR a tortán'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, 'DNR a tortán 2'); i.dispatchEvent(new Event('input', { bubbles: true })); });
+  await p.waitForTimeout(200);
+  await p.evaluate(() => { const b = [...document.querySelectorAll('#__ab button')].find(x => x.textContent.trim() === 'Mentés'); b && b.click(); });
+  await p.waitForTimeout(400);
+  const se = await p.evaluate(() => ({ err: (document.querySelector('#__ab [data-bingo-saveerr]') || {}).textContent || '', ok: /Mentve ✓/.test(document.getElementById('__ab').textContent) }));
+  ok(/Nem sikerült menteni/.test(se.err) && /permission-denied/.test(se.err) && !se.ok, '⚠️ hibás írásnál hibaüzenet, NEM „Mentve ✓"', JSON.stringify(se));
+
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
   console.log(fail ? '\n❌ ' + fail + ' HIBA' : '\n✅ MINDEN ELLENORZES RENDBEN');

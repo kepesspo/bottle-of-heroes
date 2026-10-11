@@ -3081,3 +3081,20 @@ Teszt: `node tests/torta_draw_test.js` — 3…8 csapattal 400-400 teljes szezon
 szabályos), a vak húzás kontrollja, kézzel elrontott állás, PIN, próba (nem ment), éles
 sorsolás + elfogadás (az animáció PONTOSAN a mentett húzást mutatja), késői megnyitás
 animáció nélkül, újrasorsolás, zsákutca a panelen.
+
+### Admin → Bingó: a „Megjelenítés a főképernyőn" AZONNAL ment (v10.405)
+Bejelentés: „az admin felületről nem lehet kinyomni a Bingót". Két ok:
+- **A kapcsoló csak `markDirty`-t hívott** — a lap alji „Mentés" nélkül semmi nem ment
+  ki, miközben a Beállítások kapcsolói (`AdminHomeToggles`) azonnal írnak. Most a
+  kapcsoló maga ír: `set({ enabled }, { merge:true })` — CSAK ezt a mezőt, a többi félkész
+  szerkesztés nem megy ki vele. Hibánál visszabillen és kiírja az okot.
+- **⚠️ A `setBingoConfig` elnyelte a hibát** (`.catch(console.warn)`), így a `persist`
+  `.then`-je hibás írásnál is lefutott: „Mentve ✓" állt, a Firestore-ban pedig semmi.
+  Most továbbdobja, és a lap „Nem sikerült menteni (kód)"-ot ír.
+
+Két különböző kapcsoló rejti a főképernyő gombját, és BÁRMELYIK elég (v10.402 óta):
+`bingoConfig.enabled` (Admin → Bingó) és `homeConfig.dnrApps.bingo` (Admin → Rendszer →
+Beállítások → Melyik app látszódjon).
+
+Teszt: `torta_home_test.js` 7–8. blokk (Mentés nélkül is eltűnik; elutasított írásnál
+hibaüzenet, nem „Mentve").

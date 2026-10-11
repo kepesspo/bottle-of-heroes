@@ -34534,7 +34534,8 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
     }).catch(function() { return null; });
   };
   window.setBingoConfig = function(cfg) {
-    return db.collection('config').doc('bingoConfig').set(cfg).catch(function(e) { console.warn('setBingoConfig', e); });
+    // A hibát TOVÁBBDOBJUK: korábban itt elnyeltük, és a felület hibás írásnál is „Mentve ✓"-t mutatott (v10.405)
+    return db.collection('config').doc('bingoConfig').set(cfg).catch(function(e) { console.warn('setBingoConfig', e); throw e; });
   };
 })();
 </script>
@@ -35210,7 +35211,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.404';
+const APP_VERSION = 'v10.405';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -40723,6 +40724,8 @@ function AdminBingo() {
   const [saved, setSaved] = React.useState(false);
   const [dirty, setDirty] = React.useState(false);
   const [confirmReset, setConfirmReset] = React.useState(false);
+  const [saveErr, setSaveErr] = React.useState('');
+  const [visMsg, setVisMsg] = React.useState('');
   React.useEffect(() => {
     if (typeof window.getProfiles === 'function') window.getProfiles().then(ps => setProfiles(ps || [])).catch(() => {});
     (window.getBingoConfig ? window.getBingoConfig() : Promise.resolve(null)).then(c => {
@@ -40768,10 +40771,10 @@ function AdminBingo() {
   const takenBy = pid => tortaTeams.findIndex(t => (t.members || []).includes(pid));
 
   const persist = (payload) => {
-    setSaving(true);
+    setSaving(true); setSaveErr('');
     (window.setBingoConfig ? window.setBingoConfig(payload) : Promise.resolve())
       .then(() => { setSaving(false); setDirty(false); setSaved(true); setConfirmReset(false); })
-      .catch(() => setSaving(false));
+      .catch(e => { setSaving(false); setSaved(false); setSaveErr('Nem sikerült menteni' + (e && e.code ? ` (${e.code})` : '') + ' — próbáld újra.'); });
   };
   const buildPayload = (over) => {
     const cleanItems = (items || []).map(w => ({ e: (w.e || '').trim() || '⚽', t: (w.t || '').trim() })).filter(w => w.t);
@@ -40863,9 +40866,18 @@ function AdminBingo() {
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
         <div>
           <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>Megjelenítés a főképernyőn</div>
-          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>{enabled ? 'Látszik a gomb' : 'El van rejtve'}</div>
+          <div style={{ fontFamily:T.font, fontSize:12, color:T.inkSoft, marginTop:2 }}>{enabled ? 'Látszik a gomb' : 'El van rejtve'}{visMsg ? ` · ${visMsg}` : ''}</div>
         </div>
-        <Toggle on={enabled} onChange={() => { setEnabled(v => !v); markDirty(); }} />
+        {/* AZONNAL ment (v10.405) — korábban csak a lap alji „Mentés" vitte ki, így a kapcsoló
+            átbillentve is hatástalan maradt. Csak ezt az egy mezőt írja (merge), a többi
+            félkész szerkesztés nem megy ki vele. */}
+        <Toggle on={enabled} onChange={() => {
+          const nv = !enabled; setEnabled(nv); setVisMsg('mentés…');
+          if (typeof firebase === 'undefined') { setVisMsg(''); return; }
+          firebase.firestore().collection('config').doc('bingoConfig').set({ enabled: nv }, { merge: true })
+            .then(() => setVisMsg('mentve ✓'))
+            .catch(e => { setEnabled(!nv); setVisMsg('nem sikerült menteni' + (e && e.code ? ` (${e.code})` : '')); });
+        }} />
       </div>
 
       {mode === 'bingo' ? (
@@ -41010,7 +41022,8 @@ function AdminBingo() {
       <div style={{ display:'flex', gap:8, alignItems:'center', marginTop:2 }}>
         <button onClick={() => { if (confirmReset) reset(); else setConfirmReset(true); }} disabled={saving} style={{ padding:'11px 14px', borderRadius:12, border:'none', background: confirmReset ? T.coral : T.surfaceMuted, color: confirmReset ? '#fff' : T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer' }}>{confirmReset ? 'Biztos? Alaphelyzet!' : 'Alaphelyzet'}</button>
         <div style={{ flex:1 }} />
-        {saved && !dirty && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.mint }}>Mentve ✓</span>}
+        {saveErr ? <span data-bingo-saveerr style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.coral }}>{saveErr}</span>
+          : saved && !dirty && <span style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:T.mint }}>Mentve ✓</span>}
         <button onClick={save} disabled={saving || !dirty} style={{ padding:'12px 20px', borderRadius:12, border:'none', background: dirty ? T.mint : T.mintSoft, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:14, cursor: dirty ? 'pointer' : 'default', opacity: saving ? 0.6 : 1 }}>Mentés</button>
       </div>
     </div>
