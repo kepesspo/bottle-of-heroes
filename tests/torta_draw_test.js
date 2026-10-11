@@ -369,6 +369,26 @@ const mount = (p) => p.evaluate(() => { window.__bRoot.render(React.createElemen
   await click(p, '[data-torta-drawbtn]'); await p.waitForTimeout(400);
   ok(await p.evaluate(() => !!document.querySelector('[data-torta-pin]')), 'profil nélkül is PIN-t kér');
 
+  console.log('\n===== 15. TÁRCSA: NINCS KÉTSZER EGYMÁS UTÁN UGYANAZ (v10.418) =====');
+  const rs = await p.evaluate(() => {
+    const res = { adj: 0, endBad: 0, alt2: true, n: 0 };
+    const pools = [['a','b'], ['a','b','c'], ['a','b','c','d','e'], ['a','b','c','d','e','f','g','h']];
+    for (const pool of pools) for (const host of pool) for (let seed = 0; seed < 60; seed++) {
+      const seq = tortaReelSeq(pool, host, tortaSeeded('d' + seed + host + pool.length));
+      res.n++;
+      for (let i = 1; i < seq.length; i++) if (seq[i] === seq[i - 1]) res.adj++;
+      if (seq[seq.length - 1] !== host) res.endBad++;
+      if (pool.length === 2) for (let i = 2; i < seq.length; i++) if (seq[i] !== seq[i - 2]) res.alt2 = false;
+    }
+    // determinisztikus: ugyanaz a seed → ugyanaz a sor (minden telefon ugyanazt pörgeti)
+    res.same = JSON.stringify(tortaReelSeq(['a','b','c'], 'b', tortaSeeded('x'))) === JSON.stringify(tortaReelSeq(['a','b','c'], 'b', tortaSeeded('x')));
+    res.one = tortaReelSeq(['a'], 'a', tortaSeeded('y')).every(x => x === 'a');
+    return res;
+  });
+  ok(rs.adj === 0, '⚠️ ' + rs.n + ' tárcsa-sorban egyszer sem jön egymás után ugyanaz a csapat', JSON.stringify(rs));
+  ok(rs.endBad === 0 && rs.alt2, 'a tárcsa a kihúzott házigazdán áll meg, és 2 csapatnál szigorúan felváltva jönnek', JSON.stringify(rs));
+  ok(rs.same && rs.one, 'seedelt (minden telefonon ugyanaz), és 1 csapatnál nem akad el', JSON.stringify(rs));
+
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
   console.log(fail ? '\n❌ ' + fail + ' HIBA' : '\n✅ MINDEN ELLENORZES RENDBEN');

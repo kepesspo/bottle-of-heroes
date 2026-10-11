@@ -3336,3 +3336,17 @@ beírhattak pontot. Innentől **`tortaScoringOpen(ev)`**: van `date`, és az má
   biztosan teljesül.
 Teszt: `torta_test.js` 6b. blokk (jövőbeli és dátum nélküli este tiltva, kiírja,
 kontrollal: a múltbeli újra pontozható).
+
+### Sorsolás: a tárcsán nincs kétszer egymás után ugyanaz (v10.418)
+Bejelentés: „a pörgetésnél egymás után 2-szer is jön ugyanaz — nehogy azt higgyék,
+csalás." A tárcsa eddig a `hostPool` többszöri, körönként kevert ismétlése volt: a
+körök HATÁRÁN (az egyik kör utolsója = a következő első) és a legvégén (az utolsó
+kör vége = a kihúzott házigazda) is ismételhetett.
+**`tortaReelSeq(pool, hostId, rnd)`** (modul-szintű): a sort HÁTULRÓL építi — az
+utolsó elem a kihúzott házigazda, és minden elem az utána következőtől különbözik.
+Így a végpont kötött, a szomszéd-tilalom mindig teljesíthető, és **2 csapatnál
+szigorúan felváltva** jönnek. A hossz változatlan (≈ max(6 kör, 26 elem)), a seed a
+`draw.id`-ből jön, tehát minden telefon ugyanazt pörgeti. 1 hátralévő házigazdánál
+(utolsó este) értelemszerűen csak az az egy csapat pörög.
+Teszt: `torta_draw_test.js` 15. blokk (1080 sor 2/3/5/8 csapattal: nincs szomszédos
+ismétlés, a végén a házigazda, 2 csapatnál felváltva, determinisztikus).

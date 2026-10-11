@@ -35217,7 +35217,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.417';
+const APP_VERSION = 'v10.418';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -41502,6 +41502,21 @@ function tortaDrawTimeline() {
 // Automata végigsorsolás (v10.408): a „kész" állapotban ennyi ideig áll az eredmény,
 // mielőtt a következő húzás magától indul (élesben előtte magától el is fogadja).
 const TORTA_AUTO_PAUSE = 3500;
+// A sorsoló tárcsa sorrendje (v10.418): hossz ~ max(6 kör, 26 elem), az UTOLSÓ a
+// kihúzott házigazda, és két szomszéd sosem azonos (ha a pool ≥ 2). Hátulról épül,
+// így a végpont kötött, a szomszéd-tilalom pedig mindig teljesíthető.
+function tortaReelSeq(pool, hostId, rnd) {
+  const p = (pool && pool.length) ? pool.slice() : [hostId];
+  if (!p.includes(hostId)) p.push(hostId);
+  const len = Math.max(6, Math.ceil(26 / p.length)) * p.length + 1;
+  const out = new Array(len);
+  out[len - 1] = hostId;
+  for (let i = len - 2; i >= 0; i--) {
+    const opts = p.length > 1 ? p.filter(x => x !== out[i + 1]) : p;
+    out[i] = opts[Math.floor(rnd() * opts.length)];
+  }
+  return out;
+}
 function TortaDrawShow({ draw, teams, profiles, history, isAdmin, skipAnim, onClose, onAccept, onRedraw, onDiscard, onNext, nextBlocked, auto, onStopAuto }) {
   const teamById = id => (teams || []).find(t => t.id === id) || null;
   const namesOf = id => ((teamById(id) || {}).members || []).map(pid => ((profiles || []).find(p => p.id === pid) || {}).name).filter(Boolean).join(' & ') || '?';
@@ -41511,15 +41526,13 @@ function TortaDrawShow({ draw, teams, profiles, history, isAdmin, skipAnim, onCl
   const wide = vp.w >= TORTA_WIDE_MIN;
 
   const rnd = React.useMemo(() => tortaSeeded(draw.id), [draw.id]);
-  // tárcsa: a hostPool sokszor, seedelt sorrendben, a VÉGÉN a házigazda
-  const reel = React.useMemo(() => {
-    const pool = (draw.hostPool && draw.hostPool.length) ? draw.hostPool : [draw.hostId];
-    const out = [];
-    const loops = Math.max(6, Math.ceil(26 / pool.length));
-    for (let n = 0; n < loops; n++) { const a = pool.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } out.push(...a); }
-    out.push(draw.hostId);
-    return out;
-  }, [draw.id]);
+  // tárcsa: a hostPool sokszor, seedelt sorrendben, a VÉGÉN a házigazda.
+  // ⚠️ v10.418: SOHA nem jön egymás után kétszer ugyanaz a csapat (ha legalább kettő
+  // van) — a korábbi „körönként keverés" a körök határán és a végén is ismételhetett, és
+  // a tárcsán úgy nézett ki, mintha csalnánk. A sort HÁTULRÓL építjük: az utolsó a
+  // kihúzott házigazda, és minden elem az utána következőtől KÜLÖNBÖZŐ — így két
+  // csapatnál szigorúan felváltva jönnek. Seedelt (draw.id), tehát mindenhol ugyanaz.
+  const reel = React.useMemo(() => tortaReelSeq((draw.hostPool && draw.hostPool.length) ? draw.hostPool : [draw.hostId], draw.hostId, rnd), [draw.id]);
   const gPool = React.useMemo(() => {
     const p = (draw.guestPool && draw.guestPool.length) ? draw.guestPool.slice() : draw.guestIds.slice();
     draw.guestIds.forEach(g => { if (!p.includes(g)) p.push(g); });
