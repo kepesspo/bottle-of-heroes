@@ -3512,7 +3512,7 @@ talajvonal, vastag fekete kontúr, fehér „matrica"-sáv a tárgy körül, a G
 | Liga | serleg a dobogón |
 
 **Két fájl appanként** (a szkript mindkettőt írja):
-- `dnr_<app>_icon.png` — 1024×1024, **fehér** háttér: főképernyő-ikon, manifest, a
+- `dnr_<app>_app.png` (v10.424 előtt `_icon.png`) — 1024×1024, **fehér** háttér: főképernyő-ikon, manifest, a
   központ köre, az admin listái (iOS az átlátszót feketére festené).
 - `dnr_<app>_mark.png` — 512×512, **átlátszó** háttér: a nyitóképek és az app saját
   oldalai (`TORTA_LOGO`, `PUB_LOGO` erre mutat) — a fehér négyzet a téma-háttéren kilógna.
@@ -3525,3 +3525,15 @@ mindenhol `zoom:1.25`. A korábbi márka-logók (`dnr_torta_logo.png`, `dnr_pub_
 
 Teszt: `dnr_hub_test` (mind a hét ikon a Games méretén a körben), `pwa_apps_test` (a
 nyitókép-jelek átlátszóak — a palettás PNG `tRNS`-darabbal is az).
+
+### ⚠️ Új kép = ÚJ fájlnév (v10.424)
+Bejelentés: „DNR event nem változott". A v10.423 az új ikonokat a **régi néven**
+(`dnr_<app>_icon.png`) írta felül — a Tortán és a Pub új útvonalat kapott (`_mark`),
+azok frissültek, a többi (Events, Tipp, Bingó, BOX, Liga) nem. A service worker a
+saját domainről jövő képeket **cache-first** adja (`sw.js`), alatta a böngésző
+HTTP-gyorsítótára is tart, tehát egy azonos nevű kép a készüléken a régi maradhat.
+Az ikonok ezért új néven állnak: **`dnr_<app>_app.png`** (a `make_unified_icons.py`
+már ezt írja). **Ha egy assetet tartalmában cserélsz, a nevét is cseréld** — a
+felülírás csendben hatástalan. A `pwa_apps_test` utolsó blokkja őrzi, hogy a hét
+régi névre ne legyen hivatkozás. A régi `make_bingo_app_icons.py` / `make_pub_logo.py`
+még a régi neveket írja: azok elavultak, nem hivatkozott fájlt állítanak elő.

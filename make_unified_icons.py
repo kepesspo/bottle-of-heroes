@@ -1,6 +1,6 @@
 # DNR egységes app-ikonok (v10.423) — a DNR Games ikon nyelvén.
 # Futtatás: python3 make_unified_icons.py   → két fájl appanként az assets/-ba:
-#   dnr_<app>_icon.png  — 1024×1024, FEHÉR háttér (főképernyő-ikon, manifest, központ, admin)
+#   dnr_<app>_app.png   — 1024×1024, FEHÉR háttér (főképernyő-ikon, manifest, központ, admin)
 #   dnr_<app>_mark.png  — 512×512, ÁTLÁTSZÓ háttér (nyitókép, az app saját oldalai)
 # A Games ikonja (dnr_games_icon.png) a kiindulás — azt ez a szkript NEM írja.
 # Közös keret: kék|narancs félkör háttér, talajvonal, vastag fekete kontúr,
@@ -36,14 +36,14 @@ def background(base=WHITE):
 def finish(obj, name, ground=True, gap=34):
     a = obj.split()[3]
     dil = a.filter(ImageFilter.GaussianBlur(gap * 0.55)).point(lambda v: 255 if v > 12 else 0)
-    for base, suffix in ((WHITE, 'icon'), ((255, 255, 255, 0), 'mark')):
+    for base, suffix in ((WHITE, 'app'), ((255, 255, 255, 0), 'mark')):
         bg = background(base)
         bg.paste(Image.new('RGBA', (S, S), WHITE), (0, 0), dil)   # fehér „matrica"-sáv
         d = ImageDraw.Draw(bg)
         if ground:
             d.rounded_rectangle([240, GROUND - 4, S - 240, GROUND + 38], radius=21, fill=INK)
         bg.alpha_composite(obj)
-        if suffix == 'icon':
+        if suffix == 'app':
             out = bg.resize((1024, 1024), Image.LANCZOS).convert('RGB').quantize(128, method=Image.MEDIANCUT)
         else:
             out = bg.resize((512, 512), Image.LANCZOS).quantize(128, method=Image.FASTOCTREE)

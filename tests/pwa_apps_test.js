@@ -60,7 +60,7 @@ const head = (p) => p.evaluate(() => ({
 
   // ── Fájlok ──
   console.log('===== FAJLOK =====');
-  for (const f of ['manifest-bingo.json', 'manifest-liga.json', 'assets/dnr_bingo_icon.png', 'assets/dnr_liga_icon.png']) {
+  for (const f of ['manifest-bingo.json', 'manifest-liga.json', 'assets/dnr_bingo_app.png', 'assets/dnr_liga_app.png']) {
     ok('letezik: ' + f, fs.existsSync(path.join(ROOT, f)));
   }
   for (const [f, name, url] of [['manifest-bingo.json', 'DNR Bingó', '?screen=bingo'], ['manifest-liga.json', 'DNR Liga', '?screen=liga']]) {
@@ -79,7 +79,7 @@ const head = (p) => p.evaluate(() => ({
   const hb = await head(pb);
   ok('cim: DNR Bingó', hb.title === 'DNR Bingó', hb.title);
   ok('manifest-bingo.json toltodik', /manifest-bingo\.json/.test(hb.manifest || ''), hb.manifest);
-  ok('sajat apple-touch-icon', /dnr_bingo_icon\.png/.test(hb.appleIcon || ''), hb.appleIcon);
+  ok('sajat apple-touch-icon', /dnr_bingo_app\.png/.test(hb.appleIcon || ''), hb.appleIcon);
   ok('iOS app-nev: DNR Bingó', hb.appleTitle === 'DNR Bingó', hb.appleTitle);
   ok('egybol a bingo kepernyon indul', /BINGÓ|Bingó|Ki vagy/i.test(hb.text) && !/Bottle of Heroes/i.test(hb.text), hb.text.split('\n').slice(0, 4).join(' | '));
   ok('NINCS vissza-gomb (onallo app)', hb.backBtns === 0, 'db=' + hb.backBtns);
@@ -95,7 +95,7 @@ const head = (p) => p.evaluate(() => ({
   const hl = await head(pl);
   ok('cim: DNR Liga', hl.title === 'DNR Liga', hl.title);
   ok('manifest-liga.json toltodik', /manifest-liga\.json/.test(hl.manifest || ''), hl.manifest);
-  ok('sajat apple-touch-icon', /dnr_liga_icon\.png/.test(hl.appleIcon || ''), hl.appleIcon);
+  ok('sajat apple-touch-icon', /dnr_liga_app\.png/.test(hl.appleIcon || ''), hl.appleIcon);
   ok('iOS app-nev: DNR Liga', hl.appleTitle === 'DNR Liga', hl.appleTitle);
   ok('a fejlecben DNR Liga all (nem "Statisztika")', /DNR Liga/.test(hl.text) && !/^Statisztika/m.test(hl.text), hl.text.split('\n').slice(0, 3).join(' | '));
   ok('a ranglista betoltott (Alfa 640)', /Alfa/.test(hl.text) && /640/.test(hl.text));
@@ -252,6 +252,13 @@ const head = (p) => p.evaluate(() => ({
        missing.join(', ') || hrefs.length + ' hivatkozás');
   }
 
+  // v10.424 — az egységes ikonok ÚJ fájlnéven: a v10.423 a régi néven írta felül
+  // a képet, és a készülékek a gyorsítótárból a régit mutatták. A régi név nem jöhet vissza.
+  console.log('\n===== IKON-FÁJLNEVEK (cache) =====');
+  const srcAll = ['app.src.html', ...fs.readdirSync(ROOT).filter(f => /^manifest.*\.json$/.test(f))]
+    .map(f => fs.readFileSync(ROOT + '/' + f, 'utf8')).join('\n');
+  const stale = srcAll.match(/dnr_(events|box|pub|tipp|torta|bingo|liga)_icon\.png/g) || [];
+  ok('⚠️ a felülírt régi ikon-nevekre nincs hivatkozás', stale.length === 0, stale.join(','));
   await b.close();
   console.log('\n' + (fail === 0 ? '✅ MINDEN ELLENORZES RENDBEN' : '❌ ' + fail + ' ELLENORZES BUKOTT'));
   process.exit(fail === 0 ? 0 : 1);
