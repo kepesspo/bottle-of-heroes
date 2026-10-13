@@ -4,7 +4,7 @@
 //  1) web: az oldalsáv sorrendje Általános · Games · Events · Tortán · Tipp · Bingó · BOX · Pub · Liga;
 //     az egy-fülű appoknál maga az app sora a gomb (nincs „DNR Bingó" fejléc + „Bingó" al-elem)
 //  2) a mindent érintő dolgok az Általánosban: Profilok, Hirdetmény, DNR központ, Rendszer…
-//     — és az app-specifikus dolgok NINCSENEK ott (a Pub/BOX/Events témája, a Játékmenet-kapcsoló,
+//     — és az app-specifikus dolgok NINCSENEK ott (a Játékmenet-kapcsoló,
 //     a Szezonzáró ablak a saját appjuknál)
 //  3) telefon: görgethető app-sáv, al-fülek csak több fülnél
 //  4) ⚠️ a Hirdetmény a KÖZPONTBAN látszik, a DNR Games főoldalán NEM
@@ -43,8 +43,8 @@ const clickTab = (p, k) => p.evaluate(k => { const b = document.querySelector(`#
   let p = await open(b, '?screen=games', 2000, 1100);
   await mountAdmin(p); await p.waitForTimeout(1200);
   const nav = await p.evaluate(() => [...document.querySelectorAll('#__a [data-admin-nav] > [data-admin-cat]')].map(x => ({ cat: x.getAttribute('data-admin-cat'), btn: x.tagName === 'BUTTON', subs: x.tagName === 'BUTTON' ? 0 : x.querySelectorAll('[data-admin-tab]').length })));
-  ok(nav.map(x => x.cat).join() === 'general,games,events,torta,tipp,bingo,box,pub,liga', 'a sorrend: Általános, majd az appok a központ sorrendjében', nav.map(x => x.cat).join());
-  ok(['torta','tipp','bingo','box','pub'].every(k => (nav.find(x => x.cat === k) || {}).btn), 'az egy-fülű appoknál maga az app sora a gomb', JSON.stringify(nav.filter(x => x.btn).map(x => x.cat)));
+  ok(nav.map(x => x.cat).join() === 'general,games,events,torta,tipp,bingo,liga', 'a sorrend: Általános, majd az appok a központ sorrendjében (v10.421 óta a Pub/BOX-nak nincs külön admin-lapja — a témájuk a Témák lapon)', nav.map(x => x.cat).join());
+  ok(['events','torta','tipp','bingo'].every(k => (nav.find(x => x.cat === k) || {}).btn), 'az egy-fülű appoknál maga az app sora a gomb', JSON.stringify(nav.filter(x => x.btn).map(x => x.cat)));
   ok(nav.find(x => x.cat === 'liga').subs === 3 && nav.find(x => x.cat === 'games').subs === 6, 'a Liga 3, a Games 6 fület visz');
   const title = await p.evaluate(() => (document.querySelector('#__a [data-admin-title]') || {}).innerText);
   ok(/Általános/.test(title) && /Profilok/.test(title), 'a lap fejléce: „Általános · Profilok"', title);
@@ -59,8 +59,8 @@ const clickTab = (p, k) => p.evaluate(k => { const b = document.querySelector(`#
   ok(/DNR appok a központban/.test(t) && /Melyik app látszódjon/i.test(t) && !/Játékmenet oldal/.test(t), 'Általános → DNR központ: csak a központ kapcsolói');
   await clickTab(p, 'message'); await p.waitForTimeout(500);
   ok(/Hirdetmény a DNR központban/.test(await bodyTxt(p)), 'Általános → Hirdetmény');
-  await clickTab(p, 'pubTheme'); await p.waitForTimeout(500);
-  ok(/Pub témája/.test(await bodyTxt(p)), 'DNR Pub → a Pub témája');
+  await clickTab(p, 'themes'); await p.waitForTimeout(500);
+  ok(await p.evaluate(() => document.querySelectorAll('#__a [data-theme-app]').length === 9), 'Általános → Témák: mind a kilenc app egy lapon (v10.421)');
   await clickTab(p, 'gamesSettings'); await p.waitForTimeout(500);
   t = await bodyTxt(p);
   ok(/Játékmenet oldal/.test(t) && !/Szezonzáró/.test(t), 'DNR Games → Beállítások: a Játékmenet-kapcsoló');
@@ -75,7 +75,7 @@ const clickTab = (p, k) => p.evaluate(k => { const b = document.querySelector(`#
   p = await open(b, '?screen=games', 390, 844);
   await mountAdmin(p); await p.waitForTimeout(1200);
   const ph = await p.evaluate(() => { const bar = document.querySelector('#__a [data-admin-catbar]'); return { n: bar.querySelectorAll('[data-admin-cat]').length, scroll: bar.scrollWidth > bar.clientWidth, subs: !!document.querySelector('#__a [data-admin-subtabs]') }; });
-  ok(ph.n === 9 && ph.scroll, 'kilenc app egy görgethető sávban', JSON.stringify(ph));
+  ok(ph.n === 7 && ph.scroll, 'hét kategória egy görgethető sávban', JSON.stringify(ph));
   ok(ph.subs, 'az Általánosnál vannak al-fülek');
   await p.evaluate(() => document.querySelector('#__a [data-admin-catbar] [data-admin-cat="bingo"]').click()); await p.waitForTimeout(600);
   ok(await p.evaluate(() => !document.querySelector('#__a [data-admin-subtabs]') && !!document.querySelector('#__a [data-bingo-admin-app="bingo"]')), 'egy-fülű appnál (Bingó) nincs al-fül sor, rögtön a szerkesztő');

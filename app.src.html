@@ -33852,7 +33852,20 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
 </div>
 <script>
 (function(){
-  var theme  = localStorage.getItem('boh_theme') || 'warm';
+  // v10.421: a téma APPONKÉNT jön a config/appThemes-ből (gyorsítótár: boh_app_themes)
+  // — ugyanaz a szabály, mint a bohThemeKey() az appban. Nincs mentett beállítás →
+  // a régi forrás: Events/Pub/BOX a saját régi témája, a többi az eszköz boh_theme-je.
+  var theme = (function(){
+    var q = location.search, app = /[?&]room=/.test(q) ? 'games' : 'hub';
+    var m = q.match(/[?&]screen=([^&#]+)/), sc = m ? m[1] : '';
+    var MAP = { events:'events', calendar:'events', bar:'pub', dnrbox:'box', liga:'liga', bingo:'bingo', tipp:'tipp', torta:'torta', games:'games' };
+    if (MAP[sc]) app = MAP[sc];
+    var cfg = null; try { cfg = JSON.parse(localStorage.getItem('boh_app_themes') || 'null'); } catch(e) {}
+    if (cfg && cfg.apps && cfg.apps[app]) return cfg.apps[app];
+    if (cfg && cfg.default) return cfg.default;
+    var lg = { events:['boh_events_theme','ice'], pub:['boh_bar_theme','warm'], box:['boh_dnrbox_theme','warm'] }[app];
+    try { return lg ? (localStorage.getItem(lg[0]) || lg[1]) : (localStorage.getItem('boh_theme') || 'warm'); } catch(e) { return 'warm'; }
+  })();
   var themes = {
     warm:     { bg:'#F4C57E', deep:'#E8B260', ring:'rgba(180,100,20,0.35)',  glow:'rgba(180,100,20,0.7)',  ink:'#1A2A4A', inkSoft:'#4A5878' },
     dark:     { bg:'#2C3554', deep:'#1E2640', ring:'rgba(80,110,220,0.35)',  glow:'rgba(80,110,220,0.7)',  ink:'#E8EEF8', inkSoft:'#9AA8C8' },
@@ -33870,8 +33883,6 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   // Detect events deep-link — BEFORE applying theme colors
   var _isEventsDeepLink = (location.search.indexOf('screen=events') !== -1 || location.search.indexOf('screen=calendar') !== -1);
   if (_isEventsDeepLink) {
-    var _spEvTh = localStorage.getItem('boh_events_theme') || 'ice';
-    t = themes[_spEvTh] || themes['ice'] || t;
     var evLogoWrap = document.getElementById('splash-events-logo-wrap');
     var mainLogoWrap = document.getElementById('splash-logo-wrap');
     var titleWrap = document.getElementById('splash-title-wrap');
@@ -33900,8 +33911,6 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
   var _isBarDeepLink = location.search.indexOf('screen=bar') !== -1;
   var _isBoxDeepLink = location.search.indexOf('screen=dnrbox') !== -1;
   if (_isBarDeepLink || _isBoxDeepLink) {
-    var _dkTh = localStorage.getItem(_isBarDeepLink ? 'boh_bar_theme' : 'boh_dnrbox_theme') || 'warm';
-    t = themes[_dkTh] || t;
     var _dkLogo = document.getElementById('splash-logo');
     if (_dkLogo) { _dkLogo.src = _isBarDeepLink ? 'assets/splash_pub_logo.png' : 'assets/splash_box_logo.png'; _dkLogo.alt = _isBarDeepLink ? 'DNR Pub' : 'DNR Box'; }
     var _dkTitleWrap = document.getElementById('splash-title-wrap');
@@ -35239,7 +35248,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.420';
+const APP_VERSION = 'v10.421';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -35523,11 +35532,57 @@ const themeSwatch = (key) => {
   return { bg: th.bg, accent: th.mint, surface: th.surface };
 };
 
-let T = THEMES[localStorage.getItem('boh_theme')] || THEMES['warm'];
-if (!T) T = THEMES['warm'];
-if (location.search.indexOf('screen=events') !== -1 || location.search.indexOf('screen=calendar') !== -1) { var _evTh = localStorage.getItem('boh_events_theme') || 'ice'; T = THEMES[_evTh] || THEMES['ice']; }
-else if (location.search.indexOf('screen=bar') !== -1) { var _barTh = localStorage.getItem('boh_bar_theme') || 'warm'; T = THEMES[_barTh] || THEMES['warm']; }
-else if (location.search.indexOf('screen=dnrbox') !== -1) { var _boxTh = localStorage.getItem('boh_dnrbox_theme') || 'warm'; T = THEMES[_boxTh] || THEMES['warm']; }
+// ── EGY téma-forrás minden apphoz (v10.421) ─────────────────────────────────
+// config/appThemes = { default: '<téma>', apps: { <app>: '<téma>' } }. Az app vagy a
+// közös `default`-ot viseli, vagy (ha az admin külön adott neki) a sajátját.
+// ⚠️ Mentett beállítás NÉLKÜL a RÉGI forrás él tovább: az Events/Pub/BOX a saját régi
+// admin-témája (eventsTheme/barTheme/dnrboxTheme — a gyorsítótár kulcsaiból), a többi
+// az eszköz `boh_theme`-je. Így a frissítés után semmi nem változik, amíg az admin
+// a Témák lapon nem dönt — és a régi tesztek `boh_theme`-mel is a választott témát kapják.
+const BOH_THEME_APPS = ['hub', 'games', 'events', 'torta', 'tipp', 'bingo', 'box', 'pub', 'liga'];
+const BOH_THEME_LEGACY = { events:['boh_events_theme', 'ice'], pub:['boh_bar_theme', 'warm'], box:['boh_dnrbox_theme', 'warm'] };
+function bohThemeKey(app, cfg) {
+  const ok = k => !!(k && THEMES[k]);
+  if (cfg && cfg.apps && ok(cfg.apps[app])) return cfg.apps[app];
+  if (cfg && ok(cfg.default)) return cfg.default;
+  let k = 'warm';
+  try { const lg = BOH_THEME_LEGACY[app]; k = lg ? (localStorage.getItem(lg[0]) || lg[1]) : (localStorage.getItem('boh_theme') || 'warm'); } catch(e) {}
+  return ok(k) ? k : 'warm';
+}
+function bohCachedThemeCfg() { try { return JSON.parse(localStorage.getItem('boh_app_themes') || 'null'); } catch(e) { return null; } }
+// Melyik app témáját viseli egy képernyő. Az Admin a központé (onnan nyílik).
+function bohAppOfScreen(sc) {
+  if (sc === 'hub' || sc === 'admin') return 'hub';
+  if (sc === 'log' || sc === 'create') return 'events';
+  if (sc === 'bar') return 'pub';
+  if (sc === 'jukebox') return 'box';
+  if (sc === 'stats') return 'liga';
+  if (sc === 'bingo' || sc === 'tipp' || sc === 'torta') return sc;
+  return 'games';
+}
+function bohAppOfUrl() {
+  try {
+    const q = new URLSearchParams(location.search), sc = q.get('screen') || '';
+    if (q.get('room')) return 'games';
+    return ({ events:'events', calendar:'events', bar:'pub', dnrbox:'box', liga:'liga', bingo:'bingo', tipp:'tipp', torta:'torta', games:'games' })[sc] || 'hub';
+  } catch(e) { return 'hub'; }
+}
+// A legutóbb látott beállítás (eszközön); a BottleApp és a Témák lap is ezt figyeli.
+function useAppThemeCfg() {
+  const [c, setC] = React.useState(() => bohCachedThemeCfg());
+  React.useEffect(() => {
+    if (typeof firebase === 'undefined') return;
+    const un = firebase.firestore().collection('config').doc('appThemes').onSnapshot(d => {
+      const v = (d && d.exists && d.data()) || null;
+      setC(v);
+      try { if (v) localStorage.setItem('boh_app_themes', JSON.stringify(v)); else localStorage.removeItem('boh_app_themes'); } catch(e) {}
+    }, () => {});
+    return () => { try { un(); } catch(e) {} };
+  }, []);
+  return c;
+}
+
+let T = THEMES[bohThemeKey(bohAppOfUrl(), bohCachedThemeCfg())] || THEMES['warm'];
 (function() {
   const bg = T.bg;
   document.documentElement.style.setProperty('--app-bg', bg);
@@ -37887,24 +37942,14 @@ const EV_KEY = 'boh_event_log';
 function evLoad() { try { return JSON.parse(localStorage.getItem(EV_KEY) || '[]'); } catch(e) { return []; } }
 function evSave(logs) { try { localStorage.setItem(EV_KEY, JSON.stringify(logs)); } catch(e) {} }
 
+// v10.421: az Events témája a KÖZÖS téma-forrásból (bohThemeKey('events')) — és nem
+// csak deep linken: a központból nyitva is ugyanez. Eddig az appon belül a Games
+// eszköz-témáját viselte, deep linken a sajátját — ugyanaz az app két színben.
 function useEventsTheme() {
-  const [evT, setEvT] = React.useState(() => {
-    const key = localStorage.getItem('boh_events_theme') || 'ice';
-    return THEMES[key] || THEMES['ice'] || THEMES['warm'];
-  });
-  React.useEffect(() => {
-    if (typeof window.onEventsTheme === 'function') {
-      const unsub = window.onEventsTheme(key => {
-        const th = THEMES[key] || THEMES['ice'] || THEMES['warm'];
-        setEvT(th);
-        window.__evT = th;
-        try { localStorage.setItem('boh_events_theme', key); } catch(e) {}
-      });
-      return () => unsub();
-    }
-  }, []);
-  React.useEffect(() => { window.__evT = evT; }, [evT]);
-  return evT;
+  const cfg = useAppThemeCfg();
+  const th = THEMES[bohThemeKey('events', cfg)] || THEMES['warm'];
+  window.__evT = th;
+  return th;
 }
 
 function EventCalendarView({ events, calMonth, setCalMonth, setDetail, evT: calEvT }) {
@@ -38479,17 +38524,15 @@ function AdminScreen({ go, setTheme, currentTheme }) {
   // az app sora a gomb. (Belül marad, mert a TORTA_LOGO később deklarált const.)
   const CATEGORIES = [
     { key:'general', label:'Általános', tabs:[
-      ['profiles','Profilok'],['message','Hirdetmény'],['hub','DNR központ'],['settings','Rendszer'],['growth','Növekedés'],['feladatok','Fejlesztés'],
+      ['profiles','Profilok'],['message','Hirdetmény'],['hub','DNR központ'],['themes','Témák'],['settings','Rendszer'],['growth','Növekedés'],['feladatok','Fejlesztés'],
     ]},
     { key:'games', label:'DNR Games', icon:'assets/dnr_games_icon.png', zoom:1.25, tabs:[
       ['games','Játékok'],['wildcards','Wildcard'],['partik','Partik'],['rooms','Szobák'],['zene','Zene'],['gamesSettings','Beállítások'],
     ]},
-    { key:'events', label:'DNR Events', icon:'assets/dnr_events_icon.png', zoom:1.9, tabs:[['events','Események'],['eventsTheme','Téma']] },
+    { key:'events', label:'DNR Events', icon:'assets/dnr_events_icon.png', zoom:1.9, tabs:[['events','Események']] },
     { key:'torta', label:'DNR a tortán', icon:TORTA_LOGO, tabs:[['torta','DNR a tortán']] },
     { key:'tipp', label:'DNR Tipp', icon:'assets/dnr_tipp_icon.png', zoom:1.9, tabs:[['tipp','DNR Tipp']] },
     { key:'bingo', label:'DNR Bingó', icon:'assets/dnr_bingo_icon.png', zoom:1.9, tabs:[['bingo','DNR Bingó']] },
-    { key:'box', label:'DNR BOX', icon:'assets/dnr_box_icon.png', tabs:[['boxTheme','Téma']] },
-    { key:'pub', label:'DNR Pub', icon:'assets/dnr_pub_icon.png', zoom:1.9, tabs:[['pubTheme','Téma']] },
     { key:'liga', label:'DNR Liga', icon:'assets/dnr_liga_icon.png', zoom:1.9, tabs:[['seasons','Szezonok'],['stats','Statisztika'],['xp','XP & Szint']] },
   ];
   // A négyzetes app-ikonokon a rajz a kép közepén ül, nagy fehér margóval — kicsiben
@@ -38567,10 +38610,8 @@ function AdminScreen({ go, setTheme, currentTheme }) {
         {tab === 'message'  && <AdminMessage />}
         {tab === 'hub'      && <div style={{ padding:'2px 16px 16px' }}><AdminHomeToggles only="hub" /></div>}
         {tab === 'settings' && <AdminSettings />}
-        {tab === 'gamesSettings' && <AdminGamesSettings setTheme={setTheme} currentTheme={currentTheme} />}
-        {tab === 'eventsTheme' && <AdminAppTheme app="events" />}
-        {tab === 'pubTheme'    && <AdminAppTheme app="pub" />}
-        {tab === 'boxTheme'    && <AdminAppTheme app="box" />}
+        {tab === 'gamesSettings' && <AdminGamesSettings />}
+        {tab === 'themes'   && <AdminThemes setTheme={setTheme} />}
     </React.Fragment>
   );
   return (
@@ -39878,67 +39919,136 @@ function AdminRooms() {
 }
 
 // ── Admin: Message/Announcement tab ───────────────────────────────────────────
-const THEME_OPTIONS = THEME_LIST.map(x => ({ ...x, bg: themeSwatch(x.key).bg, mint: themeSwatch(x.key).accent }));
-
-function ThemeSelector({ title, urlHint, getFn, setFn, onFn, cacheKey, defaultKey }) {
-  const [theme, setTheme] = React.useState(defaultKey);
-  const [saving, setSaving] = React.useState(false);
-  React.useEffect(() => {
-    if (typeof onFn === 'function') {
-      const unsub = onFn(t => { setTheme(t); try { localStorage.setItem(cacheKey, t); } catch(e) {} });
-      return () => unsub();
-    } else if (typeof getFn === 'function') {
-      getFn().then(t => setTheme(t)).catch(() => {});
-    }
-  }, []);
-  const save = (key) => {
-    setSaving(true);
-    setTheme(key);
-    try { localStorage.setItem(cacheKey, key); } catch(e) {}
-    (setFn ? setFn(key) : Promise.resolve()).then(() => setSaving(false)).catch(() => setSaving(false));
-  };
+// ── Admin → Általános → Témák (v10.421) ───────────────────────────────────────
+// EGY felület az összes app témájához. Fent a KÖZÖS téma, alatta minden app egy
+// sora: „Közös" (követi a fentit) vagy egy saját téma. Minden koppintás AZONNAL ment
+// (config/appThemes), a teljes alakot írja ki — így egy régi, mentetlen állapot
+// (lásd bohThemeKey) az első mentéskor pontosan úgy kerül be, ahogy látszott.
+const ADMIN_THEME_APP_ROWS = [
+  { key:'hub',    label:'DNR központ', sub:'és az Admin' },
+  { key:'games',  label:'DNR Games',   icon:'assets/dnr_games_icon.png',  zoom:1.25 },
+  { key:'events', label:'DNR Events',  icon:'assets/dnr_events_icon.png', zoom:1.9 },
+  { key:'torta',  label:'DNR a tortán', torta:true },
+  { key:'tipp',   label:'DNR Tipp',    icon:'assets/dnr_tipp_icon.png',   zoom:1.9 },
+  { key:'bingo',  label:'DNR Bingó',   icon:'assets/dnr_bingo_icon.png',  zoom:1.9 },
+  { key:'box',    label:'DNR BOX',     icon:'assets/dnr_box_icon.png' },
+  { key:'pub',    label:'DNR Pub',     icon:'assets/dnr_pub_icon.png',    zoom:1.9 },
+  { key:'liga',   label:'DNR Liga',    icon:'assets/dnr_liga_icon.png',   zoom:1.9 },
+];
+function bohMaterializeThemeCfg(cfg) {
+  const def = (cfg && cfg.default && THEMES[cfg.default]) ? cfg.default : bohThemeKey('games', null);
+  const apps = {};
+  if (cfg && cfg.default && THEMES[cfg.default]) {
+    Object.keys((cfg && cfg.apps) || {}).forEach(k => { if (THEMES[cfg.apps[k]]) apps[k] = cfg.apps[k]; });
+  } else {
+    // régi állapot: ami a közöstől eltér, az app saját témája lesz
+    BOH_THEME_APPS.forEach(k => { const v = bohThemeKey(k, cfg); if (v !== def) apps[k] = v; });
+  }
+  return { default: def, apps };
+}
+function ThemeSwatchCard({ k, on, onPick, attr }) {
+  const sw = themeSwatch(k);
+  const label = (THEME_LIST.find(x => x.key === k) || {}).label || k;
   return (
-    <div style={{ background:T.surface, borderRadius:16, padding:16, boxShadow:T.shadow, marginBottom:14 }}>
-      <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink, marginBottom:4 }}>{title}</div>
-      <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginBottom:16 }}>Ez a téma jelenik meg a <span style={{ fontFamily:'monospace', fontSize:11, background:T.surfaceMuted, padding:'1px 5px', borderRadius:4 }}>{urlHint}</span> URL-en (a következő megnyitáskor).</div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:6 }}>
-        {THEME_OPTIONS.map(th => {
-          const sel = theme === th.key;
+    <button {...attr} aria-pressed={on} onClick={onPick} style={{ padding:0, borderRadius:14, cursor:'pointer', overflow:'hidden', border: on ? `2.5px solid ${T.mint}` : `2px solid ${T.inkMute}22`, boxShadow: on ? `0 3px 12px ${T.mint}55` : T.shadowPill, background:'transparent', display:'flex', flexDirection:'column', minWidth:0 }}>
+      <span style={{ display:'block', height:40, background:sw.bg, position:'relative' }}>
+        <span style={{ position:'absolute', bottom:5, left:7, right:7, height:14, background:sw.surface, borderRadius:4, opacity:0.92 }} />
+        <span style={{ position:'absolute', top:6, right:8, width:9, height:9, borderRadius:'50%', background:sw.accent }} />
+      </span>
+      <span style={{ display:'block', padding:'6px 2px 7px', background: on ? T.mintSoft : T.surfaceMuted, fontFamily:T.font, fontWeight:800, fontSize:'clamp(8.5px, 2.5vw, 10.5px)', letterSpacing:'-0.02em', color: on ? T.mintDeep : T.inkSoft, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', textAlign:'center' }}>{label}</span>
+    </button>
+  );
+}
+function AdminThemes({ setTheme }) {
+  const cfg = useAppThemeCfg();
+  const [local, setLocal] = React.useState(null);
+  const [msg, setMsg] = React.useState('');
+  const cur = local || bohMaterializeThemeCfg(cfg);
+  const write = next => {
+    setLocal(next); setMsg('mentés…');
+    try { localStorage.setItem('boh_app_themes', JSON.stringify(next)); } catch(e) {}
+    if (typeof firebase === 'undefined') { setMsg(''); return; }
+    firebase.firestore().collection('config').doc('appThemes').set(next)
+      .then(() => setMsg('mentve ✓'))
+      .catch(e => setMsg('nem sikerült menteni' + (e && e.code ? ` (${e.code})` : '')));
+  };
+  const setDefault = k => write({ default: k, apps: { ...cur.apps } });
+  const setApp = (app, k) => { const apps = { ...cur.apps }; if (k) apps[app] = k; else delete apps[app]; write({ default: cur.default, apps }); };
+  const nOwn = Object.keys(cur.apps).length;
+  const label = k => (THEME_LIST.find(x => x.key === k) || {}).label || k;
+  const icon = r => {
+    const size = 32;
+    if (!r.icon && !r.torta) return <span style={{ width:size, height:size, borderRadius:'28%', background:DNR_HUB_INK, color:'#fff', display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:11, flexShrink:0 }}>DNR</span>;
+    return (
+      <span style={{ position:'relative', width:size, height:size, borderRadius:'28%', overflow:'hidden', background:'#fff', flexShrink:0, display:'inline-block' }}>
+        <img src={r.torta ? TORTA_LOGO : r.icon} alt="" style={{ position:'absolute', left:'50%', top:'50%', transform:'translate(-50%, -50%)', width:size * (r.zoom || 1), height:size * (r.zoom || 1), maxWidth:'none' }} />
+      </span>
+    );
+  };
+  const card = { background:T.surface, borderRadius:16, padding:16, boxShadow:T.shadow, marginBottom:14 };
+  return (
+    <div data-admin-themes style={{ padding:16 }}>
+      <div style={card}>
+        <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', gap:10 }}>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>Közös téma</div>
+          {msg && <div style={{ fontFamily:T.font, fontWeight:800, fontSize:11.5, color: /nem sikerült/.test(msg) ? T.coral : T.mint }}>{msg}</div>}
+        </div>
+        <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, margin:'3px 0 12px' }}>Minden app ezt viseli, hacsak alább nem kap sajátot. Minden telefonon ugyanaz — a téma nem eszközönkénti beállítás.</div>
+        <div style={{ display:'grid', gridTemplateColumns:`repeat(${THEME_LIST.length}, minmax(0,1fr))`, gap:6 }}>
+          {THEME_LIST.map(x => <ThemeSwatchCard key={x.key} k={x.key} on={cur.default === x.key} onPick={() => setDefault(x.key)} attr={{ 'data-theme-default': x.key }} />)}
+        </div>
+      </div>
+
+      <div style={card}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, marginBottom:4 }}>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>Appok</div>
+          {nOwn > 0 && (
+            <button data-theme-reset onClick={() => write({ default: cur.default, apps: {} })}
+              style={{ border:'none', background:'transparent', color:T.mintDeep, fontFamily:T.font, fontWeight:800, fontSize:12, cursor:'pointer', padding:'4px 0' }}>Mindenhol a közös</button>
+          )}
+        </div>
+        <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginBottom:6 }}>{nOwn === 0 ? 'Minden app a közös témát viseli.' : `${nOwn} app saját témával.`}</div>
+        {ADMIN_THEME_APP_ROWS.map((r, i) => {
+          const own = cur.apps[r.key];
+          const eff = own || cur.default;
           return (
-            <div key={th.key} onClick={() => !saving && save(th.key)} style={{ cursor:'pointer', borderRadius:14, overflow:'hidden', outline: sel ? `2.5px solid ${T.mint}` : '2.5px solid transparent', outlineOffset:2, transition:'outline-color .15s', opacity: saving ? 0.6 : 1 }}>
-              <div style={{ height:44, background:th.bg, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <div style={{ width:20, height:20, borderRadius:'50%', background:th.mint }} />
+            <div key={r.key} data-theme-app={r.key} style={{ padding:'12px 0', borderTop: i ? `1px solid ${T.inkMute}22` : 'none' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:11 }}>
+                {icon(r)}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>{r.label}{r.sub && <span style={{ fontWeight:700, fontSize:11.5, color:T.inkMute }}> · {r.sub}</span>}</div>
+                  <div data-theme-eff style={{ fontFamily:T.font, fontWeight:700, fontSize:11.5, color: own ? T.mintDeep : T.inkMute, marginTop:1 }}>{own ? 'Saját: ' + label(own) : 'Közös: ' + label(cur.default)}</div>
+                </div>
+                <span aria-hidden="true" style={{ width:30, height:22, borderRadius:7, background:themeSwatch(eff).bg, boxShadow:`inset 0 0 0 1.5px ${T.inkMute}33`, position:'relative', flexShrink:0 }}>
+                  <span style={{ position:'absolute', top:4, right:4, width:6, height:6, borderRadius:'50%', background:themeSwatch(eff).accent }} />
+                </span>
               </div>
-              <div style={{ background:T.surfaceMuted, padding:'5px 2px', textAlign:'center', fontFamily:T.font, fontWeight: sel ? 900 : 600, fontSize:9.5, letterSpacing:'-0.01em', whiteSpace:'nowrap', color: sel ? T.mint : T.inkSoft }}>{th.label}</div>
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:9, paddingLeft:43, flexWrap:'wrap' }}>
+                <button data-theme-pick="" aria-pressed={!own} onClick={() => setApp(r.key, null)}
+                  style={{ height:28, padding:'0 11px', borderRadius:999, border: !own ? `2px solid ${T.mint}` : `1.5px solid ${T.inkMute}44`, background: !own ? T.mintSoft : 'transparent', color: !own ? T.mintDeep : T.inkSoft, fontFamily:T.font, fontWeight:800, fontSize:11.5, cursor:'pointer' }}>Közös</button>
+                {THEME_LIST.map(x => {
+                  const on = own === x.key, sw = themeSwatch(x.key);
+                  return (
+                    <button key={x.key} data-theme-pick={x.key} aria-pressed={on} aria-label={label(x.key)} title={label(x.key)} onClick={() => setApp(r.key, x.key)}
+                      style={{ width:28, height:28, borderRadius:'50%', padding:0, cursor:'pointer', background:sw.bg, border: on ? `2.5px solid ${T.mint}` : `1.5px solid ${T.inkMute}44`, boxShadow: on ? `0 0 0 2px ${T.surface}, 0 0 0 4px ${T.mint}` : 'none', position:'relative' }}>
+                      <span style={{ position:'absolute', left:'50%', top:'50%', width:9, height:9, marginLeft:-4.5, marginTop:-4.5, borderRadius:'50%', background:sw.accent }} />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
       </div>
-    </div>
-  );
-}
 
-// v10.420: az admin APPOK szerint kategorizált. Itt csak az marad, ami MINDEN appot
-// érint (admin PIN, kényszerített frissítés); a témák és az app-specifikus kapcsolók
-// a saját appjuk kategóriájába költöztek (AdminAppTheme, AdminGamesSettings, Szezonok).
-const ADMIN_APP_THEMES = {
-  events: { title:'Events témája', urlHint:'?screen=events', get:'getEventsTheme', set:'setEventsTheme', on:'onEventsTheme', cacheKey:'boh_events_theme', defaultKey:'ice' },
-  pub:    { title:'Pub témája',    urlHint:'?screen=bar',    get:'getBarTheme',    set:'setBarTheme',    on:'onBarTheme',    cacheKey:'boh_bar_theme',    defaultKey:'warm' },
-  box:    { title:'BOX témája',    urlHint:'?screen=dnrbox', get:'getBoxTheme',    set:'setBoxTheme',    on:'onBoxTheme',    cacheKey:'boh_dnrbox_theme', defaultKey:'warm' },
-};
-function AdminAppTheme({ app }) {
-  const c = ADMIN_APP_THEMES[app];
-  return (
-    <div style={{ padding:16 }}>
-      <ThemeSelector title={c.title} urlHint={c.urlHint} getFn={window[c.get]} setFn={window[c.set]} onFn={window[c.on]} cacheKey={c.cacheKey} defaultKey={c.defaultKey} />
+      {setTheme && <ThemeCyclerCard setTheme={setTheme} />}
     </div>
   );
 }
-function AdminGamesSettings({ setTheme, currentTheme }) {
+function AdminGamesSettings() {
   return (
     <div style={{ padding:16 }}>
       <AdminHomeToggles only="setup" />
-      {setTheme && <ThemeCyclerCard setTheme={setTheme} currentTheme={currentTheme} />}
     </div>
   );
 }
@@ -40319,7 +40429,7 @@ function AdminHomeToggles({ only } = {}) {
 // A tema-porgeteshez ugyanaz a lista, mint a ket valaszto — ez volt a HARMADIK
 // masolat ugyanarrol. A gomb felirata is innen szamolja, hany temat mutat.
 const ADMIN_THEME_LABELS = Object.fromEntries(THEME_LIST.map(x => [x.key, x.label]));
-function ThemeCyclerCard({ setTheme, currentTheme }) {
+function ThemeCyclerCard({ setTheme }) {
   const keys = Object.keys(ADMIN_THEME_LABELS);
   const [cycling, setCycling] = React.useState(false);
   const [idx, setIdx] = React.useState(0);
@@ -40339,9 +40449,8 @@ function ThemeCyclerCard({ setTheme, currentTheme }) {
   function toggle() {
     if (cycling) {
       setCycling(false);
-      if (savedRef.current) setTheme(savedRef.current);
+      setTheme(null);   // v10.421: az előnézet elengedése — a beállított (app-) téma jön vissza
     } else {
-      savedRef.current = currentTheme;
       setIdx(0);
       setCycling(true);
     }
@@ -43735,7 +43844,7 @@ function EventLogScreen({ go, goEdit, deepLink }) {
   const [imgZoom, setImgZoom] = React.useState(null); // nagyított borítókép URL
   const evT = useEventsTheme();
   // Use events theme only on deep link; otherwise use the app's global theme
-  const T = deepLink ? evT : (THEMES[localStorage.getItem('boh_theme')] || THEMES['warm']);
+  const T = evT;
   const pfBorderE = null;
   const pfShadowE = T.shadow;
   const [notifPerm, setNotifPerm] = React.useState(() => { if (!('Notification' in window)) return 'unsupported'; return Notification.permission; });
@@ -44575,7 +44684,7 @@ function EventForm({ initial, onSave, onCancel, evT: formEvT }) {
 function EventCreateScreen({ go, deepLink }) {
   const [saving, setSaving] = React.useState(false);
   const evT = useEventsTheme();
-  const T = deepLink ? evT : (THEMES[localStorage.getItem('boh_theme')] || THEMES['warm']);
+  const T = evT;
 
   function saveNew(data, done) {
     setSaving(true);
@@ -45245,52 +45354,6 @@ function HomeScreen({ go, onStartGame, onQuickGame, setTheme, currentTheme, resu
           <SheetOverlay onClose={() => setShowSettings(false)} title={t('settings')}>
             <div style={{ padding:'0 20px 32px' }}>
 
-              {/* Theme */}
-              {/* Theme picker — color swatch strips */}
-              {(() => {
-                const THEME_DEFS = THEME_LIST.map(x => ({ ...x, ...themeSwatch(x.key) }));
-                const ThemeBtn = ({ def }) => {
-                  const active = currentTheme === def.key;
-                  return (
-                    <button onClick={() => setTheme && setTheme(def.key)} style={{
-                      padding: 0, borderRadius: 14, cursor: 'pointer', overflow: 'hidden',
-                      border: active ? `2.5px solid ${T.mint}` : `2px solid ${T.inkMute}22`,
-                      boxShadow: active ? `0 3px 12px ${T.mint}55` : T.shadow,
-                      background: 'transparent', transition: 'all .15s',
-                      display: 'flex', flexDirection: 'column',
-                    }}>
-                      {/* Color strip */}
-                      <div style={{ height: 36, background: def.bg, position: 'relative', overflow: 'hidden' }}>
-                        {/* mini surface card */}
-                        <div style={{
-                          position: 'absolute', bottom: 4, left: 6, right: 6, height: 14,
-                          background: def.surface, borderRadius: 4, opacity: 0.9,
-                        }} />
-                        {/* accent dot */}
-                        <div style={{
-                          position: 'absolute', top: 5, right: 7,
-                          width: 8, height: 8, borderRadius: '50%', background: def.accent,
-                        }} />
-                      </div>
-                      {/* Label */}
-                      <div style={{
-                        padding: '5px 2px 6px', background: active ? T.mintSoft : T.surfaceMuted,
-                        fontFamily: T.font, fontWeight: 700, fontSize: 10,
-                        letterSpacing: '-0.01em', whiteSpace: 'nowrap',
-                        color: active ? T.mintDeep : T.inkSoft, textAlign: 'center',
-                      }}>{def.label}</div>
-                    </button>
-                  );
-                };
-                return (
-                  <>
-                    <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.inkSoft, textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:8, marginTop:8 }}>Témák</div>
-                    <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:6, marginBottom:24 }}>
-                      {THEME_DEFS.map(def => <ThemeBtn key={def.key} def={def} />)}
-                    </div>
-                  </>
-                );
-              })()}
               {/* Splash screen toggle */}
               <div style={{ width:1, background:T.inkMute+'25', margin:'20px 0' }} />
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
@@ -77020,22 +77083,18 @@ function BottleApp() {
   const [selectedGames, setSelectedGames] = useState(['busz','memoria','erem']);
   const [gameMeta, setGameMeta] = useState({ modes:['points'], difficulty:'easy', observerAllowed:true });
 
-  const [appTheme, setAppTheme] = React.useState(() => localStorage.getItem('boh_theme') || 'warm');
-  const handleSetTheme = (name) => {
-    localStorage.setItem('boh_theme', name);
-    T = THEMES[name];
-    setAppTheme(name);
-    const bg = T.bg;
-    document.documentElement.style.setProperty('--app-bg', bg);
-    document.documentElement.style.setProperty('--app-surface', T.surface);
-    document.documentElement.style.background = bg;
-    document.body.style.background = bg;
-  document.documentElement.style.background = bg;
-    const tc = document.querySelector('meta[name="theme-color"]');
-    if (tc) tc.setAttribute('content', bg);
-  };
+  // A téma (v10.421) a KÉPERNYŐ APPJÁBÓL jön (bohAppOfScreen → bohThemeKey), nem az
+  // eszközről. A globális T-t itt, a renderelés elején állítjuk, így minden gyerek
+  // már az új témával rajzol. A `themePreview` csak az admin téma-pörgetőjé.
+  const themeCfg = useAppThemeCfg();
+  const [themePreview, setThemePreview] = React.useState(null);
+  const appTheme = (themePreview && THEMES[themePreview]) ? themePreview : bohThemeKey(bohAppOfScreen(screen), themeCfg);
+  if (T !== THEMES[appTheme]) T = THEMES[appTheme];
+  const handleSetTheme = (name) => setThemePreview(name || null);
 
   React.useEffect(() => {
+    document.documentElement.style.setProperty('--app-bg', T.bg);
+    document.documentElement.style.setProperty('--app-surface', T.surface);
     document.body.style.background = T.bg;
     document.documentElement.style.background = T.bg;
     document.documentElement.style.background = T.bg;

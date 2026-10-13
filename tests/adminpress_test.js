@@ -148,7 +148,7 @@ const pinOpen = (p) => p.evaluate(() => /PIN|Admin belépés|admin/i.test(docume
     return { tabs: nav.querySelectorAll('[data-admin-tab]').length, bodyW: Math.round(rb.width), gap: Math.round(rb.left - rn.right),
              inpBg: inp ? getComputedStyle(inp).backgroundColor : null, surface: (window._T || {}).surface || null };
   });
-  ok('oldalsáv az összes füllel (22 — v10.420 óta appok szerint, a Pub/BOX/Events témája saját fül)', wl.tabs === 22, JSON.stringify(wl));
+  ok('oldalsáv az összes füllel (20 — v10.421 óta a témák egy Témák lapon)', wl.tabs === 20, JSON.stringify(wl));
   ok('⚠️ a tartalom keskeny (≤ 820 px), nem nyúlik a 2000 px-es képernyőre', wl.bodyW <= 820, JSON.stringify(wl));
   ok('az oldalsáv és a tartalom egymás mellett (nincs nagy rés)', wl.gap >= 0 && wl.gap <= 40, JSON.stringify(wl));
   ok('⚠️ a mező háttere nem a téma narancsa (fehér/felület)', /rgb\(255, 255, 255\)/.test(wl.inpBg || ''), wl.inpBg);

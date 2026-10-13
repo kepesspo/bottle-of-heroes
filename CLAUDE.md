@@ -3437,3 +3437,49 @@ Teszt: `node tests/admin_apps_test.js` (sorrend, egy-fülű appok, mi hova kerü
 és mi NINCS az Általánosban —, telefonos sáv, hirdetmény a központban és NEM a Games-en,
 bezárás + új hirdetmény). Igazítva: `adminpress_test` (22 fül, `data-admin-subtabs`),
 `setupflow_test` (DNR Games → Beállítások), `dnr_toggle_test` („DNR központ" kártya; a v10.409 óta piros „TOVÁBBI DNR" kereső helyett a központ kártyáit nézi).
+
+## ⚠️ EGY téma-forrás az összes apphoz (v10.421)
+Tulajdonosi kérés: „a színeket és a témákat egységesíteni szeretném — egy felületen
+kezelni az összes apphoz a témát." Eddig HÁROM, egymástól független rendszer élt:
+- a Games/központ/Liga/Bingó… az **eszköz** `boh_theme`-jét viselte (a Games
+  beállítás-lapján telefononként választható volt);
+- az Events / Pub / BOX **saját admin-dokumentumot** (`config/eventsTheme` /
+  `barTheme` / `dnrboxTheme`), de **csak deep linken** — a központból nyitva a Games
+  eszköz-témáját viselték, vagyis ugyanaz az app két színben jelent meg.
+
+**Most egy dokumentum dönt:** `config/appThemes = { default, apps: { <app>: <téma> } }`.
+Az app vagy a közös `default`-ot viseli, vagy (ha kapott) a sajátját. Az appok:
+`hub` (a központ ÉS az Admin) · `games` · `events` · `torta` · `tipp` · `bingo` · `box` ·
+`pub` · `liga` (`BOH_THEME_APPS`). Melyik képernyő melyik appé: `bohAppOfScreen()` —
+a Games összes játékképernyője (`players`/`play`/`observer`…) a `games`.
+
+- **Egy feloldó** (`bohThemeKey(app, cfg)`) szolgál ki mindent: a boot-időbeli `let T`-t
+  (`bohAppOfUrl()`), a **nyitóképet** (a splash-szkript ugyanezt a szabályt írja ES5-ben,
+  mert a config ELŐTT fut — gyorsítótár: `boh_app_themes`), a `BottleApp`-ot és az
+  Events `useEventsTheme`-jét.
+- **A `BottleApp` a renderelés elején állítja a globális `T`-t** a képernyő appja szerint
+  (`appTheme`), így minden gyerek már az új témával rajzol, és a `--app-bg`, a
+  `theme-color` és a statuszsáv is követi. A `handleSetTheme` innentől csak az admin
+  téma-pörgetőjének **előnézete** (`themePreview`); leállításkor `setTheme(null)` engedi el.
+- **Az Events téma az appon BELÜL is él** (eddig csak deep linken): `const T = evT`.
+- **A Games beállítás-lapjáról kikerült a téma-választó** — a téma nem eszközönkénti
+  beállítás többé. Admin: **Általános → Témák** (`AdminThemes`): fent a közös téma,
+  alatta mind a kilenc app egy sora („Közös" vagy saját téma), „Mindenhol a közös",
+  és a téma-pörgető. Minden koppintás azonnal ment, a TELJES alakot írja ki.
+  A Pub/BOX admin-kategória ezzel megszűnt (csak a témájuk volt), az Events egy fülű lett.
+
+**⚠️ Migráció — ezt könnyű elrontani:** mentett `appThemes` NÉLKÜL a RÉGI forrás él
+tovább (`BOH_THEME_LEGACY`): Events/Pub/BOX a régi saját dokumentuma (a `BottleApp`
+továbbra is gyorsítótárazza őket: `boh_events_theme`…), a többi az eszköz `boh_theme`-je.
+Így a frissítés után semmi nem változik, amíg az admin nem dönt — és a régi tesztek
+`boh_theme`-mel továbbra is a választott témát kapják. A Témák lap ezt a régi állapotot
+**materializálva** mutatja (`bohMaterializeThemeCfg`: ami eltér a közöstől, az saját), és az
+első koppintás pontosan ezt írja ki — a régi Events-téma nem vész el. Ha a `default` már
+mentve van, a hiányzó app-kulcs a KÖZÖSET jelenti, nem a régit.
+
+Teszt: `node tests/themes_test.js` (régi állapot + kontroll, közös + app-saját a központból
+nyitva, deep link + nyitókép, a Témák lap négy művelete, a régi állapot első mentése, a
+Games beállítás-lapján nincs téma-választó). ⚠️ A régi Events-téma tesztben a Firestore-ba
+is kell (`config/eventsTheme`): a `BottleApp` onnan frissíti a gyorsítótárat, és egy üres
+dokumentum a gyorsítótárat is `ice`-ra írná. Igazítva: `admin_apps_test` (hét kategória,
+Témák fül), `adminpress_test` (20 fül).
