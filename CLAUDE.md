@@ -3483,3 +3483,13 @@ Games beállítás-lapján nincs téma-választó). ⚠️ A régi Events-téma 
 is kell (`config/eventsTheme`): a `BottleApp` onnan frissíti a gyorsítótárat, és egy üres
 dokumentum a gyorsítótárat is `ice`-ra írná. Igazítva: `admin_apps_test` (hét kategória,
 Témák fül), `adminpress_test` (20 fül).
+
+### DNR Pub: új kerek logó (v10.422)
+A kapott logó (`assets/src/dnr_pub_logo_src.webp`) a `make_pub_logo.py`-val két fájl lesz:
+- **`assets/dnr_pub_logo.png`** (`PUB_LOGO`) — 512×512, **átlátszó** háttér (a fehér a
+  sarkokból elárasztva megy ki, a kör krémszíne marad). A központ kártyája (134 px, mint
+  a Tortán — `circleImg`), az admin Témák sora és a `?screen=bar` nyitóképe ezt viseli.
+- **`assets/dnr_pub_icon.png`** — 1024×1024, **fehér** háttér: főképernyő-ikon és
+  `manifest-bar.json` (iOS az átlátszót feketére festené).
+⚠️ Egy már telepített Pub-ikont semmi nem cserél ki — újra a főképernyőre kell tenni.
+A régi `assets/splash_pub_logo.png` a repóban maradt, de már semmi nem hivatkozza.
