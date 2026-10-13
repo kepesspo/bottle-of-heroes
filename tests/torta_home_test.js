@@ -18,7 +18,8 @@ const ROOT = '/home/user/bottle-of-heroes';
 const stub = fs.readFileSync(ROOT + '/tests/fbstub.js', 'utf8');
 let fail = 0;
 const ok = (c, l, e) => { console.log((c ? '  OK   ' : '  HIBA ') + l + (e !== undefined ? '  → ' + e : '')); if (!c) fail++; };
-const TORTA = 'assets/dnr_torta_logo.png', BINGO = 'assets/dnr_bingo_icon.png';
+const TORTA = 'assets/dnr_torta_mark.png',   // v10.423: az egységes ikoncsalád jele
+      BINGO = 'assets/dnr_bingo_icon.png';
 
 const TIPP = 'assets/dnr_tipp_icon.png';
 const card = (p, key) => p.evaluate(key => {

@@ -70,7 +70,7 @@ const setCfg = (p, patch) => p.evaluate(patch => firebase.firestore().collection
   ok(card && card.cats === 5 && card.vals === 50, '5 kategória × 10 érték', card && (card.cats + '×' + card.vals / Math.max(1, card.cats)));
   ok(card && /Csapat A/.test(card.txt) && /HÁZIGAZDA/i.test(card.txt), 'a házigazda (Csapat A) látszik', card && card.txt.slice(0, 80));
   const logo = await p.evaluate(() => { const i = document.querySelector('#__b img[data-torta-logo]'); return i ? { src: i.getAttribute('src'), ok: i.complete && i.naturalWidth > 0 } : null; });
-  ok(logo && logo.src === 'assets/dnr_torta_logo.png' && logo.ok, 'a DNR a tortán logó betöltődik (v10.401)', JSON.stringify(logo));
+  ok(logo && logo.src === 'assets/dnr_torta_mark.png' && logo.ok, 'a DNR a tortán jele betöltődik (v10.423 óta az egységes ikoncsaládból)', JSON.stringify(logo));
 
   // ── 2. Pontozás → store + összeg ──
   console.log('\n===== 2. PONTOZÁS =====');

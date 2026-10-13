@@ -109,9 +109,8 @@ async function open(b, query, init) {
     const ri = img.getBoundingClientRect(), rc = c.getBoundingClientRect();
     return { sc, r: Math.round(ri.width / rc.width * 100) };
   }));
-  // v10.422: a Pub saját KEREK logót kapott (mint a Tortán) — az a Games méretén áll (134/160 ≈ 84%)
-  ok(fit.filter(f => ['log','bingo','stats'].includes(f.sc)).every(f => f.r <= 72) && fit.find(f => f.sc === 'jukebox').r >= 95 && Math.abs(fit.find(f => f.sc === 'bar').r - 84) <= 2,
-     '⚠️ a négyzetes ikonok (Events, Bingó, Liga) beférnek a körbe, a kerek BOX kitölti, a kerek Pub-logó a Games méretén', JSON.stringify(fit));
+  // v10.423: az egységes ikoncsalád minden tagja a Games kompozícióját követi → mind a Games méretén (134/160 ≈ 84%)
+  ok(fit.every(f => Math.abs(f.r - 84) <= 2), '⚠️ minden app-ikon ugyanakkora a körben, mint a Games', JSON.stringify(fit));
   ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
   await p.close();
 

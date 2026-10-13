@@ -3493,3 +3493,35 @@ A kapott logó (`assets/src/dnr_pub_logo_src.webp`) a `make_pub_logo.py`-val ké
   `manifest-bar.json` (iOS az átlátszót feketére festené).
 ⚠️ Egy már telepített Pub-ikont semmi nem cserél ki — újra a főképernyőre kell tenni.
 A régi `assets/splash_pub_logo.png` a repóban maradt, de már semmi nem hivatkozza.
+
+## Egységes app-ikonok a DNR Games stílusában (v10.423)
+Tulajdonosi kérés: „nagyon különbözők a logók — egységesíteni, a kiindulás a Games,
+az maradjon." A Games ikon (`dnr_games_icon.png`) változatlan; a többi hét app ikonját a
+**`make_unified_icons.py`** rajzolja UGYANABBAN a nyelvben: kék|narancs félkör-háttér,
+talajvonal, vastag fekete kontúr, fehér „matrica"-sáv a tárgy körül, a Games palettája
+(bordó, sárga, borostyán, krém, jégkék), felirat NÉLKÜL.
+
+| app | motívum |
+|---|---|
+| Events | naptár + koccintó pohár |
+| a tortán | tálaló búra tányéron, villa és kés |
+| Tipp | tippszelvény pipákkal + focilabda |
+| Bingó | bingókártya pöttyökkel + filc |
+| BOX | retro zenegép + hangjegy |
+| Pub | két koccintó korsó |
+| Liga | serleg a dobogón |
+
+**Két fájl appanként** (a szkript mindkettőt írja):
+- `dnr_<app>_icon.png` — 1024×1024, **fehér** háttér: főképernyő-ikon, manifest, a
+  központ köre, az admin listái (iOS az átlátszót feketére festené).
+- `dnr_<app>_mark.png` — 512×512, **átlátszó** háttér: a nyitóképek és az app saját
+  oldalai (`TORTA_LOGO`, `PUB_LOGO` erre mutat) — a fehér négyzet a téma-háttéren kilógna.
+
+A központban **minden ikon 134 px** a körben (`circleImg`), mint a Games: azonos a
+kompozíció, nincs többé négyzetes/kerek/kitöltő külön méret. Az adminban a rávágás
+mindenhol `zoom:1.25`. A korábbi márka-logók (`dnr_torta_logo.png`, `dnr_pub_logo.png`,
+`splash_*_logo.png`) a repóban maradtak, de már semmi nem hivatkozza őket.
+⚠️ Egy már telepített főképernyő-ikont semmi nem cserél ki — újra ki kell tenni.
+
+Teszt: `dnr_hub_test` (mind a hét ikon a Games méretén a körben), `pwa_apps_test` (a
+nyitókép-jelek átlátszóak — a palettás PNG `tRNS`-darabbal is az).

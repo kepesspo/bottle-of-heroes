@@ -84,7 +84,7 @@ const head = (p) => p.evaluate(() => ({
   ok('egybol a bingo kepernyon indul', /BINGÓ|Bingó|Ki vagy/i.test(hb.text) && !/Bottle of Heroes/i.test(hb.text), hb.text.split('\n').slice(0, 4).join(' | '));
   ok('NINCS vissza-gomb (onallo app)', hb.backBtns === 0, 'db=' + hb.backBtns);
   ok('nincs onboarding', !/Üdv a Bottle of Heroes/.test(hb.text));
-  ok('sajat nyito-kepernyo (nem "Bottle of Heroes")', pb.__splash.title === 'DNR Bingó' && /dnr_bingo_icon/.test(pb.__splash.logo || ''), JSON.stringify(pb.__splash));
+  ok('sajat nyito-kepernyo (nem "Bottle of Heroes")', pb.__splash.title === 'DNR Bingó' && /dnr_bingo_mark/.test(pb.__splash.logo || ''), JSON.stringify(pb.__splash));
   await pb.screenshot({ path: __dirname + '/pwa_bingo.png', fullPage: true });
   ok('nincs JS hiba', pb.__errs.filter(e => !/ServiceWorker/.test(e)).length === 0, pb.__errs.join(' | '));
   await pb.close();
@@ -102,7 +102,7 @@ const head = (p) => p.evaluate(() => ({
   // v10.235: egyetlen idosav-sor — Mind/Ma/7 nap/Egyedi + a szezon-pirula
   ok('az idosav-sor es a szezon-pirula is ott van', /Mind/.test(hl.text) && /Ma/.test(hl.text) && /Szezon/.test(hl.text));
   ok('NINCS vissza-gomb (onallo app)', hl.backBtns === 0, 'db=' + hl.backBtns);
-  ok('sajat nyito-kepernyo (nem "Bottle of Heroes")', pl.__splash.title === 'DNR Liga' && /dnr_liga_icon/.test(pl.__splash.logo || ''), JSON.stringify(pl.__splash));
+  ok('sajat nyito-kepernyo (nem "Bottle of Heroes")', pl.__splash.title === 'DNR Liga' && /dnr_liga_mark/.test(pl.__splash.logo || ''), JSON.stringify(pl.__splash));
   // szezon nezet elerheto az onallo appban is
   await pl.evaluate(() => { const x = Array.from(document.querySelectorAll('button')).find(y => y.textContent.trim() === 'Szezon'); if (x) x.click(); });
   await pl.waitForTimeout(900);
@@ -228,14 +228,16 @@ const head = (p) => p.evaluate(() => ({
     // egy feher negyzet jelenik meg a helyen. Ezert alfa-csatorna kell.
     // v10.414: a fő splash logó a DNR logó (splash_dnr_logo.png, NEM négyzetes — a CSS
     // height:auto-val rajzolja); a négyzetesség csak a fixen 200×200-as Events logóra áll.
-    const splash = ['assets/splash_dnr_logo.png', 'assets/splash_events_logo.png']
+    // v10.423: az appok nyitóképe az egységes ikoncsalád ÁTLÁTSZÓ jele (dnr_<app>_mark.png)
+    const splash = ['assets/splash_dnr_logo.png', ...['events','torta','tipp','bingo','box','pub','liga'].map(k => 'assets/dnr_' + k + '_mark.png')]
       .filter(f => fs.existsSync(path.join(root, f)));
     const noAlpha = [], notSq = [];
     splash.forEach(f => {
       const buf = fs.readFileSync(path.join(root, f));
       const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20), colorType = buf[25];
       if (w !== h && !/splash_dnr_logo/.test(f)) notSq.push(f + ' (' + w + '×' + h + ')');
-      if (colorType !== 6 && colorType !== 4) noAlpha.push(f);   // 6=RGBA, 4=szurke+alfa
+      // 6=RGBA, 4=szürke+alfa, 3=palettás — az utóbbi csak tRNS-darabbal átlátszó
+      if (colorType !== 6 && colorType !== 4 && !(colorType === 3 && buf.includes(Buffer.from('tRNS')))) noAlpha.push(f);
     });
     ok('a splash logók átlátszó hátterűek', noAlpha.length === 0,
        noAlpha.join(', ') || splash.length + ' logó');
