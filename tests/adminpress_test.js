@@ -78,17 +78,17 @@ const pinOpen = (p) => p.evaluate(() => /PIN|Admin belépés|admin/i.test(docume
   ok('nincs JS hiba', p.__errs.filter(e => !/ServiceWorker/.test(e)).length === 0, p.__errs.join(' | '));
   await p.close();
 
-  console.log('\n===== GAMES FOGASKERÉK: CSAK BEÁLLÍTÁSOK =====');
+  console.log('\n===== GAMES FEJLÉC-GOMB: CSAK KIEGÉSZÍTŐK =====');
   p = await home(b);
   const g = await gearBox(p);
-  ok('megvan a fogaskerek gomb a Games fejlecben', !!g, JSON.stringify(g));
+  ok('megvan a Kiegészítők gomb a Games fejlecben', !!g, JSON.stringify(g));
   await p.mouse.move(g.x, g.y);
   await p.mouse.down();
   await p.waitForTimeout(2600);
   ok('2,6 mp nyomásra SEM nyílik admin PIN (átköltözött)', (await pinOpen(p)) === false);
   await p.mouse.up();
   await p.waitForTimeout(500);
-  ok('koppintás/elengedés a Beállításokat nyitja', await p.evaluate(() => /Beállítások|Settings/.test(document.body.innerText)));
+  ok('koppintás/elengedés a Kiegészítőket nyitja (v10.425 óta a Beállítások helyén)', await p.evaluate(() => /Kiegészítők/.test(document.body.innerText) && /Betűsorsoló/.test(document.body.innerText)));
   await p.close();
 
   // ── Az al-fulek arnyeka a PIRULARA legyen szabva ────────────────────────

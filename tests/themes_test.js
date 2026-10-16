@@ -125,10 +125,11 @@ const openCard = async (p, key) => {
 
   console.log('\n===== 6. NINCS TÖBBÉ ESZKÖZÖNKÉNTI TÉMA-VÁLASZTÓ =====');
   p = await open(b, '?screen=games', null);
-  await p.evaluate(() => { const g = [...document.querySelectorAll('button')].find(x => x.querySelector('svg circle') && x.getBoundingClientRect().width === 52); g && g.click(); });
+  // v10.425 óta a Beállítások lap megszűnt — a helyén a Kiegészítők; ott sincs téma-választó
+  await p.evaluate(() => { const g = document.querySelector('[data-home-tools]'); g && g.click(); });
   await p.waitForTimeout(700);
   const sheet = await p.evaluate(() => document.body.innerText);
-  ok(/Splash screen/.test(sheet) && !/TÉMÁK|Témák/.test(sheet), 'a Games beállítás-lapján nincs téma-választó (a lap megnyílt)', sheet.slice(0, 60).replace(/\n/g, ' | '));
+  ok(/Betűsorsoló/.test(sheet) && !/TÉMÁK|Témák/.test(sheet), 'a Games fejlécéből nyíló lapon nincs téma-választó (a lap megnyílt)', sheet.slice(0, 60).replace(/\n/g, ' | '));
   await p.close();
 
   await b.close();

@@ -3537,3 +3537,26 @@ már ezt írja). **Ha egy assetet tartalmában cserélsz, a nevét is cseréld**
 felülírás csendben hatástalan. A `pwa_apps_test` utolsó blokkja őrzi, hogy a hét
 régi névre ne legyen hivatkozás. A régi `make_bingo_app_icons.py` / `make_pub_logo.py`
 még a régi neveket írja: azok elavultak, nem hivatkozott fájlt állítanak elő.
+
+## DNR Games fejléc: Beállítások helyett „Kiegészítők" (v10.425)
+Tulajdonosi kérés: a fogaskerék és ami benne volt (Splash, Hangeffektek) nem kell —
+helyette egy gomb a **játék-kiegészítőknek**. A jobb felső pirula: **Kiegészítők** (kocka-
+ikon, `data-home-tools`) | Statisztika.
+
+- **`GAME_TOOLS`** a regiszter, **`GameToolsSheet`** a lap (lista → eszköz, „‹ Kiegészítők"
+  vissza). Új kiegészítő: egy sor a `GAME_TOOLS`-ba + egy ág a lapban. Mind modul-szintű
+  (v10.335 — a törzsben minden render újramountolna).
+- **Első: `LetterDrawTool` (Betűsorsoló).** Két készlet (`LETTER_SETS`): az **Alap UGYANAZ,
+  mint az Ország-Város húzása** (`OVFJ_LETTERS`, Q/W/X/Y nélkül) — függvényként hivatkozva,
+  mert az a konstans lejjebb van (betöltéskor TDZ lenne); és a teljes A–Z. „Ne ismételjen"
+  (alapból BE): a készlet végén a gomb újrakezdést kínál. A pörgés a végső betűt dönti el
+  ELŐRE, és közben sem mutat kétszer egymás után ugyanazt. Eszközönként megjegyzett:
+  `boh_letter_set`, `boh_letter_norep`; a kihúzottak listája csak a lap nyitva tartásáig él.
+- **A Splash / Hangeffektek kapcsoló megszűnt.** A tárolt értékük (`boh_splash`,
+  `boh_snd`) továbbra is hat — aki korábban kikapcsolta, annál kikapcsolva marad.
+- **⚠️ A safe-area diagnosztika (TESZT DB) a Kiegészítők lap aljára költözött** — a
+  `docs/safe-area.md` 4. pontja erre hivatkozik („kérj számot a készülékről").
+
+Teszt: `node tests/gametools_test.js` (fejléc, lista, sorsolás, 22 húzás = mind a 22 betű
+egyszer + kontroll ismétléssel, készletváltás, a diagnosztika csak TESZT DB-n). Igazítva:
+`adminpress_test` (a fejléc-gomb a Kiegészítőket nyitja), `themes_test` 6. blokk.

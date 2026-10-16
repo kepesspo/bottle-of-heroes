@@ -195,7 +195,7 @@ csíkot, és nézzük meg, jó marad-e a szín.
 
 ## 4. Diagnosztika a készüléken
 
-**Beállítások lap alja** — csak akkor jelenik meg, ha a **TESZT DB mód be van
+**Kiegészítők lap alja** (v10.425 előtt: Beállítások) — csak akkor jelenik meg, ha a **TESZT DB mód be van
 kapcsolva** (a főoldalon a verziószámra 3× koppintva kapcsolható).
 
 ```
