@@ -3560,3 +3560,24 @@ ikon, `data-home-tools`) | Statisztika.
 Teszt: `node tests/gametools_test.js` (fejléc, lista, sorsolás, 22 húzás = mind a 22 betű
 egyszer + kontroll ismétléssel, készletváltás, a diagnosztika csak TESZT DB-n). Igazítva:
 `adminpress_test` (a fejléc-gomb a Kiegészítőket nyitja), `themes_test` 6. blokk.
+
+## Imposztor-segítség (v10.426)
+Kérés: „aki imposztor, annak legyen hint, hogy picit közelebb legyen — és ezt a
+beállításokban lehessen bekapcsolni". Az Imposztor kapott beállító lapot
+(`ImposztorConfigSheet`, `GAME_CONFIG_DEFS.imposztor` → `gameMeta.imposztorConfig`),
+egy kapcsolóval: **Imposztor-segítség** (alapból KI).
+
+- **A tipp a szó KATEGÓRIÁJA** (`IMPOSZTOR_TIPPEK`: Banán → Gyümölcs, Tűzoltó →
+  Foglalkozás) — közelebb visz, de nem árulja el. **Minden `IMPOSZTOR_SZAVAK` szóhoz
+  kell egy** (új szónál ide is!), és a tipp nem tartalmazhatja a szót (Film ≠ Filmstúdió).
+- **Online** a szerep viszi: `impRole.<pid> = { imp, word, hint }` — csak az imposztoré
+  nem `null`. **Offline** a körbeadós lapon a „IMPOSZTOR" alatt. Mindkettő a közös
+  `ImposztorHint` csipet rajzolja (modul-szintű).
+- **⚠️ A felfedő lap MINDENKINÉL magasabb, ha a segítség be van kapcsolva** (`minHeight`
+  a `hintOn`-ból, nem az `isImpostor`-ból). Két ok: (1) a csip megnövelte a lapot, a
+  nyomva tartott gomb elugrott az ujj alól, és a tartás megszakadt — az imposztor nem
+  látta a szerepét; (2) ha csak az imposztor lapja nőne, a körbeadott telefonon a
+  magasság elárulná, ki az.
+
+Teszt: `node tests/imposztor_hint_test.js` (szótár teljessége, online szerep + telefon,
+kontroll kikapcsolva, offline lap, a gomb nem ugrik el, a beállító lap).

@@ -35248,7 +35248,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.425';
+const APP_VERSION = 'v10.426';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -47112,6 +47112,17 @@ function MemoriaConfigSheet({ config, setConfig, onClose }) {
   );
 }
 
+function ImposztorConfigSheet({ config, setConfig, onClose }) {
+  return (
+    <CfgSheet title="Imposztor beállítások" onClose={onClose}
+      subtitle="Mindenki tudja a titkos szót — csak az imposztor nem. Tippeljetek, aztán szavazzatok.">
+      <CfgRow label="Imposztor-segítség" hint="Az imposztor megkapja a szó kategóriáját (pl. Banán → Gyümölcs), így könnyebb blöffölni"
+        options={[{ v:false, l:'Ki' }, { v:true, l:'Be' }]}
+        value={!!config.hint} onPick={v => setConfig(c => ({ ...c, hint: v }))} />
+    </CfgSheet>
+  );
+}
+
 function RitmusConfigSheet({ config, setConfig, onClose }) {
   return (
     <CfgSheet title="Ritmus beállítások" onClose={onClose}
@@ -47705,6 +47716,7 @@ const GAME_CONFIG_DEFS = {
   meduza:     { metaKey:'meduzaConfig',     Comp: MeduzaConfigSheet },
   cardbattle: { metaKey:'cardbattleConfig', Comp: CardBattleConfigSheet },
   quiz:       { metaKey:'quizConfig',       Comp: QuizConfigSheet },
+  imposztor:  { metaKey:'imposztorConfig',  Comp: ImposztorConfigSheet },
 };
 const GAME_CONFIG_IDS = Object.keys(GAME_CONFIG_DEFS);
 const hasGameConfig = (id) => GAME_CONFIG_IDS.indexOf(id) !== -1;
@@ -58557,6 +58569,85 @@ const IMPOSZTOR_SZAVAK = [
   'Surf','Tengerpart bár','Urbánus kert','Vadkemping','Zipline',
 ];
 
+
+// Imposztor-segítség (v10.426): a szó KATEGÓRIÁJA — „picit közelebb", de nem árulja el.
+// Minden IMPOSZTOR_SZAVAK szóhoz kell egy (az imposztor_hint_test őrzi). Új szónál ide is.
+const IMPOSZTOR_TIPPEK = {
+  'Banán':'Gyümölcs',
+  'Kókusz':'Trópusi termés',
+  'Paradicsom':'Zöldség',
+  'Focipálya':'Sporthelyszín', 'Sportcsarnok':'Sporthelyszín', 'Stadion':'Sporthelyszín', 'Teniszpálya':'Sporthelyszín',
+  'Mosógép':'Háztartási gép',
+  'Takarítás':'Háztartás',
+  'Repülőgép':'Közlekedés', 'Autópálya':'Közlekedés', 'Kerékpárút':'Közlekedés', 'Légiforgalom':'Közlekedés', 'Megálló':'Közlekedés', 'Vasút':'Közlekedés', 'Kalauz':'Közlekedés', 'Fogaskerekű':'Közlekedés', 'Útlap':'Közlekedés',
+  'Mentőautó':'Jármű', 'Bicikli':'Jármű', 'Hajó':'Jármű', 'Hintó':'Jármű',
+  'Pizzéria':'Vendéglátóhely', 'Kávézó':'Vendéglátóhely', 'Kínai étterem':'Vendéglátóhely', 'Söröző':'Vendéglátóhely', 'Palacsintázó':'Vendéglátóhely', 'Vendégfogadó':'Vendéglátóhely',
+  'Tengerpart':'Nyaralóhely', 'Plázsa':'Nyaralóhely', 'Strandbár':'Nyaralóhely', 'Strandfürdő':'Nyaralóhely', 'Tengerpart bár':'Nyaralóhely',
+  'Könyvtár':'Intézmény', 'Iskola':'Intézmény', 'Postahivatal':'Intézmény',
+  'Gitár':'Hangszer',
+  'Víziló':'Afrikai állat', 'Elefánt':'Afrikai állat',
+  'Jégkrém':'Édesség', 'Mézeskalács':'Édesség', 'Fagylalt':'Édesség', 'Sütemény':'Édesség', 'Torta':'Édesség',
+  'Karácsonyfa':'Ünnep', 'Farsang':'Ünnep', 'Tüzijáték':'Ünnep',
+  'Labda':'Játék', 'Labirintus':'Játék', 'Trambulin':'Játék', 'Ugróiskola':'Játék',
+  'Kaktusz':'Növény', 'Almafa':'Növény', 'Bambusz':'Növény', 'Napraforgó':'Növény',
+  'Nyaralás':'Szabadidő', 'Utazás':'Szabadidő',
+  'Szivárvány':'Természeti jelenség', 'Hurrikán':'Természeti jelenség', 'Naplemente':'Természeti jelenség', 'Időjárás':'Természeti jelenség',
+  'Cipőfűző':'Ruházat', 'Kesztyű':'Ruházat', 'Ruházkodás':'Ruházat',
+  'Tűzoltó':'Foglalkozás', 'Borbély':'Foglalkozás', 'Éjjeli őr':'Foglalkozás', 'Kovács':'Foglalkozás', 'Optikus':'Foglalkozás', 'Tengerész':'Foglalkozás', 'Udvarmester':'Foglalkozás', 'Zoológus':'Foglalkozás', 'Asztronauta':'Foglalkozás', 'Detektív':'Foglalkozás', 'Fényképész':'Foglalkozás', 'Kapitány':'Foglalkozás', 'Katona':'Foglalkozás', 'Kertész':'Foglalkozás', 'Mentős':'Foglalkozás', 'Mérnök':'Foglalkozás', 'Mészáros':'Foglalkozás', 'Orvos':'Foglalkozás', 'Pilóta':'Foglalkozás', 'Postás':'Foglalkozás', 'Rendőr':'Foglalkozás', 'Szakács':'Foglalkozás', 'Szerelő':'Foglalkozás', 'Tanár':'Foglalkozás', 'Vadőr':'Foglalkozás', 'Bébiszitter':'Foglalkozás',
+  'Akvárium':'Otthon', 'Kert':'Otthon', 'Fürdőszoba':'Otthon', 'Szőnyeg':'Otthon', 'Lépcső':'Otthon',
+  'Asztalitenisz':'Sport', 'Baseball':'Sport', 'Birkózás':'Sport', 'Foci':'Sport', 'Golf':'Sport', 'Hegymászás':'Sport', 'Íjász':'Sport', 'Jégkorong':'Sport', 'Karate':'Sport', 'Kosárlabda':'Sport', 'Lovagló':'Sport', 'Pingpong':'Sport', 'Strandfoci':'Sport', 'Verseny':'Sport', 'Focista':'Sport',
+  'Bábszínház':'Szórakozás', 'Cirkusz':'Szórakozás', 'Kalandpark':'Szórakozás', 'Lunapark':'Szórakozás', 'Mozi':'Szórakozás', 'Körhinta':'Szórakozás', 'Óriáskerék':'Szórakozás', 'Zipline':'Szórakozás',
+  'Bagoly':'Madár', 'Vadkacsa':'Madár', 'Varjú':'Madár',
+  'Bajusz':'Arc',
+  'Benzinkút':'Autózás', 'Parkoló':'Autózás',
+  'Bögrék':'Konyha', 'Főzés':'Konyha', 'Recept':'Konyha', 'Sajtárda':'Konyha', 'Grillezés':'Konyha', 'Gasztronómia':'Konyha',
+  'Búvár':'Víz', 'Folyó':'Víz', 'Fürdőzés':'Víz', 'Mentőmellény':'Víz', 'Óceán':'Víz', 'Snorkeling':'Víz', 'Úszómedence':'Víz', 'Uszoda':'Víz', 'Aquapark':'Víz', 'Csónakázó tó':'Víz', 'Surf':'Víz', 'Kikötő':'Víz', 'Jachtklub':'Víz',
+  'Cápa':'Tengeri állat', 'Delfin':'Tengeri állat', 'Polip':'Tengeri állat', 'Rák':'Tengeri állat',
+  'Csúszda':'Gyerekek', 'Gyerekjáték':'Gyerekek', 'Bölcsőde':'Gyerekek', 'Játszóház':'Gyerekek', 'Napközi':'Gyerekek',
+  'Diszkó':'Buli', 'Pizsamaparti':'Buli', 'Fesztivál':'Buli',
+  'Dohányzás':'Szokás',
+  'Dzsungel':'Természet', 'Erdő':'Természet', 'Vízesés':'Természet', 'Vulkán':'Természet', 'Puszta':'Természet', 'Sivatag':'Természet',
+  'Édességbolt':'Vásárlás', 'Szupermarket':'Vásárlás', 'Trafik':'Vásárlás', 'Régiséges bolt':'Vásárlás', 'Vásárcsarnok':'Vásárlás', 'Lemezbolt':'Vásárlás', 'Kézműves piac':'Vásárlás',
+  'Felhőkarcoló':'Épület', 'Palota':'Épület', 'Kastély':'Épület', 'Piramis':'Épület', 'Pajta':'Épület',
+  'Fogorvos':'Egészség', 'Gyógyszer':'Egészség', 'Kórház':'Egészség', 'Trachoma':'Egészség',
+  'Gorilla':'Állat', 'Majom':'Állat', 'Nyúl':'Állat', 'Panda':'Állat', 'Teknős':'Állat', 'Tigris':'Állat', 'Dínó':'Állat', 'Medvebölcső':'Állat', 'Lovasiskola':'Állat',
+  'Gyár':'Munkahely', 'Nyomda':'Munkahely', 'Bánya':'Munkahely',
+  'Gyöngy':'Ékszer',
+  'Gyümölcslé':'Ital', 'Narancslé':'Ital',
+  'Hamutartó':'Tárgy', 'Mágnes':'Tárgy',
+  'Horgászat':'Hobbi', 'Kézimunka':'Hobbi', 'Kosárfonás':'Hobbi', 'Origami':'Hobbi',
+  'Hotelszoba':'Utazás', 'Safari':'Utazás', 'Repülőtér':'Utazás', 'Szálloda':'Utazás',
+  'Jógaóra':'Mozgás',
+  'Katicabogár':'Rovar',
+  'Kemping':'Szabadtér', 'Sátortábor':'Szabadtér', 'Tábortűz':'Szabadtér', 'Természetjárás':'Szabadtér', 'Vadkemping':'Szabadtér', 'Állatkert':'Szabadtér',
+  'Márvány':'Anyag',
+  'Mértani forma':'Iskola', 'Oktatás':'Iskola',
+  'Múzeum':'Kultúra', 'Operaház':'Kultúra', 'Galéria':'Kultúra', 'Múzeumkert':'Kultúra',
+  'Napelem':'Energia', 'Erőmű':'Energia',
+  'Naptej':'Nyár',
+  'Programozás':'Technika', 'Robot':'Technika',
+  'Sakk':'Társasjáték',
+  'Sarkvidék':'Hideg',
+  'Sci-fi':'Film', 'Vígjáték':'Film',
+  'Filmstúdió':'Forgatás',
+  'Sétálóutca':'Város', 'Szökőkút':'Város', 'Piactér':'Város', 'Urbánus kert':'Város',
+  'Szerszám':'Barkácsolás',
+  'Vadászat':'Erdő',
+  'Zsemle':'Pékáru',
+  'Pizza':'Étel',
+  'Zsírkréta':'Rajzolás',
+  'Balerina':'Tánc',
+  'Boszorkány':'Mese',
+  'Harangozó':'Templom',
+  'Kovboj':'Vadnyugat',
+  'Zsonglőr':'Cirkusz', 'Bohóc':'Cirkusz',
+  'Cirkuszpor':'Porond',
+  'Botanikus kert':'Növények',
+  'Hangversenyterem':'Zene',
+  'Laborató':'Tudomány', 'Obszervatórium':'Tudomány',
+  'Hóember':'Tél',
+};
+
 const IMPOSZTOR_SZAVAK_SHUFFLED = (() => {
   const a = [...IMPOSZTOR_SZAVAK];
   for (let i = a.length - 1; i > 0; i--) {
@@ -58566,8 +58657,20 @@ const IMPOSZTOR_SZAVAK_SHUFFLED = (() => {
   return a;
 })();
 
-function ImposztorGame({ gameIdx, players, onAdvance, onResult, roomCode }) {
+// Az imposztor tippje — a host körbeadós lapja ÉS a telefon ugyanezt rajzolja.
+function ImposztorHint({ hint }) {
+  return (
+    <div data-imp-hint style={{ marginTop:10, display:'inline-flex', flexDirection:'column', alignItems:'center', gap:2, padding:'8px 14px', borderRadius:12, background:'rgba(255,255,255,0.10)', border:'1.5px dashed rgba(255,255,255,0.35)' }}>
+      <span style={{ fontFamily:T.font, fontWeight:800, fontSize:10.5, letterSpacing:'0.1em', color:'rgba(255,255,255,0.55)' }}>💡 SEGÍTSÉG</span>
+      <span style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:'#fff' }}>{hint}</span>
+    </div>
+  );
+}
+
+function ImposztorGame({ gameIdx, players, onAdvance, onResult, roomCode, gameMeta }) {
   const online = !!roomCode;
+  // v10.426: Imposztor-segítség — ha be van kapcsolva, az imposztor a szó kategóriáját kapja
+  const hintOn = !!(gameMeta && gameMeta.imposztorConfig && gameMeta.imposztorConfig.hint);
   const [impostorIndices, setImpostorIndices] = useState([]);
   const [startIdx, setStartIdx] = useState(0); // körönként random kezdőjátékos
   const [wordIdx, setWordIdx] = useState(0);
@@ -58614,6 +58717,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult, roomCode }) {
   }, [timerEnd]);
 
   const word = IMPOSZTOR_SZAVAK_SHUFFLED[wordIdx];
+  const impHint = hintOn ? (IMPOSZTOR_TIPPEK[word] || null) : null;
 
   // ── KÖZÖS könyvelés — az offline utolsó szavazat ÉS az online is ezt hívja.
   // `nv`: voter.id → a megszavazott játékos INDEXE.
@@ -58650,11 +58754,11 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult, roomCode }) {
   React.useEffect(() => {
     if (!online || !impostorIndices.length || typeof syncRoom !== 'function') return;
     const roles = {};
-    players.forEach((p, i) => { const imp = impostorIndices.includes(i); roles[p.id] = { imp, word: imp ? null : word }; });
+    players.forEach((p, i) => { const imp = impostorIndices.includes(i); roles[p.id] = { imp, word: imp ? null : word, hint: imp ? impHint : null }; });
     // ⚠️ `null` a törléshez (merge-nél a `{}` NEM törölné az előző kör jelzéseit).
     syncRoom(roomCode, { impRole: roles, impReady: null, impVote: null });
     setReadySet(new Set()); setVotes({});
-  }, [online, gameIdx, impostorIndices.join(',')]);
+  }, [online, gameIdx, impostorIndices.join(','), impHint]);
   // A fázist külön szinkronizáljuk (a telefonok ezt követik).
   React.useEffect(() => {
     if (!online || typeof syncRoom !== 'function') return;
@@ -58748,12 +58852,15 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult, roomCode }) {
         {/* Dark reveal card */}
         <div style={{ width:'100%', background:T.ink, borderRadius:20, padding:'20px 18px 16px', display:'flex', flexDirection:'column', alignItems:'center', gap:14 }}>
           {/* Eye / reveal area */}
-          <div style={{ width:'100%', minHeight:150, borderRadius:18, border:'2px dashed rgba(255,255,255,0.28)', background:'rgba(255,255,255,0.05)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, padding:20 }}>
+          {/* v10.426: segítséggel a lap MINDENKINÉL magasabb (nem csak az imposztornál — különben a
+                magasság elárulná, ki az), és a gomb nem ugrik el az ujj alól */}
+          <div style={{ width:'100%', minHeight: hintOn ? 228 : 150, borderRadius:18, border:'2px dashed rgba(255,255,255,0.28)', background:'rgba(255,255,255,0.05)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, padding:20 }}>
             {holding ? (
               isImpostor ? (
                 <div style={{ textAlign:'center', animation:'burstPop .25s' }}>
                   <div style={{ fontSize:48 }}>🕵️</div>
                   <div style={{ fontFamily:T.font, fontWeight:800, fontSize:22, color:T.coral, letterSpacing:'0.05em' }}>IMPOSZTOR</div>
+                  {impHint && <ImposztorHint hint={impHint} />}
                 </div>
               ) : (
                 <div style={{ textAlign:'center', animation:'burstPop .25s' }}>
@@ -66092,7 +66199,7 @@ function GameContent({ gameId, gameIdx, players, onAdvance, onUnready, onResult,
   if (gameId === 'beerpong2') return <BeerPong2Game key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} roomCode={roomCode} initialBpState={null} onSetHideFooter={onSetHideFooter} onSetBpEnded={onSetBpEnded} />;
   if (gameId === 'blackjack') return <BlackjackGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onLiveDrinkUpdate={onLiveDrinkUpdate} onSetBuszSwitch={onSetBuszSwitch} />;
   if (gameId === 'busz') return <BuszGame key={gameIdx} gameIdx={gameIdx} players={players||[]} roomCode={roomCode} gameMeta={gameMeta} onAdvance={onAdvance} onSetHideFooter={onSetHideFooter} onSetBuszSwitch={onSetBuszSwitch} />;
-  if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} roomCode={roomCode} />;
+  if (gameId === 'imposztor') return <ImposztorGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} roomCode={roomCode} gameMeta={gameMeta} />;
   if (gameId === 'rulett') return <RulettGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} />;
   if (gameId === 'kisebb') return <KisebbGame key={gameIdx} gameIdx={gameIdx} players={players||[]} onAdvance={onAdvance} onResult={onResult} onLiveDrinkUpdate={onLiveDrinkUpdate} gameMeta={gameMeta} roomCode={roomCode} drinkMult={drinkMult} />;
   if (gameId === 'zene') return <ZeneGame key={gameIdx} gameIdx={gameIdx} challenger={challenger} onAdvance={onAdvance} onResult={onResult} gameMeta={gameMeta} />;
@@ -75698,13 +75805,14 @@ function ImposztorObserverView({ code, room, observerName }) {
     return shell(
       <div style={{ width:'100%', maxWidth:360, display:'flex', flexDirection:'column', gap:12, alignItems:'center' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}><PlayerAvatar player={me} size={28} /><span style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>{me.name}</span></div>
-        <div style={{ width:'100%', minHeight:150, background:T.ink, borderRadius:20, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, padding:'20px 16px', textAlign:'center' }}>
+        <div style={{ width:'100%', minHeight: myRole.hint ? 228 : 150, background:T.ink, borderRadius:20, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8, padding:'20px 16px', textAlign:'center' }}>
           {hold ? (
             myRole.imp ? (
               <React.Fragment>
                 <div style={{ fontSize:40 }}>🕵️</div>
                 <div style={{ fontFamily:T.font, fontWeight:900, fontSize:22, color:'#FF6B6B' }}>TE VAGY AZ IMPOSZTOR</div>
                 <div style={{ fontFamily:T.font, fontSize:12.5, color:'rgba(255,255,255,0.6)' }}>Nem tudod a szót — blöffölj!</div>
+                {myRole.hint && <ImposztorHint hint={myRole.hint} />}
               </React.Fragment>
             ) : (
               <React.Fragment>
