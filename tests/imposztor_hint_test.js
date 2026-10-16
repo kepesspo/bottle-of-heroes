@@ -74,6 +74,30 @@ async function phoneHold(p, name) {
   });
   ok(dict.miss.length === 0, '⚠️ minden szóhoz van tipp', dict.miss.join(','));
   ok(dict.leak.length === 0, 'egyik tipp sem tartalmazza a szót (és fordítva)', JSON.stringify(dict.leak));
+  // v10.428 — „Laborató" csonka szó volt; a bank nem tartalmazhat ismétlést és ismert hibás alakot
+  const bank = await p.evaluate(() => ({ dup: IMPOSZTOR_SZAVAK.filter((w, i) => IMPOSZTOR_SZAVAK.indexOf(w) !== i),
+    bad: IMPOSZTOR_SZAVAK.filter(w => ['Laborató','Cirkuszpor','Medvebölcső','Útlap','Sajtárda','Trachoma','Tüzijáték','Surf','Lovagló'].includes(w)),
+    has: ['Laboratórium','Tűzijáték','Szörf'].every(w => IMPOSZTOR_SZAVAK.includes(w)),
+    longest: IMPOSZTOR_SZAVAK.slice().sort((a, b) => b.length - a.length)[0] }));
+  ok(bank.dup.length === 0, 'nincs kétszer ugyanaz a szó a bankban', bank.dup.join(','));
+  ok(bank.bad.length === 0 && bank.has, '⚠️ a csonka/hibás szavak javítva (Laborató → Laboratórium…)', bank.bad.join(','));
+  // a leghosszabb szó is kifér a telefon lapján (360 px)
+  await p.setViewportSize({ width: 360, height: 900 });
+  await p.evaluate(({ pl, w }) => {
+    const r0 = document.getElementById('root'); if (r0) r0.style.display = 'none';
+    const d = document.createElement('div'); d.id = '__lw'; d.style.cssText = 'position:absolute;left:0;top:0;width:360px;height:700px;display:flex;flex-direction:column';
+    document.body.appendChild(d);
+    ReactDOM.createRoot(d).render(React.createElement(ImposztorObserverView, { code: '1', observerName: 'Sere',
+      room: { players: pl, impState: { phase: 'reveal', gameIdx: 0 }, impRole: { p0: { imp: false, word: w } } } }));
+  }, { pl: PL, w: bank.longest });
+  await p.waitForTimeout(400);
+  { const btn = await p.$('#__lw button:has-text("Nyomd a szerepedhez")'); const bx = await btn.boundingBox();
+    await p.mouse.move(bx.x + bx.width / 2, bx.y + bx.height / 2); await p.mouse.down(); await p.waitForTimeout(200);
+    const g = await p.evaluate(() => { const el = document.querySelector('#__lw [data-imp-word]'); const card = el.parentElement.getBoundingClientRect(); const r = el.getBoundingClientRect();
+      return { txt: el.innerText, inside: r.left >= card.left - 0.5 && r.right <= card.right + 0.5, over: el.scrollWidth - el.clientWidth }; });
+    await p.mouse.up();
+    ok(g.txt === bank.longest && g.inside && g.over <= 0, 'a leghosszabb szó is teljes egészében kifér 360 px-en', JSON.stringify(g));
+    await p.evaluate(() => document.getElementById('__lw').remove()); await p.setViewportSize({ width: 402, height: 1500 }); }
 
   console.log('\n===== 2–3. ONLINE: SZEREP + TELEFON =====');
   await mountOnline(p, true, '880101'); await p.waitForTimeout(1500);

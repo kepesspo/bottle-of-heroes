@@ -3601,3 +3601,16 @@ beállításban kapcsolható." Az Imposztor beállító lapján új sor: **Ját�
 
 Teszt: `imposztor_hint_test.js` 6–9. blokk (kakukktojás-szó kategóriája 249 szón, online
 szerep + a telefon nem árulja el, offline két különböző szó, a beállító lap).
+
+### Imposztor: csonka szavak a bankban (v10.428)
+Bejelentés képpel: „A hosszú szó nem jelent meg" — a lapon „Laborató" állt. Nem a
+megjelenítés vágta le: **a bankban volt csonkán** (`'Laborató'`). Ugyanígy javítva:
+Cirkuszpor → Cirkuszsátor, Medvebölcső → Jegesmedve, Útlap → Útlevél, Sajtárda →
+Sajttál, Trachoma → Patika, Tüzijáték → Tűzijáték, Surf → Szörf, Lovagló → Lovaglás,
+és a kétszer szereplő Tengerész egyike → Halász. A tipp-szótár (`IMPOSZTOR_TIPPEK`)
+ugyanígy átírva — a kettőnek szóra pontosan egyeznie kell.
+
+A hosszú szavakra a lap is felkészült: `impWordSize(w, alap)` — 10 betűig az alapméret,
+fölötte arányosan kisebb (min. 60%), és `overflowWrap:'anywhere'`.
+Teszt: `imposztor_hint_test.js` 1. blokk (nincs ismétlés, nincs ismert hibás alak, a
+leghosszabb szó 360 px-en is kifér).
