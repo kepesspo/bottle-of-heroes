@@ -35248,7 +35248,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.428';
+const APP_VERSION = 'v10.429';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -47112,7 +47112,10 @@ function MemoriaConfigSheet({ config, setConfig, onClose }) {
   );
 }
 
-function ImposztorConfigSheet({ config, setConfig, onClose }) {
+function ImposztorConfigSheet({ config, setConfig, onClose, playerCount }) {
+  const n = playerCount || 0;
+  const cnt = typeof config.count === 'number' ? config.count : 'auto';
+  const eff = n ? imposztorCount(config, n) : null;
   return (
     <CfgSheet title="Imposztor beállítások" onClose={onClose}
       subtitle="Mindenki tudja a titkos szót — csak az imposztor nem. Tippeljetek, aztán szavazzatok.">
@@ -47121,6 +47124,11 @@ function ImposztorConfigSheet({ config, setConfig, onClose }) {
           : 'Az imposztor nem kap szót, tudja, hogy ő az — blöffölnie kell'}
         options={[{ v:'classic', l:'Klasszikus' }, { v:'undercover', l:'Más szó' }]}
         value={config.mode === 'undercover' ? 'undercover' : 'classic'} onPick={v => setConfig(c => ({ ...c, mode: v }))} />
+      <CfgRow label="Imposztorok száma"
+        hint={(cnt === 'auto' ? 'Automatikus: 5 játékostól 2, alatta 1' : 'Mindig marad legalább 2 nem-imposztor')
+              + (eff != null ? ` · most ${n} főre: ${eff} imposztor` : '')}
+        options={[{ v:'auto', l:'Auto' }, { v:1, l:'1' }, { v:2, l:'2' }, { v:3, l:'3' }]}
+        value={cnt} onPick={v => setConfig(c => ({ ...c, count: v }))} />
       {config.mode !== 'undercover' && (
         <CfgRow label="Imposztor-segítség" hint="Az imposztor megkapja a szó kategóriáját (pl. Banán → Gyümölcs), így könnyebb blöffölni"
           options={[{ v:false, l:'Ki' }, { v:true, l:'Be' }]}
@@ -58679,6 +58687,14 @@ const IMPOSZTOR_SZAVAK_SHUFFLED = (() => {
 // A szó betűmérete a hosszából: 10 betűig az alap, fölötte arányosan kisebb (min. 60%).
 const impWordSize = (w, base) => { const n = String(w || '').length; return n <= 10 ? base : Math.max(Math.round(base * 0.6), Math.round(base * 10 / n)); };
 
+// Hány imposztor legyen (v10.429). `cfg.count`: 'auto' (alap — 5 főtől 2, alatta 1) vagy
+// 1/2/3. Mindig marad legalább KÉT nem-imposztor, különben nincs kit kiszavazni.
+function imposztorCount(cfg, n) {
+  const c = cfg && cfg.count;
+  const want = (typeof c === 'number' && c > 0) ? c : (n >= 5 ? 2 : 1);
+  return Math.max(1, Math.min(want, n - 2));
+}
+
 function ImposztorHint({ hint }) {
   return (
     <div data-imp-hint style={{ marginTop:10, display:'inline-flex', flexDirection:'column', alignItems:'center', gap:2, padding:'8px 14px', borderRadius:12, background:'rgba(255,255,255,0.10)', border:'1.5px dashed rgba(255,255,255,0.35)' }}>
@@ -58711,7 +58727,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult, roomCode, gameMe
 
   useEffect(() => {
     // Determine number of impostors based on player count
-    const numImpostors = players.length >= 5 ? 2 : 1;
+    const numImpostors = imposztorCount(gameMeta && gameMeta.imposztorConfig, players.length);
     const indices = [];
     for (let i = 0; i < numImpostors; i++) {
       let idx;
@@ -58726,7 +58742,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult, roomCode, gameMe
     setOddWord(imposztorOddWord(IMPOSZTOR_SZAVAK_SHUFFLED[gameIdx % IMPOSZTOR_SZAVAK_SHUFFLED.length]));
     setPhase('reveal'); setRevealStep(0); setHolding(false); setVotes({}); setVoteStep(0);
     setTimerTotal(0); setTimerEnd(0); setTimerLeft(0); setVoteReady(false); resultFiredRef.current = false;
-  }, [gameIdx, players.length]);
+  }, [gameIdx, players.length, gameMeta && gameMeta.imposztorConfig && gameMeta.imposztorConfig.count]);
 
   // A felfedés/szavazás sorrendje a random kezdőtől indul körbe
   const ord = players.map((_, i) => players[(startIdx + i) % players.length]);
@@ -58933,7 +58949,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult, roomCode, gameMe
         {!voteReady ? (
           <div style={{ background:T.ink, borderRadius:16, padding:'16px', width:'100%', display:'flex', flexDirection:'column', gap:12, alignItems:'center' }}>
             <div style={{ fontFamily:T.font, fontSize:13, color:'rgba(255,255,255,0.75)', textAlign:'center', lineHeight:1.5 }}>
-              Mindenki mondjon <strong style={{ color:'#fff' }}>egy tippet</strong> a szóra. Az idő lejártakor {impostorIndices.length === 2 ? 'szavazhattok az egyik imposztorra' : 'szavazhattok'}.
+              Mindenki mondjon <strong style={{ color:'#fff' }}>egy tippet</strong> a szóra. Az idő lejártakor {impostorIndices.length > 1 ? 'szavazhattok az egyik imposztorra' : 'szavazhattok'}.
             </div>
             {timerTotal === 0 && (
               <>
@@ -59024,7 +59040,7 @@ function ImposztorGame({ gameIdx, players, onAdvance, onResult, roomCode, gameMe
     return (
       <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10, alignItems:'center' }}>
         <div style={{ background:'#1a1a2e', borderRadius:16, padding:'12px 18px', textAlign:'center', boxShadow:T.shadow, animation:'popIn .4s', width:'100%' }}>
-          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Az Imposztor{impostors.length === 2 ? 'ok' : ''}</div>
+          <div style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>Az Imposztor{impostors.length > 1 ? 'ok' : ''}</div>
           <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
             {impostors.map((impostor, imIdx) => (
               <div key={impostor.id} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>

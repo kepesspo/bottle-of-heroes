@@ -13,6 +13,9 @@
 //     a segítség ebben a módban nem jár, akkor sem, ha be volt kapcsolva
 //  8) offline: mind a három lapon „TITKOS SZÓ", két különböző szó, az egyik pontosan egyszer
 //  9) a beállító lapon a „Más szó" elrejti a Segítség sort, és a configba ír
+// v10.429 — az imposztorok száma beállítható:
+// 10) imposztorCount: Auto = 5 főtől 2; a kért szám, de mindig marad 2 nem-imposztor
+// 11) 5 fővel, count:1 → tényleg EGY imposztor kap szerepet (kontroll: Auto → 2)
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const ROOT = '/home/user/bottle-of-heroes';
@@ -204,6 +207,28 @@ async function phoneHold(p, name) {
   ok(Object.keys(cnt).length === 2 && Object.values(cnt).includes(1), 'két különböző szó, az egyik pontosan egyszer', JSON.stringify(cnt));
   await p.close();
 
+  console.log('\n===== 10–11. IMPOSZTOROK SZÁMA =====');
+  p = await page(b);
+  const tbl = await p.evaluate(() => [[{}, 3], [{}, 5], [{ count: 1 }, 6], [{ count: 2 }, 4], [{ count: 3 }, 4], [{ count: 3 }, 8], [{ count: 2 }, 3], [{ count: 'auto' }, 7]]
+    .map(([c, n]) => imposztorCount(c, n)));
+  ok(JSON.stringify(tbl) === JSON.stringify([1, 2, 1, 2, 2, 3, 1, 2]), 'Auto / kért szám / legalább 2 nem-imposztor', JSON.stringify(tbl));
+  const PL5 = ['Sere','Kecsi','Vivi','Robi','Luca'].map((n, i) => ({ id:'q' + i, name:n, color:'#888', points:0, drinks:0 }));
+  const impN = async (cfg, code) => {
+    await p.evaluate(({ pl, cfg, code }) => {
+      window.__fbStore['rooms'] = { [code]: { code, players: pl, gameIdx: 0 } };
+      const d = document.createElement('div'); d.id = '__n' + code; document.body.appendChild(d);
+      ReactDOM.createRoot(d).render(React.createElement(ImposztorGame, { gameIdx: 0, players: pl, roomCode: code, gameMeta: { imposztorConfig: cfg }, onResult: () => {}, onAdvance: () => {} }));
+    }, { pl: PL5, cfg, code });
+    await p.waitForTimeout(1200);
+    const r = await roles(p, code);
+    return Object.keys(r).length === 5 ? Object.values(r).filter(x => x.imp).length : -1;
+  };
+  const n1 = await impN({ count: 1 }, '880201'), nA = await impN({}, '880202'), n3 = await impN({ count: 3 }, '880203');
+  ok(n1 === 1, '⚠️ 5 fővel, „1" beállítással egy imposztor', n1);
+  ok(nA === 2 && n3 === 3, 'kontroll: Auto → 2, „3" → 3 (5 fővel)', `${nA} / ${n3}`);
+  ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+  await p.close();
+
   console.log('\n===== 5. BEÁLLÍTÓ LAP =====');
   p = await page(b);
   await p.evaluate(() => {
@@ -223,6 +248,9 @@ async function phoneHold(p, name) {
   ok(!/Imposztor-segítség/.test(await p.evaluate(() => document.body.innerText)), '„Más szó" módban a Segítség sor rejtve');
   await p.evaluate(() => [...document.querySelectorAll('button')].find(x => x.textContent.trim() === 'Klasszikus').click()); await p.waitForTimeout(200);
   ok(/Imposztor-segítség/.test(await p.evaluate(() => document.body.innerText)), 'Klasszikus módban visszajön');
+  await p.evaluate(() => [...document.querySelectorAll('button')].find(x => x.textContent.trim() === '1').click()); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => window.__meta.imposztorConfig.count === 1), 'az „1" a count-ot állítja');
+  ok(/most 4 főre: 1 imposztor/.test(await p.evaluate(() => document.body.innerText)), 'a lap kiírja, hány imposztor lesz a mostani létszámmal');
   ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
   await p.close();
 

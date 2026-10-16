@@ -3614,3 +3614,17 @@ A hosszú szavakra a lap is felkészült: `impWordSize(w, alap)` — 10 betűig 
 fölötte arányosan kisebb (min. 60%), és `overflowWrap:'anywhere'`.
 Teszt: `imposztor_hint_test.js` 1. blokk (nincs ismétlés, nincs ismert hibás alak, a
 leghosszabb szó 360 px-en is kifér).
+
+### Imposztor: az imposztorok száma beállítható (v10.429)
+Kérés: „2 imposztor volt — be lehessen állítani, hogy 1 legyen." Eddig bedrótozva 5
+főtől 2 volt. Új sor a beállító lapon: **Imposztorok száma** — `Auto` (alap, a régi
+szabály) / `1` / `2` / `3` (`imposztorConfig.count`).
+
+Egy forrás: **`imposztorCount(cfg, n)`** (modul-szintű, a játék és a lap is ezt hívja).
+⚠️ Mindig marad **legalább 2 nem-imposztor** (`min(kért, n − 2)`, de legalább 1) —
+különben nincs kit kiszavazni, és a játék magától eldőlne. A lap kiírja, hány imposztor
+lesz a mostani létszámmal (`playerCount` a `GameConfigHost`-ból). A „szavazhattok az
+egyik imposztorra" és az „Imposztorok" felirat innentől `> 1`-re néz, nem `=== 2`-re.
+
+Teszt: `imposztor_hint_test.js` 10–11. blokk (a szabály táblája; 5 fővel „1" → egy
+imposztor, kontroll Auto → 2, „3" → 3; a lap kiírja a várható számot).
