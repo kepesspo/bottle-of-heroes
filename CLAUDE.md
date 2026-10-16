@@ -3581,3 +3581,23 @@ egy kapcsolóval: **Imposztor-segítség** (alapból KI).
 
 Teszt: `node tests/imposztor_hint_test.js` (szótár teljessége, online szerep + telefon,
 kontroll kikapcsolva, offline lap, a gomb nem ugrik el, a beállító lap).
+
+### Imposztor: „Más szó" mód (v10.427)
+Kérés: „mindenki ugyanazt a szót kapja, és egy valaki más szót — nem imposztor szót;
+beállításban kapcsolható." Az Imposztor beállító lapján új sor: **Játékmód** —
+`Klasszikus` (alap) / `Más szó` (`imposztorConfig.mode === 'undercover'`).
+
+- **Az imposztor is szót kap, és NEM tudja, hogy ő a kakukktojás.** Offline a lapja
+  ugyanúgy „TITKOS SZÓ", online a szerepe `word`-öt visz (`imp:true` marad a
+  könyveléshez). ⚠️ A telefon ezért a `imp && !word` alapján dönt az „IMPOSZTOR"
+  képernyőről, nem a puszta `imp`-ből — különben elárulná.
+- **A szava lehetőleg UGYANABBÓL a kategóriából jön** (`imposztorOddWord`, az
+  `IMPOSZTOR_TIPPEK` alapján: Banán mellé másik gyümölcs) — egy idegen szóval az első
+  tippnél lebukna. Ha a kategóriában nincs más szó, a bankból húz. Körönként egyszer
+  sorsol (a `gameIdx`-effektben), két imposztornál mindkettő ugyanazt kapja.
+- **A Segítség ebben a módban nem él** (`hintOn = !undercover && …`), és a beállító
+  lapon el is tűnik — itt az imposztornak van szava, nincs mit segíteni.
+- Az eredmény-lap mindkét szót kiírja („Szó: X · az imposztoré: Y").
+
+Teszt: `imposztor_hint_test.js` 6–9. blokk (kakukktojás-szó kategóriája 249 szón, online
+szerep + a telefon nem árulja el, offline két különböző szó, a beállító lap).

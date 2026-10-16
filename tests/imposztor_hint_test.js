@@ -7,6 +7,12 @@
 //  3) a telefon az imposztornak mutatja a tippet, a csapatnak nem
 //  4) offline körbeadás: a lenyomott lapon az imposztornál ott a tipp, a csapatnál nincs
 //  5) a beállító lap kapcsolója a configba ír
+// v10.427 — „Más szó" mód (undercover):
+//  6) a kakukktojás-szó sosem a csapaté, és ahol lehet, UGYANABBÓL a kategóriából jön
+//  7) online: az imposztor szót kap (nem null), a telefonja NEM mondja, hogy ő az imposztor;
+//     a segítség ebben a módban nem jár, akkor sem, ha be volt kapcsolva
+//  8) offline: mind a három lapon „TITKOS SZÓ", két különböző szó, az egyik pontosan egyszer
+//  9) a beállító lapon a „Más szó" elrejti a Segítség sort, és a configba ír
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs');
 const ROOT = '/home/user/bottle-of-heroes';
@@ -34,7 +40,7 @@ const mountOnline = (p, hint, code) => p.evaluate(({ pl, hint, code }) => {
   const h = document.createElement('div'); h.id = '__host'; h.style.cssText = 'position:absolute;left:0;top:0;width:402px;height:700px;overflow:auto;background:#fff';
   document.body.appendChild(h);
   ReactDOM.createRoot(h).render(React.createElement(ImposztorGame, { gameIdx: 0, players: pl, roomCode: code,
-    gameMeta: hint === null ? {} : { imposztorConfig: { hint } }, onResult: () => {}, onAdvance: () => {} }));
+    gameMeta: hint === null ? {} : { imposztorConfig: (typeof hint === 'object' ? hint : { hint }) }, onResult: () => {}, onAdvance: () => {} }));
   const f = document.createElement('div'); f.id = '__phone'; f.style.cssText = 'position:absolute;left:0;top:720px;width:402px;height:700px;overflow:auto;background:#fff';
   document.body.appendChild(f);
   function W() {
@@ -121,6 +127,59 @@ async function phoneHold(p, name) {
     await p.close();
   }
 
+  console.log('\n===== 6. KAKUKKTOJÁS-SZÓ =====');
+  p = await page(b);
+  const odd = await p.evaluate(() => {
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const bad = [], offCat = [];
+    IMPOSZTOR_SZAVAK.forEach(w => { for (let k = 0; k < 5; k++) {
+      const o = imposztorOddWord(w, rnd);
+      if (!o || o === w) bad.push(w);
+      const sameExists = IMPOSZTOR_SZAVAK.some(x => x !== w && IMPOSZTOR_TIPPEK[x] === IMPOSZTOR_TIPPEK[w]);
+      if (sameExists && IMPOSZTOR_TIPPEK[o] !== IMPOSZTOR_TIPPEK[w]) offCat.push(w + '→' + o);
+    } });
+    return { bad, offCat, ex: imposztorOddWord('Banán', () => 0) + ' / ' + imposztorOddWord('Delfin', () => 0.5) };
+  });
+  ok(odd.bad.length === 0, 'a kakukktojás-szó sosem azonos a csapat szavával', odd.bad.slice(0, 5).join(','));
+  ok(odd.offCat.length === 0, '⚠️ ahol a kategóriában van más szó, onnan jön', odd.offCat.slice(0, 5).join(',') + ' · pl. ' + odd.ex);
+
+  console.log('\n===== 7. ONLINE „MÁS SZÓ" =====');
+  await mountOnline(p, { mode: 'undercover', hint: true }, '880103'); await p.waitForTimeout(1500);
+  r = await roles(p, '880103');
+  const uImp = Object.keys(r).find(id => r[id].imp), uCrew = Object.keys(r).filter(id => !r[id].imp);
+  const cw = r[uCrew[0]].word, iw = r[uImp].word;
+  ok(!!iw && iw !== cw && uCrew.every(id => r[id].word === cw), 'az imposztor MÁS szót kap, a csapat mind ugyanazt', `${cw} / ${iw}`);
+  ok(Object.keys(r).every(id => r[id].hint == null), 'ebben a módban nincs segítség (akkor sem, ha be volt kapcsolva)');
+  const pu = await phoneHold(p, PL.find(x => x.id === uImp).name);
+  ok(pu.t.includes(iw) && !/TE VAGY AZ IMPOSZTOR/.test(pu.t) && /A TITKOS SZÓ/.test(pu.t), '⚠️ az imposztor telefonja a saját szavát mutatja, és nem árulja el, hogy ő az', iw);
+  ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+  await p.close();
+
+  console.log('\n===== 8. OFFLINE „MÁS SZÓ" =====');
+  p = await page(b);
+  await p.evaluate(({ pl }) => {
+    const r0 = document.getElementById('root'); if (r0) r0.style.display = 'none';
+    const h = document.createElement('div'); h.id = '__off'; h.style.cssText = 'position:absolute;left:0;top:0;width:402px;height:900px;background:#fff';
+    document.body.appendChild(h);
+    window.__setPh = null;
+    function W() { const [ph, setPh] = React.useState('play'); window.__setPh = setPh;
+      return React.createElement(ImposztorGame, { gameIdx: 0, players: pl, gameMeta: { imposztorConfig: { mode: 'undercover' } }, onResult: () => {}, onAdvance: () => {} }); }
+    ReactDOM.createRoot(h).render(React.createElement(W));
+  }, { pl: PL });
+  await p.waitForTimeout(600);
+  const words = [];
+  for (let i = 0; i < PL.length; i++) {
+    const btn = await p.$('#__off button:has-text("Nyomd")'); const bx = await btn.boundingBox();
+    await p.mouse.move(bx.x + bx.width / 2, bx.y + bx.height / 2); await p.mouse.down(); await p.waitForTimeout(200);
+    words.push(await p.evaluate(() => { const t = document.getElementById('__off').innerText; const m = t.match(/TITKOS SZÓ\n+([^\n]+)/i); return { w: m ? m[1].trim() : null, imp: /IMPOSZTOR/.test(t) }; }));
+    await p.mouse.up();
+    await p.evaluate(() => [...document.querySelectorAll('#__off button')].find(x => /adom tovább/.test(x.textContent)).click()); await p.waitForTimeout(250);
+  }
+  const cnt = {}; words.forEach(x => { cnt[x.w] = (cnt[x.w] || 0) + 1; });
+  ok(words.every(x => x.w && !x.imp), 'mindhárom lapon „TITKOS SZÓ" áll, sehol „IMPOSZTOR"', JSON.stringify(words));
+  ok(Object.keys(cnt).length === 2 && Object.values(cnt).includes(1), 'két különböző szó, az egyik pontosan egyszer', JSON.stringify(cnt));
+  await p.close();
+
   console.log('\n===== 5. BEÁLLÍTÓ LAP =====');
   p = await page(b);
   await p.evaluate(() => {
@@ -135,6 +194,11 @@ async function phoneHold(p, name) {
   ok(/Imposztor beállítások/.test(sheet) && /Imposztor-segítség/.test(sheet), 'a lap megnyílik');
   await p.evaluate(() => [...document.querySelectorAll('button')].find(x => x.textContent.trim() === 'Be').click()); await p.waitForTimeout(200);
   ok(await p.evaluate(() => window.__meta.imposztorConfig && window.__meta.imposztorConfig.hint === true), 'a „Be" a gameMeta.imposztorConfig.hint-et kapcsolja');
+  await p.evaluate(() => [...document.querySelectorAll('button')].find(x => x.textContent.trim() === 'Más szó').click()); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => window.__meta.imposztorConfig.mode === 'undercover'), 'a „Más szó" a mode-ot állítja (9.)');
+  ok(!/Imposztor-segítség/.test(await p.evaluate(() => document.body.innerText)), '„Más szó" módban a Segítség sor rejtve');
+  await p.evaluate(() => [...document.querySelectorAll('button')].find(x => x.textContent.trim() === 'Klasszikus').click()); await p.waitForTimeout(200);
+  ok(/Imposztor-segítség/.test(await p.evaluate(() => document.body.innerText)), 'Klasszikus módban visszajön');
   ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
   await p.close();
 
