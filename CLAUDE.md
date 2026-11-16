@@ -3811,3 +3811,28 @@ Teszt: `reveal_test.js` 4. blokk (alap 3 lap, 1/2/3 választó + megmarad, 3/5/8
 háttér; a réteg-hiba reprodukálva: z > 30 után a kvíz-lapon `elementFromPoint` — a javítás
 nélkül elbukik) és `reveal_extras_test.js` 7. blokk (az operátornál nincs kvíz-vezérlő, a
 Szülőknél csak kóddal van, és onnan lapoz).
+
+## Gender Reveal: Kisfiú/Kislány, telefonon távirányító, kvíz csak a Szülőktől (v10.435)
+- **A kiírás „KISFIÚ!” / „KISLÁNY!”** (`REVEAL_RESULTS[].word`, a név `Kisfiú`/`Kislány`).
+  A hosszabb szó miatt a robbanás felirata `min(26vh, 13vw)` + `nowrap` — a régi `22vw`
+  8 betűvel kilógott volna.
+- **⚠️ Telefonon a Vetítő szerep TÁVIRÁNYÍTÓ, nem vetít** (`RevealProjectorHost`: ha a
+  rövidebb oldal < `REVEAL_PHONE_MAX` = 500 px → `RevealRemote`). A teljes képernyős
+  portál iOS-en szétesett (a `position:fixed` réteg mögött a státuszsáv és a home-sáv a
+  gyökér színét mutatta — `docs/safe-area.md`), és telefonon amúgy sem nézik. A
+  távirányító sima képernyő a témával: idő 3/5/8, polaroid 1/2/3, Szünet/Folytatás,
+  Következő ›.
+- **A vezérlés KÖZÖS dokumentumon megy:** `config/revealProjector = { secs, slots, paused,
+  next }`. A laptop vetítője is ezt írja a saját gombjaival (és a `localStorage`-ba is),
+  és átveszi, amit a telefon ír. A `next` jelölő: minden ÚJ érték egy lépés; az első
+  pillanatképet csak megjegyzi. ⚠️ A vetítő SAJÁT „Következő" gombja NEM írja a jelölőt —
+  különben a visszaérkező pillanatkép még egyet léptetne. ⚠️ A Firestore-szabályoknak a
+  `config/revealProjector` írását is engedniük kell.
+- **A Babakvízt a vetítőről NEM lehet indítani** (a `data-reveal-quizbtn` kikerült) —
+  csak a Szülők nézetből. Futó kvíz alatt a vetítő lapozó-gombjai maradnak.
+- **A leleplezés-jelvény és a sarok-óra a felső gombsor ALATT** (`max(3vh, 74px)`):
+  látható sávnál eddig rácsúsztak.
+
+Teszt: `reveal_test.js` 4. blokk (390×844-en távirányító, nincs vetítés; a távirányító
+írása a laptopon lapszámot vált, léptet, megállít) és `reveal_extras_test.js` 7. blokk (nincs
+kvíz-gomb a vetítőn, a Szülők indítják) + 5b (a sarok-óra a gombsor alatt).
