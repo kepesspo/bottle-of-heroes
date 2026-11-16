@@ -3635,8 +3635,10 @@ imposztor, kontroll Auto → 2, „3" → 3; a lap kiírja a várható számot).
 A központban az utolsó kártya, az adminban saját kategória (jelszó, cím, ürítés).
 
 **Folyam:** jelszó → szerepválasztó → **Vetítő** (laptop/projektor) vagy **Operátor**
-(feltöltés). EGY jelszó mindkettőnek (`config/revealConfig.password`); az eszköz megjegyzi
-(`boh_reveal_pw`), jelszócserénél újra kéri. Jelszó nélkül nem lehet belépni.
+(feltöltés). EGY jelszó mindkettőnek (`config/revealConfig.password`). **⚠️ A jelszót
+NEM mentjük (v10.431, tulajdonosi döntés):** minden megnyitáskor bekéri, csak a
+munkamenetre él; a v10.430-ban esetleg eltárolt `boh_reveal_pw` kulcsot törli.
+Jelszócserénél menet közben is kidob. Jelszó nélkül nem lehet belépni.
 
 **Adat:** `revealPhotos/<id> = { src:<dataURL>, w, h, at:<ms>, hidden }` — egy kép egy
 dokumentum. ⚠️ Nincs Storage SDK: a `revealCompress` 1920 px-re kicsinyít és addig

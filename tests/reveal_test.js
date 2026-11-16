@@ -1,8 +1,8 @@
 // v10.430 — Gender Reveal: élő képvetítő (jelszó → Vetítő / Operátor, admin)
 //
 // Fogódzók:
-//  1) jelszó nélkül nem lehet belépni; hibás jelszó → hiba; jó jelszó → szerepválasztó,
-//     és az eszköz megjegyzi (újratöltés után nem kéri) — DE jelszócserénél újra kéri
+//  1) jelszó nélkül nem lehet belépni; hibás jelszó → hiba; jó jelszó → szerepválasztó;
+//     ⚠️ a jelszót NEM menti (v10.431): újratöltés után újra kéri; jelszócserénél kidob
 //  2) ⚠️ a vetítő körbe jár, és a MENET KÖZBEN feltöltött kép a mostani UTÁN rögtön
 //     jön („ÚJ KÉP"), majd a kör ott folytatódik, ahol abbamaradt
 //  3) az épp vetített kép elrejtése → azonnal továbblép; minden kép eltűnik → üres állapot
@@ -47,9 +47,12 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok(await has('[data-reveal-bad]') && !(await has('[data-reveal-roles]')), 'hibás jelszó → „Hibás jelszó", nem enged be');
   await p.fill('[data-reveal-pw]', 'baba'); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
   ok(await has('[data-reveal-roles]'), 'jó jelszó → szerepválasztó (Vetítő / Operátor)');
+  ok(await p.evaluate(() => localStorage.getItem('boh_reveal_pw')) === null, 'a jelszó NINCS elmentve az eszközön (v10.431)');
   await p.evaluate(() => window.__rvSave());
   await open();
-  ok(await has('[data-reveal-roles]'), 'újratöltés után nem kéri újra');
+  ok(await has('[data-reveal-gate]') && !(await has('[data-reveal-roles]')), '⚠️ újratöltés után ÚJRA kéri a jelszót (v10.431)');
+  await p.fill('[data-reveal-pw]', 'baba'); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
+  ok(await has('[data-reveal-roles]'), 'újra beírva beenged');
   await setCfg({ password: 'uj-jelszo' }); await p.waitForTimeout(200);
   ok(await has('[data-reveal-gate]'), 'jelszócsere után újra kéri');
   await p.fill('[data-reveal-pw]', 'uj-jelszo'); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
