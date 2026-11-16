@@ -3669,3 +3669,65 @@ böngésző nem tud dekódolni). A lista a legfrissebbel kezd; Elrejt/Mutat és 
 Teszt: `node tests/reveal_test.js` (`window.__revealSpeed` az ütemet skálázza).
 Igazítva: `dnr_hub_test` (7 kártya), `themes_test` / `admin_apps_test` (10 app, 8
 kategória), `adminpress_test` (21 fül).
+
+## Gender Reveal: leleplezés, vendégek, jókívánságok, Babaquiz, album (v10.432)
+Három szerep a jelszó után: **Vetítő · Operátor · Leleplező**, plusz két jelszó NÉLKÜLI
+link (a saját kulcsukkal): **vendég** (`?screen=reveal&g=<guestKey>`, a vetítő QR-kódja)
+és **galéria** (`?screen=reveal&album=<albumKey>`, a szülőknek, csak nézhető). A két kulcs
+az admin első mentésekor keletkezik, „Új" gombbal cserélhető (a régi link megszűnik).
+
+### ⚠️ A leleplezés — ki mit lát
+- Az eredmény a **`config/revealSecret`**-ben ül (`result`, `code`, `videoUrl`) — CSAK az
+  admin írja, az adminban is **maszkolva** („●●● beállítva", 👁 Mutat).
+- **Az operátor NEM indíthatja** (tulajdonosi kérés: ő sem tudja az eredményt) — az
+  operátor nézetben nincs ilyen gomb. A **Leleplező** szerep külön kódot kér (`code`, NEM
+  a közös jelszó), és ő SEM látja az eredményt: a gomb csak átmásolja a titkos
+  dokumentumból a `config/revealState`-be (`{ phase:'reveal', run, result, videoUrl }`).
+  A vetítő ott olvassa először — addig a `revealState`-ben nincs eredmény.
+- **Próba-leleplezés** (`test:true`): ugyanaz a menet „PRÓBA" felirattal, videó nélkül,
+  és nem színezi a vetítőt — egy főpróbához, ami nem árulja el.
+- A vetítőn: **10-től visszaszámlálás dobpergéssel → [videó] → robbanás** (konfetti,
+  lufik, óriási „FIÚ!"/„LÁNY!", cintányér) → vissza a képfolyamhoz a kiderült
+  színben, sarok-jelvénnyel. A hang WebAudio-ból jön (nincs hangfájl), az AudioContext a
+  Vetítő szerep koppintásakor születik — különben a böngésző némítaná.
+- **⚠️ Az első pillanatképben ülő leleplezést NEM játsszuk le** (`firstRef`): a később
+  nyitott vetítő rögtön a kiderült színt kapja. Csak a menet közben érkező új `run`
+  indít előadást (óra-független). Lekésve: „↻ Leleplezés újra" a vetítőn.
+- **Videó:** a vetítő gépéről betöltött fájl (🎬 Videó gomb — elsőbbséget kap) VAGY az
+  admin közvetlen .mp4 linkje. YouTube link NEM megy (`<video>` nem játssza). Hibás
+  videónál (`onError`) a robbanás jön, nem akad el; „Tovább ›" gomb is van.
+- Admin „Visszaállítás" → `phase:'idle'` (a vetítő elengedi a színt).
+
+### Vendégek: kép + jókívánság, jóváhagyással
+- A vendég előbb nevet ad (`boh_reveal_guest_name`), utána fotóz/galériából tölt, és
+  üzenetet ír (max. `REVEAL_WISH_MAX` = 140). **Minden `pending:true`** — a vetítő a
+  jóváhagyásig nem mutatja.
+- A jókívánság UGYANABBAN a gyűjteményben ül (`revealPhotos`, `kind:'wish'`): egy
+  sorrend, egy moderáció, egy ürítés. A vetítőn kártyaként jön a képek között (mind a
+  négy módban), a küldő nevével.
+- **⚠️ Jóváhagyáskor az `at` friss lesz** (`approve`): a vetítő így ÚJ tételnek látja, és
+  rögtön a mostani után jön („💌 ÚJ ÜZENET" / „✨ ÚJ KÉP"). „Eldob" = törlés.
+
+### Babaquiz
+- Kérdések: `config/revealQuiz.questions` (admin szerkeszti; hiányában `REVEAL_QUIZ_DEFAULT`
+  — 10 általános babás kérdés). Az operátor vezeti (`RevealQuizControl`): indítás →
+  megoldás → következő → eredménytábla → vége.
+- **Az indítás LEMÁSOLJA a kérdéseket** a `revealQuizState.qs`-be, és új `run`-t kap: a
+  kör közbeni admin-szerkesztés nem zavarja a futó kvízt, és a régi kör válaszai nem
+  számítanak bele.
+- Válasz: `revealQuizAns/<gid>.a['<run>_<idx>']` — egy kérdésre egyszer. A vetítő a kvíz
+  alatt a képfolyam helyett a kérdést mutatja (QR-ral), a végén top 10 tábla.
+
+### Album
+- `revealBuildAlbum(items)` → saját, tömörítés NÉLKÜLI ZIP (`revealZip` + `revealCrc32`;
+  a JPEG/WebP már tömörített): minden jóváhagyott, nem rejtett kép (`kep_001_<név>.webp`)
+  + `jokivansagok.txt`. Admin „Album letöltése (ZIP)" és a galéria-link „Összes letöltése".
+- Az ürítés a kvízválaszokat is törli, és a megerősítés rákérdez az albumra.
+
+⚠️ A Firestore-szabályoknak engedniük kell: `config/revealSecret`, `revealState`,
+`revealQuiz`, `revealQuizState`, és a `revealQuizAns` gyűjteményt.
+
+Teszt: `node tests/reveal_extras_test.js` (titkos eredmény + maszk, az operátor nem
+leleplezhet, kód-kapu, próba, leleplezés végig, hibás videó, később nyitott vetítő,
+vendég → jóváhagyás → vetítő, Babaquiz végig, ZIP Python `zipfile`-lal ellenőrizve,
+galéria- és rossz link). A `reveal_test.js` változatlanul zöld.

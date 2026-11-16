@@ -161,7 +161,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await p.click('[data-admin-reveal-clear]'); await p.waitForTimeout(100);
   await p.click('button:has-text("Mind törlése")'); await p.waitForTimeout(400);
   ok(await p.evaluate(() => Object.keys(window.__fbStore.revealPhotos).length === 0), 'ürítés → minden kép törölve');
-  ok((await p.textContent('[data-admin-reveal-msg]')).includes('kép törölve'), 'visszajelzés a törölt darabszámmal', await p.textContent('[data-admin-reveal-msg]'));
+  ok((await p.textContent('[data-admin-reveal-msg]')).includes('törölve'), 'visszajelzés a törölt darabszámmal', await p.textContent('[data-admin-reveal-msg]'));
   await p.evaluate(() => document.getElementById('__a').remove());
 
   console.log('\n===== 8. DNR KÖZPONT =====');
