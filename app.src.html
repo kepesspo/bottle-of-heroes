@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.433';
+const APP_VERSION = 'v10.434';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -42901,7 +42901,7 @@ function canvasToCompressedURL(canvas, quality) {
 }
 
 // ── Gender Reveal: élő képvetítő kivetítőre (v10.430, bővítve v10.432–433) ─────────────
-// Jelszó → szerep (Vetítő / Operátor / Leleplező). Az operátor folyamatosan tölt fel, a
+// Jelszó → szerep (Vetítő / Operátor / Szülők). Az operátor folyamatosan tölt fel, a
 // vetítő a `revealPhotos` gyűjteményt figyeli, és az új tétel ÚJRATÖLTÉS NÉLKÜL bekerül:
 // a mostani után RÖGTÖN az jön („ÚJ" jelöléssel), utána beáll a körbe.
 // A vendégek a vetítő QR-kódjával (jelszó nélkül, a `guestKey`-jel) képet és
@@ -42920,7 +42920,11 @@ function canvasToCompressedURL(canvas, quality) {
 const REVEAL_LOGO = 'assets/dnr_reveal_mark.png';
 const REVEAL_PINK = '#F496B4', REVEAL_BLUE = '#96C8F0', REVEAL_NIGHT = '#15121F';
 const REVEAL_MAX_SIDE = 1920, REVEAL_MAX_CHARS = 900000, REVEAL_WISH_MAX = 140;
-const REVEAL_SECS = [5, 8, 12, 20];
+const REVEAL_SECS = [3, 5, 8];
+// A vetítőn egyszerre látszó polaroidok száma: a vetítő gépén választható (1–3).
+const REVEAL_SLOT_OPTS = [1, 2, 3];
+// A vetítő papír-színei — UGYANAZ a krém alap és pasztell foltok, mint a Babakvízé.
+const REVEAL_PAPER = '#FFF7EE', REVEAL_INK = '#23202B';
 // A leleplezés két kimenete. A szín a kiderülés UTÁN a vetítő hátterét is adja.
 const REVEAL_RESULTS = {
   boy:  { word:'FIÚ!',  name:'Fiú',  emoji:'💙', c1:'#4FA3E8', c2:'#96C8F0', ink:'#0E2A4A' },
@@ -43179,15 +43183,28 @@ function useRevealSequence(photos, loaded, secs, paused) {
   return { cur, photo: cur ? byId[cur.id] : null, next };
 }
 
-// ── A polaroid-asztal (v10.433) ──────────────────────────────────────────────────
-// Széles vásznon TÖBB polaroid látszik egyszerre, kis átfedéssel. A helyek száma a
-// kijelző arányából és szélességéből jön (`revealBoardCount`); minden váltás a
-// LEGRÉGEBBI helyre ejt új képet, és az kerül felülre. Kevés képnél nincs ismétlés:
-// a már kint lévő kép csak előre jön, nem kerül ki másodszor.
-function revealBoardCount(w, h) {
-  const ar = w / Math.max(1, h);
-  const byAr = ar >= 1.9 ? 5 : ar >= 1.45 ? 4 : ar >= 1.1 ? 3 : ar >= 0.8 ? 2 : 1;
-  return Math.max(1, Math.min(byAr, Math.floor(w / 300)));
+// ── A polaroid-asztal (v10.433, v10.434) ────────────────────────────────────────
+// Széles vásznon TÖBB polaroid látszik egyszerre, kis átfedéssel. A számot a vetítő
+// gépén választják (1–3, `boh_reveal_slots`), de egy lap legalább 260 px széles
+// marad — álló telefonon ezért mindig 1 —, és több hely nincs, mint kép. Minden
+// váltás a LEGRÉGEBBI helyre ejt új képet, és az kerül felülre. Kevés képnél nincs
+// ismétlés: a már kint lévő kép csak előre jön, nem kerül ki másodszor.
+function revealBoardCount(pref, w, nItems) {
+  const want = REVEAL_SLOT_OPTS.includes(pref) ? pref : 3;
+  return Math.max(1, Math.min(want, Math.floor(w / 260), nItems || 1));
+}
+// A krém „papír" pasztell foltjai — a Babakvíz és a képfolyam ugyanezt viseli.
+// Leleplezés után a foltok a kiderült szín árnyalatait kapják.
+function RevealPaperBlobs({ tones }) {
+  const c = tones || ['#F7B6CB', '#FAD47E', '#A9D0F5', '#F7B6CB'];
+  return (
+    <React.Fragment>
+      <div aria-hidden="true" style={{ position:'absolute', left:'-6vh', top:'-8vh', width:'min(26vh, 24vw)', height:'min(26vh, 24vw)', borderRadius:'50%', background:c[0], transition:'background 1.5s' }} />
+      <div aria-hidden="true" style={{ position:'absolute', left:'min(10vh, 8vw)', top:'6vh', width:'min(11vh, 9vw)', height:'min(13vh, 11vw)', borderRadius:'50%', background:c[1], transition:'background 1.5s' }} />
+      <div aria-hidden="true" style={{ position:'absolute', right:'-7vh', top:'-9vh', width:'min(28vh, 26vw)', height:'min(28vh, 26vw)', borderRadius:'50%', background:c[2], transition:'background 1.5s' }} />
+      <div aria-hidden="true" style={{ position:'absolute', right:'min(14vh, 12vw)', top:'5vh', width:'min(10vh, 8vw)', height:'min(12vh, 10vw)', borderRadius:'50%', background:c[3], transition:'background 1.5s' }} />
+    </React.Fragment>
+  );
 }
 function useRevealViewport() {
   const get = () => ({ w: window.innerWidth || 1280, h: window.innerHeight || 720 });
@@ -43221,8 +43238,8 @@ function RevealBoardCard({ item, g, z, isNew, isCur }) {
   return (
     <div data-reveal-polaroid={wish ? undefined : item.id} data-reveal-wish={wish ? item.id : undefined} data-current={isCur ? '1' : '0'}
       style={{ position:'absolute', left: g.cx - g.cw / 2, top: g.cy - g.ch / 2, width: g.cw, height: g.ch, zIndex: z, boxSizing:'border-box',
-        transform:`rotate(${g.rot.toFixed(2)}deg)`, background:'#FFFDF8', padding:`${g.pad}px ${g.pad}px ${g.bottom}px`, borderRadius:6,
-        boxShadow: isCur ? '0 2.6vh 7vh rgba(0,0,0,0.6)' : '0 1.6vh 4vh rgba(0,0,0,0.45)', animation: isCur ? 'revealDrop 0.9s cubic-bezier(.2,1.2,.4,1) both' : undefined, ['--rot']: g.rot.toFixed(2) + 'deg' }}>
+        transform:`rotate(${g.rot.toFixed(2)}deg)`, background:'#FFFFFF', border:'1px solid #EFE2D2', padding:`${g.pad}px ${g.pad}px ${g.bottom}px`, borderRadius:6,
+        boxShadow: isCur ? '0 2.6vh 6vh rgba(60,40,20,0.28)' : '0 1.4vh 3.4vh rgba(60,40,20,0.18)', animation: isCur ? 'revealDrop 0.9s cubic-bezier(.2,1.2,.4,1) both' : undefined, ['--rot']: g.rot.toFixed(2) + 'deg' }}>
       {wish ? (
         <div style={{ width: g.iw, height: g.ih, borderRadius:2, background:'#FFF1F5', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', textAlign:'center', padding:'6%', boxSizing:'border-box', overflow:'hidden' }}>
           <div aria-hidden="true" style={{ fontSize: Math.max(22, g.ih * 0.13), lineHeight:1, marginBottom: g.ih * 0.04 }}>💌</div>
@@ -43240,8 +43257,8 @@ function RevealNewBadge({ wish }) {
   return (
     // alul ül: felül a (3 mp után eltűnő) vezérlősáv takarná
     <div data-reveal-newbadge style={{ position:'absolute', bottom:'3vh', left:'2.4vw', zIndex:50, padding:'1vh 1.6vw', borderRadius:999,
-      background:`linear-gradient(90deg, ${REVEAL_PINK}, ${REVEAL_BLUE})`, color:'#1B1830', fontFamily:T.font, fontWeight:900,
-      fontSize:'max(14px, 2.2vh)', letterSpacing:'0.1em', boxShadow:'0 6px 24px rgba(0,0,0,0.35)', animation:'revealPop 0.6s cubic-bezier(.3,1.6,.5,1) both' }}>{wish ? '💌 ÚJ ÜZENET' : '✨ ÚJ KÉP'}</div>
+      background:`linear-gradient(90deg, ${REVEAL_PINK}, ${REVEAL_BLUE})`, color:REVEAL_INK, fontFamily:T.font, fontWeight:900,
+      fontSize:'max(14px, 2.2vh)', letterSpacing:'0.1em', boxShadow:'0 6px 24px rgba(60,40,20,0.2)', animation:'revealPop 0.6s cubic-bezier(.3,1.6,.5,1) both' }}>{wish ? '💌 ÚJ ÜZENET' : '✨ ÚJ KÉP'}</div>
   );
 }
 function RevealQrCard({ url, big }) {
@@ -43316,10 +43333,11 @@ function RevealShow({ show, video, onDone }) {
   const balloons = React.useMemo(() => Array.from({ length:16 }, (_, i) => ({ x: (i * 6.3 + revealHash('b' + i) * 5) % 100, d: 5 + revealHash('d' + i) * 4, del: revealHash('t' + i) * 2.4, s: 7 + revealHash('s' + i) * 6, c: i % 3 === 2 ? '#fff' : (i % 2 ? R.c1 : R.c2) })), []);
   return (
     <div data-reveal-show={stage} data-reveal-countdown={stage === 'count' ? n : ''} data-reveal-boom={stage === 'boom' ? (show.test ? 'test' : show.result) : ''}
-      style={{ position:'absolute', inset:0, zIndex:40, overflow:'hidden', background: stage === 'boom' ? `radial-gradient(circle at 50% 55%, ${R.c2}, ${R.c1} 70%)` : '#07060C', transition:'background .5s' }}>
+      style={{ position:'absolute', inset:0, zIndex:40, overflow:'hidden', background: stage === 'boom' ? `radial-gradient(circle at 50% 55%, ${R.c2}, ${R.c1} 70%)` : REVEAL_PAPER, transition:'background .5s' }}>
+      {stage === 'count' && <RevealPaperBlobs />}
       {stage === 'count' && (
         <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'3vh' }}>
-          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:'clamp(16px, 3.4vh, 40px)', letterSpacing:'0.3em', color:'rgba(255,255,255,0.7)', textAlign:'center' }}>{show.test ? 'PRÓBA-LELEPLEZÉS' : 'FIÚ VAGY LÁNY?'}</div>
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:'clamp(16px, 3.4vh, 40px)', letterSpacing:'0.3em', color:'#2F63A8', textAlign:'center' }}>{show.test ? 'PRÓBA-LELEPLEZÉS' : 'FIÚ VAGY LÁNY?'}</div>
           <div key={n} style={{ fontFamily:T.font, fontWeight:900, fontSize:'min(46vh, 40vw)', lineHeight:1, color:'#fff',
             background:`linear-gradient(90deg, ${REVEAL_PINK}, ${REVEAL_BLUE})`, WebkitBackgroundClip:'text', backgroundClip:'text', WebkitTextFillColor:'transparent',
             animation:`revealBeat ${sp}s ease-out both` }}>{n}</div>
@@ -43385,16 +43403,9 @@ function revealQuizWrite(st) { const db = revealDb(); if (db) db.collection('con
 function revealQuizQuestions(doc) { return (doc && Array.isArray(doc.questions) && doc.questions.length) ? doc.questions : REVEAL_QUIZ_DEFAULT; }
 function RevealQuizStage({ qstate, narrow }) {
   const qs = qstate.qs || [], idx = qstate.idx || 0, q = qs[idx];
-  const ink = '#23202B';
-  const bg = { position:'absolute', inset:0, zIndex:30, overflow:'hidden', background:'#FFF7EE' };
-  const blobs = (
-    <React.Fragment>
-      <div aria-hidden="true" style={{ position:'absolute', left:'-6vh', top:'-8vh', width:'min(26vh, 24vw)', height:'min(26vh, 24vw)', borderRadius:'50%', background:'#F7B6CB' }} />
-      <div aria-hidden="true" style={{ position:'absolute', left:'min(10vh, 8vw)', top:'6vh', width:'min(11vh, 9vw)', height:'min(13vh, 11vw)', borderRadius:'50%', background:'#FAD47E' }} />
-      <div aria-hidden="true" style={{ position:'absolute', right:'-7vh', top:'-9vh', width:'min(28vh, 26vw)', height:'min(28vh, 26vw)', borderRadius:'50%', background:'#A9D0F5' }} />
-      <div aria-hidden="true" style={{ position:'absolute', right:'min(14vh, 12vw)', top:'5vh', width:'min(10vh, 8vw)', height:'min(12vh, 10vw)', borderRadius:'50%', background:'#F7B6CB' }} />
-    </React.Fragment>
-  );
+  const ink = REVEAL_INK;
+  const bg = { position:'absolute', inset:0, zIndex:30, overflow:'hidden', background:REVEAL_PAPER };
+  const blobs = <RevealPaperBlobs />;
   if (qstate.phase === 'end') return (
     <div data-reveal-quiz="end" style={bg}>
       {blobs}
@@ -43452,7 +43463,8 @@ function RevealProjector({ title, cfg, onExit }) {
   const qstate = qdoc.v && qdoc.v.phase && qdoc.v.phase !== 'idle' ? qdoc.v : null;
   const vp = useRevealViewport();
   const narrow = vp.w < 700;
-  const [secs, setSecs] = React.useState(() => { const n = +revealStore('boh_reveal_secs'); return REVEAL_SECS.includes(n) ? n : 8; });
+  const [secs, setSecs] = React.useState(() => { const n = +revealStore('boh_reveal_secs'); return REVEAL_SECS.includes(n) ? n : 5; });
+  const [slotPref, setSlotPref] = React.useState(() => { const n = +revealStore('boh_reveal_slots'); return REVEAL_SLOT_OPTS.includes(n) ? n : 3; });
   const [showQr, setShowQr] = React.useState(() => revealStore('boh_reveal_qr') !== '0');
   const [paused, setPaused] = React.useState(false);
   const [ui, setUi] = React.useState(true);
@@ -43507,7 +43519,7 @@ function RevealProjector({ title, cfg, onExit }) {
 
   // ── polaroid-asztal: a helyek és ki van rajtuk ──
   const byId = {}; photos.forEach(p => { byId[p.id] = p; });
-  const nSlots = Math.max(1, Math.min(revealBoardCount(vp.w, vp.h), photos.length || 1));
+  const nSlots = revealBoardCount(slotPref, vp.w, photos.length);
   const [slots, setSlots] = React.useState([]);               // [{ id, key, isNew, z }]
   const zRef = React.useRef(0);
   React.useEffect(() => {
@@ -43569,21 +43581,20 @@ function RevealProjector({ title, cfg, onExit }) {
   }, [seq.next]);
 
   const RR = revealed ? REVEAL_RESULTS[revealed] : null;
-  const chip = (on) => ({ flexShrink:0, whiteSpace:'nowrap', padding: narrow ? '6px 10px' : '7px 12px', borderRadius:999, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize: narrow ? 12 : 13,
-    background: on ? '#fff' : 'rgba(255,255,255,0.14)', color: on ? '#1B1830' : '#fff' });
-  const grad = RR
-    ? `radial-gradient(70% 80% at 20% 20%, ${RR.c1}66, transparent 70%), radial-gradient(70% 80% at 80% 80%, ${RR.c2}55, transparent 70%), ${REVEAL_NIGHT}`
-    : `radial-gradient(60% 70% at 15% 20%, ${REVEAL_PINK}33, transparent 70%), radial-gradient(60% 70% at 85% 80%, ${REVEAL_BLUE}33, transparent 70%), ${REVEAL_NIGHT}`;
+  // ⚠️ A felület a Babakvíz krém papírja (v10.434): sötét tinta, fehér/pasztell chipek.
+  const chip = (on) => ({ flexShrink:0, whiteSpace:'nowrap', padding: narrow ? '6px 10px' : '7px 12px', borderRadius:999, cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize: narrow ? 12 : 13,
+    border: on ? `1.5px solid ${REVEAL_INK}` : '1.5px solid #EFE2D2', background: on ? REVEAL_INK : '#fff', color: on ? '#fff' : REVEAL_INK });
+  const tones = RR ? [RR.c2, '#FAD47E', RR.c1 + '88', RR.c2] : null;
   const stage = () => {
     if (!seq.photo) return (
       <div data-reveal-empty style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'2.4vh', textAlign:'center', padding:'0 6vw' }}>
         <img src={REVEAL_LOGO} alt="" style={{ width:'min(30vh, 40vw)', height:'auto', animation:'revealFloat 4s ease-in-out infinite' }} />
         <div style={{ fontFamily:T.font, fontWeight:900, fontSize:'clamp(28px, 7vh, 96px)', lineHeight:1.05, background:`linear-gradient(90deg, ${RR ? RR.c1 : REVEAL_PINK}, ${RR ? RR.c2 : REVEAL_BLUE})`, WebkitBackgroundClip:'text', backgroundClip:'text', color:'transparent' }}>{title || 'Gender Reveal'}</div>
-        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:'clamp(15px, 2.6vh, 32px)', color:'rgba(255,255,255,0.7)' }}>{loaded ? 'Hamarosan érkeznek a képek…' : 'Betöltés…'}</div>
+        <div style={{ fontFamily:T.font, fontWeight:700, fontSize:'clamp(15px, 2.6vh, 32px)', color:'#2F63A8' }}>{loaded ? 'Hamarosan érkeznek a képek…' : 'Betöltés…'}</div>
       </div>
     );
     return (
-      <div data-reveal-board data-slots={nSlots} style={{ position:'absolute', inset:0 }}>
+      <div data-reveal-board data-slots={nSlots} style={{ position:'absolute', inset:0, zIndex:1, isolation:'isolate' }}>
         {slots.map((s, i) => { const it = s && byId[s.id]; if (!it) return null;
           return <RevealBoardCard key={s.key} item={it} g={revealCardGeom(i, nSlots, vp.w, vp.h, it, s.key)} z={s.z} isNew={s.isNew} isCur={s.key === seq.cur.key} />; })}
         {seq.cur.isNew && <RevealNewBadge wish={seq.photo.kind === 'wish'} />}
@@ -43592,7 +43603,7 @@ function RevealProjector({ title, cfg, onExit }) {
   };
   return ReactDOM.createPortal(
     <div data-reveal-projector data-reveal-current={seq.cur ? seq.cur.id : ''} data-reveal-isnew={seq.cur && seq.cur.isNew ? '1' : '0'} data-reveal-revealed={revealed || ''}
-      style={{ position:'fixed', inset:0, zIndex:6000, overflow:'hidden', cursor: ui ? 'default' : 'none', background:grad, transition:'background 1.5s' }}>
+      style={{ position:'fixed', inset:0, zIndex:6000, overflow:'hidden', cursor: ui ? 'default' : 'none', background:REVEAL_PAPER }}>
       <style>{`
 @keyframes revealFadeIn { from { opacity:0 } to { opacity:1 } }
 @keyframes revealPop { 0% { transform:scale(.4); opacity:0 } 100% { transform:scale(1); opacity:1 } }
@@ -43602,14 +43613,15 @@ function RevealProjector({ title, cfg, onExit }) {
 @keyframes revealSlam { 0% { transform:scale(3); opacity:0 } 60% { transform:scale(0.92); opacity:1 } 100% { transform:scale(1) } }
 @keyframes revealRise { from { transform:translateY(0) } to { transform:translateY(-140vh) } }
 `}</style>
-      {stage()}
+      <RevealPaperBlobs tones={tones} />
+      {!qstate && stage()}
       {RR && !show && !qstate && (
         <div data-reveal-resultbadge style={{ position:'absolute', top: narrow ? 56 : '3vh', right:'2.4vw', zIndex:45, padding:'1vh 1.6vw', borderRadius:999, background:`linear-gradient(90deg, ${RR.c1}, ${RR.c2})`, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:'clamp(14px, 3vh, 36px)', boxShadow:'0 8px 30px rgba(0,0,0,0.35)' }}>{RR.emoji} {RR.word}</div>
       )}
       {cfg && cfg.countdownOn && revealAt > 0 && !RR && !show && !qstate && (
         <div data-reveal-corner style={{ position:'absolute', top: narrow ? 56 : '3vh', right:'2.4vw', zIndex:45, padding: narrow ? '8px 14px' : '1.2vh 1.6vw', borderRadius:18, textAlign:'right',
-          background:'rgba(15,12,24,0.72)', border:`2px solid ${REVEAL_PINK}88`, boxShadow:'0 8px 30px rgba(0,0,0,0.35)', backdropFilter:'blur(6px)', WebkitBackdropFilter:'blur(6px)' }}>
-          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:'clamp(11px, 1.7vh, 20px)', letterSpacing:'0.18em', color:'rgba(255,255,255,0.75)' }}>{revealAt > now ? 'A LELEPLEZÉSIG' : 'MINDJÁRT KIDERÜL'}</div>
+          background:'#fff', border:'2px solid #EFE2D2', boxShadow:'0 1vh 2.6vh rgba(60,40,20,0.12)' }}>
+          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:'clamp(11px, 1.7vh, 20px)', letterSpacing:'0.18em', color:'#2F63A8' }}>{revealAt > now ? 'A LELEPLEZÉSIG' : 'MINDJÁRT KIDERÜL'}</div>
           <div data-reveal-corner-time style={{ fontFamily:T.font, fontWeight:900, fontSize:'clamp(22px, 5vh, 64px)', lineHeight:1.05, fontVariantNumeric:'tabular-nums',
             background:`linear-gradient(90deg, ${REVEAL_PINK}, ${REVEAL_BLUE})`, WebkitBackgroundClip:'text', backgroundClip:'text', WebkitTextFillColor:'transparent' }}>{revealAt > now ? revealFmtLeft(revealAt - now) : '🎉'}</div>
         </div>
@@ -43621,18 +43633,20 @@ function RevealProjector({ title, cfg, onExit }) {
       {qstate && !show && (
         <div data-reveal-quiznav style={{ position:'absolute', left:0, right:0, bottom:0, zIndex:60, display:'flex', justifyContent:'center', gap:10, padding:'14px 16px', flexWrap:'wrap',
           opacity: ui ? 1 : 0, pointerEvents: ui ? 'auto' : 'none', transition:'opacity .4s' }}>
-          {!(qstate.phase === 'q' && !qstate.idx) && <button data-reveal-quizprev onClick={() => quizStep(-1)} style={{ ...chip(false), background:'rgba(35,32,43,0.75)' }}>‹ Előző</button>}
-          <button data-reveal-quiznext onClick={() => quizStep(1)} style={{ ...chip(true), background:'#23202B', color:'#fff' }}>{revealQuizNextLabel(qstate)}</button>
-          <button data-reveal-quizexit onClick={() => revealQuizWrite({ phase:'idle' })} style={{ ...chip(false), background:'rgba(35,32,43,0.45)' }}>✕ Kilépés</button>
+          {!(qstate.phase === 'q' && !qstate.idx) && <button data-reveal-quizprev onClick={() => quizStep(-1)} style={chip(false)}>‹ Előző</button>}
+          <button data-reveal-quiznext onClick={() => quizStep(1)} style={chip(true)}>{revealQuizNextLabel(qstate)}</button>
+          <button data-reveal-quizexit onClick={() => revealQuizWrite({ phase:'idle' })} style={chip(false)}>✕ Kilépés</button>
         </div>
       )}
       {show && <RevealShow key={show.run} show={show} video={video && video.url} onDone={finishShow} />}
       <div data-reveal-controls style={{ position:'absolute', left:0, right:0, top:0, display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflowX:'auto', WebkitOverflowScrolling:'touch',
-        padding: narrow ? '10px 12px' : '14px 18px', background:'linear-gradient(rgba(0,0,0,0.6), transparent)', opacity: ui ? 1 : 0, pointerEvents: ui ? 'auto' : 'none', transition:'opacity .4s', zIndex:70, scrollbarWidth:'none' }}>
+        padding: narrow ? '10px 12px' : '14px 18px', background:`linear-gradient(${REVEAL_PAPER}F2 55%, ${REVEAL_PAPER}00)`, opacity: ui ? 1 : 0, pointerEvents: ui ? 'auto' : 'none', transition:'opacity .4s', zIndex:70, scrollbarWidth:'none' }}>
         <button data-reveal-exit onClick={() => { try { if (document.fullscreenElement) document.exitFullscreen(); } catch(e) {} onExit(); }} aria-label="Vissza" style={chip(false)}>‹ Vissza</button>
         {REVEAL_SECS.map(n => <button key={n} data-reveal-secs={n} onClick={() => { setSecs(n); revealStore('boh_reveal_secs', String(n)); }} style={chip(secs === n)}>{n} mp</button>)}
+        <span aria-hidden="true" style={{ flexShrink:0, width:1.5, alignSelf:'stretch', margin:'4px 2px', background:'#EFE2D2' }} />
+        {REVEAL_SLOT_OPTS.map(n => <button key={n} data-reveal-slotsbtn={n} aria-label={n + ' polaroid egyszerre'} title={n + ' polaroid egyszerre'} onClick={() => { setSlotPref(n); revealStore('boh_reveal_slots', String(n)); }} style={chip(slotPref === n)}>🖼 {n}</button>)}
         <div style={{ flex:1, minWidth:8 }} />
-        <span data-reveal-count style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:'rgba(255,255,255,0.8)' }}>{photos.filter(p => p.src).length} kép</span>
+        <span data-reveal-count style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:REVEAL_INK, opacity:0.7 }}>{photos.filter(p => p.src).length} kép</span>
         <button data-reveal-quizbtn onClick={() => qstate ? revealQuizWrite({ phase:'idle' }) : quizStep(1)} style={chip(!!qstate)}>🍼 Babakvíz</button>
         {qrUrl && !narrow && <button data-reveal-qrbtn onClick={() => { const v = !showQr; setShowQr(v); revealStore('boh_reveal_qr', v ? '1' : '0'); }} style={chip(showQr)}>QR</button>}
         <button data-reveal-videobtn onClick={() => videoRef.current && videoRef.current.click()} title={video ? video.name : ''} style={chip(!!video)}>{video ? '🎬 Videó kész' : '🎬 Videó'}</button>
@@ -43743,7 +43757,6 @@ function RevealOperator({ onBack }) {
               </div>
             </div>
           )}
-          <RevealQuizControl />
           <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginTop:4 }}>
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>A vetítőn</div>
             <div data-reveal-opcount style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft }}>{loaded ? `${shown} a vetítőn${approved.length > shown ? ` · ${approved.length - shown} rejtve` : ''}` : 'Betöltés…'}</div>
@@ -43774,7 +43787,9 @@ function RevealOperator({ onBack }) {
   );
 }
 
-// ── Leleplező (a szülő): külön kóddal, NEM az operátor ───────────────────────────
+// ── Szülők: külön kóddal, NEM az operátor (v10.434: „Leleplező" → „Szülők") ─────────
+// A szülők engedélyezik/indítják a leleplezést ÉS ők lapozzák a Babakvízt — az
+// operátornál (aki a képeket kezeli) nincs kvíz-vezérlő.
 // Az eredményt a leleplező SEM látja. Két út, és mindkettőhöz az ő döntése kell:
 //  • időzített: az admin megadja az időpontot (`revealConfig.revealAt`), a szülő
 //    ENGEDÉLYEZI (`revealState.phase = 'armed'`) — a vetítő az időpontra magától indul;
@@ -43819,14 +43834,14 @@ function RevealTrigger({ onBack }) {
   const ghost = { padding:'12px', borderRadius:14, border:`1.5px solid ${T.border}`, background:'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:14, color:T.inkSoft };
   return (
     <div data-reveal-trigger style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
-      <AppBar title="Leleplezés" onBack={onBack} />
+      <AppBar title="Szülők" onBack={onBack} />
       <div style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column', alignItems:'center', gap:16, padding:'22px 16px calc(24px + env(safe-area-inset-bottom))' }}>
         {!secret.loaded ? <div style={{ fontFamily:T.font, color:T.inkSoft }}>Betöltés…</div>
         : !sec.code ? <div data-reveal-nocode style={{ ...card, textAlign:'center', fontFamily:T.font, fontSize:14, fontWeight:700, color:T.inkSoft, lineHeight:1.5 }}>Még nincs leleplező kód beállítva.<br/>Admin → Gender Reveal → Leleplezés</div>
         : !ok ? (
           <div data-reveal-codegate style={{ ...card, display:'flex', flexDirection:'column', gap:12 }}>
-            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, textAlign:'center' }}>🎉 Leleplező kód</div>
-            <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', lineHeight:1.45 }}>Ez nem a közös jelszó — a leleplezést csak a szülő engedélyezheti, ezzel a kóddal.</div>
+            <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, textAlign:'center' }}>👶 Szülői kód</div>
+            <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', lineHeight:1.45 }}>Ez nem a közös jelszó — a leleplezést és a Babakvízt a szülők kezelik, ezzel a kóddal.</div>
             <input data-reveal-code type="password" value={code} autoFocus onChange={e => { setCode(e.target.value); setBad(false); }} onKeyDown={e => { if (e.key === 'Enter') { if (code.trim() === sec.code) setOk(true); else setBad(true); } }}
               style={{ width:'100%', boxSizing:'border-box', padding:'14px', borderRadius:14, border:`1.5px solid ${bad ? T.coral : T.border}`, background:T.bg, fontFamily:T.font, fontSize:17, fontWeight:700, color:T.ink, textAlign:'center', outline:'none' }} />
             {bad && <div data-reveal-codebad style={{ fontFamily:T.font, fontSize:13, fontWeight:800, color:T.coral, textAlign:'center' }}>Hibás kód</div>}
@@ -43848,6 +43863,7 @@ function RevealTrigger({ onBack }) {
             {msg && <div data-reveal-firemsg style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.mint }}>{msg}</div>}
           </div>
         )}
+        {secret.loaded && sec.code && ok && <div data-reveal-parentquiz style={{ width:'100%', maxWidth:440 }}><RevealQuizControl /></div>}
       </div>
       {ask && (
         <ActionModal kicker={ask === 'arm' ? 'Engedélyezed?' : 'Indulhat?'} onClose={() => setAsk(null)} onSecondary={() => setAsk(null)} secondaryLabel="Még ne"
@@ -44018,8 +44034,8 @@ function RevealScreen({ go, deepLink }) {
           <div data-reveal-roles style={{ width:'100%', maxWidth:860, display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:14 }}>
             {[
               { id:'projector', emoji:'📽️', name:'Vetítő', sub:'Laptop a kivetítőn — polaroid-fal, üzenetek, Babakvíz és a nagy leleplezés.' },
-              { id:'operator', emoji:'📷', name:'Operátor', sub:'Feltöltés, a vendégek képeinek jóváhagyása, a Babakvíz lapozása.' },
-              { id:'trigger', emoji:'🎉', name:'Leleplező', sub:'Külön kóddal — ő indítja a nagy pillanatot. Az eredményt ő sem látja.' },
+              { id:'operator', emoji:'📷', name:'Operátor', sub:'Feltöltés és a vendégek képeinek, üzeneteinek jóváhagyása.' },
+              { id:'trigger', emoji:'👶', name:'Szülők', sub:'Külön kóddal — a nagy leleplezés és a Babakvíz. Az eredményt ők sem látják.' },
             ].map(r => (
               <button key={r.id} data-reveal-role={r.id} onClick={() => { if (r.id === 'projector') revealAudio(); setRole(r.id); }} style={{ ...card, maxWidth:'none', border:'none', cursor:'pointer', textAlign:'left', display:'flex', flexDirection:'column', gap:6 }}>
                 <span style={{ fontSize:34 }}>{r.emoji}</span>
@@ -44178,7 +44194,7 @@ function AdminReveal() {
       </div>
       <div data-admin-reveal-secret style={box}>
         {h('🎉 Leleplezés')}
-        {note('Az eredményt csak itt látod. A leleplezést a „Leleplező" szerep indítja a saját kódjával — az operátor nem tudja elindítani.')}
+        {note('Az eredményt csak itt látod. A leleplezést a „Szülők" szerep indítja a saját kódjával — az operátor nem tudja elindítani.')}
         {label('Az eredmény')}
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
           {peek || !result ? ['boy', 'girl'].map(r => (
@@ -44186,7 +44202,7 @@ function AdminReveal() {
           )) : <div data-admin-reveal-masked style={{ flex:1, fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink }}>●●● beállítva</div>}
           {result && <button data-admin-reveal-peek onClick={() => setPeek(p => !p)} style={btn(false)}>{peek ? 'Elrejt' : '👁 Mutat'}</button>}
         </div>
-        {label('Leleplező kód (nem a közös jelszó)')}
+        {label('Szülői kód (nem a közös jelszó)')}
         <input data-admin-reveal-code value={code} onChange={e => setCode(e.target.value)} placeholder="pl. 2026" style={inpSt} />
         {label('Videó-link (nem kötelező — közvetlen .mp4 link)')}
         <input data-admin-reveal-video value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="https://…/leleplezes.mp4" style={inpSt} />
@@ -44196,7 +44212,7 @@ function AdminReveal() {
           <input data-admin-reveal-countdown type="checkbox" checked={countdownOn} onChange={e => setCountdownOn(e.target.checked)} />
           Visszaszámláló a vetítő jobb felső sarkában
         </label>
-        {note('Az időpontra a vetítő MAGÁTÓL indul — de csak ha a szülő (Leleplező szerep, a saját kódjával) előtte engedélyezte. Engedély nélkül nem történik semmi.')}
+        {note('Az időpontra a vetítő MAGÁTÓL indul — de csak ha a szülő (Szülők szerep, a saját kódjával) előtte engedélyezte. Engedély nélkül nem történik semmi.')}
         {note('A videót a vetítő laptopjáról is be lehet tölteni (🎬 Videó gomb a vetítőn) — az biztosabb. Ha ott van betöltött videó, az megy a link helyett. Próbánál soha nincs videó.')}
         <div style={{ display:'flex', alignItems:'center', gap:12, marginTop:14, flexWrap:'wrap' }}>
           <button data-admin-reveal-secretsave onClick={saveSecret} style={btn(true)}>Mentés</button>

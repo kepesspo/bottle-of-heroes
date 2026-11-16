@@ -3786,3 +3786,28 @@ telefonon 1 lap, egysoros sáv) és `reveal_extras_test.js` 3b (videó-előtölt
 (időzítés: engedély nélkül nem indul, engedéllyel magától, sarok-óra be/ki), 7 (a PDF 20
 kérdése és kulcsa, lapozás vetítőn/operátoron/billentyűn, megoldás-kiemelés, pontsávok).
 `adminpress_test` az új PIN-nel.
+
+## Gender Reveal: 1–3 polaroid, 3/5/8 mp, krém felület, Szülők szerep (v10.434)
+- **Polaroidok száma: 1 / 2 / 3** — a vetítő sávjában (`🖼 1/2/3`, `data-reveal-slotsbtn`),
+  eszközönként megjegyezve (`boh_reveal_slots`, alap **3**). `revealBoardCount(pref, w, n)`:
+  a választott szám, DE egy lap legalább 260 px (álló telefonon mindig 1), és több hely
+  nincs, mint kép. A régi arány-alapú (akár 5 lapos) szabály megszűnt.
+- **Idő: 3 / 5 / 8 mp** (`REVEAL_SECS`, alap 5).
+- **Az egész vetítő a Babakvíz krém papírja** (`REVEAL_PAPER` + `RevealPaperBlobs` — a kvíz
+  is ezt használja, EGY forrás): világos chipek sötét tintával (`REVEAL_INK`), fehér
+  sarok-óra, halvány polaroid-árnyék. A visszaszámlálás is papíron megy; a videó fekete és
+  a robbanás a kiderült szín marad. Leleplezés után a foltok a kiderült szín árnyalatait kapják.
+- **⚠️ HIBA volt: a polaroid a Babakvíz FÖLÉ került.** A lap `z-index`-e minden váltással
+  nő (`zRef`), a fal pedig nem zárta le a saját rétegét → ~30 váltás után átlépte a kvíz
+  30-as rétegét. Javítás: a fal `zIndex:1` + `isolation:'isolate'`, és kvíz alatt nem is
+  rajzolódik (`{!qstate && stage()}`). Új rétegnél ugyanez: ha a gyerekek z-indexe nő, a
+  szülő zárja le.
+- **Szerepek: Vetítő · Operátor · Szülők** (a „Leleplező" neve Szülők lett, azonosítója
+  marad `trigger`). **A Babakvíz-lapozó (`RevealQuizControl`) a Szülőkhöz költözött**, a
+  szülői kód mögé — az operátornál NINCS (ő a képeket kezeli). A vetítő saját kvíz-gombjai
+  maradnak.
+
+Teszt: `reveal_test.js` 4. blokk (alap 3 lap, 1/2/3 választó + megmarad, 3/5/8 mp, krém
+háttér; a réteg-hiba reprodukálva: z > 30 után a kvíz-lapon `elementFromPoint` — a javítás
+nélkül elbukik) és `reveal_extras_test.js` 7. blokk (az operátornál nincs kvíz-vezérlő, a
+Szülőknél csak kóddal van, és onnan lapoz).

@@ -100,7 +100,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok(!(await has('[data-reveal-modebtn]')), 'nincs módváltó — csak a Polaroid maradt (v10.433)');
   await p.setViewportSize({ width: 1280, height: 720 });
   await p.evaluate(() => { window.__revealSpeed = 0.1; });
-  await p.waitForFunction(() => document.querySelectorAll('[data-reveal-board] [data-reveal-polaroid]').length >= 4, null, { timeout: 5000 }).catch(() => {});
+  await p.waitForFunction(() => document.querySelectorAll('[data-reveal-board] [data-reveal-polaroid]').length >= 3, null, { timeout: 5000 }).catch(() => {});
   await p.evaluate(() => { window.__revealSpeed = 100; }); await p.waitForTimeout(1300);   // az ejtés-animáció (1,25× nagyítás) végét megvárjuk
   const wall = await p.evaluate(() => {
     const b = document.querySelector('[data-reveal-board]');
@@ -110,10 +110,27 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     return { slots: +b.getAttribute('data-slots'), n: cards.length, uniq: new Set(ids).size, minL: Math.min(...rs.map(r => r.left)), maxR: Math.max(...rs.map(r => r.right)),
       overlap: rs.some((r, i) => rs.some((q, j) => i !== j && r.left < q.right && q.left < r.right)) };
   });
-  ok(wall.slots === 4 && wall.n === 4, '16:9-en 4 polaroid látszik egyszerre (4 képnél)', JSON.stringify(wall));
+  ok(wall.slots === 3 && wall.n === 3, 'alapból 3 polaroid látszik egyszerre (4 képnél)', JSON.stringify(wall));
   ok(wall.uniq === wall.n, 'nincs ismétlődő kép a falon');
   ok(wall.minL >= 0 && wall.maxR <= 1280, 'a szélső lapok sem lógnak ki a vászonról', wall.minL.toFixed(0) + '…' + wall.maxR.toFixed(0));
   ok(wall.overlap, 'a lapok kicsit átfedik egymást');
+  // v10.434: a lapok száma 1–3 között választható, és megmarad
+  const slotsAfter = async n => { await p.click(`[data-reveal-slotsbtn="${n}"]`); await p.waitForTimeout(200);
+    return p.evaluate(() => ({ slots: +document.querySelector('[data-reveal-board]').getAttribute('data-slots'), n: document.querySelectorAll('[data-reveal-board] [data-reveal-polaroid]').length, st: localStorage.getItem('boh_reveal_slots') })); };
+  const s1 = await slotsAfter(1);
+  ok(s1.slots === 1 && s1.n === 1 && s1.st === '1', '„🖼 1" → egyetlen polaroid', JSON.stringify(s1));
+  await p.evaluate(() => { window.__revealSpeed = 0.1; });
+  const s2 = await slotsAfter(2); await p.waitForTimeout(400);
+  const s2b = await p.evaluate(() => document.querySelectorAll('[data-reveal-board] [data-reveal-polaroid]').length);
+  ok(s2.slots === 2 && s2b === 2 && s2.st === '2', '„🖼 2" → két polaroid', JSON.stringify(s2) + ' n=' + s2b);
+  const s3 = await slotsAfter(3); await p.waitForTimeout(400);
+  ok(s3.slots === 3 && s3.st === '3', '„🖼 3" → három hely', JSON.stringify(s3));
+  ok(!(await has('[data-reveal-slotsbtn="4"]')), 'nincs 4-es választó (1–3)');
+  const secsOpts = await p.evaluate(() => [...document.querySelectorAll('[data-reveal-secs]')].map(b => +b.getAttribute('data-reveal-secs')).join(','));
+  ok(secsOpts === '3,5,8', 'az idő-választó 3 / 5 / 8 mp', secsOpts);
+  const paper = await p.evaluate(() => getComputedStyle(document.querySelector('[data-reveal-projector]')).backgroundColor);
+  ok(paper === 'rgb(255, 247, 238)', 'a vetítő felülete a Babakvíz krém papírja', paper);
+  await p.evaluate(() => { window.__revealSpeed = 100; });
   await p.setViewportSize({ width: 390, height: 844 });
   await p.waitForTimeout(300);
   const ph = await p.evaluate(() => ({ slots: +document.querySelector('[data-reveal-board]').getAttribute('data-slots'), sw: document.documentElement.scrollWidth,
@@ -122,12 +139,29 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok(ph.ctl.wrap === 'nowrap' && ph.ctl.h < 70, 'telefonon a vezérlősáv egy sorban marad (görgethető)', JSON.stringify(ph.ctl));
   await p.setViewportSize({ width: 1280, height: 760 });
   await p.evaluate(() => { window.__revealSpeed = 100; });
-  await p.click('[data-reveal-secs="12"]');
-  ok(await p.evaluate(() => localStorage.getItem('boh_reveal_secs')) === '12', 'az idő is megmarad (12 mp)');
+  await p.click('[data-reveal-secs="3"]');
+  ok(await p.evaluate(() => localStorage.getItem('boh_reveal_secs')) === '3', 'az idő is megmarad (3 mp)');
   await p.waitForTimeout(3800);
   ok(await p.evaluate(() => getComputedStyle(document.querySelector('[data-reveal-controls]')).opacity) === '0', 'a vezérlők 3 mp tétlenség után eltűnnek');
   await p.click('[data-reveal-projector]', { position: { x: 5, y: 700 } }).catch(() => {});
   await p.mouse.move(420, 320); await p.waitForTimeout(450);
+  // ⚠️ HIBA (v10.434, képernyőkép): sok váltás után a polaroid a Babakvíz FÖLÉ került —
+  // a lap z-indexe minden váltással nő, és a fal nem zárta le a saját rétegét.
+  await p.evaluate(() => { window.__revealSpeed = 0.01; });                 // 3 mp → 30 ms / váltás
+  await p.evaluate(() => document.querySelector('[data-reveal-next]').click());   // a 100×-os sebességgel indult órát újraindítja
+  await p.waitForFunction(() => Math.max(0, ...[...document.querySelectorAll('[data-reveal-board] [data-reveal-polaroid]')].map(c => +getComputedStyle(c).zIndex || 0)) > 30, null, { timeout: 20000 }).catch(() => {});
+  const zMax = await p.evaluate(() => Math.max(...[...document.querySelectorAll('[data-reveal-board] [data-reveal-polaroid]')].map(c => +getComputedStyle(c).zIndex || 0)));
+  ok(zMax > 30, 'sok váltás után a lapok z-indexe a kvízé (30) fölé nő — a hiba feltétele fennáll', zMax);
+  await p.evaluate(() => { window.__revealSpeed = 100; });
+  await p.evaluate(() => document.querySelector('[data-reveal-quizbtn]').click()); await p.waitForTimeout(300);
+  const lay = await p.evaluate(() => {
+    const hit = [[640, 380], [400, 450], [900, 450]].map(([x, y]) => { const e = document.elementFromPoint(x, y); return !!(e && e.closest('[data-reveal-quiz]')); });
+    return { hit, board: !!document.querySelector('[data-reveal-board]') };
+  });
+  ok(lay.hit.every(Boolean) && !lay.board, 'a Babakvíz alatt nincs polaroid a kérdés fölött', JSON.stringify(lay));
+  await p.evaluate(() => document.querySelector('[data-reveal-quizexit]').click()); await p.waitForTimeout(300);
+  ok(await has('[data-reveal-board]'), 'a kvízből kilépve visszajön a képfolyam');
+  await p.mouse.move(430, 330); await p.waitForTimeout(200);
   await p.click('[data-reveal-exit]'); await p.waitForTimeout(150);
   ok(await has('[data-reveal-roles]') && !(await has('[data-reveal-projector]')), '„‹ Vissza" a szerepválasztóra visz');
 

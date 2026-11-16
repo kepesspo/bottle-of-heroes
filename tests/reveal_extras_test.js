@@ -81,7 +81,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   console.log('\n===== 2. KI LELEPLEZHET =====');
   await go(); await p.evaluate(() => { window.__revealSpeed = 0.06; });
   await login();
-  ok(await has('[data-reveal-role="trigger"]'), 'a szerepválasztón ott a Leleplező');
+  ok(await has('[data-reveal-role="trigger"]') && (await p.textContent('[data-reveal-role="trigger"]')).includes('Szülők'), 'a szerepválasztón: Vetítő · Operátor · Szülők');
   await p.click('[data-reveal-role="operator"]'); await p.waitForTimeout(200);
   ok(!(await has('[data-reveal-fire]')) && !(await has('[data-reveal-test]')), '⚠️ az operátor nézetben NINCS leleplező gomb');
   await p.click('.appbar-shell button'); await p.waitForTimeout(150);
@@ -216,8 +216,14 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok((await p.evaluate(() => document.querySelectorAll('[data-reveal-quiz-opt][data-correct="1"]').length)) === 0, 'kérdezéskor NINCS kiemelve a helyes válasz');
   await mountSide('RevealOperator');
   await p.waitForTimeout(250);
+  ok(!(await has('#__side [data-reveal-quizctl]')), 'v10.434: az operátornál NINCS kvíz-vezérlő');
+  await mountSide('RevealTrigger');
+  await p.waitForTimeout(200);
+  ok(!(await has('#__side [data-reveal-quizctl]')), 'a Szülők kvíz-vezérlője is a kód mögött van');
+  await p.fill('#__side [data-reveal-code]', '2026'); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
+  ok(await has('#__side [data-reveal-parentquiz] [data-reveal-quizctl]'), 'a kóddal a Szülők nézetben ott a Babakvíz-lapozó');
   await p.click('#__side [data-reveal-quiz-next]'); await p.waitForTimeout(150);
-  ok((await qz()) === 'q' && (await qi()) === '1', 'az operátor is lapoz: 2. kérdés');
+  ok((await qz()) === 'q' && (await qi()) === '1', 'a Szülők is lapoznak: 2. kérdés');
   await p.keyboard.press('ArrowRight'); await p.waitForTimeout(150);
   ok((await qz()) === 'sol' && (await qi()) === '0', 'a kérdések után a megoldások jönnek (1. kérdés újra)');
   ok((await attr('[data-reveal-quiz-opt="1"]', 'data-correct')) === '1' && (await p.textContent('[data-reveal-quiz]')).includes('Megoldások'), 'a megoldásnál a helyes válasz kiemelve');
