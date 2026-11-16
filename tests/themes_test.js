@@ -94,7 +94,7 @@ const openCard = async (p, key) => {
   ok(nav.themes && !nav.evTheme && !/box|pub/.test(nav.cats), 'egy Témák fül az Általánosban; nincs Pub/BOX kategória és Events-téma fül', JSON.stringify(nav));
   await p.evaluate(() => document.querySelector('#__a [data-admin-tab="themes"]').click()); await p.waitForTimeout(600);
   const rows = await p.evaluate(() => [...document.querySelectorAll('#__a [data-theme-app]')].map(x => x.getAttribute('data-theme-app')).join());
-  ok(rows === 'hub,games,events,torta,tipp,bingo,box,pub,liga', 'mind a kilenc app egy listán', rows);
+  ok(rows === 'hub,games,events,torta,tipp,bingo,box,pub,liga,reveal', 'mind a tíz app egy listán (v10.430: + Gender Reveal)', rows);
   const store = () => p.evaluate(() => JSON.parse(JSON.stringify(window.__fbStore.config.appThemes || null)));
   await p.evaluate(() => document.querySelector('#__a [data-theme-default="jade"]').click()); await p.waitForTimeout(400);
   ok((await store()).default === 'jade', 'a közös téma azonnal ment (jade)', JSON.stringify(await store()));

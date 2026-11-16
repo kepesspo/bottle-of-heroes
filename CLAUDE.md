@@ -3628,3 +3628,42 @@ egyik imposztorra" és az „Imposztorok" felirat innentől `> 1`-re néz, nem `
 
 Teszt: `imposztor_hint_test.js` 10–11. blokk (a szabály táblája; 5 fővel „1" → egy
 imposztor, kontroll Auto → 2, „3" → 3; a lap kiírja a várható számot).
+
+## Gender Reveal: élő képvetítő kivetítőre (v10.430)
+Önálló DNR app (`screen === 'reveal'`, deep link `?screen=reveal`, aliasok:
+`genderreveal`, `vetito`…; saját manifest, ikon — `make_unified_icons.py assets reveal`).
+A központban az utolsó kártya, az adminban saját kategória (jelszó, cím, ürítés).
+
+**Folyam:** jelszó → szerepválasztó → **Vetítő** (laptop/projektor) vagy **Operátor**
+(feltöltés). EGY jelszó mindkettőnek (`config/revealConfig.password`); az eszköz megjegyzi
+(`boh_reveal_pw`), jelszócserénél újra kéri. Jelszó nélkül nem lehet belépni.
+
+**Adat:** `revealPhotos/<id> = { src:<dataURL>, w, h, at:<ms>, hidden }` — egy kép egy
+dokumentum. ⚠️ Nincs Storage SDK: a `revealCompress` 1920 px-re kicsinyít és addig
+tömörít, amíg `REVEAL_MAX_CHARS` (900 000) alá nem kerül — a Firestore 1 MB-os
+dokumentum-korlátja miatt. Az admin „Összes kép törlése" 400-as kötegekben töröl.
+
+**⚠️ A sorrend (`useRevealSequence`) a lényeg:**
+- az ELSŐ pillanatképben lévő képek a kör tagjai (feltöltési sorrendben, körbe);
+- ami UTÁNA érkezik, az `uj` sorba kerül, és a MOSTANI kép után RÖGTÖN jön („✨ ÚJ KÉP"),
+  nem szakítja félbe — majd a kör ott folytatódik, ahol abbamaradt;
+- az épp vetített kép elrejtése/törlése azonnal továbblép; ha nincs kép, üres állapot
+  (a `title` + „Hamarosan érkeznek a képek…").
+- Az időzítő **ref-en át** hívja az `advance`-t: függőségként minden beérkező kép
+  újraindítaná a mostani kép óráját.
+
+**Vetítő:** portál a `body`-ba (fix, sötét — NEM témafüggő, a kivetítőn a sötét a jó),
+négy mód (`REVEAL_MODES`: Áttűnés · Ken Burns · Polaroid · Kollázs), idő 5/8/12/20 mp —
+mindkettő eszközönként (`boh_reveal_mode`, `boh_reveal_secs`). A vezérlők 3 mp
+tétlenség után eltűnnek a kurzorral együtt, ezért az „ÚJ KÉP" jelvény **alul** ül.
+Wake Lock (a laptop nem alszik el), Teljes képernyő gomb / `F`, `→` következő, szóköz szünet.
+Kollázsban az új kép mindig a nagy helyre kerül.
+
+**Operátor:** „Fotó készítése" (kamera) + „Képek kiválasztása" (több fájl), egymás után
+tölt (párhuzamosan egy telefon memóriája elfogyhat), haladásjelző, hibalista (HEIC, amit a
+böngésző nem tud dekódolni). A lista a legfrissebbel kezd; Elrejt/Mutat és Törlés
+(megerősítéssel).
+
+Teszt: `node tests/reveal_test.js` (`window.__revealSpeed` az ütemet skálázza).
+Igazítva: `dnr_hub_test` (7 kártya), `themes_test` / `admin_apps_test` (10 app, 8
+kategória), `adminpress_test` (21 fül).

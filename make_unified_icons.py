@@ -234,6 +234,31 @@ def liga():
     d.arc([800, 560, 1000, 900], 200, 250, fill=WHITE, width=34)
     finish(im, 'liga')
 
+# ── Gender Reveal: rózsaszín és babakék lufi, középen kérdőjeles szív (v10.430)
+PINK = (244, 150, 180, 255); BABY = (150, 200, 240, 255)
+def reveal():
+    im, d = layer()
+    def balloon(cx, cy, fill, ang):
+        b = Image.new('RGBA', (S, S), (0, 0, 0, 0)); bd = ImageDraw.Draw(b)
+        rx, ry = 300, 360
+        bd.line([(cx, cy + ry + 40), (cx - 30, cy + ry + 260), (cx + 20, cy + ry + 470), (1024, 1660)], fill=INK, width=24, joint='curve')
+        poly(bd, [(cx - 60, cy + ry + 70), (cx + 60, cy + ry + 70), (cx, cy + ry - 10)], fill)
+        bd.ellipse([cx - rx, cy - ry, cx + rx, cy + ry], fill=fill, outline=INK, width=LW)
+        bd.arc([cx - rx + 70, cy - ry + 60, cx + rx - 150, cy + ry - 160], 200, 250, fill=WHITE, width=46)
+        return b.rotate(ang, resample=Image.BICUBIC, center=(1024, 1660))
+    im.alpha_composite(balloon(700, 720, PINK, 8))
+    im.alpha_composite(balloon(1350, 720, BABY, -8))
+    # kérdőjel a két lufi között, krém korongon
+    circ(d, 1024, 1180, 150, CREAM)
+    d.arc([952, 1046, 1096, 1190], 165, 60, fill=INK, width=42)
+    line(d, (1060, 1180), (1024, 1212), w=42); line(d, (1024, 1212), (1024, 1236), w=42)
+    d.ellipse([1000, 1268, 1048, 1316], fill=INK)
+    for (x, y, r, c) in [(420, 340, 30, YELLOW), (1640, 360, 34, YELLOW), (1024, 300, 26, CORAL), (520, 1250, 24, BABY), (1530, 1240, 24, PINK)]:
+        d.ellipse([x - r, y - r, x + r, y + r], fill=c, outline=INK, width=18)
+    finish(im, 'reveal')
+
 OUT = sys.argv[1] if len(sys.argv) > 1 else 'assets'
-for f in (events, torta, tipp, bingo, box, pub, liga): f()
+ONLY = sys.argv[2:]   # pl. `python3 make_unified_icons.py assets reveal` — csak az új ikon
+for f in (events, torta, tipp, bingo, box, pub, liga, reveal):
+    if not ONLY or f.__name__ in ONLY: f()
 print('ok')

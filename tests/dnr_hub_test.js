@@ -68,7 +68,7 @@ async function open(b, query, init) {
 
   console.log('\n===== 5. KÁRTYÁK NÉZET =====');
   const c1 = await p.evaluate(() => ({ active: (document.querySelector('[data-hub-card][data-active="1"]') || {}).getAttribute && document.querySelector('[data-hub-card][data-active="1"]').getAttribute('data-hub-card'), n: document.querySelectorAll('[data-hub-card]').length }));
-  ok(c1.active === 'home' && c1.n === 6, 'az első aktív kártya a DNR Games, összesen 6 kártya', JSON.stringify(c1));
+  ok(c1.active === 'home' && c1.n === 7, 'az első aktív kártya a DNR Games, összesen 7 kártya (v10.430: + Gender Reveal)', JSON.stringify(c1));
   const order = await p.evaluate(() => [...document.querySelectorAll('[data-hub-card]')].map(x => x.getAttribute('data-hub-card')));
   ok(order[2] === 'bingo', '⚠️ a Bingó / DNR a tortán a harmadik kártya (v10.413)', order.join(','));
   // ⚠️ v10.410: VALÓDI egérkattintás a nyíl közepére (hit-test). Az element.click()
