@@ -60,6 +60,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   console.log('\n===== 2. VETÍTŐ: KÖR + ÉLŐ ÚJ KÉP =====');
   await addPhoto('a', 1); await addPhoto('b', 2); await addPhoto('c', 3);
   await p.evaluate(() => { window.__revealSpeed = 0.1; localStorage.setItem('boh_reveal_secs', '5'); });   // 5 mp → 0,5 mp
+  await p.setViewportSize({ width: 420, height: 760 });   // álló vászon = 1 lap: a gyors feltöltés nem lapoz közbe
   await p.click('[data-reveal-role="projector"]'); await p.waitForTimeout(200);
   ok(await has('[data-reveal-projector]'), 'a vetítő megnyílt (teljes képernyős réteg)');
   ok((await cur()).id === 'a', 'az első kép a legrégebbi', JSON.stringify(await cur()));
@@ -95,16 +96,32 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await p.waitForTimeout(150);
   ok(!(await has('[data-reveal-empty]')) && (await cur()).id, 'a képek visszajönnek → újra vetít');
 
-  console.log('\n===== 4. MEGJELENÍTÉSI MÓDOK =====');
-  await p.mouse.move(400, 300);
-  const marks = { fade: '[data-reveal-slide]', kenburns: '[data-reveal-slide]', polaroid: '[data-reveal-polaroid]', collage: '[data-reveal-collage]' };
-  for (const m of ['polaroid', 'collage', 'kenburns', 'fade']) {
-    await p.click(`[data-reveal-modebtn="${m}"]`); await p.click('[data-reveal-next]'); await p.waitForTimeout(150);
-    const md = await p.getAttribute('[data-reveal-projector]', 'data-reveal-mode');
-    ok(md === m && await has(marks[m]), `„${m}" mód rajzol`, md);
-  }
-  await p.click('[data-reveal-modebtn="polaroid"]');
-  ok(await p.evaluate(() => localStorage.getItem('boh_reveal_mode')) === 'polaroid', 'a mód eszközönként megmarad');
+  console.log('\n===== 4. POLAROID-FAL (széles vásznon több kép) =====');
+  ok(!(await has('[data-reveal-modebtn]')), 'nincs módváltó — csak a Polaroid maradt (v10.433)');
+  await p.setViewportSize({ width: 1280, height: 720 });
+  await p.evaluate(() => { window.__revealSpeed = 0.1; });
+  await p.waitForFunction(() => document.querySelectorAll('[data-reveal-board] [data-reveal-polaroid]').length >= 4, null, { timeout: 5000 }).catch(() => {});
+  await p.evaluate(() => { window.__revealSpeed = 100; }); await p.waitForTimeout(1300);   // az ejtés-animáció (1,25× nagyítás) végét megvárjuk
+  const wall = await p.evaluate(() => {
+    const b = document.querySelector('[data-reveal-board]');
+    const cards = [...document.querySelectorAll('[data-reveal-board] [data-reveal-polaroid]')];
+    const ids = cards.map(c => c.getAttribute('data-reveal-polaroid'));
+    const rs = cards.map(c => c.getBoundingClientRect());
+    return { slots: +b.getAttribute('data-slots'), n: cards.length, uniq: new Set(ids).size, minL: Math.min(...rs.map(r => r.left)), maxR: Math.max(...rs.map(r => r.right)),
+      overlap: rs.some((r, i) => rs.some((q, j) => i !== j && r.left < q.right && q.left < r.right)) };
+  });
+  ok(wall.slots === 4 && wall.n === 4, '16:9-en 4 polaroid látszik egyszerre (4 képnél)', JSON.stringify(wall));
+  ok(wall.uniq === wall.n, 'nincs ismétlődő kép a falon');
+  ok(wall.minL >= 0 && wall.maxR <= 1280, 'a szélső lapok sem lógnak ki a vászonról', wall.minL.toFixed(0) + '…' + wall.maxR.toFixed(0));
+  ok(wall.overlap, 'a lapok kicsit átfedik egymást');
+  await p.setViewportSize({ width: 390, height: 844 });
+  await p.waitForTimeout(300);
+  const ph = await p.evaluate(() => ({ slots: +document.querySelector('[data-reveal-board]').getAttribute('data-slots'), sw: document.documentElement.scrollWidth,
+    ctl: (() => { const c = document.querySelector('[data-reveal-controls]'); return { h: c.getBoundingClientRect().height, wrap: getComputedStyle(c).flexWrap }; })() }));
+  ok(ph.slots === 1 && ph.sw <= 390, 'telefonon (álló) 1 lap, és nincs vízszintes kicsúszás', JSON.stringify(ph));
+  ok(ph.ctl.wrap === 'nowrap' && ph.ctl.h < 70, 'telefonon a vezérlősáv egy sorban marad (görgethető)', JSON.stringify(ph.ctl));
+  await p.setViewportSize({ width: 1280, height: 760 });
+  await p.evaluate(() => { window.__revealSpeed = 100; });
   await p.click('[data-reveal-secs="12"]');
   ok(await p.evaluate(() => localStorage.getItem('boh_reveal_secs')) === '12', 'az idő is megmarad (12 mp)');
   await p.waitForTimeout(3800);

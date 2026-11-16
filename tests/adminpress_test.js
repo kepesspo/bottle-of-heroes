@@ -69,7 +69,7 @@ const pinOpen = (p) => p.evaluate(() => /PIN|Admin belépés|admin/i.test(docume
   await p.fill('[data-admin-pin] input', '1111'); await p.keyboard.press('Enter');
   await p.waitForTimeout(200);
   ok('rossz PIN: hibaüzenet, marad a központ', await p.evaluate(() => /Helytelen PIN/.test(document.body.innerText) && !!document.querySelector('[data-dnr-hub]')));
-  await p.fill('[data-admin-pin] input', '199509'); await p.keyboard.press('Enter');
+  await p.fill('[data-admin-pin] input', '202703'); await p.keyboard.press('Enter');
   await p.waitForTimeout(900);
   ok('helyes PIN → Admin', await p.evaluate(() => !document.querySelector('[data-dnr-hub]') && /Admin/.test(document.body.innerText)));
   await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find(x => { const r = x.getBoundingClientRect(); return r.top < 140 && r.left < 80 && r.width > 0 && x.querySelector('svg'); }); b && b.click(); });

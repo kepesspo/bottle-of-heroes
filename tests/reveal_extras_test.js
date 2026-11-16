@@ -11,7 +11,8 @@
 //  5) ⚠️ később nyitott vetítő: animáció NÉLKÜL rögtön a kiderült szín
 //  6) vendég (QR-link, jelszó nélkül): név → kép és üzenet `pending`-ként; a vetítő
 //     nem mutatja; az operátor jóváhagyja → a vetítőn rögtön jön, ÚJ jelöléssel
-//  7) Babaquiz: operátor indít → vetítő kérdés → vendég válaszol → megoldás → eredménytábla
+//  7) Babakvíz (v10.433): a PDF 20 kérdése; papíron szavaznak — a vetítő/operátor csak
+//     lapoz: kérdések → ugyanezek a helyes válasszal kiemelve → pontozás → vége
 //  8) album: ZIP (Python zipfile-lal ellenőrizve) + a csak nézhető galéria-link
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const fs = require('fs'), cp = require('child_process');
@@ -60,10 +61,14 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(await has('[data-admin-reveal-guesturl]') && await has('[data-admin-reveal-albumurl]'), 'a két link kint van az adminban');
   await p.click('[data-admin-reveal-result="girl"]');
   await p.fill('[data-admin-reveal-code]', '2026');
+  await p.fill('[data-admin-reveal-when]', '2030-06-01T18:30');
+  await p.click('[data-admin-reveal-countdown]');   // alapból BE → KI
   await p.click('[data-admin-reveal-secretsave]'); await p.waitForTimeout(200);
   st = await store();
   ok(st.c.revealSecret && st.c.revealSecret.result === 'girl' && st.c.revealSecret.code === '2026', 'az eredmény és a kód a TITKOS dokumentumba megy', JSON.stringify(st.c.revealSecret));
   ok(!st.c.revealState, '⚠️ a leleplezésig a revealState-ben nincs eredmény');
+  ok(st.c.revealConfig.revealAt === new Date(2030, 5, 1, 18, 30).getTime() && st.c.revealConfig.countdownOn === false, 'az időpont (helyi idő) és a sarok-kapcsoló a revealConfig-ba megy', JSON.stringify([st.c.revealConfig.revealAt, st.c.revealConfig.countdownOn]));
+  ok(!st.c.revealSecret.revealAt, 'az időpont nem a titkos dokumentumba kerül');
   await p.evaluate(() => { const d = document.getElementById('__adm'); d.__r.unmount(); d.remove(); });
   await p.evaluate(() => { const d = document.createElement('div'); d.id = '__adm'; d.style.cssText = 'position:fixed;inset:0;z-index:9000;background:#fff;overflow:auto'; document.body.appendChild(d); d.__r = ReactDOM.createRoot(d); d.__r.render(React.createElement(AdminReveal)); });
   await p.waitForTimeout(300);
@@ -114,6 +119,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
 
   console.log('\n===== 3b. VIDEÓ: hibás link sem akasztja meg =====');
   await p.evaluate(() => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'vid1', test: false, result: 'girl', videoUrl: 'file:///nincs/ilyen.mp4', at: Date.now() }));
+  ok(await has('[data-reveal-show="count"] video[data-reveal-video][preload="auto"]'), 'a videó már a visszaszámlálás alatt betöltődik (rejtve)');
   await p.waitForFunction(() => { const e = document.querySelector('[data-reveal-show]'); return e && e.getAttribute('data-reveal-show') !== 'count'; }, null, { timeout: 4000 }).catch(() => {});
   const vs = await attr('[data-reveal-show]', 'data-reveal-show');
   ok(vs === 'video' || vs === 'boom', 'a visszaszámlálás után a videó-szakasz jön', vs);
@@ -126,6 +132,39 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await go(); await p.evaluate(() => { window.__revealSpeed = 0.06; });
   await login(); await p.click('[data-reveal-role="projector"]'); await p.waitForTimeout(400);
   ok(!(await has('[data-reveal-show]')) && (await attr('[data-reveal-projector]', 'data-reveal-revealed')) === 'girl', '⚠️ animáció nélkül, rögtön a kiderült szín');
+
+  console.log('\n===== 5b. IDŐZÍTETT LELEPLEZÉS: időpont + a szülő engedélye =====');
+  await p.evaluate(() => firebase.firestore().collection('config').doc('revealState').set({ phase: 'idle', run: 'reset1' }));
+  await p.evaluate(t => firebase.firestore().collection('config').doc('revealConfig').set({ revealAt: t, countdownOn: true }, { merge: true }), Date.now() + 1500);
+  await p.waitForTimeout(250);
+  ok(!(await attr('[data-reveal-projector]', 'data-reveal-revealed')), 'visszaállítás után a vetítő elengedi a színt');
+  ok(await has('[data-reveal-corner]') && /\d\d:\d\d/.test(await p.textContent('[data-reveal-corner-time]')), 'visszaszámláló a jobb felső sarokban', await p.textContent('[data-reveal-corner-time]'));
+  const cr = await p.evaluate(() => { const r = document.querySelector('[data-reveal-corner]').getBoundingClientRect(); return { right: innerWidth - r.right, top: r.top }; });
+  ok(cr.right < 60 && cr.top < 60, 'a sarokban ül (jobb felül)', JSON.stringify(cr));
+  await p.waitForTimeout(2000);
+  st = await store();
+  ok(!(await has('[data-reveal-show]')) && st.c.revealState.phase === 'idle', '⚠️ engedély NÉLKÜL az időpont elmúlik, és nem indul semmi');
+  ok((await p.textContent('[data-reveal-corner]')).includes('MINDJÁRT'), 'a sarok „mindjárt kiderül"-t ír');
+  await p.evaluate(t => firebase.firestore().collection('config').doc('revealConfig').set({ revealAt: t }, { merge: true }), Date.now() + 4000);
+  await mountSide('RevealTrigger');
+  await p.waitForTimeout(200);
+  await p.fill('#__side [data-reveal-code]', '2026'); await p.keyboard.press('Enter'); await p.waitForTimeout(150);
+  ok(await has('#__side [data-reveal-when]') && await has('#__side [data-reveal-arm]'), 'a szülőnél: az időpont és az „Engedélyezem" gomb');
+  await p.click('#__side [data-reveal-arm]'); await p.waitForTimeout(100);
+  await p.click('button:text-is("Engedélyezem")'); await p.waitForTimeout(200);
+  st = await store();
+  ok(st.c.revealState.phase === 'armed' && !st.c.revealState.result, 'engedélyezve — és az eredmény MÉG nincs a szobában', JSON.stringify(st.c.revealState));
+  ok(!(await has('[data-reveal-show]')), 'az időpont előtt még nem indul');
+  await p.waitForFunction(() => !!document.querySelector('[data-reveal-show]'), null, { timeout: 6000 }).catch(() => {});
+  st = await store();
+  ok(await has('[data-reveal-show]') && st.c.revealState.phase === 'reveal' && st.c.revealState.result === 'girl' && /-go$/.test(st.c.revealState.run), 'az időpontra MAGÁTÓL indul (a vetítő írja be az eredményt)', JSON.stringify(st.c.revealState));
+  await p.waitForFunction(() => !document.querySelector('[data-reveal-show]'), null, { timeout: 6000 }).catch(() => {});
+  ok((await attr('[data-reveal-projector]', 'data-reveal-revealed')) === 'girl' && !(await has('[data-reveal-corner]')), 'utána a kiderült szín, a sarok-óra eltűnik');
+  await p.evaluate(() => firebase.firestore().collection('config').doc('revealState').set({ phase: 'idle', run: 'reset2' }));
+  await p.evaluate(() => firebase.firestore().collection('config').doc('revealConfig').set({ revealAt: Date.now() + 60000, countdownOn: false }, { merge: true }));
+  await p.waitForTimeout(250);
+  ok(!(await has('[data-reveal-corner]')), 'kikapcsolva (admin) nincs sarok-óra');
+  await p.evaluate(() => { const d = document.getElementById('__side'); if (d) { d.__r.unmount(); d.remove(); } });
 
   console.log('\n===== 6. VENDÉG: KÉP + ÜZENET JÓVÁHAGYÁSSAL =====');
   await p.evaluate(px => { const db = firebase.firestore(); ['a', 'b'].forEach((id, i) => db.collection('revealPhotos').doc(id).set({ src: px, w: 1, h: 1, at: i + 1, hidden: false, pending: false })); }, PX);
@@ -160,32 +199,38 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(await p.evaluate(() => !window.__fbStore.revealPhotos.junk2), '„Eldob" → törlődik');
   await p.evaluate(() => { delete window.__fbStore.revealPhotos.junk; });
 
-  console.log('\n===== 7. BABAQUIZ =====');
+  console.log('\n===== 7. BABAKVÍZ (papíron, csak lapozás) =====');
+  const key = await p.evaluate(() => REVEAL_QUIZ_DEFAULT.map(q => 'ABC'[q.ok]).join(''));
+  ok(await p.evaluate(() => REVEAL_QUIZ_DEFAULT.length === 20 && REVEAL_QUIZ_DEFAULT.every(q => q.opts.length === 3)), 'a PDF 20 kérdése, mind A/B/C');
+  ok(key === 'BBABCABBAACBBCAABBAA', 'a megoldókulcs egyezik a játékmesteri lappal', key);
   await p.evaluate(() => firebase.firestore().collection('config').doc('revealQuiz').set({ questions: [
-    { q: 'Első kérdés?', opts: ['A1', 'B1', 'C1'], ok: 1 }, { q: 'Második?', opts: ['A2', 'B2'], ok: 0 } ] }));
+    { q: 'Első kérdés?', opts: ['A1', 'B1', 'C1'], ok: 1 }, { q: 'Második?', opts: ['A2', 'B2', 'C2'], ok: 0 } ] }));
   await p.waitForTimeout(150);
-  await p.click('#__side [data-reveal-quiz-start]'); await p.waitForTimeout(200);
-  ok((await attr('[data-reveal-quiz]', 'data-reveal-quiz')) === 'q' && (await p.textContent('[data-reveal-quiz]')).includes('Első kérdés?'), 'a vetítő a kérdést mutatja');
-  ok(await has('[data-reveal-quiz] [data-reveal-qr]'), 'a kérdés mellett a QR (válasz a telefonon)');
   await mountSide('RevealGuest', { cfg: cfgV });
+  await p.waitForTimeout(200);
+  await p.evaluate(() => document.querySelector('[data-reveal-quizbtn]').click()); await p.waitForTimeout(250);   // a vetítő saját gombja
+  const qz = () => attr('[data-reveal-quiz]', 'data-reveal-quiz'), qi = () => attr('[data-reveal-quiz]', 'data-reveal-quiz-idx');
+  ok((await qz()) === 'q' && (await p.textContent('[data-reveal-quiz]')).includes('Első kérdés?'), 'a vetítő gombja elindítja: 1. kérdés');
+  ok(!(await has('[data-reveal-quiz] [data-reveal-qr]')), 'a kvízben nincs QR-kód (papíron szavaznak)');
+  ok(!(await has('#__side [data-reveal-guestquiz]')) && !(await has('#__side [data-reveal-guestopt]')), 'a vendég telefonján nincs kvíz-válasz');
+  ok((await p.evaluate(() => document.querySelectorAll('[data-reveal-quiz-opt][data-correct="1"]').length)) === 0, 'kérdezéskor NINCS kiemelve a helyes válasz');
+  await mountSide('RevealOperator');
   await p.waitForTimeout(250);
-  ok(await has('#__side [data-reveal-guestquiz="q"]'), 'a vendég telefonján megjelenik a kérdés');
-  await p.click('#__side [data-reveal-guestopt="1"]'); await p.waitForTimeout(200);
-  ok((await p.textContent('#__side [data-reveal-guestquizmsg]')).includes('rögzítve'), 'válasz rögzítve');
-  ok(await p.evaluate(() => document.querySelector('#__side [data-reveal-guestopt="0"]').disabled), 'egy kérdésre egyszer lehet válaszolni');
-  ok((await p.textContent('[data-reveal-quiz-total]')).includes('1 válasz'), 'a vetítő számolja a válaszokat');
-  await p.evaluate(() => firebase.firestore().collection('config').doc('revealQuizState').get().then(d => firebase.firestore().collection('config').doc('revealQuizState').set(Object.assign({}, d.data(), { phase: 'ans' }))));
-  await p.waitForTimeout(200);
-  ok((await attr('[data-reveal-quiz-opt="1"]', 'data-correct')) === '1', 'megoldás: a helyes válasz kiemelve');
-  ok((await p.textContent('#__side [data-reveal-guestquizmsg]')).includes('Eltaláltad'), 'a vendég látja, hogy eltalálta');
-  await p.evaluate(() => firebase.firestore().collection('config').doc('revealQuizState').get().then(d => firebase.firestore().collection('config').doc('revealQuizState').set(Object.assign({}, d.data(), { phase: 'board' }))));
-  await p.waitForTimeout(200);
-  const row = await p.evaluate(() => [...document.querySelectorAll('[data-reveal-quiz-row]')].map(r => r.textContent));
-  ok(row.length === 1 && row[0].includes('Zsófi') && row[0].includes('1 / 2'), 'eredménytábla: Zsófi 1 / 2', JSON.stringify(row));
-  ok((await p.textContent('#__side [data-reveal-guestscore]')).includes('1 / 2'), 'a vendég is látja a pontszámát');
-  await p.evaluate(() => firebase.firestore().collection('config').doc('revealQuizState').set({ phase: 'idle' }));
-  await p.waitForTimeout(200);
-  ok(!(await has('[data-reveal-quiz]')) && await has('[data-reveal-projector]'), 'kvíz vége → vissza a képfolyam');
+  await p.click('#__side [data-reveal-quiz-next]'); await p.waitForTimeout(150);
+  ok((await qz()) === 'q' && (await qi()) === '1', 'az operátor is lapoz: 2. kérdés');
+  await p.keyboard.press('ArrowRight'); await p.waitForTimeout(150);
+  ok((await qz()) === 'sol' && (await qi()) === '0', 'a kérdések után a megoldások jönnek (1. kérdés újra)');
+  ok((await attr('[data-reveal-quiz-opt="1"]', 'data-correct')) === '1' && (await p.textContent('[data-reveal-quiz]')).includes('Megoldások'), 'a megoldásnál a helyes válasz kiemelve');
+  await p.keyboard.press('ArrowLeft'); await p.waitForTimeout(150);
+  ok((await qz()) === 'q' && (await qi()) === '1', '‹ visszalép az utolsó kérdésre');
+  await p.evaluate(() => document.querySelector('[data-reveal-quiznext]').click()); await p.waitForTimeout(120);
+  await p.evaluate(() => document.querySelector('[data-reveal-quiznext]').click()); await p.waitForTimeout(120);
+  ok((await qz()) === 'sol' && (await qi()) === '1' && (await attr('[data-reveal-quiz-opt="0"]', 'data-correct')) === '1', '2. megoldás: A');
+  ok((await p.textContent('[data-reveal-quiznext]')).includes('Pontozás'), 'az utolsó megoldás után „Pontozás ›"');
+  await p.evaluate(() => document.querySelector('[data-reveal-quiznext]').click()); await p.waitForTimeout(200);
+  ok((await qz()) === 'end' && (await p.evaluate(() => document.querySelectorAll('[data-reveal-quiz-band]').length)) === 4, 'pontozás: a négy pontsáv a lapról');
+  await p.evaluate(() => document.querySelector('[data-reveal-quiznext]').click()); await p.waitForTimeout(200);
+  ok(!(await has('[data-reveal-quiz]')) && await has('[data-reveal-board]'), 'kvíz vége → vissza a polaroid-fal');
 
   console.log('\n===== 8. ALBUM =====');
   const zipB64 = await p.evaluate(async () => {

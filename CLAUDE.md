@@ -3731,3 +3731,58 @@ Teszt: `node tests/reveal_extras_test.js` (titkos eredmény + maszk, az operáto
 leleplezhet, kód-kapu, próba, leleplezés végig, hibás videó, később nyitott vetítő,
 vendég → jóváhagyás → vetítő, Babaquiz végig, ZIP Python `zipfile`-lal ellenőrizve,
 galéria- és rossz link). A `reveal_test.js` változatlanul zöld.
+
+## Gender Reveal: polaroid-fal, papíros Babakvíz, időzített leleplezés (v10.433)
+**Csak a Polaroid maradt** (az Áttűnés / Ken Burns / Kollázs és a módváltó kikerült), de
+széles vásznon **több lap látszik egyszerre**, kis átfedéssel (`RevealBoardCard`):
+- a helyek száma `revealBoardCount(w, h)` — az arányból (16:9 → 4) ÉS a szélességből
+  (legalább 300 px / lap): álló telefonon 1, fekvő telefonon 2; és sosem több, mint a képek;
+- a lap mérete és helye px-ben (`revealCardGeom`, `useRevealViewport`), **a vászonra
+  szorítva** (a forgatott befoglaló félszélességével) — a szélső lap nem lóghat ki;
+- minden váltás a **legrégebbi** helyre ejt (az új kerül felülre); a már kint lévő kép
+  csak előre jön, nem kerül ki kétszer; induláskor a helyek gyorsan feltöltődnek;
+- a jókívánság ugyanilyen lap (rózsaszín „papír", alul a küldő neve).
+⚠️ A `revealDrop` animáció `--rot` CSS-változóval forgat vissza — a lap `left/top`-pal áll,
+nem `translate(-50%)`-tel. Teszt-fogódzó: a mérést az ejtés (1,25×) UTÁN kell végezni.
+
+**Telefonos vetítő:** a vezérlősáv EGY sorban marad, vízszintesen görgethető (`nowrap`),
+keskenyen kisebb chipekkel; a QR ott nem jelenik meg.
+
+**A videó a visszaszámlálás után indul** — a `<video>` már a számolás alatt betöltődik
+(rejtve, `preload="auto"`), és a „0"-nál KÉZZEL indítjuk (`play()`); ha a böngésző a hangos
+lejátszást nem engedi, némítva indul, és „🔊 Hang" gomb jön elő. Betölthetetlen videónál
+egyenesen a robbanás jön.
+
+### Babakvíz — papíron (a kapott PDF alapján)
+`REVEAL_QUIZ_DEFAULT` = a játékmesteri lap **20 kérdése, A/B/C** (megoldókulcs:
+`BBABCABBAACBBCAABBAA`), `REVEAL_QUIZ_BANDS` = a négy pontsáv. **Nincs QR és nincs telefonos
+válasz** (a vendégoldalról is kikerült): mindenki papíron karikáz, az app csak lapoz:
+**20 kérdés (`q`) → ugyanaz a 20 a helyes válasszal kiemelve (`sol`) → pontozás (`end`) → vége.**
+- Lapozni a vetítőn lehet (`🍼 Babakvíz` gomb a sávban, alul ‹ Előző / Következő ›, ←/→,
+  szóköz) ÉS az operátor telefonján — mindkettő a `revealQuizState`-et írja
+  (`revealQuizStep` — EGY lépés-logika). Kérdezéskor a helyes válasz NINCS kiemelve.
+- A kvíz-lap krém alapú, a papírlap színeivel (A kék · B sárga · C rózsa).
+
+### Időzített leleplezés + sarok-visszaszámláló
+- Admin → Leleplezés: **időpont** (`revealConfig.revealAt`, `datetime-local` → HELYI idő,
+  ms) és **„Visszaszámláló a vetítő jobb felső sarkában"** (`revealConfig.countdownOn`).
+  Ezek NEM titkosak (a vetítő olvassa), ezért a `revealConfig`-ba mennek, nem a secretbe.
+- **⚠️ A szülő (Leleplező, saját kóddal) engedélye NÉLKÜL nem indul el.** Az
+  „Engedélyezem a leleplezést" `revealState = { phase:'armed', run }`-t ír — eredmény NÉLKÜL.
+  Az időpont előtt 10 mp-cel (hogy a „0" az időpontra essen) a vetítő maga olvassa ki a
+  titkos eredményt, és `{ phase:'reveal', run:'<run>-go', … }`-t ír: több vetítőnél is
+  ugyanaz az azonosító, tehát egyszer fut. Engedély nélkül az időpont elmúlik, a sarok
+  „MINDJÁRT KIDERÜL"-t ír, és semmi nem történik. Későbbi engedélyre azonnal indul.
+- A szülő az időpont előtt is indíthatja („Leleplezés most"), visszavonhatja az
+  engedélyt, és van próba. Az admin „Visszaállítás" az engedélyt is törli.
+
+### DNR admin PIN
+A DNR központ admin-gombjának belépő kódja **`DNR_ADMIN_PIN = '202703'`** (v10.433-ig
+bedrótozott `199509`). Ez NEM a Firestore `config/adminPin` (az az Admin felület saját
+PIN-je, Rendszer fül) — a központ gombja ezt a konstanst nézi.
+
+Teszt: `reveal_test.js` 4. blokk (4 lap 16:9-en, nincs ismétlés, nem lóg ki, átfedés;
+telefonon 1 lap, egysoros sáv) és `reveal_extras_test.js` 3b (videó-előtöltés), 5b
+(időzítés: engedély nélkül nem indul, engedéllyel magától, sarok-óra be/ki), 7 (a PDF 20
+kérdése és kulcsa, lapozás vetítőn/operátoron/billentyűn, megoldás-kiemelés, pontsávok).
+`adminpress_test` az új PIN-nel.
