@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.435';
+const APP_VERSION = 'v10.436';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -42986,6 +42986,28 @@ function useRevealDoc(name) {
 function useRevealCfg() { return useRevealDoc('revealConfig'); }
 // A tételek (kép + jókívánság), feltöltési sorrendben. `all` → a rejtett és a
 // jóváhagyásra váró is (operátor), különben csak ami a vetítőre mehet.
+// ── Tippek (v10.436): az operátor a kép alá jelöli, ki mire tippelt ────────────────
+// `revealPhotos/<id>.pair` (személy / pár) + `.votes` = ['boy'|'girl'|null, …] — páron
+// KÉT tipp (a pár két tagja máshogy is tippelhet). A számláló a VETÍTŐN lévő képek
+// (jóváhagyott, nem rejtett) tippjeit adja össze: ami nem látszik, az nem is számít.
+// ⚠️ MINDEN olvasás a `revealVotesOf`-on megy, ami a `pair` szerint vág: egy személynek
+// jelölt dokumentumban (régi adat, kézi írás) bennmaradt második tipp így sem számít.
+const REVEAL_VOTE_SIDES = ['boy', 'girl'];
+const REVEAL_METER_ROOM = 0.86;   // a vászon ennyi része marad a falnak, ha látszik a számláló
+function revealVotesOf(p) {
+  const v = Array.isArray(p && p.votes) ? p.votes : [];
+  return v.slice(0, p && p.pair ? 2 : 1).filter(x => x === 'boy' || x === 'girl');
+}
+function revealVoteTally(items) {
+  const t = { boy:0, girl:0 };
+  (items || []).forEach(p => { if (!p || p.pending || p.hidden || p.kind === 'wish') return; revealVotesOf(p).forEach(v => { t[v]++; }); });
+  return t;
+}
+function revealVoteWrite(p, pair, votes) {
+  const db = revealDb(); if (!db || !p) return;
+  const clean = [0, 1].slice(0, pair ? 2 : 1).map(i => (votes[i] === 'boy' || votes[i] === 'girl') ? votes[i] : null);
+  db.collection('revealPhotos').doc(p.id).set({ pair: !!pair, votes: clean }, { merge:true }).catch(() => {});
+}
 function useRevealPhotos(all) {
   const [s, setS] = React.useState({ list:[], loaded:false });
   React.useEffect(() => {
@@ -43237,6 +43259,7 @@ function RevealBoardCard({ item, g, z, isNew, isCur }) {
   const cap = wish ? (item.by ? '— ' + item.by : (isNew ? '✨ friss! ✨' : '')) : (isNew ? '✨ friss! ✨' : (item.by || ''));
   const len = (item.text || '').length;
   const fs = Math.max(14, Math.min(g.ih / (len > 90 ? 7.5 : len > 50 ? 6 : 4.6), g.iw / (len > 90 ? 13 : 10)));
+  const vs = wish ? [] : revealVotesOf(item);
   return (
     <div data-reveal-polaroid={wish ? undefined : item.id} data-reveal-wish={wish ? item.id : undefined} data-current={isCur ? '1' : '0'}
       style={{ position:'absolute', left: g.cx - g.cw / 2, top: g.cy - g.ch / 2, width: g.cw, height: g.ch, zIndex: z, boxSizing:'border-box',
@@ -43250,7 +43273,8 @@ function RevealBoardCard({ item, g, z, isNew, isCur }) {
       ) : (
         <img src={item.src} alt="" style={{ display:'block', width: g.iw, height: g.ih, objectFit:'cover', borderRadius:2 }} />
       )}
-      {cap && <div style={{ position:'absolute', left:0, right:0, bottom:0, height: g.bottom, display:'flex', alignItems:'center', justifyContent:'center', padding:'0 8px', boxSizing:'border-box',
+      {vs.length > 0 && <div data-reveal-cardvotes={vs.join(',')} aria-hidden="true" style={{ position:'absolute', right: g.pad, bottom:0, height: g.bottom, display:'flex', alignItems:'center', gap:2, fontSize: Math.max(13, g.bottom * 0.42), lineHeight:1 }}>{vs.map((v, i) => <span key={i}>{REVEAL_RESULTS[v].emoji}</span>)}</div>}
+      {cap && <div style={{ position:'absolute', left:0, right:0, bottom:0, height: g.bottom, display:'flex', alignItems:'center', justifyContent:'center', padding: vs.length ? `0 ${Math.round(g.bottom * (vs.length > 1 ? 1.5 : 1))}px` : '0 8px', boxSizing:'border-box',
         fontFamily:'"Comic Sans MS", "Segoe Print", "Bradley Hand", cursive', fontWeight:700, fontSize: Math.max(13, g.bottom * 0.42), color:'#C0507A', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{cap}</div>}
     </div>
   );
@@ -43261,6 +43285,67 @@ function RevealNewBadge({ wish }) {
     <div data-reveal-newbadge style={{ position:'absolute', bottom:'3vh', left:'2.4vw', zIndex:50, padding:'1vh 1.6vw', borderRadius:999,
       background:`linear-gradient(90deg, ${REVEAL_PINK}, ${REVEAL_BLUE})`, color:REVEAL_INK, fontFamily:T.font, fontWeight:900,
       fontSize:'max(14px, 2.2vh)', letterSpacing:'0.1em', boxShadow:'0 6px 24px rgba(60,40,20,0.2)', animation:'revealPop 0.6s cubic-bezier(.3,1.6,.5,1) both' }}>{wish ? '💌 ÚJ ÜZENET' : '✨ ÚJ KÉP'}</div>
+  );
+}
+// A szavazás állása a vetítő alján: két szám, köztük az arány-sáv. A leleplezés után a
+// nyertes oldal kiemelve („🎯"), a másik halványítva.
+function RevealVoteMeter({ tally, revealed }) {
+  const tot = tally.boy + tally.girl, pb = tot ? tally.boy / tot : 0.5;
+  const side = s => {
+    const R = REVEAL_RESULTS[s], win = revealed === s, lose = !!revealed && revealed !== s;
+    return (
+      <div data-reveal-votes-side={s} data-win={win ? '1' : '0'} style={{ display:'flex', flexDirection: s === 'boy' ? 'row' : 'row-reverse', alignItems:'center', gap:'0.6vw', opacity: lose ? 0.45 : 1, flexShrink:0 }}>
+        <span aria-hidden="true" style={{ fontSize:'clamp(18px, 3.2vh, 40px)', lineHeight:1 }}>{R.emoji}</span>
+        <span style={{ display:'flex', flexDirection:'column', alignItems: s === 'boy' ? 'flex-start' : 'flex-end', lineHeight:1 }}>
+          <span data-reveal-votes-n style={{ fontFamily:T.font, fontWeight:900, fontSize:'clamp(20px, 4vh, 52px)', color:R.ink, fontVariantNumeric:'tabular-nums' }}>{tally[s]}</span>
+          <span style={{ fontFamily:T.font, fontWeight:800, fontSize:'clamp(10px, 1.5vh, 18px)', color:REVEAL_INK, opacity:0.7, letterSpacing:'0.06em', textTransform:'uppercase', whiteSpace:'nowrap', marginTop:'0.3vh' }}>{win ? '🎯 ' : ''}{R.name}</span>
+        </span>
+      </div>
+    );
+  };
+  return (
+    <div data-reveal-votes data-boy={tally.boy} data-girl={tally.girl} style={{ position:'absolute', left:'50%', bottom:'3vh', transform:'translateX(-50%)', zIndex:46,
+      width:'min(520px, 36vw)', minWidth:280, boxSizing:'border-box', padding:'1.2vh 1.4vw', borderRadius:20, background:'#fff', border:'2px solid #EFE2D2', boxShadow:'0 1vh 2.6vh rgba(60,40,20,0.14)' }}>
+      <div style={{ textAlign:'center', fontFamily:T.font, fontWeight:900, fontSize:'clamp(10px, 1.5vh, 18px)', letterSpacing:'0.2em', color:'#2F63A8', marginBottom:'0.8vh' }}>TIPPEK · {tot}</div>
+      <div style={{ display:'flex', alignItems:'center', gap:'1vw' }}>
+        {side('boy')}
+        <div style={{ flex:1, minWidth:40, height:'clamp(10px, 1.6vh, 20px)', borderRadius:999, overflow:'hidden', display:'flex', background:'#EFE2D2' }}>
+          <div data-reveal-votes-bar style={{ width: (pb * 100).toFixed(1) + '%', background:REVEAL_RESULTS.boy.c1, transition:'width .6s' }} />
+          <div style={{ flex:1, background:REVEAL_RESULTS.girl.c1 }} />
+        </div>
+        {side('girl')}
+      </div>
+    </div>
+  );
+}
+// Az operátor a kép ALÁ jelöli: személy vagy pár, és mire tippelt(ek). Ugyanarra
+// koppintva a tipp törlődik. Páron két sor: a pár két tagja máshogy is tippelhet.
+function RevealVotePicker({ item }) {
+  const pair = !!item.pair;
+  const votes = Array.isArray(item.votes) ? item.votes : [];
+  const cur = [votes[0] || null, votes[1] || null];
+  const set = (i, v) => { const nv = cur.slice(); nv[i] = nv[i] === v ? null : v; revealVoteWrite(item, pair, nv); };
+  const seg = on => ({ flex:1, padding:'5px 0', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:11.5,
+    background: on ? T.surface : 'transparent', color: on ? T.ink : T.inkSoft, boxShadow: on ? '0 1px 3px rgba(0,0,0,0.12)' : 'none' });
+  const vb = (on, s) => ({ flex:1, minWidth:0, padding: pair ? '7px 0' : '7px 2px', borderRadius:10, cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize: pair ? 11 : 12,
+    border: on ? `1.5px solid ${REVEAL_RESULTS[s].c1}` : `1.5px solid ${T.border}`, background: on ? REVEAL_RESULTS[s].c1 : 'transparent', color: on ? '#fff' : T.ink,
+    whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' });
+  const row = i => (
+    <div key={i} style={{ display:'flex', alignItems:'center', gap: pair ? 4 : 5 }}>
+      {pair && <span style={{ width:9, flexShrink:0, fontFamily:T.font, fontWeight:900, fontSize:11, color:T.inkSoft }}>{i + 1}</span>}
+      {REVEAL_VOTE_SIDES.map(s => (
+        <button key={s} data-reveal-vote={s} data-vote-idx={i} aria-pressed={cur[i] === s} onClick={() => set(i, s)} style={vb(cur[i] === s, s)}>{REVEAL_RESULTS[s].emoji} {REVEAL_RESULTS[s].name}</button>
+      ))}
+    </div>
+  );
+  return (
+    <div data-reveal-votepick={item.id} data-pair={pair ? '1' : '0'} style={{ padding:8, display:'flex', flexDirection:'column', gap:6 }}>
+      <div style={{ display:'flex', gap:3, padding:3, borderRadius:10, background:T.bg }}>
+        <button data-reveal-votekind="single" aria-pressed={!pair} onClick={() => { if (pair) revealVoteWrite(item, false, cur); }} style={seg(!pair)}>👤 Személy</button>
+        <button data-reveal-votekind="pair" aria-pressed={pair} onClick={() => { if (!pair) revealVoteWrite(item, true, cur); }} style={seg(pair)}>👥 Pár</button>
+      </div>
+      {row(0)}{pair && row(1)}
+    </div>
   );
 }
 function RevealQrCard({ url, big }) {
@@ -43491,6 +43576,7 @@ function RevealRemote({ onExit }) {
           <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink, marginTop:6 }}>Távirányító</div>
           <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, lineHeight:1.45, marginTop:4 }}>A vetítést a kivetítőre kötött laptop mutatja — innen állíthatod.</div>
           <div data-reveal-remote-count style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, marginTop:8 }}>{photos.filter(x => x.src || x.kind === 'wish').length} tétel a vetítőn</div>
+          {(() => { const t = revealVoteTally(photos); return t.boy + t.girl > 0 && <div data-reveal-remote-tally style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, marginTop:6 }}>Tippek: {REVEAL_RESULTS.boy.emoji} {t.boy} · {REVEAL_RESULTS.girl.emoji} {t.girl}</div>; })()}
         </div>
         <div style={card}>
           {label('Képváltás')}
@@ -43658,6 +43744,11 @@ function RevealProjector({ title, cfg, onExit }) {
   }, [seq.next]);
 
   const RR = revealed ? REVEAL_RESULTS[revealed] : null;
+  const tally = revealVoteTally(photos);
+  // ⚠️ A számláló a vászon alját foglalja: amíg látszik, a fal a fennmaradó 86%-on áll,
+  // különben a középső lap felirata (és a rajta lévő tipp) a számláló alá kerülne.
+  const meterOn = tally.boy + tally.girl > 0 && !qstate && !show;
+  const boardH = meterOn ? vp.h * REVEAL_METER_ROOM : vp.h;
   // ⚠️ A felület a Babakvíz krém papírja (v10.434): sötét tinta, fehér/pasztell chipek.
   const chip = (on) => ({ flexShrink:0, whiteSpace:'nowrap', padding: narrow ? '6px 10px' : '7px 12px', borderRadius:999, cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize: narrow ? 12 : 13,
     border: on ? `1.5px solid ${REVEAL_INK}` : '1.5px solid #EFE2D2', background: on ? REVEAL_INK : '#fff', color: on ? '#fff' : REVEAL_INK });
@@ -43673,7 +43764,7 @@ function RevealProjector({ title, cfg, onExit }) {
     return (
       <div data-reveal-board data-slots={nSlots} style={{ position:'absolute', inset:0, zIndex:1, isolation:'isolate' }}>
         {slots.map((s, i) => { const it = s && byId[s.id]; if (!it) return null;
-          return <RevealBoardCard key={s.key} item={it} g={revealCardGeom(i, nSlots, vp.w, vp.h, it, s.key)} z={s.z} isNew={s.isNew} isCur={s.key === seq.cur.key} />; })}
+          return <RevealBoardCard key={s.key} item={it} g={revealCardGeom(i, nSlots, vp.w, boardH, it, s.key)} z={s.z} isNew={s.isNew} isCur={s.key === seq.cur.key} />; })}
         {seq.cur.isNew && <RevealNewBadge wish={seq.photo.kind === 'wish'} />}
       </div>
     );
@@ -43706,6 +43797,7 @@ function RevealProjector({ title, cfg, onExit }) {
       {showQr && qrUrl && !qstate && !show && !narrow && (
         <div style={{ position:'absolute', right:'2vw', bottom:'3vh', zIndex:45 }}><RevealQrCard url={qrUrl} /></div>
       )}
+      {meterOn && <RevealVoteMeter tally={tally} revealed={revealed} />}
       {qstate && !show && <RevealQuizStage qstate={qstate} narrow={narrow} />}
       {qstate && !show && (
         <div data-reveal-quiznav style={{ position:'absolute', left:0, right:0, bottom:0, zIndex:60, display:'flex', justifyContent:'center', gap:10, padding:'14px 16px', flexWrap:'wrap',
@@ -43786,6 +43878,7 @@ function RevealOperator({ onBack }) {
   const approved = items.filter(p => !p.pending);
   const shown = approved.filter(p => !p.hidden).length;
   const latest = approved.slice().reverse();
+  const tally = revealVoteTally(items);
   const bigBtn = (primary) => ({ flex:1, minWidth:0, padding:'18px 10px', borderRadius:18, border: primary ? 'none' : `2px solid ${T.mint}`, cursor:'pointer',
     background: primary ? T.mint : T.surface, color: primary ? '#fff' : T.mint, fontFamily:T.font, fontWeight:900, fontSize:16, display:'flex', flexDirection:'column', alignItems:'center', gap:6 });
   const tileBody = p => p.kind === 'wish'
@@ -43835,18 +43928,21 @@ function RevealOperator({ onBack }) {
           )}
           <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginTop:4 }}>
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>A vetítőn</div>
-            <div data-reveal-opcount style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft }}>{loaded ? `${shown} a vetítőn${approved.length > shown ? ` · ${approved.length - shown} rejtve` : ''}` : 'Betöltés…'}</div>
+            <div data-reveal-opcount style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft, textAlign:'right' }}>{tally.boy + tally.girl > 0 && <span data-reveal-optally style={{ fontWeight:900, color:T.ink, marginRight:8 }}>Tippek: {REVEAL_RESULTS.boy.emoji} {tally.boy} · {REVEAL_RESULTS.girl.emoji} {tally.girl}</span>}{loaded ? `${shown} a vetítőn${approved.length > shown ? ` · ${approved.length - shown} rejtve` : ''}` : 'Betöltés…'}</div>
           </div>
           {loaded && !approved.length && <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center', padding:'24px 0' }}>Még nincs feltöltött kép.</div>}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:10 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(170px, 1fr))', gap:10, alignItems:'start' }}>
             {latest.map(p => (
-              <div key={p.id} data-reveal-thumb={p.id} data-hidden={p.hidden ? '1' : '0'} style={{ position:'relative', borderRadius:14, overflow:'hidden', background:T.surface, boxShadow:T.shadow, aspectRatio:'1 / 1' }}>
+              <div key={p.id} data-reveal-thumb={p.id} data-hidden={p.hidden ? '1' : '0'} style={{ borderRadius:14, overflow:'hidden', background:T.surface, boxShadow:T.shadow }}>
+              <div style={{ position:'relative', aspectRatio:'1 / 1' }}>
                 {tileBody(p)}{byLine(p)}
                 {p.hidden && <div style={{ position:'absolute', top:8, left:8, padding:'3px 8px', borderRadius:999, background:'rgba(0,0,0,0.6)', color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:11 }}>REJTVE</div>}
                 <div style={{ position:'absolute', left:6, right:6, bottom:6, display:'flex', gap:6 }}>
                   <button data-reveal-hide onClick={() => setHidden(p, !p.hidden)} style={smallBtn('rgba(255,255,255,0.92)', '#1B1830')}>{p.hidden ? 'Mutat' : 'Elrejt'}</button>
                   <button data-reveal-del onClick={() => setConfirmDel(p)} aria-label="Törlés" style={{ width:36, padding:'7px 0', borderRadius:10, border:'none', cursor:'pointer', background:'rgba(220,70,70,0.92)', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:12 }}>🗑</button>
                 </div>
+              </div>
+              {p.kind !== 'wish' && <RevealVotePicker item={p} />}
               </div>
             ))}
           </div>

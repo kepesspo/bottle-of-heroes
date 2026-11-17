@@ -3836,3 +3836,28 @@ Szülőknél csak kóddal van, és onnan lapoz).
 Teszt: `reveal_test.js` 4. blokk (390×844-en távirányító, nincs vetítés; a távirányító
 írása a laptopon lapszámot vált, léptet, megállít) és `reveal_extras_test.js` 7. blokk (nincs
 kvíz-gomb a vetítőn, a Szülők indítják) + 5b (a sarok-óra a gombsor alatt).
+
+## Gender Reveal: tippek a kép alatt + számláló a vetítőn (v10.436)
+Az operátor minden kép ALÁ bejelöli, ki mire tippelt: **👤 Személy** (1 tipp) vagy
+**👥 Pár** (2 tipp — a pár két tagja máshogy is tippelhet). Ugyanarra koppintva a tipp
+törlődik. Üzenetnél (`kind:'wish'`) nincs választó.
+
+- **Adat a képen:** `revealPhotos/<id>.pair` + `.votes = ['boy'|'girl'|null, …]`
+  (`revealVoteWrite`, `set`+`merge`; pár → személy váltáskor a tömb 1 elemre vágódik).
+  Nincs külön gyűjtemény, tehát az ürítés a tippeket is viszi.
+- **⚠️ Minden olvasás a `revealVotesOf`-on megy** (a `pair` szerint vág), a számolás a
+  `revealVoteTally` — ez a vetítő, az operátor és a távirányító közös forrása.
+- **Mi számít:** csak a VETÍTŐN lévő kép (jóváhagyott, nem rejtett). Egy kép elrejtése a
+  tippjét is kiveszi a számlálóból — ami nem látszik, az nem is számít.
+- **A vetítőn:** `RevealVoteMeter` alul középen (💙 szám — arány-sáv — szám 💗,
+  „TIPPEK · N"). Csak ha van tipp; Babakvíz és leleplezés alatt nincs. A leleplezés után
+  a kiderült oldal kiemelve („🎯"), a másik halványítva. ⚠️ Amíg a számláló látszik, a
+  polaroid-fal a vászon felső `REVEAL_METER_ROOM` (86%) részén áll — különben a középső
+  lap alja (a felirattal és a tippel) a számláló alá kerül.
+- **A polaroidon is** látszik a tipp (💙/💗 a lap alsó sávjának jobb szélén).
+- Az operátor a lista fölött, a távirányító a fejléc-kártyán írja ki az állást.
+
+Teszt: `node tests/reveal_votes_test.js` (a számolás szabályai; az operátor-választó a kép
+alatt, pár két sorral, store-írás és törlés; a vetítő élőben követi — tipp, törlés,
+pár → személy, elrejtés; kvíz alatt nincs; a számláló alul középen; leleplezés utáni
+kiemelés; távirányító).
