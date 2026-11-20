@@ -4051,3 +4051,17 @@ A Szülők készletével (`rvBtn`, `rvCard`, `rvPill`, `rvIcon`) és a DNR téma
 
 Teszt: `reveal_votes_test.js` 6. blokk (36–44 px-es gomb, ≤ 64 px-es választó, teljes
 képernyős nézet nyit/zár) és 7. blokk (páros módban a kép ≥ 400 px).
+
+### Jóváhagyás: gomb + teljes képernyős lapozó (v10.446)
+A jóváhagyásra várók csíkja helyett a feltöltés mellett **„Jóváhagyás N" gomb**
+(`data-reveal-pendbtn`, csak ha van várakozó). Megnyitva a **`RevealPendingReview`**:
+UGYANAZ a felület, mint az operátor lapozója — fejléc (sorszám, Fotó/Üzenet, beküldő),
+nagy kép sötét háttéren / az üzenet a közös `RevealWishPolaroid`-dal, alul **Eldob** és
+**Mehet a vetítőre**, legalul ‹ N / M ›. A sorrend a beküldésé (legrégebbi elöl).
+- Döntés után a tétel kiesik, a lapozó ugyanott marad → a következő csúszik a helyére;
+  ha elfogyott, a felület magától bezárul.
+- ⚠️ Kiürüléskor a `review` állapot is visszaáll (effekt az operátorban) — különben egy
+  később érkező beküldés **magától felnyitná** a felületet.
+- NEM portál (`position:fixed` a szülő DOM-jában), a tesztek `#__side`-ből érik el.
+Teszt: `reveal_extras_test.js` 6. blokk (gomb a darabszámmal, 1 / 2 → léptetés 2 / 2,
+nagy kép + üzenet-polaroid, bezárul az utolsó után, új beküldés nem nyitja fel magától).

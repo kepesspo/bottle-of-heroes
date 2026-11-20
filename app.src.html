@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.445';
+const APP_VERSION = 'v10.446';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -43941,6 +43941,60 @@ function RevealProjector({ title, cfg, onExit }) {
 }
 
 // ── Babakvíz-vezérlő (operátor) — ugyanazt lapozza, mint a vetítő gombjai ─────────
+// ── Jóváhagyás (v10.446): teljes képernyős lapozó a beküldött képekhez/üzenetekhez ──
+// UGYANAZ a felület, mint az operátor lapozója (lap = fejléc + nagy kép sötét háttéren),
+// csak a tipp-sor helyén Eldob / Mehet. A sorrend a beküldésé (legrégebbi elöl — sor).
+// Döntés után a tétel kiesik, a lapozó ugyanott marad → a következő csúszik a helyére.
+// Ha elfogyott, magától bezárul. ⚠️ NEM portál: a szülő DOM-jában (position:fixed) marad.
+function RevealPendingReview({ items, onApprove, onReject, onClose }) {
+  const trackRef = React.useRef(null);
+  const [slide, setSlide] = React.useState(0);
+  const n = items.length, cur = Math.min(slide, Math.max(0, n - 1));
+  const go = i => { const el = trackRef.current; if (!el) return; const k = Math.max(0, Math.min(n - 1, i)); el.scrollTo({ left: k * el.clientWidth, behavior:'smooth' }); setSlide(k); };
+  const onScroll = e => { const el = e.currentTarget, k = Math.round(el.scrollLeft / Math.max(1, el.clientWidth)); if (k !== slide) setSlide(k); };
+  React.useEffect(() => { if (!n) onClose(); }, [n]);
+  const DARK = '#16131C';
+  const navBtn = on => rvBtn('secondary', { width:52, height:44, borderRadius:14, opacity: on ? 1 : 0.35, cursor: on ? 'pointer' : 'default' });
+  return (
+    <div data-reveal-review style={{ position:'fixed', inset:0, zIndex:6800, display:'flex', flexDirection:'column', background:T.bg }}>
+      <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:8, padding:'calc(8px + env(safe-area-inset-top)) 12px 8px', background:T.surface, borderBottom:`1px solid ${T.border}` }}>
+        <button type="button" data-reveal-reviewclose aria-label="Bezárás" onClick={onClose} style={rvBtn('ghost', { width:44, height:44, padding:0, color:T.ink })}>{rvIcon('prev', 22)}</button>
+        <div style={{ flex:1, fontFamily:T.font, fontWeight:900, fontSize:19, color:T.ink }}>Jóváhagyás</div>
+        {rvPill(n + ' vár', 'pink')}
+      </div>
+      <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', gap:8, padding:'10px 16px calc(10px + env(safe-area-inset-bottom))', boxSizing:'border-box', maxWidth:720, width:'100%', margin:'0 auto' }}>
+        <div ref={trackRef} data-reveal-reviewtrack onScroll={onScroll}
+          style={{ flex:'1 1 0', minHeight:0, display:'flex', alignItems:'stretch', overflowX:'auto', overflowY:'hidden', scrollSnapType:'x mandatory', WebkitOverflowScrolling:'touch', scrollbarWidth:'none', margin:'0 -4px' }}>
+          {items.map((p, i) => (
+            <div key={p.id} data-reveal-pend={p.id} data-idx={i} style={{ flex:'0 0 100%', minWidth:0, boxSizing:'border-box', padding:'0 4px 2px', scrollSnapAlign:'center', display:'flex' }}>
+              <div style={rvCard({ flex:1, minWidth:0, display:'flex', flexDirection:'column' })}>
+                <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:8, padding:'10px 14px' }}>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, whiteSpace:'nowrap' }}>{i + 1}. / {n}</span>
+                  {rvPill(p.kind === 'wish' ? 'Üzenet' : 'Fotó', p.kind === 'wish' ? 'pink' : 'info')}
+                  <span style={{ flex:1, minWidth:0, textAlign:'right', fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkSoft, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.by ? 'Beküldte: ' + p.by : ''}</span>
+                </div>
+                <div style={{ position:'relative', flex:'1 1 0', minHeight:120, background: p.kind === 'wish' ? (T.bgSoft || T.bg) : DARK, overflow:'hidden' }}>
+                  {p.kind === 'wish'
+                    ? <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center' }}><RevealWishPolaroid text={p.text} by={p.by} width={260} /></div>
+                    : <img src={p.src} alt={p.by ? 'Kép: ' + p.by : 'Kép'} style={{ width:'100%', height:'100%', objectFit:'contain', display:'block' }} />}
+                </div>
+                <div style={{ flexShrink:0, display:'flex', gap:8, padding:10, borderTop:`1px solid ${T.border}` }}>
+                  <button type="button" data-reveal-reject onClick={() => onReject(p)} style={rvBtn('danger', { flex:1, height:52, borderRadius:14, fontSize:16 })}>Eldob</button>
+                  <button type="button" data-reveal-approve onClick={() => onApprove(p)} style={rvBtn('primary', { flex:1.5, height:52, borderRadius:14, fontSize:16 })}>Mehet a vetítőre</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+          <button type="button" data-reveal-reviewprev aria-label="Előző" disabled={cur <= 0} onClick={() => go(cur - 1)} style={navBtn(cur > 0)}>{rvIcon('prev', 20)}</button>
+          <div data-reveal-reviewpos style={{ flex:1, textAlign:'center', fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>{n ? cur + 1 : 0} / {n}</div>
+          <button type="button" data-reveal-reviewnext aria-label="Következő" disabled={cur >= n - 1} onClick={() => go(cur + 1)} style={navBtn(cur < n - 1)}>{rvIcon('chev', 20)}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 // ── Operátor (v10.445): a Szülők készletével, a DNR téma színeivel ─────────────────
 // Fentről: feltöltés · (jóváhagyásra várók csíkja) · „A vetítőn" + tippek · LAPOZÓ, ami a
 // maradék helyet kapja. A lapon: fejléc (sorszám, név, Elrejt, 🗑) → a KÉP sötét háttéren,
@@ -43952,6 +44006,7 @@ function RevealOperator({ onBack }) {
   const [errs, setErrs] = React.useState([]);
   const [confirmDel, setConfirmDel] = React.useState(null);
   const [zoom, setZoom] = React.useState(null);
+  const [review, setReview] = React.useState(false);
   // v10.437: az operátor NEM fotóz az appból — a saját kamerájával készíti, és csak feltölti.
   const pickRef = React.useRef(null);
   const onFiles = (fl) => {
@@ -43968,6 +44023,8 @@ function RevealOperator({ onBack }) {
   const approve = p => { if (db) db.collection('revealPhotos').doc(p.id).set({ pending:false, at:Date.now() }, { merge:true }).catch(() => {}); };
   const del = (p) => { if (db) db.collection('revealPhotos').doc(p.id).delete().catch(() => {}); setConfirmDel(null); };
   const pending = items.filter(p => p.pending);
+  // ⚠️ kiürült → zárva is marad (különben egy később érkező beküldés magától felnyitná)
+  React.useEffect(() => { if (!pending.length && review) setReview(false); }, [pending.length]);
   const approved = items.filter(p => !p.pending);
   const shown = approved.filter(p => !p.hidden).length;
   const latest = approved.slice().reverse();                 // ⚠️ a LEGÚJABB elöl
@@ -43989,8 +44046,14 @@ function RevealOperator({ onBack }) {
       <AppBar title="Operátor" onBack={onBack} />
       <div data-reveal-opscroll style={{ flex:1, minHeight:0, overflowY:'auto', display:'flex', flexDirection:'column', padding:'10px 16px calc(10px + env(safe-area-inset-bottom))', boxSizing:'border-box', WebkitOverflowScrolling:'touch' }}>
         <div style={{ flex:'1 0 auto', width:'100%', maxWidth:720, margin:'0 auto', display:'flex', flexDirection:'column', gap:10 }}>
-          <button type="button" data-reveal-pick onClick={() => pickRef.current && pickRef.current.click()} style={rvBtn('primary', { height:48, borderRadius:14, fontSize:16, flexShrink:0 })}>
-            <span aria-hidden="true" style={{ fontSize:20, lineHeight:1 }}>🖼️</span>Képek feltöltése</button>
+          <div style={{ display:'flex', gap:8, flexShrink:0 }}>
+            <button type="button" data-reveal-pick onClick={() => pickRef.current && pickRef.current.click()} style={rvBtn('primary', { flex:1, minWidth:0, height:48, borderRadius:14, fontSize:15 })}>
+              <span aria-hidden="true" style={{ fontSize:20, lineHeight:1 }}>🖼️</span>{pending.length ? 'Feltöltés' : 'Képek feltöltése'}</button>
+            {pending.length > 0 && (
+              <button type="button" data-reveal-pendbtn onClick={() => setReview(true)} style={rvBtn('secondary', { flex:1, minWidth:0, height:48, borderRadius:14, fontSize:15, fontWeight:900, border:`2px solid ${REVEAL_PINK}` })}>
+                Jóváhagyás<span style={{ minWidth:24, height:24, padding:'0 7px', borderRadius:999, background:REVEAL_PINK, color:'#fff', fontSize:13, display:'inline-flex', alignItems:'center', justifyContent:'center', boxSizing:'border-box' }}>{pending.length}</span></button>
+            )}
+          </div>
           <input ref={pickRef} data-reveal-input type="file" accept="image/*" multiple style={{ display:'none' }} onChange={e => { onFiles(e.target.files); e.target.value = ''; }} />
           {busy.total > 0 && (
             <div data-reveal-progress style={rvCard({ padding:'10px 14px' })}>
@@ -44002,30 +44065,6 @@ function RevealOperator({ onBack }) {
             <div data-reveal-errors style={rvCard({ padding:'10px 14px', fontFamily:T.font, fontSize:13, fontWeight:700, color:'#A3342C', lineHeight:1.5, background:'#FBE7E4', border:'none' })}>
               {errs.map((e, i) => <div key={i}>⚠️ {e}</div>)}
             </div>
-          )}
-          {pending.length > 0 && (
-            <section data-reveal-pending style={rvCard({ padding:'10px 0 12px', border:`2px solid ${REVEAL_PINK}` })}>
-              <div style={{ display:'flex', alignItems:'center', gap:8, padding:'0 14px 8px' }}>
-                <span style={{ flex:1, fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink }}>Jóváhagyásra vár</span>
-                {rvPill(String(pending.length), 'pink')}
-              </div>
-              <div style={{ display:'flex', gap:10, overflowX:'auto', padding:'0 14px', scrollbarWidth:'none' }}>
-                {pending.map(p => (
-                  <div key={p.id} data-reveal-pend={p.id} style={{ flex:'0 0 112px', display:'flex', flexDirection:'column', gap:6 }}>
-                    <div style={{ position:'relative', height:96, borderRadius:12, overflow:'hidden', background: p.kind === 'wish' ? 'linear-gradient(165deg, #FFEFF5, #EAF4FD)' : DARK }}>
-                      {p.kind === 'wish'
-                        ? <div style={{ position:'absolute', inset:0, padding:'8px', display:'flex', alignItems:'center', justifyContent:'center', textAlign:'center', fontFamily:T.font, fontWeight:800, fontSize:11, color:'#3A2440', lineHeight:1.3, overflow:'hidden', overflowWrap:'anywhere' }}>{p.text}</div>
-                        : <img src={p.src} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />}
-                      {p.by && <div style={{ position:'absolute', left:4, right:4, bottom:4, padding:'2px 6px', borderRadius:999, background:'rgba(0,0,0,0.6)', color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:10, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.by}</div>}
-                    </div>
-                    <div style={{ display:'flex', gap:4 }}>
-                      <button type="button" data-reveal-approve onClick={() => approve(p)} style={rvBtn('small', { flex:1, height:32, padding:0, background:T.mint, color:'#fff', border:'none' })}>Mehet</button>
-                      <button type="button" data-reveal-reject onClick={() => del(p)} style={rvBtn('small', { flex:1, height:32, padding:0, color:'#A3342C', borderColor:'#E8B4AE' })}>Eldob</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
           )}
           <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
             <div style={{ flex:1, fontFamily:T.font, fontWeight:900, fontSize:15, color:T.ink }}>A vetítőn</div>
@@ -44073,6 +44112,7 @@ function RevealOperator({ onBack }) {
           )}
         </div>
       </div>
+      {review && pending.length > 0 && <RevealPendingReview items={pending} onApprove={approve} onReject={del} onClose={() => setReview(false)} />}
       {zoom && (
         // teljes képernyős nézet — a kép a lehető legnagyobb; koppintásra bezárul
         <div data-reveal-oplightbox onClick={() => setZoom(null)} style={{ position:'fixed', inset:0, zIndex:7000, background:'#000', display:'flex', alignItems:'center', justifyContent:'center', cursor:'zoom-out' }}>
