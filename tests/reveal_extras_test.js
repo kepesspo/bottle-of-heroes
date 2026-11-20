@@ -286,6 +286,53 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(await p.evaluate(() => !window.__fbStore.revealPhotos.junk2), '„Eldob" → törlődik');
   await p.evaluate(() => { delete window.__fbStore.revealPhotos.junk; });
 
+  console.log('\n===== 6b. VENDÉGENKÉNT 1 KÉP + 1 ÜZENET · VETÍTŐ-SAROKJELVÉNY · SZÜLŐI JÓVÁHAGYÁS (v10.449) =====');
+  await mountSide('RevealGuest', { cfg: cfgV });
+  await p.waitForTimeout(250);
+  ok(await has('#__side [data-reveal-guestdone="photo"]') && !(await has('#__side [data-reveal-guestpick]')), 'a képét már elküldte: a Kép fülön a saját képe, nincs feltöltő gomb');
+  ok(!(await p.evaluate(() => document.querySelector('#__side [data-reveal-guestinput]').multiple)), 'a vendég fájl-mezője egyetlen képet fogad');
+  const zsofiN = () => p.evaluate(() => Object.values(window.__fbStore.revealPhotos).filter(x => x.by === 'Zsófi').length);
+  const n0 = await zsofiN();
+  await p.setInputFiles('#__side [data-reveal-guestinput]', ROOT + '/assets/dnr_reveal_app.png'); await p.waitForTimeout(600);
+  ok((await zsofiN()) === n0, 'a rejtett mezőn át sem küldhet második képet', n0 + ' → ' + (await zsofiN()));
+  await p.click('#__side [data-reveal-guesttab="wish"]'); await p.waitForTimeout(100);
+  ok(await has('#__side [data-reveal-guestdone="wish"]') && !(await has('#__side [data-reveal-wishinput]')), 'az üzenetét is elküldte: nincs második üzenet');
+  await p.click('#__side button:text-is("Nem te vagy?")'); await p.waitForTimeout(80);
+  await p.fill('#__side [data-reveal-guestname]', 'Álnév'); await p.keyboard.press('Enter'); await p.waitForTimeout(150);
+  ok(await has('#__side [data-reveal-guestdone]'), '⚠️ névcserével sem nyílik új keret (eszközönkénti azonosító)');
+  const wishId = gWish[0];
+  await p.evaluate(id => firebase.firestore().collection('revealPhotos').doc(id).delete(), wishId); await p.waitForTimeout(200);
+  await p.click('#__side [data-reveal-guesttab="wish"]'); await p.waitForTimeout(100);
+  ok(await has('#__side [data-reveal-wishinput]'), 'ha az üzenetét eldobták (törlődött), újra írhat');
+  // a vetítő felső sarkai
+  ok(!(await has('[data-reveal-pendbadge]')), 'nincs várakozó → nincs jelvény a jobb felső sarokban');
+  await p.evaluate(px => firebase.firestore().collection('revealPhotos').doc('pz1').set({ src: px, w: 1, h: 1, at: 200, by: 'Vendég', pending: true }), PX);
+  await p.evaluate(() => firebase.firestore().collection('revealPhotos').doc('pz2').set({ kind: 'wish', text: 'Szia!', by: 'Vendég2', at: 201, pending: true }));
+  await p.waitForTimeout(200);
+  const corners = await p.evaluate(() => { const b = document.querySelector('[data-reveal-pendbadge]'), t = document.querySelector('[data-reveal-tally]'), bd = document.querySelector('[data-reveal-board]');
+    const rb = b && b.getBoundingClientRect(), rt = t && t.getBoundingClientRect();
+    return { n: b && b.getAttribute('data-reveal-pendbadge'), bRight: rb && innerWidth - rb.right, tLeft: rt && rt.left, bTop: rb && rb.top, tBottom: rt && rt.bottom, bBottom: rb && rb.bottom, boardTop: bd && bd.getBoundingClientRect().top, vw: innerWidth }; });
+  ok(corners.n === '2' && corners.bRight < corners.vw * 0.05 && corners.bTop < 140, 'jobb felső sarokban: 2 jóváhagyásra vár', JSON.stringify(corners));
+  ok(corners.tLeft < corners.vw * 0.05 && (await p.textContent('[data-reveal-count]')).trim() === '3 kép', 'bal fent fixen a képek száma', JSON.stringify(corners));
+  ok(corners.boardTop >= Math.max(corners.tBottom, corners.bBottom), 'a polaroid-fal a sarok-elemek ALATT kezdődik', JSON.stringify(corners));
+  // szülői jóváhagyás
+  await mountSide('RevealTrigger');
+  await p.waitForTimeout(200);
+  await p.fill('#__side [data-reveal-code]', '2026'); await p.keyboard.press('Enter'); await p.waitForTimeout(250);
+  ok(await has('#__side [data-reveal-ppendbtn]') && (await p.textContent('#__side [data-reveal-ppendcount]')).trim() === '2', 'a Szülők állapot-sorában: Jóváhagyás (2)');
+  await p.evaluate(() => document.querySelector('#__side [data-reveal-ppendbtn]').click()); await p.waitForTimeout(200);
+  ok(await has('#__side [data-reveal-review]') && !(await has('[data-reveal-pdock]')), 'megnyílik a közös lapozó, és a dokk eltűnik alatta');
+  await p.evaluate(() => document.querySelector('#__side [data-reveal-pend="pz1"] [data-reveal-approve]').click()); await p.waitForTimeout(200);
+  await p.evaluate(() => document.querySelector('#__side [data-reveal-pend="pz2"] [data-reveal-reject]').click()); await p.waitForTimeout(250);
+  st = await store();
+  ok(st.ph.pz1 && st.ph.pz1.pending === false && !st.ph.pz2, 'a Szülők jóváhagyták a képet, eldobták az üzenetet');
+  ok(!(await has('#__side [data-reveal-review]')) && await has('[data-reveal-pdock]') && !(await has('#__side [data-reveal-ppendbtn]')), 'utána bezárul, a dokk visszajön, a gomb eltűnik');
+  ok(!(await has('[data-reveal-pendbadge]')) && (await p.textContent('[data-reveal-count]')).trim() === '4 kép', 'a vetítőn: nincs várakozó-jelvény, 4 kép');
+  // a későbbi blokkok (album) az eredeti állapotra épülnek: az üzenet vissza, a plusz kép ki
+  await p.evaluate(({ id, v }) => { const db = firebase.firestore(); db.collection('revealPhotos').doc('pz1').delete(); return db.collection('revealPhotos').doc(id).set(Object.assign({}, v, { pending: false })); }, { id: gWish[0], v: gWish[1] });
+  await p.waitForTimeout(150);
+  await p.evaluate(() => { const d = document.getElementById('__side'); if (d) { d.__r.unmount(); d.remove(); } });
+
   console.log('\n===== 7. BABAKVÍZ (papíron, csak lapozás) =====');
   const key = await p.evaluate(() => REVEAL_QUIZ_DEFAULT.map(q => 'ABC'[q.ok]).join(''));
   ok(await p.evaluate(() => REVEAL_QUIZ_DEFAULT.length === 20 && REVEAL_QUIZ_DEFAULT.every(q => q.opts.length === 3)), 'a PDF 20 kérdése, mind A/B/C');

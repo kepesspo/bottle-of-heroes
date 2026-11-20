@@ -4093,3 +4093,27 @@ eltakarta. A javítás a Pub mintája (`docs/safe-area.md`):
 kell, és a kattintás JS `.click()` (a teszt-oldalpanel 6500-as rétege alatt van).
 Mérve iOS-szimulációval (402×812, 34 px home-sáv): a gombok alja = a fül-sáv teteje,
 nincs átfedés.
+
+## Gender Reveal: 1 kép + 1 üzenet / vendég, szülői jóváhagyás, vetítő-sarkok (v10.449)
+- **Vendégenként EGY kép és EGY üzenet** (`REVEAL_GUEST_LIMIT`). ⚠️ Az azonosító
+  **eszközönkénti** (`revealGuestId()` → `boh_reveal_gid`, a beküldésen `gid` mező), NEM a
+  név — a „Nem te vagy?" névcserével különben új keret nyílna. Régi, `gid` nélküli tételnél a
+  név számít (`revealGuestMine`). Elküldés után a fül „elküldve" kártyát mutat a saját
+  beküldéssel és az állapotával (`data-reveal-guestdone`); a fájl-mező nem `multiple`, és az
+  `onFiles` maga is ellenőriz (a rejtett mezőn át se menjen második). A küldés KÖZBEN is zár
+  (`sending`) — a pillanatkép visszaérkezéséig egy második koppintás átcsúszna. **Eldobott
+  (törölt) beküldés után újra küldhet.**
+- **A Szülők is jóváhagyhatnak:** az állapot-sorban „N Jóváhagyás ›" gomb
+  (`data-reveal-ppendbtn`, csak ha van várakozó) → UGYANAZ a `RevealPendingReview`, mint az
+  operátornál. A jóváhagyás/eldobás közös helper: `revealApprove` / `revealRemove`.
+  ⚠️ A body-ba portálozott dokk (v10.448) a fölé nyíló lapok alatt **eltűnik**
+  (`!review && !sheet` — a kérdés-szerkesztő `onSheet`-tel szól fel), NEM rétegsorrenddel
+  (v10.322 Pub-minta): a gyökér konténer stacking-contextje miatt a lap z-indexe nem
+  feltétlenül győz.
+- **A vetítőn fixen:** bal fent a képek (és üzenetek) száma (`data-reveal-tally`, benne a
+  `data-reveal-count`), jobb fent — csak ha van — „N jóváhagyásra vár"
+  (`data-reveal-pendbadge`). A vetítő ezért MINDEN tételt figyel (`useRevealPhotos(true)`), a
+  sorrend a szűrt listából megy. A felső sor minden eleme `data-reveal-topm`: a fal a
+  legalacsonyabb ALJA alatt kezdődik (a régi egyetlen `topRef` helyett). Kvíz és leleplezés
+  alatt a sarkok nincsenek.
+Teszt: `reveal_extras_test.js` 6b. blokk.
