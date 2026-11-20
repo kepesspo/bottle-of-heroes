@@ -4085,8 +4085,8 @@ eltakarta. A javítás a Pub mintája (`docs/safe-area.md`):
   állapotba teszi): a Leleplezés fül a gombjait (`data-reveal-firepanel`) **ide
   portálozza** — így a fő akció mindig a hüvelykujj alatt van, és nem csúszhat a fül-sáv
   alá. A többi fül nem használja (a rés üres).
-- **z-index 6600**: a megerősítő modal (`ActionModal` 9998) és a kérdés-szerkesztő lap
-  (7000) FÖLÉ kerül, a tartalom fölé igen.
+- **z-index 6600**: a tartalom fölött, de a megerősítő modal (`ActionModal` 9998) és a
+  kérdés-szerkesztő lap (7000) ALATT — azok eltakarják a dokkot.
 - A görgő terület alsó paddingja a fültől függ (Leleplezés: +220, a többi: +100), különben
   az utolsó kártya a dokk alá görgetődne.
 ⚠️ Tesztben a dokk a `body`-ban van, nem a `#__side`-ban — a szelektor `#__side` NÉLKÜL
