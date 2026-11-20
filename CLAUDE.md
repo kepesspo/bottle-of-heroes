@@ -4035,3 +4035,19 @@ Teszt: `reveal_extras_test.js` 1. blokk (négy fül, mi melyik fülön van, ninc
 gomb, a cím azonnal ment, az időpont a sorra koppintva nyílik, a kapcsoló ment), 7. blokk
 (Kvíz fül, Vetítő fül, az ugró-rács két része). Mérve jade témán, 390×844: mind a
 négy fül görgetés nélkül kifér.
+
+## Gender Reveal operátor: a kép jól látható, a tipp-választó kicsi (v10.445)
+A Szülők készletével (`rvBtn`, `rvCard`, `rvPill`, `rvIcon`) és a DNR téma színeivel.
+- **A kép sötét háttéren** (`#16131C` — fotónézegető-szabvány, a kép ettől „kiemelkedik"),
+  `contain`, a lapozó a maradék helyet kapja; **koppintásra teljes képernyő**
+  (`data-reveal-oplightbox`, fekete, koppintásra zár). Az üzenet a közös
+  `RevealWishPolaroid`-dal látszik (ugyanaz, mint a vetítőn).
+- **A tipp-választó egy sor** (`RevealVotePicker`): `[👤|👥]` ikon-kapcsoló + Kisfiú /
+  Kislány 40 px-es gomb; párnál egy „2. tipp" sor jön. Mérve 390×844-en, páros módban
+  a kép 350 → **451 px**; a választó személynél 59 px.
+- ⚠️ **A lapozó lapján `minWidth:0`** kell: a flex-elem alapértelmezett `min-width:auto`-ja
+  a tartalomhoz (fejléc: sorszám, LEGÚJABB, név, Elrejt, 🗑) szélesítette a lapot, és a jobb
+  széle (a „Kislány" gomb) levágódott. A LEGÚJABB jelvény ezért kisebb is.
+
+Teszt: `reveal_votes_test.js` 6. blokk (36–44 px-es gomb, ≤ 64 px-es választó, teljes
+képernyős nézet nyit/zár) és 7. blokk (páros módban a kép ≥ 400 px).

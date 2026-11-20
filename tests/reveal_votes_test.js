@@ -125,7 +125,13 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   });
   ok(sl.id === 'c' && sl.num === '1. kép' && sl.newest, 'a legújabb elöl, felül „1. kép" + LEGÚJABB', JSON.stringify(sl));
   ok(sl.ctlAbove && !sl.onImg, 'az Elrejt és a 🗑 a lap fejlécében, nem a képen');
-  ok(sl.vh >= 48, 'a Kisfiú / Kislány gomb elég nagy (≥ 48 px)', sl.vh);
+  ok(sl.vh >= 36 && sl.vh <= 44, 'v10.445: a Kisfiú / Kislány gomb kompakt (36–44 px)', sl.vh);
+  const pk = await p.evaluate(() => { const v = document.querySelector('#__side [data-reveal-thumb][data-idx="0"] [data-reveal-votepick]'); return Math.round(v.getBoundingClientRect().height); });
+  ok(pk <= 64, 'v10.445: személynél az egész választó egy sor (≤ 64 px)', pk);
+  await clickSide('[data-reveal-thumb][data-idx="0"] [data-reveal-slideimg]'); await p.waitForTimeout(150);
+  ok(await has('#__side [data-reveal-oplightbox] img'), 'a képre koppintva teljes képernyős nézet');
+  await clickSide('[data-reveal-oplightbox]'); await p.waitForTimeout(120);
+  ok(!(await has('#__side [data-reveal-oplightbox]')), 'koppintásra bezárul');
   ok(/x/.test(sl.snap) && sl.pos === '1 / 3', 'vízszintes lapozó (scroll-snap), alul „1 / 3"', sl.snap + ' ' + sl.pos);
   await clickSide('[data-reveal-slidenext]'); await p.waitForTimeout(700);
   const s2 = await p.evaluate(() => { const tr = document.querySelector('#__side [data-reveal-track]'); return { pos: document.querySelector('#__side [data-reveal-slidepos]').textContent, x: Math.round(tr.scrollLeft / tr.clientWidth * 100) / 100 }; });
@@ -152,7 +158,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   };
   const f1 = await fit(390, 844);
   ok(f1.over <= 1 && f1.navB <= 844 && f1.pair === '1', '390×844 (pár-móddal): nincs függőleges görgetés, a lapozó is látszik', JSON.stringify(f1));
-  ok(f1.imgH >= 300, 'a kép a maradék helyet kapja (≥ 300 px)', f1.imgH);
+  ok(f1.imgH >= 400, 'v10.445: a kép jól látható — páros módban is ≥ 400 px', f1.imgH);
   const f2 = await fit(375, 667);
   ok(f2.over <= 1 && f2.navB <= 667 && f2.imgH >= 120, '375×667 (iPhone SE): itt is kifér', JSON.stringify(f2));
   await p.evaluate(() => { const d = document.getElementById('__full'); if (d) { d.__r.unmount(); d.remove(); } });
