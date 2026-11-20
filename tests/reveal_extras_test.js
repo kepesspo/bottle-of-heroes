@@ -280,7 +280,10 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(await p.evaluate(() => (window.__fbStore.config.revealProjector || {}).qr === false), 'a QR is innen kapcsolható');
   await p.click('#__side [data-reveal-ctl-qr="1"]'); await p.waitForTimeout(100);
   await p.click('#__side [data-reveal-quiz-next]'); await p.waitForTimeout(250);
-  ok((await qz()) === 'q' && (await p.textContent('[data-reveal-quiz]')).includes('Első kérdés?'), 'a Szülők indítják: a vetítőn az 1. kérdés');
+  ok((await qz()) === 'cover' && (await p.textContent('[data-reveal-quiz-covertitle]')) === 'Babakvíz' && !(await has('[data-reveal-quiz-q]')), 'v10.442: az első oldal a BORÍTÓ, nem a kérdés');
+  ok((await p.textContent('#__side [data-reveal-quiz-next]')).includes('Első kérdés'), 'a borító után „Első kérdés ›"');
+  await p.click('#__side [data-reveal-quiz-next]'); await p.waitForTimeout(200);
+  ok((await qz()) === 'q' && (await p.textContent('[data-reveal-quiz]')).includes('Első kérdés?'), 'utána a vetítőn az 1. kérdés');
   ok(!(await has('[data-reveal-quiz] [data-reveal-qr]')), 'a kvízben nincs QR-kód (papíron szavaznak)');
   ok((await p.evaluate(() => document.querySelectorAll('[data-reveal-quiz-opt][data-correct="1"]').length)) === 0, 'kérdezéskor NINCS kiemelve a helyes válasz');
   await p.click('#__side [data-reveal-quiz-next]'); await p.waitForTimeout(150);
@@ -289,20 +292,34 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await p.waitForTimeout(200);
   ok(!(await has('#__side [data-reveal-guestquiz]')) && !(await has('#__side [data-reveal-guestopt]')), 'a vendég telefonján nincs kvíz-válasz');
   await p.keyboard.press('ArrowRight'); await p.waitForTimeout(150);
-  ok((await qz()) === 'sol' && (await qi()) === '0', 'a kérdések után a megoldások jönnek (1. kérdés újra)');
+  ok((await qz()) === 'solcover' && (await p.textContent('[data-reveal-quiz-covertitle]')) === 'Megoldások' && !(await has('[data-reveal-quiz-opt]')), 'v10.442: a megoldások előtt is BORÍTÓ jön');
+  await p.keyboard.press('ArrowRight'); await p.waitForTimeout(150);
+  ok((await qz()) === 'sol' && (await qi()) === '0', 'a borító után a megoldások (1. kérdés újra)');
   ok((await attr('[data-reveal-quiz-opt="1"]', 'data-correct')) === '1' && (await p.textContent('[data-reveal-quiz]')).includes('Megoldások'), 'a megoldásnál a helyes válasz kiemelve');
+  await p.keyboard.press('ArrowLeft'); await p.waitForTimeout(120);
   await p.keyboard.press('ArrowLeft'); await p.waitForTimeout(150);
-  ok((await qz()) === 'q' && (await qi()) === '1', '‹ visszalép az utolsó kérdésre');
+  ok((await qz()) === 'q' && (await qi()) === '1', '‹ visszalép a borítón át az utolsó kérdésre');
   await mountSide('RevealQuizControl'); await p.waitForTimeout(150);   // a Szülők lapozója (a kód mögötti rész)
-  await p.click('#__side [data-reveal-quiz-next]'); await p.waitForTimeout(120);
-  await p.click('#__side [data-reveal-quiz-next]'); await p.waitForTimeout(120);
-  ok((await qz()) === 'sol' && (await qi()) === '1' && (await attr('[data-reveal-quiz-opt="0"]', 'data-correct')) === '1', '2. megoldás: A');
+  ok(!(await has('#__side [data-reveal-quiz-jumps]')), 'az ugró-rács alapból csukva');
+  await p.click('#__side [data-reveal-quiz-jumpbtn]'); await p.waitForTimeout(120);
+  const jl = await p.evaluate(() => [...document.querySelectorAll('#__side [data-reveal-quiz-jump]')].map(b => b.getAttribute('data-reveal-quiz-jump') + ':' + b.textContent).join(','));
+  ok(jl === '0:Borító,1:1,2:2,3:Borító,4:1,5:2,6:Pontozás', 'ugró-rács: borító + kérdések, borító + megoldások, pontozás', jl);
+  ok((await attr('#__side [data-reveal-quiz-jump="2"]', 'aria-pressed')) === 'true', 'a rács jelöli, hol tartunk (2. kérdés)');
+  await p.click('#__side [data-reveal-quiz-jump="5"]'); await p.waitForTimeout(150);
+  ok((await qz()) === 'sol' && (await qi()) === '1' && (await attr('[data-reveal-quiz-opt="0"]', 'data-correct')) === '1', 'ugrás: rögtön a 2. megoldás (A)');
   ok((await p.textContent('#__side [data-reveal-quiz-next]')).includes('Pontozás'), 'az utolsó megoldás után „Pontozás ›"');
   ok(!(await has('[data-reveal-quiznav]')), 'v10.438: a vetítőn nincs kvíz-lapozó gombsor');
-  await p.click('#__side [data-reveal-quiz-next]'); await p.waitForTimeout(200);
-  ok((await qz()) === 'end' && (await p.evaluate(() => document.querySelectorAll('[data-reveal-quiz-band]').length)) === 4, 'pontozás: a négy pontsáv a lapról');
+  await p.click('#__side [data-reveal-quiz-jump="0"]'); await p.waitForTimeout(150);
+  ok((await qz()) === 'cover' && await p.evaluate(() => document.querySelector('#__side [data-reveal-quiz-prev]').disabled), 'ugrás vissza a borítóra (ott az „‹ Előző" tiltott)');
+  await p.click('#__side [data-reveal-quiz-jump="6"]'); await p.waitForTimeout(200);
+  ok((await qz()) === 'end' && (await p.evaluate(() => document.querySelectorAll('[data-reveal-quiz-band]').length)) === 4, 'ugrás a pontozásra: a négy pontsáv a lapról');
   await p.click('#__side [data-reveal-quiz-next]'); await p.waitForTimeout(200);
   ok(!(await has('[data-reveal-quiz]')) && await has('[data-reveal-board]'), 'kvíz vége → vissza a polaroid-fal');
+  await p.click('#__side [data-reveal-quiz-jump="3"]'); await p.waitForTimeout(200);
+  const qst = await p.evaluate(() => window.__fbStore.config.revealQuizState);
+  ok((await qz()) === 'solcover' && qst.run && qst.qs && qst.qs.length === 2, 'nem futó kvíznél az ugrás el is indítja (rögtön a megoldásokhoz)', JSON.stringify({ ph: qst.phase, n: (qst.qs || []).length }));
+  await p.click('#__side [data-reveal-quiz-end]'); await p.waitForTimeout(200);
+  ok(!(await has('[data-reveal-quiz]')), 'megszakítva vissza a képfolyam');
 
   console.log('\n===== 8. ALBUM =====');
   const zipB64 = await p.evaluate(async () => {

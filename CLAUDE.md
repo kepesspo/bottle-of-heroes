@@ -3957,3 +3957,24 @@ a képernyő alá csúsztak. Most:
 - ha mégsem fér ki (hosszú „Jóváhagyásra vár" lista), görget: a lapozó min. 360 px.
 Mérve, páros tipp-móddal: 390×844 → kép 350 px, 375×667 → 173 px, mindkettő görgetés nélkül.
 Teszt: `reveal_votes_test.js` 7. blokk.
+
+## Babakvíz: két borító + ugrás bármelyik oldalra (v10.442)
+A menet: **Borító (`cover`) → 20 kérdés (`q`) → Megoldások borító (`solcover`) → 20
+megoldás (`sol`) → Pontozás (`end`)**. A kvíz eddig rögtön az 1. kérdéssel nyitott, és a
+megoldások is szó nélkül kezdődtek.
+- **EGY lineáris oldallista** (`revealQuizPages(n)`, `revealQuizPos(st)`): a léptetés
+  (`revealQuizStep`, ±1) és az ugrás (`revealQuizGoto(st, pos, qs)`) ugyanazt a pozíciót
+  használja — két külön logika elcsúszna egymástól. 20 kérdésnél 43 oldal.
+- **Nem futó kvíznél az ugrás el is indítja** (új `run`, a kérdések lemásolva — mint az
+  indításnál), így egyenesen a megoldásokhoz is lehet menni.
+- **A Szülők lapozóján** „🔢 Ugrás oldalra" (alapból csukva): két rács (Kérdések: Borító +
+  1–20 · Megoldások: Borító + 1–20) és a Pontozás; az aktuális oldal kiemelve
+  (`aria-pressed`). A borítón az „‹ Előző" tiltott.
+- **A borítók a vetítőn:** logó + nagy cím („Babakvíz" / „Megoldások"), a kérdés-borítón
+  a kérdésszám és az A/B/C korongok a papírlap színeivel.
+- ⚠️ A régi `phase:'q'` → `'sol'` közvetlen átmenet megszűnt: aki a lépés-logikához nyúl,
+  a lista sorrendjét módosítsa, ne külön ágat írjon.
+
+Teszt: `reveal_extras_test.js` 7. blokk (az első oldal a borító, a megoldások előtt is
+borító, visszalépés a borítón át, az ugró-rács 7 oldala 2 kérdésnél, ugrás a 2.
+megoldásra / a borítóra / a pontozásra, és nem futó kvíznél az ugrás elindítja).
