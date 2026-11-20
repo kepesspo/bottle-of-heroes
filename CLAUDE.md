@@ -3924,3 +3924,22 @@ Teszt: `reveal_extras_test.js` 1. (admin csak a titkos rész; a Szülők kárty�
 és 3c. blokk (3 darab < 1 MB, a vetítő betölti, a leleplezés `blob:` videót visz, törlés);
 `reveal_test.js` 4. (a vetítő sávján csak Vissza · Teljes képernyő) és 7. (ürítés a
 Szülők kártyájáról).
+
+## Gender Reveal: az operátor képei lapozóban, a legújabb elöl (v10.440)
+A „A vetítőn" rács helyett **vízszintes lapozó** (`data-reveal-track`, `scroll-snap x
+mandatory`): egy kép = egy teljes szélességű lap, ujjal oldalra húzva vagy az alsó ‹ ›
+gombokkal (`data-reveal-slideprev/next`, közöttük `N / M`) lép.
+- **A legújabb mindig az első** (`latest` = fordított sorrend), „1. kép" + LEGÚJABB
+  jelöléssel. ⚠️ Új kép érkezésekor (feltöltés vagy jóváhagyás — az `at` friss lesz) a
+  lapozó **visszaugrik az elejére**, különben az index elcsúszna, és az operátor a régi
+  helyen egy másik képet látna.
+- **A lap fejléce** (`data-reveal-slidehead`): felül „N. kép / M", jobbra az **Elrejt** és a
+  **🗑** — már NEM a képen ülnek, így tippelés közben nem lehet véletlenül elrejteni/törölni.
+- A kép **egészben** látszik (`objectFit:contain`, `clamp(220px, 46vh, 460px)` magas).
+- **A tipp-választó nagyobb** (`RevealVotePicker`): a Kisfiú/Kislány gomb legalább 50 px
+  magas, 16 px-es felirattal; a Személy/Pár váltó is nagyobb.
+- A tesztfogódzók maradtak (`data-reveal-thumb`, `data-reveal-hide`, `data-reveal-del`,
+  `data-reveal-votepick`) — minden lap a DOM-ban van, csak oldalra görgetve.
+
+Teszt: `reveal_votes_test.js` 6. blokk (a legújabb elöl, a gombok a fejlécben és nem a
+képen, ≥ 48 px-es tipp-gomb, „›" és húzás is lép, új képre visszaugrik az elejére).

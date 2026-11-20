@@ -109,6 +109,34 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   const rt = await p.evaluate(() => { const e = document.querySelector('#__side [data-reveal-ctl-tally]'); return e ? e.textContent : null; });
   ok(rt && /1.*·.*1/.test(rt), 'a Szülők vetítő-panelje is kiírja az állást', rt);
 
+  console.log('\n===== 6. OPERÁTOR: LAPOZÓ (v10.440) =====');
+  await mountSide('RevealOperator'); await p.waitForTimeout(300);
+  const sl = await p.evaluate(() => {
+    const first = document.querySelector('#__side [data-reveal-thumb][data-idx="0"]');
+    const head = first.querySelector('[data-reveal-slidehead]'), img = first.querySelector('img');
+    const hide = head.querySelector('[data-reveal-hide]'), del = head.querySelector('[data-reveal-del]');
+    const vbtn = first.querySelector('[data-reveal-vote="boy"]');
+    const tr = document.querySelector('#__side [data-reveal-track]');
+    return { id: first.getAttribute('data-reveal-thumb'), num: first.querySelector('[data-reveal-slidenum]').textContent, newest: head.textContent.includes('LEGÚJABB'),
+      ctlAbove: !!(hide && del) && del.getBoundingClientRect().bottom <= img.getBoundingClientRect().top + 1,
+      onImg: !!img.parentElement.querySelector('[data-reveal-hide], [data-reveal-del]'),
+      vh: Math.round(vbtn.getBoundingClientRect().height), snap: getComputedStyle(tr).scrollSnapType,
+      pos: document.querySelector('#__side [data-reveal-slidepos]').textContent };
+  });
+  ok(sl.id === 'c' && sl.num === '1. kép' && sl.newest, 'a legújabb elöl, felül „1. kép" + LEGÚJABB', JSON.stringify(sl));
+  ok(sl.ctlAbove && !sl.onImg, 'az Elrejt és a 🗑 a lap fejlécében, nem a képen');
+  ok(sl.vh >= 48, 'a Kisfiú / Kislány gomb elég nagy (≥ 48 px)', sl.vh);
+  ok(/x/.test(sl.snap) && sl.pos === '1 / 3', 'vízszintes lapozó (scroll-snap), alul „1 / 3"', sl.snap + ' ' + sl.pos);
+  await clickSide('[data-reveal-slidenext]'); await p.waitForTimeout(700);
+  const s2 = await p.evaluate(() => { const tr = document.querySelector('#__side [data-reveal-track]'); return { pos: document.querySelector('#__side [data-reveal-slidepos]').textContent, x: Math.round(tr.scrollLeft / tr.clientWidth * 100) / 100 }; });
+  ok(s2.pos === '2 / 3' && s2.x === 1, '„›" a következő képre lép', JSON.stringify(s2));
+  await p.evaluate(() => { const tr = document.querySelector('#__side [data-reveal-track]'); tr.scrollLeft = tr.clientWidth * 2; tr.dispatchEvent(new Event('scroll')); }); await p.waitForTimeout(200);
+  ok((await p.textContent('#__side [data-reveal-slidepos]')) === '3 / 3', 'oldalra húzva is lép (3 / 3)');
+  await p.evaluate(px => firebase.firestore().collection('revealPhotos').doc('d').set({ src: px, w: 1, h: 1, at: 10, hidden: false, by: 'Vendég d' }), PX);
+  await p.waitForTimeout(800);
+  const s3 = await p.evaluate(() => { const tr = document.querySelector('#__side [data-reveal-track]'); return { first: document.querySelector('#__side [data-reveal-thumb][data-idx="0"]').getAttribute('data-reveal-thumb'), pos: document.querySelector('#__side [data-reveal-slidepos]').textContent, x: tr.scrollLeft }; });
+  ok(s3.first === 'd' && s3.pos === '1 / 4' && s3.x < 5, 'új kép → az elejére ugrik, az új kép az első', JSON.stringify(s3));
+
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
   console.log(fail ? `\n${fail} HIBA` : '\nMIND ZÖLD');

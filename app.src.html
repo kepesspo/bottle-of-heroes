@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.439';
+const APP_VERSION = 'v10.440';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -43327,22 +43327,22 @@ function RevealVotePicker({ item }) {
   const votes = Array.isArray(item.votes) ? item.votes : [];
   const cur = [votes[0] || null, votes[1] || null];
   const set = (i, v) => { const nv = cur.slice(); nv[i] = nv[i] === v ? null : v; revealVoteWrite(item, pair, nv); };
-  const seg = on => ({ flex:1, padding:'5px 0', borderRadius:8, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:11.5,
+  const seg = on => ({ flex:1, padding:'11px 0', borderRadius:10, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:15,
     background: on ? T.surface : 'transparent', color: on ? T.ink : T.inkSoft, boxShadow: on ? '0 1px 3px rgba(0,0,0,0.12)' : 'none' });
-  const vb = (on, s) => ({ flex:1, minWidth:0, padding: pair ? '7px 0' : '7px 2px', borderRadius:10, cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize: pair ? 11 : 12,
-    border: on ? `1.5px solid ${REVEAL_RESULTS[s].c1}` : `1.5px solid ${T.border}`, background: on ? REVEAL_RESULTS[s].c1 : 'transparent', color: on ? '#fff' : T.ink,
+  const vb = (on, s) => ({ flex:1, minWidth:0, minHeight:50, padding:'12px 4px', borderRadius:14, cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize: pair ? 15 : 16,
+    border: on ? `2px solid ${REVEAL_RESULTS[s].c1}` : `2px solid ${T.border}`, background: on ? REVEAL_RESULTS[s].c1 : 'transparent', color: on ? '#fff' : T.ink,
     whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' });
   const row = i => (
-    <div key={i} style={{ display:'flex', alignItems:'center', gap: pair ? 4 : 5 }}>
-      {pair && <span style={{ width:9, flexShrink:0, fontFamily:T.font, fontWeight:900, fontSize:11, color:T.inkSoft }}>{i + 1}</span>}
+    <div key={i} style={{ display:'flex', alignItems:'center', gap:8 }}>
+      {pair && <span style={{ width:14, flexShrink:0, fontFamily:T.font, fontWeight:900, fontSize:15, color:T.inkSoft, textAlign:'center' }}>{i + 1}</span>}
       {REVEAL_VOTE_SIDES.map(s => (
         <button key={s} data-reveal-vote={s} data-vote-idx={i} aria-pressed={cur[i] === s} onClick={() => set(i, s)} style={vb(cur[i] === s, s)}>{REVEAL_RESULTS[s].emoji} {REVEAL_RESULTS[s].name}</button>
       ))}
     </div>
   );
   return (
-    <div data-reveal-votepick={item.id} data-pair={pair ? '1' : '0'} style={{ padding:8, display:'flex', flexDirection:'column', gap:6 }}>
-      <div style={{ display:'flex', gap:3, padding:3, borderRadius:10, background:T.bg }}>
+    <div data-reveal-votepick={item.id} data-pair={pair ? '1' : '0'} style={{ padding:12, display:'flex', flexDirection:'column', gap:10 }}>
+      <div style={{ display:'flex', gap:4, padding:4, borderRadius:13, background:T.bg }}>
         <button data-reveal-votekind="single" aria-pressed={!pair} onClick={() => { if (pair) revealVoteWrite(item, false, cur); }} style={seg(!pair)}>👤 Személy</button>
         <button data-reveal-votekind="pair" aria-pressed={pair} onClick={() => { if (!pair) revealVoteWrite(item, true, cur); }} style={seg(pair)}>👥 Pár</button>
       </div>
@@ -43976,7 +43976,19 @@ function RevealOperator({ onBack }) {
   const pending = items.filter(p => p.pending);
   const approved = items.filter(p => !p.pending);
   const shown = approved.filter(p => !p.hidden).length;
-  const latest = approved.slice().reverse();
+  const latest = approved.slice().reverse();                 // ⚠️ a LEGÚJABB elöl
+  // lapozó: vízszintes, scroll-snap — ujjal húzva és a ‹ › gombokkal is lép
+  const trackRef = React.useRef(null);
+  const [slide, setSlide] = React.useState(0);
+  const nSlides = latest.length, curSlide = Math.min(slide, Math.max(0, nSlides - 1));
+  const goSlide = i => { const el = trackRef.current; if (!el) return; const k = Math.max(0, Math.min(nSlides - 1, i)); el.scrollTo({ left: k * el.clientWidth, behavior:'smooth' }); setSlide(k); };
+  const onTrackScroll = e => { const el = e.currentTarget, k = Math.round(el.scrollLeft / Math.max(1, el.clientWidth)); if (k !== slide) setSlide(k); };
+  // új kép érkezett (feltöltés vagy jóváhagyás) → vissza az elejére, hogy rögtön tippelni lehessen rá
+  const firstId = latest[0] ? latest[0].id : null, prevFirst = React.useRef(firstId);
+  React.useEffect(() => {
+    if (firstId && prevFirst.current && firstId !== prevFirst.current && trackRef.current) { trackRef.current.scrollTo({ left:0, behavior:'smooth' }); setSlide(0); }
+    prevFirst.current = firstId;
+  }, [firstId]);
   const tally = revealVoteTally(items);
   const bigBtn = (primary) => ({ flex:1, minWidth:0, padding:'18px 10px', borderRadius:18, border: primary ? 'none' : `2px solid ${T.mint}`, cursor:'pointer',
     background: primary ? T.mint : T.surface, color: primary ? '#fff' : T.mint, fontFamily:T.font, fontWeight:900, fontSize:16, display:'flex', flexDirection:'column', alignItems:'center', gap:6 });
@@ -44028,21 +44040,45 @@ function RevealOperator({ onBack }) {
             <div data-reveal-opcount style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft, textAlign:'right' }}>{tally.boy + tally.girl > 0 && <span data-reveal-optally style={{ fontWeight:900, color:T.ink, marginRight:8 }}>Tippek: {REVEAL_RESULTS.boy.emoji} {tally.boy} · {REVEAL_RESULTS.girl.emoji} {tally.girl}</span>}{loaded ? `${shown} a vetítőn${approved.length > shown ? ` · ${approved.length - shown} rejtve` : ''}` : 'Betöltés…'}</div>
           </div>
           {loaded && !approved.length && <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, textAlign:'center', padding:'24px 0' }}>Még nincs feltöltött kép.</div>}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(170px, 1fr))', gap:10, alignItems:'start' }}>
-            {latest.map(p => (
-              <div key={p.id} data-reveal-thumb={p.id} data-hidden={p.hidden ? '1' : '0'} style={{ borderRadius:14, overflow:'hidden', background:T.surface, boxShadow:T.shadow }}>
-              <div style={{ position:'relative', aspectRatio:'1 / 1' }}>
-                {tileBody(p)}{byLine(p)}
-                {p.hidden && <div style={{ position:'absolute', top:8, left:8, padding:'3px 8px', borderRadius:999, background:'rgba(0,0,0,0.6)', color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:11 }}>REJTVE</div>}
-                <div style={{ position:'absolute', left:6, right:6, bottom:6, display:'flex', gap:6 }}>
-                  <button data-reveal-hide onClick={() => setHidden(p, !p.hidden)} style={smallBtn('rgba(255,255,255,0.92)', '#1B1830')}>{p.hidden ? 'Mutat' : 'Elrejt'}</button>
-                  <button data-reveal-del onClick={() => setConfirmDel(p)} aria-label="Törlés" style={{ width:36, padding:'7px 0', borderRadius:10, border:'none', cursor:'pointer', background:'rgba(220,70,70,0.92)', color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:12 }}>🗑</button>
-                </div>
+          {nSlides > 0 && (
+            <div data-reveal-slider style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <div ref={trackRef} data-reveal-track onScroll={onTrackScroll}
+                style={{ display:'flex', overflowX:'auto', overflowY:'hidden', scrollSnapType:'x mandatory', WebkitOverflowScrolling:'touch', scrollbarWidth:'none', margin:'0 -4px' }}>
+                {latest.map((p, i) => (
+                  <div key={p.id} data-reveal-thumb={p.id} data-hidden={p.hidden ? '1' : '0'} data-idx={i} style={{ flex:'0 0 100%', boxSizing:'border-box', padding:'0 4px', scrollSnapAlign:'center' }}>
+                    <div style={{ borderRadius:18, overflow:'hidden', background:T.surface, boxShadow:T.shadow }}>
+                      {/* fejléc: hányadik kép + Elrejt / Kuka — NEM a képen (v10.440) */}
+                      <div data-reveal-slidehead style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 12px' }}>
+                        <span data-reveal-slidenum style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink, whiteSpace:'nowrap' }}>{i + 1}. kép</span>
+                        <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft, whiteSpace:'nowrap' }}>/ {nSlides}</span>
+                        {i === 0 && <span style={{ padding:'3px 8px', borderRadius:999, background:REVEAL_PINK, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:10, letterSpacing:'0.06em' }}>LEGÚJABB</span>}
+                        <div style={{ flex:1 }} />
+                        <button data-reveal-hide onClick={() => setHidden(p, !p.hidden)} style={{ padding:'8px 12px', borderRadius:10, border:`1.5px solid ${T.border}`, background: p.hidden ? T.mintSoft : 'transparent', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, whiteSpace:'nowrap' }}>{p.hidden ? 'Mutat' : 'Elrejt'}</button>
+                        <button data-reveal-del onClick={() => setConfirmDel(p)} aria-label="Törlés" style={{ width:40, height:36, flexShrink:0, borderRadius:10, border:`1.5px solid ${T.coral}`, background:'transparent', cursor:'pointer', fontSize:15 }}>🗑</button>
+                      </div>
+                      <div style={{ position:'relative', height:'clamp(220px, 46vh, 460px)', background:T.bg }}>
+                        {p.kind === 'wish'
+                          ? <div style={{ position:'absolute', inset:0, padding:'18px 16px', background:'#FFF1F5', display:'flex', alignItems:'center', justifyContent:'center', textAlign:'center', opacity: p.hidden ? 0.4 : 1 }}>
+                              <div style={{ fontFamily:T.font, fontWeight:800, fontSize:18, color:'#2A1E3A', lineHeight:1.4, overflowWrap:'anywhere' }}>💌 „{p.text}”</div>
+                            </div>
+                          : <img src={p.src} alt="" style={{ width:'100%', height:'100%', objectFit:'contain', display:'block', opacity: p.hidden ? 0.3 : 1 }} />}
+                        {byLine(p)}
+                        {p.hidden && <div style={{ position:'absolute', top:8, left:8, padding:'3px 8px', borderRadius:999, background:'rgba(0,0,0,0.6)', color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:11 }}>REJTVE</div>}
+                      </div>
+                      {p.kind !== 'wish' && <RevealVotePicker item={p} />}
+                    </div>
+                  </div>
+                ))}
               </div>
-              {p.kind !== 'wish' && <RevealVotePicker item={p} />}
+              <div data-reveal-slidenav style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <button data-reveal-slideprev aria-label="Előző kép" disabled={curSlide <= 0} onClick={() => goSlide(curSlide - 1)}
+                  style={{ width:54, height:48, borderRadius:14, border:`2px solid ${T.border}`, background:T.surface, cursor: curSlide > 0 ? 'pointer' : 'default', opacity: curSlide > 0 ? 1 : 0.35, fontFamily:T.font, fontWeight:900, fontSize:24, color:T.ink }}>‹</button>
+                <div data-reveal-slidepos style={{ flex:1, textAlign:'center', fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink }}>{curSlide + 1} / {nSlides}</div>
+                <button data-reveal-slidenext aria-label="Következő kép" disabled={curSlide >= nSlides - 1} onClick={() => goSlide(curSlide + 1)}
+                  style={{ width:54, height:48, borderRadius:14, border:`2px solid ${T.border}`, background:T.surface, cursor: curSlide < nSlides - 1 ? 'pointer' : 'default', opacity: curSlide < nSlides - 1 ? 1 : 0.35, fontFamily:T.font, fontWeight:900, fontSize:24, color:T.ink }}>›</button>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       </div>
       {confirmDel && (
