@@ -4141,3 +4141,19 @@ témából jönnek; FIX csak a szerep-csempék pasztell párja és az állapot-t
   gombok a lap ALJÁN, fixen, az ÉPP látható tételre** (`data-reveal-reject` / `-approve`),
   fölöttük pöttyök (`data-reveal-reviewdot`). ⚠️ Tesztben: előbb oda kell lapozni
   (`decide()` helper a `reveal_extras_test`-ben), a gomb nem a laphoz tartozik.
+
+## Gender Reveal: belépés KÓDDAL, kirakott számgombokkal (v10.451)
+A közös belépő ÉS a Szülők kódja jelszómező helyett a közös `RevealCodePad`: pöttyök (annyi,
+ahány jegyű a beállított kód) + 3×4 számbillentyűzet (`data-reveal-key="0"…"9"`,
+`data-reveal-keyback`). Az utolsó jegy után **magától ellenőriz** (140 ms), hibánál
+megrázza a pöttyöket és „Hibás kód"-ot ír. A **fizikai billentyűzet is megy** (számok,
+Backspace, Enter — a laptopon a vetítőhöz), de csak ha nem egy beviteli mezőben gépelnek.
+- ⚠️ **Régi, betűs jelszónál a szövegmező marad** (`revealIsNumCode`) — különben a
+  számbillentyűzettel be sem lehetne lépni. Az admin mezője innentől csak számjegyet fogad
+  (`inputMode="numeric"`, a nem-szám kiesik), és betűs régi értéknél figyelmeztet.
+- A kód hossza a pöttyökből látszik — ez tudatos (ettől tud magától ellenőrizni).
+- Tesztben: `p.keyboard.type('1234')`, utána **≥ 300 ms** várakozás (a késleltetett
+  ellenőrzés miatt) — a régi `fill` + Enter a `data-reveal-pw` / `data-reveal-code` mezőre
+  csak a betűs tartalék-ágon működik.
+Teszt: `reveal_test.js` 1. blokk (gombok, pöttyök, hibás kód, a képernyő gombjaival és
+billentyűzettel beírt jó kód, Backspace, betűs tartalék, az admin csak számot ment).

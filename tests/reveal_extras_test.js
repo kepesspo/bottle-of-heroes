@@ -50,7 +50,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
     await p.evaluate(w => document.querySelector(`[data-reveal-review] [data-reveal-${w}]`).click(), what);
     await p.waitForTimeout(200);
   };
-  const login = async () => { await p.fill('[data-reveal-pw]', 'baba'); await p.keyboard.press('Enter'); await p.waitForTimeout(200); };
+  const login = async () => { await p.keyboard.type('1234'); await p.waitForTimeout(350); };
 
   // ── alapállapot: jelszó, címek, kulcsok az admin mentésével ──
   await go();
@@ -65,7 +65,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   const admGone = await p.evaluate(() => ['title', 'when', 'countdown', 'clear', 'zip', 'quiz', 'guesturl', 'albumurl'].filter(k => document.querySelector('[data-admin-reveal-' + k + ']')));
   ok(admGone.length === 0, 'v10.439: az adminban csak a belépés és a titkos rész maradt', admGone.join(','));
   ok(await has('[data-admin-reveal-moved]'), 'az admin megmondja, hová kerültek a többi beállítás');
-  await p.fill('[data-admin-reveal-pw]', 'baba');
+  await p.fill('[data-admin-reveal-pw]', '1234');
   await p.click('[data-admin-reveal-save]'); await p.waitForTimeout(200);
   let st = await store();
   ok(st.c.revealConfig.guestKey && st.c.revealConfig.albumKey && st.c.revealConfig.guestKey !== st.c.revealConfig.albumKey, 'mentéskor vendég- és album-kulcs keletkezik', JSON.stringify(st.c.revealConfig));
@@ -85,7 +85,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   // v10.439: a cím, a linkek és az időpont a Szülőknél
   await mountSide('RevealTrigger'); await p.waitForTimeout(200);
   ok(!(await has('#__side [data-reveal-p-schedule]')), 'a Szülők beállításai a kód mögött vannak');
-  await p.fill('#__side [data-reveal-code]', '2026'); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
+  await p.keyboard.type('2026'); await p.waitForTimeout(350);
   // v10.448: a fül-sáv PORTÁLBAN van (a body-ban, fixen alul) — a teszt oldalpanelje
   // (z-index 6500) eltakarja, ezért a fülváltás JS-kattintással megy.
   // v10.444: négy fül — Leleplezés · Vetítő · Kvíz · Esemény; egyszerre csak egy látszik
@@ -133,9 +133,9 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await mountSide('RevealTrigger');
   await p.waitForTimeout(200);
   ok(await has('#__side [data-reveal-codegate]'), 'a Leleplező kódot kér');
-  await p.fill('#__side [data-reveal-code]', 'baba'); await p.keyboard.press('Enter'); await p.waitForTimeout(100);
+  await p.keyboard.type('1234'); await p.waitForTimeout(350);
   ok(await has('#__side [data-reveal-codebad]') && !(await has('[data-reveal-fire]')), 'a közös jelszó NEM jó leleplező kódnak');
-  await p.fill('#__side [data-reveal-code]', '2026'); await p.keyboard.press('Enter'); await p.waitForTimeout(150);
+  await p.keyboard.type('2026'); await p.waitForTimeout(350);
   ok(await has('[data-reveal-fire]'), 'a jó kóddal ott a LELEPLEZÉS gomb');
   ok(!/lány|fiú/i.test(await p.textContent('[data-reveal-firepanel]')), 'a leleplező sem látja az eredményt');
 
@@ -177,7 +177,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   const vf = '/tmp/claude-0/-home-user-bottle-of-heroes/41faa226-19f7-5bf9-9bc4-4d933d77bf20/scratchpad/fake_reveal.mp4';
   fs.mkdirSync(require('path').dirname(vf), { recursive: true }); fs.writeFileSync(vf, Buffer.alloc(1500000, 7));
   await mountSide('RevealTrigger'); await p.waitForTimeout(200);
-  await p.fill('#__side [data-reveal-code]', '2026'); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
+  await p.keyboard.type('2026'); await p.waitForTimeout(350);
   await p.setInputFiles('#__side [data-reveal-p-videoinput]', vf);
   await p.waitForFunction(() => { const m = (window.__fbStore.config || {}).revealVideo; return m && m.vid; }, null, { timeout: 15000 }).catch(() => {});
   const vm = await p.evaluate(() => { const m = window.__fbStore.config.revealVideo || {}, ch = Object.values(window.__fbStore.revealVideo || {});
@@ -228,7 +228,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await p.evaluate(t => firebase.firestore().collection('config').doc('revealConfig').set({ revealAt: t }, { merge: true }), Date.now() + 4000);
   await mountSide('RevealTrigger');
   await p.waitForTimeout(200);
-  await p.fill('#__side [data-reveal-code]', '2026'); await p.keyboard.press('Enter'); await p.waitForTimeout(150);
+  await p.keyboard.type('2026'); await p.waitForTimeout(350);
   ok(await has('#__side [data-reveal-when]') && await has('[data-reveal-arm]'), 'a szülőnél: az időpont és az „Engedélyezem" gomb');
   await p.click('[data-reveal-arm]'); await p.waitForTimeout(100);
   await p.click('button:text-is("Engedélyezem")'); await p.waitForTimeout(200);
@@ -326,7 +326,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   // szülői jóváhagyás
   await mountSide('RevealTrigger');
   await p.waitForTimeout(200);
-  await p.fill('#__side [data-reveal-code]', '2026'); await p.keyboard.press('Enter'); await p.waitForTimeout(250);
+  await p.keyboard.type('2026'); await p.waitForTimeout(350);
   ok(await has('#__side [data-reveal-ppendbtn]') && (await p.textContent('#__side [data-reveal-ppendcount]')).trim() === '2', 'a Szülők állapot-sorában: Jóváhagyás (2)');
   await p.evaluate(() => document.querySelector('#__side [data-reveal-ppendbtn]').click()); await p.waitForTimeout(200);
   ok(await has('#__side [data-reveal-review]') && !(await has('[data-reveal-pdock]')), 'megnyílik a közös lapozó, és a dokk eltűnik alatta');
@@ -356,7 +356,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await mountSide('RevealTrigger');
   await p.waitForTimeout(200);
   ok(!(await has('#__side [data-reveal-quizctl]')), 'a Szülők kvíz-vezérlője is a kód mögött van');
-  await p.fill('#__side [data-reveal-code]', '2026'); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
+  await p.keyboard.type('2026'); await p.waitForTimeout(350);
   await p.evaluate(() => document.querySelector('[data-reveal-ptab="quiz"]').click()); await p.waitForTimeout(100);
   ok(await has('#__side [data-reveal-parentquiz] [data-reveal-quizctl]'), 'a kóddal a Szülők Kvíz fülén ott a Babakvíz-lapozó');
   // v10.438: a vetítő MINDEN beállítása a Szülőknél (v10.444: a Vetítő fülön)
