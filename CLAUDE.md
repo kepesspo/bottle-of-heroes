@@ -4157,3 +4157,17 @@ Backspace, Enter — a laptopon a vetítőhöz), de csak ha nem egy beviteli mez
   csak a betűs tartalék-ágon működik.
 Teszt: `reveal_test.js` 1. blokk (gombok, pöttyök, hibás kód, a képernyő gombjaival és
 billentyűzettel beírt jó kód, Backspace, betűs tartalék, az admin csak számot ment).
+
+## Gender Reveal: a szervezői visszajelzés BAL ALUL, kicsiben (v10.452)
+**Felülírja a v10.449 két felső sarok-csipjét.** A képszám (`data-reveal-count`), az
+üzenetszám (`data-reveal-wishcount`) és — ha van — a várakozók száma
+(`data-reveal-pendbadge`, borostyán szám + „vár") EGY halk csipben áll a vetítő bal alsó
+sarkában (`data-reveal-tally`, ~24 px magas, 10–14 px betű, 80% átlátszóság). Ez a
+szervezőknek szól („kell-e jóváhagyni"), nem a vendégeknek — ezért nem hivalkodó.
+- A fal alja a csip FÖLÖTT van (`statusRoom` a `boardH`-ban, a számláló és a QR mellett a
+  harmadik alsó foglalás). Felül nincs több sarok-elem (`data-reveal-topm` csak a középső
+  jelvényen / órán maradt).
+- A Szülői kód admin-mezője is figyelmeztet, ha a régi kód betűs: a Szülők belépője csak
+  számkódnál ad számbillentyűzetet (`revealIsNumCode`).
+Teszt: `reveal_extras_test.js` 6b. blokk (bal alul, kicsi, a fal fölötte; a Szülői kód
+számbillentyűzeten).

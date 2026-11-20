@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.451';
+const APP_VERSION = 'v10.452';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -43886,7 +43886,9 @@ function RevealProjector({ title, cfg, onExit }) {
   // fölött van; a számláló és a QR közül a magasabb dönt.
   const qrOn = !!(showQr && qrUrl && !qstate && !show && !narrow);
   const qrRoom = qrOn ? Math.round(Math.min(Math.max(84, vp.h * 0.13), 150) + 20 + vp.h * 0.03 + 12) : 0;
-  const boardH = vp.h - Math.max(meterOn ? vp.h * (1 - REVEAL_METER_ROOM) : 0, qrRoom);
+  // v10.452: a bal alsó szervezői csip helye is fenn van tartva (kicsi — a lapok alig kisebbek)
+  const statusRoom = (!qstate && !show) ? Math.round(Math.max(30, vp.h * 0.045)) : 0;
+  const boardH = vp.h - Math.max(meterOn ? vp.h * (1 - REVEAL_METER_ROOM) : 0, qrRoom, statusRoom);
   // ⚠️ A felül középen álló jelvény / visszaszámláló a középső lap tetejére esne: a fal az
   // ALJA alatt kezdődik (mért érték — a szöveg mérete vh-függő).
   // v10.449: a felső sor MINDEN eleme (jelvény/óra középen, számláló bal, várakozók jobb) —
@@ -43900,9 +43902,6 @@ function RevealProjector({ title, cfg, onExit }) {
   });
   const nPhotos = photos.filter(p => p.src).length, nWish = photos.filter(p => p.kind === 'wish').length;
   const cornersOn = !qstate && !show;
-  const cornerTop = narrow ? 56 : 'max(3vh, 74px)';
-  const cornerChip = { position:'absolute', top:cornerTop, zIndex:45, display:'inline-flex', alignItems:'center', gap:'0.8vh', whiteSpace:'nowrap', padding: narrow ? '6px 12px' : '0.9vh 1.4vw', borderRadius:999,
-    fontFamily:T.font, fontWeight:900, fontSize:'clamp(13px, 2.2vh, 26px)', boxShadow:'0 0.6vh 1.8vh rgba(60,40,20,0.12)' };
   // ⚠️ A felület a Babakvíz krém papírja (v10.434): sötét tinta, fehér/pasztell chipek.
   const chip = (on) => ({ flexShrink:0, whiteSpace:'nowrap', padding: narrow ? '6px 10px' : '7px 12px', borderRadius:999, cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize: narrow ? 12 : 13,
     border: on ? `1.5px solid ${REVEAL_INK}` : '1.5px solid #EFE2D2', background: on ? REVEAL_INK : '#fff', color: on ? '#fff' : REVEAL_INK });
@@ -43948,16 +43947,17 @@ function RevealProjector({ title, cfg, onExit }) {
             background:`linear-gradient(90deg, ${REVEAL_PINK}, ${REVEAL_BLUE})`, WebkitBackgroundClip:'text', backgroundClip:'text', WebkitTextFillColor:'transparent' }}>{revealAt > now ? revealFmtLeft(revealAt - now) : '🎉'}</div>
         </div>
       )}
+      {/* v10.452: a SZERVEZŐKNEK szóló halk visszajelzés — bal alul, kicsiben: hány kép van
+          kint, és van-e jóváhagyásra váró (akkor egy borostyán szám villan mellette). */}
       {cornersOn && (
-        <div data-reveal-topm data-reveal-tally style={{ ...cornerChip, left:'2vw', background:'#fff', border:'2px solid #EFE2D2', color:REVEAL_INK }}>
+        <div data-reveal-tally style={{ position:'absolute', left:'1.2vw', bottom:'1.2vh', zIndex:45, display:'inline-flex', alignItems:'center', gap:6, whiteSpace:'nowrap',
+          padding:'3px 9px', borderRadius:999, background:'rgba(255,255,255,0.72)', border:'1px solid #EFE2D2', color:REVEAL_INK, opacity:0.8,
+          fontFamily:T.font, fontWeight:800, fontSize:'clamp(10px, 1.3vh, 14px)' }}>
           <span aria-hidden="true">📷</span><span data-reveal-count>{nPhotos} kép</span>
-          {nWish > 0 && <React.Fragment><span aria-hidden="true" style={{ opacity:0.35 }}>·</span><span aria-hidden="true">💌</span><span data-reveal-wishcount>{nWish} üzenet</span></React.Fragment>}
-        </div>
-      )}
-      {cornersOn && pendingN > 0 && (
-        <div data-reveal-topm data-reveal-pendbadge={pendingN} style={{ ...cornerChip, right:'2vw', background:'#FFF1D6', border:'2px solid #F2D49A', color:'#7A4F00' }}>
-          <span style={{ minWidth:'1.6em', height:'1.6em', padding:'0 0.4em', boxSizing:'border-box', borderRadius:999, background:'#E0A020', color:'#fff', display:'grid', placeItems:'center', fontSize:'0.85em' }}>{pendingN}</span>
-          jóváhagyásra vár
+          {nWish > 0 && <React.Fragment><span aria-hidden="true" style={{ opacity:0.35 }}>·</span><span aria-hidden="true">💌</span><span data-reveal-wishcount>{nWish}</span></React.Fragment>}
+          {pendingN > 0 && <span data-reveal-pendbadge={pendingN} title={pendingN + ' jóváhagyásra vár'} style={{ display:'inline-flex', alignItems:'center', gap:4, marginLeft:2, color:'#7A4F00' }}>
+            <span aria-hidden="true" style={{ opacity:0.35, color:REVEAL_INK }}>·</span>
+            <span style={{ minWidth:'1.5em', height:'1.5em', padding:'0 0.35em', boxSizing:'border-box', borderRadius:999, background:'#E0A020', color:'#fff', display:'grid', placeItems:'center', fontWeight:900 }}>{pendingN}</span>vár</span>}
         </div>
       )}
       {showQr && qrUrl && !qstate && !show && !narrow && (
@@ -45262,6 +45262,7 @@ function AdminReveal() {
         </div>
         {label('Szülői kód (nem a közös jelszó)')}
         <input data-admin-reveal-code value={code} inputMode="numeric" onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 12))} placeholder="pl. 2026" style={inpSt} />
+        {code && !revealIsNumCode(code) && <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:'#A3342C', marginTop:6 }}>A régi szülői kód betűket tartalmaz — adj meg számkódot (csak így jön a számbillentyűzet).</div>}
         {label('Videó-link (nem kötelező — közvetlen .mp4 link)')}
         <input data-admin-reveal-video value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="https://…/leleplezes.mp4" style={inpSt} />
         {note('A videót a Szülők is feltölthetik (Szülők → 🎬 Leleplező videó) — ha van feltöltött videó, az megy a link helyett. Próbánál soha nincs videó.')}

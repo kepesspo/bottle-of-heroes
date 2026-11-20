@@ -133,6 +133,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await mountSide('RevealTrigger');
   await p.waitForTimeout(200);
   ok(await has('#__side [data-reveal-codegate]'), 'a Leleplező kódot kér');
+  ok(await p.evaluate(() => document.querySelectorAll('#__side [data-reveal-codegate] [data-reveal-key]').length === 10 && !document.querySelector('#__side input[data-reveal-code]')), 'v10.452: a Szülői kód is számbillentyűzeten (nincs szövegmező)');
   await p.keyboard.type('1234'); await p.waitForTimeout(350);
   ok(await has('#__side [data-reveal-codebad]') && !(await has('[data-reveal-fire]')), 'a közös jelszó NEM jó leleplező kódnak');
   await p.keyboard.type('2026'); await p.waitForTimeout(350);
@@ -312,17 +313,20 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await p.evaluate(id => firebase.firestore().collection('revealPhotos').doc(id).delete(), wishId); await p.waitForTimeout(200);
   await p.click('#__side [data-reveal-guesttab="wish"]'); await p.waitForTimeout(100);
   ok(await has('#__side [data-reveal-wishinput]'), 'ha az üzenetét eldobták (törlődött), újra írhat');
-  // a vetítő felső sarkai
-  ok(!(await has('[data-reveal-pendbadge]')), 'nincs várakozó → nincs jelvény a jobb felső sarokban');
+  // v10.452: a vetítő szervezői csipje — bal ALUL, kicsiben (képszám + várakozók)
+  ok(!(await has('[data-reveal-pendbadge]')), 'nincs várakozó → nincs „vár" jelzés');
   await p.evaluate(px => firebase.firestore().collection('revealPhotos').doc('pz1').set({ src: px, w: 1, h: 1, at: 200, by: 'Vendég', pending: true }), PX);
   await p.evaluate(() => firebase.firestore().collection('revealPhotos').doc('pz2').set({ kind: 'wish', text: 'Szia!', by: 'Vendég2', at: 201, pending: true }));
   await p.waitForTimeout(200);
   const corners = await p.evaluate(() => { const b = document.querySelector('[data-reveal-pendbadge]'), t = document.querySelector('[data-reveal-tally]'), bd = document.querySelector('[data-reveal-board]');
-    const rb = b && b.getBoundingClientRect(), rt = t && t.getBoundingClientRect();
-    return { n: b && b.getAttribute('data-reveal-pendbadge'), bRight: rb && innerWidth - rb.right, tLeft: rt && rt.left, bTop: rb && rb.top, tBottom: rt && rt.bottom, bBottom: rb && rb.bottom, boardTop: bd && bd.getBoundingClientRect().top, vw: innerWidth }; });
-  ok(corners.n === '2' && corners.bRight < corners.vw * 0.05 && corners.bTop < 140, 'jobb felső sarokban: 2 jóváhagyásra vár', JSON.stringify(corners));
-  ok(corners.tLeft < corners.vw * 0.05 && (await p.textContent('[data-reveal-count]')).trim() === '3 kép', 'bal fent fixen a képek száma', JSON.stringify(corners));
-  ok(corners.boardTop >= Math.max(corners.tBottom, corners.bBottom), 'a polaroid-fal a sarok-elemek ALATT kezdődik', JSON.stringify(corners));
+    const rt = t.getBoundingClientRect(), rd = bd && bd.getBoundingClientRect();
+    return { n: b && b.getAttribute('data-reveal-pendbadge'), inTally: !!(b && t.contains(b)), left: Math.round(rt.left), bottomGap: Math.round(innerHeight - rt.bottom), h: Math.round(rt.height),
+      fs: parseFloat(getComputedStyle(t).fontSize), boardBottom: rd && Math.round(rd.bottom), tTop: Math.round(rt.top), vw: innerWidth, vh: innerHeight,
+      topEls: document.querySelectorAll('[data-reveal-topm]').length }; });
+  ok(corners.n === '2' && corners.inTally, 'a várakozók száma (2) a bal alsó csipben', JSON.stringify(corners));
+  ok(corners.left < corners.vw * 0.03 && corners.bottomGap < corners.vh * 0.03 && (await p.textContent('[data-reveal-count]')).trim() === '3 kép', 'bal ALUL a képek száma', JSON.stringify(corners));
+  ok(corners.h <= 28 && corners.fs <= 14, 'kicsi és halk (≤ 28 px magas, ≤ 14 px betű) — csak a szervezőknek', JSON.stringify(corners));
+  ok(corners.boardBottom <= corners.tTop && corners.topEls === 0, 'a polaroid-fal a csip FÖLÖTT végződik; felül nincs sarok-elem', JSON.stringify(corners));
   // szülői jóváhagyás
   await mountSide('RevealTrigger');
   await p.waitForTimeout(200);
@@ -335,7 +339,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   st = await store();
   ok(st.ph.pz1 && st.ph.pz1.pending === false && !st.ph.pz2, 'a Szülők jóváhagyták a képet, eldobták az üzenetet');
   ok(!(await has('#__side [data-reveal-review]')) && await has('[data-reveal-pdock]') && !(await has('#__side [data-reveal-ppendbtn]')), 'utána bezárul, a dokk visszajön, a gomb eltűnik');
-  ok(!(await has('[data-reveal-pendbadge]')) && (await p.textContent('[data-reveal-count]')).trim() === '4 kép', 'a vetítőn: nincs várakozó-jelvény, 4 kép');
+  ok(!(await has('[data-reveal-pendbadge]')) && (await p.textContent('[data-reveal-count]')).trim() === '4 kép', 'a vetítőn: nincs „vár" jelzés, 4 kép');
   // a későbbi blokkok (album) az eredeti állapotra épülnek: az üzenet vissza, a plusz kép ki
   await p.evaluate(({ id, v }) => { const db = firebase.firestore(); db.collection('revealPhotos').doc('pz1').delete(); return db.collection('revealPhotos').doc(id).set(Object.assign({}, v, { pending: false })); }, { id: gWish[0], v: gWish[1] });
   await p.waitForTimeout(150);
