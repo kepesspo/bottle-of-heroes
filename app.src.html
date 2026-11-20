@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.453';
+const APP_VERSION = 'v10.454';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -43328,11 +43328,11 @@ function RevealWishPolaroid({ text, by, width }) {
     </div>
   );
 }
-function RevealBoardCard({ item, g, z, isNew, isCur }) {
+function RevealBoardCard({ item, g, z, isNew, isCur, hideVotes }) {
   const wish = item.kind === 'wish';
   // az üzenetnél a küldő neve a lényeg — az ÚJ jelzést ott a sarok-jelvény adja
   const cap = wish ? (item.by ? '— ' + item.by : (isNew ? '✨ friss! ✨' : '')) : (isNew ? '✨ friss! ✨' : (item.by || ''));
-  const vs = wish ? [] : revealVotesOf(item);
+  const vs = (wish || hideVotes) ? [] : revealVotesOf(item);
   return (
     <div data-reveal-polaroid={wish ? undefined : item.id} data-reveal-wish={wish ? item.id : undefined} data-current={isCur ? '1' : '0'}
       style={{ position:'absolute', left: g.cx - g.cw / 2, top: g.cy - g.ch / 2, width: g.cw, height: g.ch, zIndex: z, boxSizing:'border-box',
@@ -43743,6 +43743,7 @@ function RevealProjector({ title, cfg, onExit }) {
   const [secs, setSecs] = React.useState(() => { const n = +revealStore('boh_reveal_secs'); return REVEAL_SECS.includes(n) ? n : 5; });
   const [slotPref, setSlotPref] = React.useState(() => { const n = +revealStore('boh_reveal_slots'); return REVEAL_SLOT_OPTS.includes(n) ? n : 3; });
   const [showQr, setShowQr] = React.useState(true);
+  const [showVotes, setShowVotes] = React.useState(true);
   const [paused, setPaused] = React.useState(false);
   const [ui, setUi] = React.useState(true);
   const [fs, setFs] = React.useState(false);
@@ -43754,6 +43755,7 @@ function RevealProjector({ title, cfg, onExit }) {
     if (REVEAL_SLOT_OPTS.includes(+v.slots)) setSlotPref(+v.slots);
     if (typeof v.paused === 'boolean') setPaused(v.paused);
     if (typeof v.qr === 'boolean') setShowQr(v.qr);
+    if (typeof v.votes === 'boolean') setShowVotes(v.votes);
     // a laptop megjegyzi az utolsó beállítást (ha a dokumentum egyszer üresen jönne)
     if (REVEAL_SECS.includes(+v.secs)) revealStore('boh_reveal_secs', String(+v.secs));
     if (REVEAL_SLOT_OPTS.includes(+v.slots)) revealStore('boh_reveal_slots', String(+v.slots));
@@ -43881,7 +43883,7 @@ function RevealProjector({ title, cfg, onExit }) {
   const tally = revealVoteTally(photos);
   // ⚠️ A számláló a vászon alját foglalja: amíg látszik, a fal a fennmaradó 86%-on áll,
   // különben a középső lap felirata (és a rajta lévő tipp) a számláló alá kerülne.
-  const meterOn = tally.boy + tally.girl > 0 && !qstate && !show;
+  const meterOn = showVotes && tally.boy + tally.girl > 0 && !qstate && !show;
   // v10.443: a vendég-QR (jobb alsó sarok) sem lóghat rá a lapokra — a fal alja a QR
   // fölött van; a számláló és a QR közül a magasabb dönt.
   const qrOn = !!(showQr && qrUrl && !qstate && !show && !narrow);
@@ -43917,7 +43919,7 @@ function RevealProjector({ title, cfg, onExit }) {
     return (
       <div data-reveal-board data-slots={nSlots} style={{ position:'absolute', left:0, right:0, top:topEdge, height:Math.max(1, boardH - topEdge), zIndex:1, isolation:'isolate' }}>
         {slots.map((s, i) => { const it = s && byId[s.id]; if (!it) return null;
-          return <RevealBoardCard key={s.key} item={it} g={revealCardGeom(i, nSlots, vp.w, Math.max(1, boardH - topEdge), it, s.key, topEdge > 0 || boardH < vp.h)} z={s.z} isNew={s.isNew} isCur={s.key === seq.cur.key} />; })}
+          return <RevealBoardCard key={s.key} item={it} g={revealCardGeom(i, nSlots, vp.w, Math.max(1, boardH - topEdge), it, s.key, topEdge > 0 || boardH < vp.h)} z={s.z} isNew={s.isNew} isCur={s.key === seq.cur.key} hideVotes={!showVotes} />; })}
         {seq.cur.isNew && <RevealNewBadge wish={seq.photo.kind === 'wish'} />}
       </div>
     );
@@ -44926,6 +44928,7 @@ function RevealProjectorPanel() {
   const slots = REVEAL_SLOT_OPTS.includes(+v.slots) ? +v.slots : 3;
   const paused = !!v.paused;
   const qr = v.qr !== false;
+  const votesOn = v.votes !== false;
   const [msg, flash] = useRevealFlash();
   const t = revealVoteTally(photos), tot = t.boy + t.girl;
   const nPhoto = photos.filter(x => x.src).length, nWish = photos.filter(x => x.kind === 'wish').length;
@@ -44952,6 +44955,8 @@ function RevealProjectorPanel() {
         {rvRow({ first:true, tight:true, label:'Képváltás', right: rvSeg(REVEAL_SECS.map(n => ({ v:n, t:n + ' mp' })), secs, n => revealCtlWrite({ secs:n }), 'data-reveal-ctl-secs', 'Képváltás') })}
         {rvRow({ tight:true, label:'Polaroidok egyszerre', right: rvSeg(REVEAL_SLOT_OPTS.map(n => ({ v:n, t:String(n) })), slots, n => revealCtlWrite({ slots:n }), 'data-reveal-ctl-slots', 'Polaroidok egyszerre') })}
         {rvRow({ label:'Vendég QR-kód a vetítőn', right: rvSwitch(qr, () => revealCtlWrite({ qr: !qr }), 'Vendég QR-kód a vetítőn', { 'data-reveal-ctl-qr': qr ? '1' : '0' }) })}
+        {rvRow({ label: <span>Tippek a vetítőn<span style={{ display:'block', fontWeight:700, fontSize:12, color:T.inkSoft, marginTop:2 }}>Számláló alul és a jel a polaroidokon</span></span>,
+          right: rvSwitch(votesOn, () => revealCtlWrite({ votes: !votesOn }), 'Tippek a vetítőn', { 'data-reveal-ctl-votes': votesOn ? '1' : '0' }) })}
         {rvRow({ label: <span>Visszaszámláló a vetítőn{!hasAt && <span data-reveal-p-countdownnote style={{ display:'block', fontWeight:700, fontSize:12, color:T.inkSoft, marginTop:2 }}>Időpont nélkül nem látszik (Leleplezés fül)</span>}{cdMsg && <span style={{ display:'block', marginTop:2 }}>{rvMsg(cdMsg)}</span>}</span>,
           right: rvSwitch(cdOn, () => saveCd(!cdOn), 'Visszaszámláló a vetítőn', { 'data-reveal-p-countdown':'' }) })}
       </section>

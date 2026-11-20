@@ -4182,3 +4182,13 @@ Leleplezés fülön**; ha nincs időpont, a kapcsoló alatt figyelmeztetés áll
 (`waitForSelector('[data-reveal-key]')`) — különben a leütések a semmibe mennek, és a teszt
 billeg (`reveal_extras_test` `login()`).
 Teszt: `reveal_extras_test.js` 1. blokk.
+
+## Gender Reveal: „Tippek a vetítőn" kapcsoló (v10.454)
+A Szülők Vetítő fülén (a QR-kapcsoló alatt): `data-reveal-ctl-votes` →
+`config/revealProjector.votes` (alapból BE — hiányzó mező = BE). Kikapcsolva a vetítőn
+**se az alsó számláló** (`meterOn` a `showVotes`-ot is nézi), **se a polaroidok tipp-jele**
+(`RevealBoardCard` `hideVotes`) nem látszik. A tippek ettől még **számolódnak és
+rögzíthetők** — az operátornál és a Szülők panelén az állás ugyanúgy látszik; ez csak a
+vetítő megjelenése. Mint a többi vetítő-beállítás: a vetítő CSAK olvassa.
+Teszt: `reveal_votes_test.js` 3. blokk (KI → semmi, BE → visszajön) és 5. blokk (a kapcsoló
+a közös dokumentumba ír, a vetítő követi).

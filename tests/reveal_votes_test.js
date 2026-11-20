@@ -98,6 +98,10 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(!(await has('[data-reveal-votes]')), 'Babakvíz alatt nincs számláló');
   await p.evaluate(() => revealQuizWrite({ phase:'idle' })); await p.waitForTimeout(250);
   ok(JSON.stringify(await meter()) === '{"boy":1,"girl":1}', 'a kvíz után visszajön', JSON.stringify(await meter()));
+  await p.evaluate(() => revealCtlWrite({ votes: false })); await p.waitForTimeout(250);
+  ok(!(await has('[data-reveal-votes]')) && !(await has('[data-reveal-board] [data-reveal-cardvotes]')), 'v10.454: tippek KI → se számláló, se jel a polaroidokon');
+  await p.evaluate(() => revealCtlWrite({ votes: true })); await p.waitForTimeout(250);
+  ok(JSON.stringify(await meter()) === '{"boy":1,"girl":1}' && await has('[data-reveal-board] [data-reveal-cardvotes]'), 'tippek BE → visszajön (kontroll)', JSON.stringify(await meter()));
   const geo = await p.evaluate(() => { const r = document.querySelector('[data-reveal-votes]').getBoundingClientRect(); return { cx: Math.round(r.left + r.width / 2), bottom: Math.round(r.bottom) }; });
   ok(Math.abs(geo.cx - 700) < 4 && geo.bottom <= 820 && geo.bottom > 760, 'a számláló alul, középen', JSON.stringify(geo));
 
@@ -111,6 +115,11 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await mountSide('RevealProjectorPanel'); await p.waitForTimeout(300);
   const rt = await p.evaluate(() => { const e = document.querySelector('#__side [data-reveal-ctl-tally]'); return e ? e.textContent : null; });
   ok(rt && /1.*·.*1/.test(rt), 'a Szülők vetítő-panelje is kiírja az állást', rt);
+  ok((await attr('#__side [data-reveal-ctl-votes]', 'data-reveal-ctl-votes')) === '1', 'v10.454: „Tippek a vetítőn" kapcsoló, alapból BE');
+  await clickSide('[data-reveal-ctl-votes]'); await p.waitForTimeout(250);
+  ok(await p.evaluate(() => window.__fbStore.config.revealProjector.votes === false) && (await attr('#__side [data-reveal-ctl-votes]', 'data-reveal-ctl-votes')) === '0', 'a kapcsoló a közös vetítő-dokumentumba ír (votes:false)');
+  ok(!(await has('[data-reveal-votes]')), 'és a vetítőről eltűnik a számláló');
+  await clickSide('[data-reveal-ctl-votes]'); await p.waitForTimeout(250);
 
   console.log('\n===== 6. OPERÁTOR: LAPOZÓ (v10.440) =====');
   await mountSide('RevealOperator'); await p.waitForTimeout(300);
