@@ -4192,3 +4192,28 @@ rögzíthetők** — az operátornál és a Szülők panelén az állás ugyanú
 vetítő megjelenése. Mint a többi vetítő-beállítás: a vetítő CSAK olvassa.
 Teszt: `reveal_votes_test.js` 3. blokk (KI → semmi, BE → visszajön) és 5. blokk (a kapcsoló
 a közös dokumentumba ír, a vetítő követi).
+
+## ⚠️ Gender Reveal: a titkos rész is a Szülőknél — az adminban CSAK a belépő kód (v10.455)
+**Felülírja a v10.439-et** („az adminban a belépés és a titkos rész marad"). Az admin
+(`AdminReveal`) innentől egyetlen mezőt visz: a közös **belépő kódot** (`data-admin-reveal-pw`).
+Az eredmény, a szülői kód, a videó-link és az állapot + Visszaállítás a Szülők Leleplezés
+fülén áll, a **`RevealSecretCard`**-ban (`data-reveal-p-secret`):
+- **Alapból CSUKVA**; az Előkészületek „Eredmény és kód" sorára (`data-reveal-p-secretrow`)
+  koppintva nyílik — így a fül továbbra is kifér egy képernyőre.
+- **Az eredmény MASZKOLVA** („●●● beállítva", `data-reveal-p-masked`), csak a 👁 Mutat
+  (`data-reveal-p-peek`) után látszik — aki nem akarja tudni, ne lássa véletlenül. Koppintásra
+  ment (`data-reveal-p-result`).
+- **A szülői kód CSAK a „Mentés" gombra** (`data-reveal-p-codesave`, min. 4 számjegy) — egy
+  félig begépelt, magától mentett kód kizárná a többieket.
+- **A videó-link** 600 ms késleltetéssel ment; **YouTube-linkre figyelmeztet**
+  (`revealIsYoutube`, `data-reveal-p-videowarn`): a `<video>` nem játssza le, ilyenkor fel kell
+  tölteni a videót, vagy közvetlen .mp4 link kell.
+- **Szülői kód nélkül** (friss telepítés) a Szülők belépője nem az adminhoz küld, hanem
+  **ott helyben beállíttatja az elsőt** (`data-reveal-nocode` → `data-reveal-p-newcode`,
+  „Kód mentése"). A közös belépő kód úgyis védi a szerepválasztót.
+⚠️ Ez megfordítja a korábbi elvet („az eredményt a szülők sem látják") — tulajdonosi
+döntés: a titkos rész kezelője a Szülők szerep (gyakorlatban egy megbízott szervező). Ezért
+lett a maszk alapértelmezett.
+Teszt: `reveal_extras_test.js` 1. blokk (az adminban nincs titkos mező; első kód a
+Szülőknél, rövid kód tiltva; csukott kártya; eredmény → titkos doksi; YouTube-figyelmeztetés;
+újranyitva maszkolva, Mutat után a Kislány kijelölve).
