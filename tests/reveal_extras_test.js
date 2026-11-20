@@ -50,7 +50,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
     await p.evaluate(w => document.querySelector(`[data-reveal-review] [data-reveal-${w}]`).click(), what);
     await p.waitForTimeout(200);
   };
-  const login = async () => { await p.keyboard.type('1234'); await p.waitForTimeout(350); };
+  const login = async () => { await p.waitForSelector('[data-reveal-key]', { timeout: 8000 }).catch(() => {}); await p.keyboard.type('1234'); await p.waitForTimeout(350); };
 
   // ── alapállapot: jelszó, címek, kulcsok az admin mentésével ──
   await go();
@@ -108,13 +108,18 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(!(await has('#__side [data-reveal-p-when]')), 'az időpont-mező a sorra koppintva nyílik');
   await p.click('#__side [data-reveal-p-whenrow]'); await p.waitForTimeout(100);
   await p.fill('#__side [data-reveal-p-when]', '2030-06-01T18:30'); await p.waitForTimeout(200);
+  ok(!(await has('#__side [data-reveal-p-countdown]')), 'v10.453: a Leleplezés fülön NINCS visszaszámláló-kapcsoló');
+  await p.evaluate(() => document.querySelector('[data-reveal-ptab="proj"]').click()); await p.waitForTimeout(150);
+  ok(await has('#__side [data-reveal-parentctl] [data-reveal-p-countdown]') && !(await has('#__side [data-reveal-p-countdownnote]')), 'a Vetítő fülön van (időponttal nincs figyelmeztetés)');
   ok((await attr('#__side [data-reveal-p-countdown]', 'aria-checked')) === 'true', 'a visszaszámláló alapból BE (kapcsoló)');
   await p.click('#__side [data-reveal-p-countdown]'); await p.waitForTimeout(200);   // BE → KI, azonnal ment
   st = await store();
   ok(st.c.revealConfig.title === 'Anna & Bence babája', 'a cím a Szülőktől mentődik', st.c.revealConfig.title);
   ok(st.c.revealConfig.revealAt === new Date(2030, 5, 1, 18, 30).getTime() && st.c.revealConfig.countdownOn === false, 'az időpont (helyi idő) és a visszaszámláló-kapcsoló a revealConfig-ba megy', JSON.stringify([st.c.revealConfig.revealAt, st.c.revealConfig.countdownOn]));
   ok(!st.c.revealSecret.revealAt, 'az időpont nem a titkos dokumentumba kerül');
-  ok((await attr('#__side [data-reveal-p-countdown]', 'aria-checked')) === 'false' && await has('#__side [data-reveal-when]'), 'a kapcsoló és a sor követi a mentett állapotot');
+  ok((await attr('#__side [data-reveal-p-countdown]', 'aria-checked')) === 'false', 'a kapcsoló követi a mentett állapotot');
+  await p.evaluate(() => document.querySelector('[data-reveal-ptab="reveal"]').click()); await p.waitForTimeout(100);
+  ok(await has('#__side [data-reveal-when]'), 'a Leleplezés fülön az időpont-sor marad');
   await p.evaluate(() => document.querySelector('[data-reveal-ptab="quiz"]').click()); await p.waitForTimeout(100);
   await p.click('#__side [data-reveal-p-quizeditbtn]'); await p.waitForTimeout(150);
   ok(await has('#__side [data-reveal-p-quizedit] [data-admin-reveal-quiz]'), 'a Babakvíz kérdései a Szülőknél szerkeszthetők (teljes képernyős lapon)');

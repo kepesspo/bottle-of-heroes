@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.452';
+const APP_VERSION = 'v10.453';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -44799,7 +44799,6 @@ function RevealParentRevealTab({ dock }) {
   const v = cfg.v || {};
   const revealAt = +(v.revealAt || 0);
   const future = revealAt > now;
-  const cdOn = v.countdownOn !== false;
   const db = revealDb();
   const flash = m => { setMsg(m); setTimeout(() => setMsg(''), 4000); };
   const write = (d, m) => { if (!db) return; db.collection('config').doc('revealState').set(d).then(() => flash(m)).catch(e => setMsg('Nem sikerült (' + ((e && e.code) || 'hiba') + ')')); setAsk(null); };
@@ -44851,7 +44850,6 @@ function RevealParentRevealTab({ dock }) {
             {revealAt > 0 && <button type="button" onClick={() => { saveCfg({ revealAt:0 }); setEditWhen(false); }} style={rvBtn('small')}>Törlés</button>}
           </div>
         )}
-        {rvRow({ icon:'timer', tone:'ok', label:'Visszaszámláló a vetítőn', right: rvSwitch(cdOn, () => saveCfg({ countdownOn: !cdOn }), 'Visszaszámláló a vetítőn', { 'data-reveal-p-countdown':'' }) })}
         <RevealVideoRow />
       </section>
 
@@ -44916,6 +44914,12 @@ function RevealVideoRow() {
 // ── 2. fül: Vetítő (a vetítő MINDEN beállítása — v10.438 óta csak itt) ──
 function RevealProjectorPanel() {
   const ctl = useRevealDoc('revealProjector');
+  // v10.453: a visszaszámláló kapcsolója is itt (a vetítő felső közepén jelenik meg)
+  const rcfg = useRevealCfg(), rv = rcfg.v || {};
+  const cdOn = rv.countdownOn !== false, hasAt = +(rv.revealAt || 0) > 0;
+  const [cdMsg, cdFlash] = useRevealFlash();
+  const saveCd = on => { const db = revealDb(); if (db) db.collection('config').doc('revealConfig').set({ countdownOn: on }, { merge:true })
+    .then(() => cdFlash('Mentve')).catch(e => cdFlash('Nem sikerült (' + ((e && e.code) || 'hiba') + ')')); };
   const { list: photos } = useRevealPhotos(false);
   const v = ctl.v || {};
   const secs = REVEAL_SECS.includes(+v.secs) ? +v.secs : 5;
@@ -44948,6 +44952,8 @@ function RevealProjectorPanel() {
         {rvRow({ first:true, tight:true, label:'Képváltás', right: rvSeg(REVEAL_SECS.map(n => ({ v:n, t:n + ' mp' })), secs, n => revealCtlWrite({ secs:n }), 'data-reveal-ctl-secs', 'Képváltás') })}
         {rvRow({ tight:true, label:'Polaroidok egyszerre', right: rvSeg(REVEAL_SLOT_OPTS.map(n => ({ v:n, t:String(n) })), slots, n => revealCtlWrite({ slots:n }), 'data-reveal-ctl-slots', 'Polaroidok egyszerre') })}
         {rvRow({ label:'Vendég QR-kód a vetítőn', right: rvSwitch(qr, () => revealCtlWrite({ qr: !qr }), 'Vendég QR-kód a vetítőn', { 'data-reveal-ctl-qr': qr ? '1' : '0' }) })}
+        {rvRow({ label: <span>Visszaszámláló a vetítőn{!hasAt && <span data-reveal-p-countdownnote style={{ display:'block', fontWeight:700, fontSize:12, color:T.inkSoft, marginTop:2 }}>Időpont nélkül nem látszik (Leleplezés fül)</span>}{cdMsg && <span style={{ display:'block', marginTop:2 }}>{rvMsg(cdMsg)}</span>}</span>,
+          right: rvSwitch(cdOn, () => saveCd(!cdOn), 'Visszaszámláló a vetítőn', { 'data-reveal-p-countdown':'' }) })}
       </section>
       {tot > 0 && (
         <section style={rvCard({ padding:'12px 16px 14px' })}>

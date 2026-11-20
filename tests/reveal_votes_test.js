@@ -58,7 +58,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
     await db.collection('config').doc('revealConfig').set({ password: '1234', title: 'Fiú vagy lány?' });
     for (const [id, at] of [['a', 1], ['b', 2], ['c', 3]]) await db.collection('revealPhotos').doc(id).set({ src: px, w: 1, h: 1, at, hidden: false, by: 'Vendég ' + id });
   }, PX);
-  await p.keyboard.type('1234'); await p.waitForTimeout(350);
+  await p.waitForSelector('[data-reveal-key]', { timeout: 8000 }).catch(() => {}); await p.keyboard.type('1234'); await p.waitForTimeout(350);
   await p.click('[data-reveal-role="projector"]'); await p.waitForTimeout(600);
   ok(await has('[data-reveal-projector]') && !(await has('[data-reveal-votes]')), 'tipp nélkül nincs számláló a vetítőn');
 

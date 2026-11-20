@@ -4171,3 +4171,14 @@ szervezőknek szól („kell-e jóváhagyni"), nem a vendégeknek — ezért nem
   számkódnál ad számbillentyűzetet (`revealIsNumCode`).
 Teszt: `reveal_extras_test.js` 6b. blokk (bal alul, kicsi, a fal fölötte; a Szülői kód
 számbillentyűzeten).
+
+## Gender Reveal: a visszaszámláló-kapcsoló a Szülők VETÍTŐ fülén (v10.453)
+A „Visszaszámláló a vetítőn" kapcsoló (`data-reveal-p-countdown`, `revealConfig.countdownOn`)
+a Leleplezés fül Előkészületek kártyájáról a **Vetítő fülre** került (`RevealProjectorPanel`,
+a QR-kapcsoló alá) — a vetítő megjelenését állítja, nem a leleplezést. Az **időpont marad a
+Leleplezés fülön**; ha nincs időpont, a kapcsoló alatt figyelmeztetés áll
+(`data-reveal-p-countdownnote` — „Időpont nélkül nem látszik").
+⚠️ Tesztben a belépő kódot csak a számbillentyűzet megjelenése UTÁN szabad gépelni
+(`waitForSelector('[data-reveal-key]')`) — különben a leütések a semmibe mennek, és a teszt
+billeg (`reveal_extras_test` `login()`).
+Teszt: `reveal_extras_test.js` 1. blokk.
