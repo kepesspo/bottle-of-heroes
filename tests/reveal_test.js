@@ -197,6 +197,10 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   console.log('\n===== 6. OPERÁTOR =====');
   await p.click('[data-reveal-role="operator"]'); await p.waitForTimeout(200);
   ok(await has('[data-reveal-operator]'), 'operátor nézet');
+  const opUp = await p.evaluate(() => ({ cam: !!document.querySelector('[data-reveal-operator] [data-reveal-camera]'),
+    capture: [...document.querySelectorAll('[data-reveal-operator] input[type=file]')].filter(i => i.hasAttribute('capture')).length,
+    multi: !!document.querySelector('[data-reveal-operator] [data-reveal-input][multiple]'), pick: !!document.querySelector('[data-reveal-operator] [data-reveal-pick]') }));
+  ok(!opUp.cam && opUp.capture === 0 && opUp.multi && opUp.pick, 'v10.437: az operátor csak feltölt (nincs kamera-gomb, nincs capture), több kép egyszerre', JSON.stringify(opUp));
   const n0 = await p.evaluate(() => Object.keys(window.__fbStore.revealPhotos).length);
   await p.setInputFiles('[data-reveal-input]', [ROOT + '/assets/dnr_reveal_app.png', ROOT + '/assets/dnr_tipp_app.png']);
   await p.waitForFunction(n => Object.keys(window.__fbStore.revealPhotos).length >= n + 2, n0, { timeout: 8000 }).catch(() => {});

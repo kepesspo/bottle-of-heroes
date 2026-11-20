@@ -3861,3 +3861,12 @@ Teszt: `node tests/reveal_votes_test.js` (a számolás szabályai; az operátor-
 alatt, pár két sorral, store-írás és törlés; a vetítő élőben követi — tipp, törlés,
 pár → személy, elrejtés; kvíz alatt nincs; a számláló alul középen; leleplezés utáni
 kiemelés; távirányító).
+
+### Az operátor csak feltölt, nem fotóz (v10.437)
+Tulajdonosi kérés: az operátor a saját fényképezőjével, saját beállításokkal készíti a
+képet, és utána tölti fel — az appból nem fotóz. Az operátor nézetből kikerült a
+„📷 Fotó készítése" gomb és a `capture` inputja; egyetlen elsődleges gomb maradt,
+**„🖼️ Képek feltöltése"** (`data-reveal-pick`, több kép egyszerre). **A vendég nézet
+fotó-gombja MARAD** — ott a gyors, telefonos kép a cél.
+Teszt: `reveal_test.js` 6. blokk (nincs `data-reveal-camera`, nincs `capture` attribútum,
+a feltöltő `multiple`).
