@@ -3896,3 +3896,31 @@ Teszt: `reveal_test.js` 4. blokk (a sávon csak a három gomb; telefonon tájék
 közös dokumentumot a laptop követi), `reveal_extras_test.js` (a jelvény és az óra középen,
 a fal alatta; a Szülők panelje ír; a kvízt a Szülők lapozója viszi végig),
 `reveal_votes_test.js` 5. blokk (a panel kiírja az állást).
+
+## Gender Reveal: az admin is kiürült, a videó a Szülőknél, a polaroid újra nagy (v10.439)
+- **Az adminban CSAK a belépés és a titkos rész marad:** jelszó, eredmény, szülői kód,
+  videó-link, + az állapot és a vészhelyzeti „Visszaállítás". Egy kártya
+  (`data-admin-reveal-moved`) megmondja, hova került a többi.
+- **A Szülők nézet (a kód után), sorrendben:** Leleplezés → ⏰ Időpont + visszaszámláló
+  (`RevealScheduleCard`) → 🎬 Leleplező videó (`RevealVideoCard`) → Vetítő beállításai →
+  Babakvíz lapozó + „✏️ Kérdések szerkesztése" (`RevealQuizEditBox` → `RevealQuizEditor`,
+  a régi `AdminRevealQuiz`) → 🔗 Cím és linkek (`RevealLinksCard`; a cím első mentése is
+  létrehozza a vendég/album kulcsot) → 📦 Album és ürítés (`RevealAlbumCard`).
+  A kártyák közös elemei a modul-szintű `rv*` függvények (nem komponensek — v10.335).
+- **A videó nem a vetítő gépéről jön többé**, hanem a Szülők töltik fel. Storage SDK
+  nincs, ezért **darabolva a Firestore-ba**: `revealVideo/<vid>_NNN = { vid, i, d:<base64> }`
+  (`REVEAL_VIDEO_CHUNK` = 690 000 bájt ≈ 920 KB base64 — az 1 MB-os dokumentum-korlát
+  alatt), max. `REVEAL_VIDEO_MAX` = 60 MB. A `config/revealVideo` meta (`vid, n, name, type,
+  size`) ⚠️ CSAK a teljes feltöltés után kapja meg a `vid`-et (addig `uploading:true`), így a
+  vetítő félkész videót nem tölt be. A vetítő (`useRevealVideo`) a darabokból Blob-URL-t
+  rak össze, és ez elsőbbséget kap az admin linkjével szemben. A Szülőknél **nincs
+  előnézet** (ők sem nézik meg előre). ⚠️ A Firestore-szabályoknak a `revealVideo`
+  gyűjteményt és a `config/revealVideo`-t is engedniük kell.
+- **A polaroid újra nagy:** a v10.438 óta a fal a felső óra alatt kezdődik, és a lap a
+  kisebb magasság 70%-át kapta → összement. `revealCardGeom(…, roomy)`: ilyenkor a maradék
+  90%-a jár, középre igazítva. Mérve: órával és nélküle ugyanakkora (≈500 px 1280×720-on).
+
+Teszt: `reveal_extras_test.js` 1. (admin csak a titkos rész; a Szülők kártyái és mentése)
+és 3c. blokk (3 darab < 1 MB, a vetítő betölti, a leleplezés `blob:` videót visz, törlés);
+`reveal_test.js` 4. (a vetítő sávján csak Vissza · Teljes képernyő) és 7. (ürítés a
+Szülők kártyájáról).

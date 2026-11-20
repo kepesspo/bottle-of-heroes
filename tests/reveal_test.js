@@ -131,7 +131,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   const ctlBar = await p.evaluate(() => ({
     gone: ['[data-reveal-secs]', '[data-reveal-slotsbtn]', '[data-reveal-pause]', '[data-reveal-next]', '[data-reveal-qrbtn]', '[data-reveal-replay]', '[data-reveal-quiznav]'].filter(s => document.querySelector(s)),
     btns: [...document.querySelectorAll('[data-reveal-controls] button')].map(b => [...b.attributes].map(a => a.name).find(n => n.startsWith('data-reveal-'))).join(',') }));
-  ok(ctlBar.gone.length === 0 && ctlBar.btns === 'data-reveal-exit,data-reveal-videobtn,data-reveal-fs', 'a vetítő sávján csak Vissza · Videó · Teljes képernyő', JSON.stringify(ctlBar));
+  ok(ctlBar.gone.length === 0 && ctlBar.btns === 'data-reveal-exit,data-reveal-fs', 'a vetítő sávján csak Vissza · Teljes képernyő (a videó is a Szülőknél — v10.439)', JSON.stringify(ctlBar));
   const paper = await p.evaluate(() => getComputedStyle(document.querySelector('[data-reveal-projector]')).backgroundColor);
   ok(paper === 'rgb(255, 247, 238)', 'a vetítő felülete a Babakvíz krém papírja', paper);
   await p.evaluate(() => { window.__revealSpeed = 100; });
@@ -229,10 +229,17 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   await p.fill('[data-admin-reveal-pw]', 'kisbaba'); await p.click('[data-admin-reveal-save]'); await p.waitForTimeout(150);
   ok(await p.evaluate(() => window.__fbStore.config.revealConfig.password === 'kisbaba'), 'jelszó mentve');
   ok((await p.textContent('[data-admin-reveal-msg]')).includes('Mentve'), '„Mentve ✓"');
-  await p.click('[data-admin-reveal-clear]'); await p.waitForTimeout(100);
+  ok(!(await has('[data-admin-reveal-clear]')), 'v10.439: az ürítés nincs az adminban (a Szülőknél van)');
+  await p.evaluate(() => document.getElementById('__a').remove());
+  await p.evaluate(() => {
+    const d = document.createElement('div'); d.id = '__a'; d.style.cssText = 'position:fixed;inset:0;z-index:7000;background:#fff;overflow:auto';
+    document.body.appendChild(d); ReactDOM.createRoot(d).render(React.createElement(RevealAlbumCard));
+  });
+  await p.waitForTimeout(200);
+  await p.click('[data-reveal-p-clear]'); await p.waitForTimeout(100);
   await p.click('button:has-text("Mind törlése")'); await p.waitForTimeout(400);
-  ok(await p.evaluate(() => Object.keys(window.__fbStore.revealPhotos).length === 0), 'ürítés → minden kép törölve');
-  ok((await p.textContent('[data-admin-reveal-msg]')).includes('törölve'), 'visszajelzés a törölt darabszámmal', await p.textContent('[data-admin-reveal-msg]'));
+  ok(await p.evaluate(() => Object.keys(window.__fbStore.revealPhotos).length === 0), 'ürítés (Szülők) → minden kép törölve');
+  ok((await p.textContent('[data-reveal-p-albummsg]')).includes('törölve'), 'visszajelzés a törölt darabszámmal', await p.textContent('[data-reveal-p-albummsg]'));
   await p.evaluate(() => document.getElementById('__a').remove());
 
   console.log('\n===== 8. DNR KÖZPONT =====');

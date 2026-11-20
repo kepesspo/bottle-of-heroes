@@ -54,21 +54,19 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await p.waitForTimeout(300);
 
   console.log('\n===== 1. ADMIN: TITKOS EREDMÉNY =====');
-  await p.fill('[data-admin-reveal-pw]', 'baba'); await p.fill('[data-admin-reveal-title]', 'Anna & Bence babája');
+  const admGone = await p.evaluate(() => ['title', 'when', 'countdown', 'clear', 'zip', 'quiz', 'guesturl', 'albumurl'].filter(k => document.querySelector('[data-admin-reveal-' + k + ']')));
+  ok(admGone.length === 0, 'v10.439: az adminban csak a belépés és a titkos rész maradt', admGone.join(','));
+  ok(await has('[data-admin-reveal-moved]'), 'az admin megmondja, hová kerültek a többi beállítás');
+  await p.fill('[data-admin-reveal-pw]', 'baba');
   await p.click('[data-admin-reveal-save]'); await p.waitForTimeout(200);
   let st = await store();
   ok(st.c.revealConfig.guestKey && st.c.revealConfig.albumKey && st.c.revealConfig.guestKey !== st.c.revealConfig.albumKey, 'mentéskor vendég- és album-kulcs keletkezik', JSON.stringify(st.c.revealConfig));
-  ok(await has('[data-admin-reveal-guesturl]') && await has('[data-admin-reveal-albumurl]'), 'a két link kint van az adminban');
   await p.click('[data-admin-reveal-result="girl"]');
   await p.fill('[data-admin-reveal-code]', '2026');
-  await p.fill('[data-admin-reveal-when]', '2030-06-01T18:30');
-  await p.click('[data-admin-reveal-countdown]');   // alapból BE → KI
   await p.click('[data-admin-reveal-secretsave]'); await p.waitForTimeout(200);
   st = await store();
   ok(st.c.revealSecret && st.c.revealSecret.result === 'girl' && st.c.revealSecret.code === '2026', 'az eredmény és a kód a TITKOS dokumentumba megy', JSON.stringify(st.c.revealSecret));
   ok(!st.c.revealState, '⚠️ a leleplezésig a revealState-ben nincs eredmény');
-  ok(st.c.revealConfig.revealAt === new Date(2030, 5, 1, 18, 30).getTime() && st.c.revealConfig.countdownOn === false, 'az időpont (helyi idő) és a sarok-kapcsoló a revealConfig-ba megy', JSON.stringify([st.c.revealConfig.revealAt, st.c.revealConfig.countdownOn]));
-  ok(!st.c.revealSecret.revealAt, 'az időpont nem a titkos dokumentumba kerül');
   await p.evaluate(() => { const d = document.getElementById('__adm'); d.__r.unmount(); d.remove(); });
   await p.evaluate(() => { const d = document.createElement('div'); d.id = '__adm'; d.style.cssText = 'position:fixed;inset:0;z-index:9000;background:#fff;overflow:auto'; document.body.appendChild(d); d.__r = ReactDOM.createRoot(d); d.__r.render(React.createElement(AdminReveal)); });
   await p.waitForTimeout(300);
@@ -76,6 +74,24 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await p.click('[data-admin-reveal-peek]'); await p.waitForTimeout(80);
   ok(await has('[data-admin-reveal-result="girl"]'), '👁 Mutat → látszik');
   await p.evaluate(() => { const d = document.getElementById('__adm'); d.__r.unmount(); d.remove(); });
+  // v10.439: a cím, a linkek és az időpont a Szülőknél
+  await mountSide('RevealTrigger'); await p.waitForTimeout(200);
+  ok(!(await has('#__side [data-reveal-p-schedule]')), 'a Szülők beállításai a kód mögött vannak');
+  await p.fill('#__side [data-reveal-code]', '2026'); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
+  const pcards = await p.evaluate(() => ['schedule', 'video', 'links', 'album'].filter(k => document.querySelector('#__side [data-reveal-p-' + k + ']')).join(','));
+  ok(pcards === 'schedule,video,links,album' && await has('#__side [data-reveal-parentctl]') && await has('#__side [data-reveal-p-quizeditbtn]'), 'kóddal: időpont, videó, vetítő, Babakvíz-kérdések, linkek, album', pcards);
+  ok(await has('#__side [data-reveal-p-guesturl]') && await has('#__side [data-reveal-p-albumurl]'), 'a két link a Szülőknél');
+  await p.fill('#__side [data-reveal-p-title]', 'Anna & Bence babája'); await p.click('#__side [data-reveal-p-titlesave]'); await p.waitForTimeout(150);
+  await p.fill('#__side [data-reveal-p-when]', '2030-06-01T18:30');
+  await p.click('#__side [data-reveal-p-countdown]');   // alapból BE → KI
+  await p.click('#__side [data-reveal-p-schedsave]'); await p.waitForTimeout(200);
+  st = await store();
+  ok(st.c.revealConfig.title === 'Anna & Bence babája', 'a cím a Szülőktől mentődik', st.c.revealConfig.title);
+  ok(st.c.revealConfig.revealAt === new Date(2030, 5, 1, 18, 30).getTime() && st.c.revealConfig.countdownOn === false, 'az időpont (helyi idő) és a visszaszámláló-kapcsoló a revealConfig-ba megy', JSON.stringify([st.c.revealConfig.revealAt, st.c.revealConfig.countdownOn]));
+  ok(!st.c.revealSecret.revealAt, 'az időpont nem a titkos dokumentumba kerül');
+  await p.click('#__side [data-reveal-p-quizeditbtn]'); await p.waitForTimeout(150);
+  ok(await has('#__side [data-admin-reveal-quiz]'), 'a Babakvíz kérdései a Szülőknél szerkeszthetők');
+  await p.evaluate(() => { const d = document.getElementById('__side'); d.__r.unmount(); d.remove(); });
   await p.evaluate(() => window.__rvSave());
 
   console.log('\n===== 2. KI LELEPLEZHET =====');
@@ -128,6 +144,34 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await p.waitForFunction(() => { const e = document.querySelector('[data-reveal-show]'); return e && e.getAttribute('data-reveal-show') === 'boom'; }, null, { timeout: 4000 }).catch(() => {});
   ok((await attr('[data-reveal-show]', 'data-reveal-boom')) === 'girl', 'betölthetetlen videónál is a robbanás jön');
   await p.waitForFunction(() => !document.querySelector('[data-reveal-show]'), null, { timeout: 4000 }).catch(() => {});
+
+  console.log('\n===== 3c. VIDEÓ A SZÜLŐKTŐL (darabolt feltöltés, v10.439) =====');
+  ok(!(await has('[data-reveal-videobtn]')) && !(await has('[data-reveal-videoinput]')), 'a vetítőn nincs videó-gomb');
+  const vf = '/tmp/claude-0/-home-user-bottle-of-heroes/41faa226-19f7-5bf9-9bc4-4d933d77bf20/scratchpad/fake_reveal.mp4';
+  fs.mkdirSync(require('path').dirname(vf), { recursive: true }); fs.writeFileSync(vf, Buffer.alloc(1500000, 7));
+  await mountSide('RevealTrigger'); await p.waitForTimeout(200);
+  await p.fill('#__side [data-reveal-code]', '2026'); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
+  await p.setInputFiles('#__side [data-reveal-p-videoinput]', vf);
+  await p.waitForFunction(() => { const m = (window.__fbStore.config || {}).revealVideo; return m && m.vid; }, null, { timeout: 15000 }).catch(() => {});
+  const vm = await p.evaluate(() => { const m = window.__fbStore.config.revealVideo || {}, ch = Object.values(window.__fbStore.revealVideo || {});
+    return { n: m.n, size: m.size, chunks: ch.filter(c => c.vid === m.vid).length, maxLen: Math.max(0, ...ch.map(c => c.d.length)) }; });
+  ok(vm.n === 3 && vm.chunks === 3 && vm.size === 1500000 && vm.maxLen < 1000000, 'a videó 3 darabban, darabonként 1 MB alatt kerül a szobába', JSON.stringify(vm));
+  await p.waitForTimeout(200);
+  ok((await p.textContent('#__side [data-reveal-p-videostatus]')).includes('1.4 MB'), 'a Szülőknél: feltöltve, mérettel', await p.textContent('#__side [data-reveal-p-videostatus]'));
+  ok(!(await has('#__side video')), 'a Szülők nem játsszák le (előnézet nincs)');
+  await p.waitForFunction(() => !!document.querySelector('[data-reveal-videoready="1"]'), null, { timeout: 5000 }).catch(() => {});
+  ok(await has('[data-reveal-videoready="1"]'), 'a vetítő betöltötte (a sávon „videó kész")');
+  await p.evaluate(() => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'vid2', test: false, result: 'girl', videoUrl: '', at: Date.now() }));
+  await p.waitForTimeout(150);
+  const vsrc = await p.evaluate(() => { const v = document.querySelector('video[data-reveal-video]'); return v ? v.getAttribute('src') : null; });
+  ok(vsrc && vsrc.startsWith('blob:'), 'a leleplezés a feltöltött videót viszi', vsrc);
+  await p.waitForFunction(() => !document.querySelector('[data-reveal-show]'), null, { timeout: 6000 }).catch(() => {});
+  await p.click('#__side [data-reveal-p-videodel]'); await p.waitForTimeout(100);
+  await p.locator('button:text-is("Törlés")').last().click(); await p.waitForTimeout(400);
+  const vgone = await p.evaluate(() => ({ vid: (window.__fbStore.config.revealVideo || {}).vid, ch: Object.keys(window.__fbStore.revealVideo || {}).length }));
+  ok(!vgone.vid && vgone.ch === 0, 'törlés: a meta és a darabok is eltűnnek', JSON.stringify(vgone));
+  ok(!(await has('[data-reveal-videoready]')), 'a vetítő is elengedi');
+  await p.evaluate(() => { const d = document.getElementById('__side'); if (d) { d.__r.unmount(); d.remove(); } });
   await p.evaluate(() => window.__rvSave());
 
   console.log('\n===== 5. KÉSŐBB NYITOTT VETÍTŐ =====');
