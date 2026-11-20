@@ -42,6 +42,14 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
     d.style.cssText = 'position:fixed;right:0;top:0;width:420px;height:100vh;z-index:6500;background:#fff;display:flex;flex-direction:column;overflow:auto';
     document.body.appendChild(d); d.__r = ReactDOM.createRoot(d); d.__r.render(React.createElement(window[comp] || eval(comp), Object.assign({ onBack: () => {} }, props || {})));
   }, { comp, props });
+  // v10.450: a Jóváhagyás döntés-gombjai a lap ALJÁN, az ÉPP látható tételre — odalapozunk, aztán döntünk
+  const decide = async (id, what) => {
+    await p.evaluate(id => { const tr = document.querySelector('[data-reveal-reviewtrack]'), el = tr && tr.querySelector(`[data-reveal-pend="${id}"]`);
+      if (el) { tr.scrollLeft = (+el.getAttribute('data-idx')) * tr.clientWidth; tr.dispatchEvent(new Event('scroll')); } }, id);
+    await p.waitForTimeout(150);
+    await p.evaluate(w => document.querySelector(`[data-reveal-review] [data-reveal-${w}]`).click(), what);
+    await p.waitForTimeout(200);
+  };
   const login = async () => { await p.fill('[data-reveal-pw]', 'baba'); await p.keyboard.press('Enter'); await p.waitForTimeout(200); };
 
   // ── alapállapot: jelszó, címek, kulcsok az admin mentésével ──
@@ -268,21 +276,21 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await p.click('#__side [data-reveal-pendbtn]'); await p.waitForTimeout(150);
   ok(await has('#__side [data-reveal-review]') && (await p.textContent('#__side [data-reveal-reviewpos]')).trim() === '1 / 2', 'megnyitva teljes képernyős lapozó: 1 / 2');
   ok(await has(`#__side [data-reveal-pend="${gPhoto[0]}"] img`) && await has(`#__side [data-reveal-pend="${gWish[0]}"] [data-reveal-wishpreview]`), 'a kép nagyban, az üzenet polaroidként');
-  await p.click('#__side [data-reveal-reviewnext]'); await p.waitForTimeout(500);
+  await p.click('#__side [data-reveal-reviewdot="1"]'); await p.waitForTimeout(500);
   ok((await p.textContent('#__side [data-reveal-reviewpos]')).trim() === '2 / 2', 'léptethető (2 / 2)');
-  await p.click(`#__side [data-reveal-pend="${gWish[0]}"] [data-reveal-approve]`); await p.waitForTimeout(150);
+  await decide(gWish[0], 'approve');
   await p.evaluate(() => revealCtlWrite({ next: revealToken() })); await p.waitForTimeout(200);   // a Szülők „Következő ›"-je
   ok((await attr('[data-reveal-projector]', 'data-reveal-current')) === gWish[0] && (await attr('[data-reveal-projector]', 'data-reveal-isnew')) === '1', 'jóváhagyás után az üzenet rögtön jön, ÚJ jelöléssel');
   ok(await has(`[data-reveal-wish="${gWish[0]}"]`) && (await p.textContent(`[data-reveal-wish="${gWish[0]}"]`)).includes('Zsófi'), 'jókívánság-kártya a küldő nevével');
   ok(await has(`[data-reveal-wish="${gWish[0]}"] [data-reveal-wishface]`) && (await p.textContent(`[data-reveal-wish="${gWish[0]}"] [data-reveal-wishtext]`)) === 'Isten hozott, kicsi!', 'v10.443: a vetítőn UGYANAZ az üzenet-arc, mint az előnézetben');
-  await p.click(`#__side [data-reveal-pend="${gPhoto[0]}"] [data-reveal-approve]`); await p.waitForTimeout(150);
+  await decide(gPhoto[0], 'approve');
   ok(!(await has('#__side [data-reveal-review]')) && !(await has('#__side [data-reveal-pendbtn]')), 'az utolsó döntés után a felület bezárul, a gomb eltűnik');
   ok((await p.textContent('[data-reveal-count]')).trim() === '3 kép', 'a jóváhagyott kép bekerül a vetítőre');
   await p.evaluate(() => { window.__fbStore.revealPhotos.junk = { src: 'data:image/png;base64,AAAA', pending: true, by: 'X', at: 99 }; return firebase.firestore().collection('revealPhotos').doc('junk2').set({ kind: 'wish', text: 'rossz', by: 'Y', pending: true, at: 100 }); });
   await p.waitForTimeout(150);
   ok(!(await has('#__side [data-reveal-review]')), 'új beküldés NEM nyitja fel magától a felületet');
   await p.click('#__side [data-reveal-pendbtn]'); await p.waitForTimeout(150);
-  await p.click('#__side [data-reveal-pend="junk2"] [data-reveal-reject]'); await p.waitForTimeout(150);
+  await decide('junk2', 'reject');
   ok(await p.evaluate(() => !window.__fbStore.revealPhotos.junk2), '„Eldob" → törlődik');
   await p.evaluate(() => { delete window.__fbStore.revealPhotos.junk; });
 
@@ -322,8 +330,8 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(await has('#__side [data-reveal-ppendbtn]') && (await p.textContent('#__side [data-reveal-ppendcount]')).trim() === '2', 'a Szülők állapot-sorában: Jóváhagyás (2)');
   await p.evaluate(() => document.querySelector('#__side [data-reveal-ppendbtn]').click()); await p.waitForTimeout(200);
   ok(await has('#__side [data-reveal-review]') && !(await has('[data-reveal-pdock]')), 'megnyílik a közös lapozó, és a dokk eltűnik alatta');
-  await p.evaluate(() => document.querySelector('#__side [data-reveal-pend="pz1"] [data-reveal-approve]').click()); await p.waitForTimeout(200);
-  await p.evaluate(() => document.querySelector('#__side [data-reveal-pend="pz2"] [data-reveal-reject]').click()); await p.waitForTimeout(250);
+  await decide('pz1', 'approve');
+  await decide('pz2', 'reject');
   st = await store();
   ok(st.ph.pz1 && st.ph.pz1.pending === false && !st.ph.pz2, 'a Szülők jóváhagyták a képet, eldobták az üzenetet');
   ok(!(await has('#__side [data-reveal-review]')) && await has('[data-reveal-pdock]') && !(await has('#__side [data-reveal-ppendbtn]')), 'utána bezárul, a dokk visszajön, a gomb eltűnik');

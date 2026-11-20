@@ -36,6 +36,9 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
     d.style.cssText = 'position:fixed;right:0;top:0;width:420px;height:100vh;z-index:6500;background:#fff;display:flex;flex-direction:column;overflow:auto';
     document.body.appendChild(d); d.__r = ReactDOM.createRoot(d); d.__r.render(React.createElement(eval(comp), Object.assign({ onBack: () => {}, onExit: () => {} }, props || {})));
   }, { comp, props });
+  // v10.450: a lapozó helyzete a bélyegkép-csíkból (aktív elem / elemszám)
+  const slidePos = () => p.evaluate(() => { const all = document.querySelectorAll('#__side [data-reveal-strip]'), cur = document.querySelector('#__side [data-reveal-strip][aria-current="true"]');
+    return cur ? (+cur.getAttribute('data-reveal-strip') + 1) + ' / ' + all.length : null; });
   const clickSide = sel => p.evaluate(s => { const e = document.querySelector('#__side ' + s); if (e) e.click(); return !!e; }, sel);
 
   console.log('\n===== 1. A SZÁMOLÁS =====');
@@ -121,7 +124,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
       ctlAbove: !!(hide && del) && del.getBoundingClientRect().bottom <= img.getBoundingClientRect().top + 1,
       onImg: !!img.parentElement.querySelector('[data-reveal-hide], [data-reveal-del]'),
       vh: Math.round(vbtn.getBoundingClientRect().height), snap: getComputedStyle(tr).scrollSnapType,
-      pos: document.querySelector('#__side [data-reveal-slidepos]').textContent };
+      pos: (() => { const all = document.querySelectorAll('#__side [data-reveal-strip]'), cur = document.querySelector('#__side [data-reveal-strip][aria-current="true"]'); return cur ? (+cur.getAttribute('data-reveal-strip') + 1) + ' / ' + all.length : null; })() };
   });
   ok(sl.id === 'c' && sl.num === '1. kép' && sl.newest, 'a legújabb elöl, felül „1. kép" + LEGÚJABB', JSON.stringify(sl));
   ok(sl.ctlAbove && !sl.onImg, 'az Elrejt és a 🗑 a lap fejlécében, nem a képen');
@@ -132,15 +135,15 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(await has('#__side [data-reveal-oplightbox] img'), 'a képre koppintva teljes képernyős nézet');
   await clickSide('[data-reveal-oplightbox]'); await p.waitForTimeout(120);
   ok(!(await has('#__side [data-reveal-oplightbox]')), 'koppintásra bezárul');
-  ok(/x/.test(sl.snap) && sl.pos === '1 / 3', 'vízszintes lapozó (scroll-snap), alul „1 / 3"', sl.snap + ' ' + sl.pos);
-  await clickSide('[data-reveal-slidenext]'); await p.waitForTimeout(700);
-  const s2 = await p.evaluate(() => { const tr = document.querySelector('#__side [data-reveal-track]'); return { pos: document.querySelector('#__side [data-reveal-slidepos]').textContent, x: Math.round(tr.scrollLeft / tr.clientWidth * 100) / 100 }; });
-  ok(s2.pos === '2 / 3' && s2.x === 1, '„›" a következő képre lép', JSON.stringify(s2));
+  ok(/x/.test(sl.snap) && sl.pos === '1 / 3', 'vízszintes lapozó (scroll-snap), a bélyegkép-csíkon az 1. aktív (1 / 3)', sl.snap + ' ' + sl.pos);
+  await clickSide('[data-reveal-strip="1"]'); await p.waitForTimeout(700);
+  const s2 = Object.assign({ pos: await slidePos() }, await p.evaluate(() => { const tr = document.querySelector('#__side [data-reveal-track]'); return { x: Math.round(tr.scrollLeft / tr.clientWidth * 100) / 100 }; }));
+  ok(s2.pos === '2 / 3' && s2.x === 1, 'v10.450: a csík 2. bélyegképére koppintva a 2. képre lép', JSON.stringify(s2));
   await p.evaluate(() => { const tr = document.querySelector('#__side [data-reveal-track]'); tr.scrollLeft = tr.clientWidth * 2; tr.dispatchEvent(new Event('scroll')); }); await p.waitForTimeout(200);
-  ok((await p.textContent('#__side [data-reveal-slidepos]')) === '3 / 3', 'oldalra húzva is lép (3 / 3)');
+  ok((await slidePos()) === '3 / 3', 'oldalra húzva is lép (3 / 3), és a csík követi');
   await p.evaluate(px => firebase.firestore().collection('revealPhotos').doc('d').set({ src: px, w: 1, h: 1, at: 10, hidden: false, by: 'Vendég d' }), PX);
   await p.waitForTimeout(800);
-  const s3 = await p.evaluate(() => { const tr = document.querySelector('#__side [data-reveal-track]'); return { first: document.querySelector('#__side [data-reveal-thumb][data-idx="0"]').getAttribute('data-reveal-thumb'), pos: document.querySelector('#__side [data-reveal-slidepos]').textContent, x: tr.scrollLeft }; });
+  const s3 = Object.assign({ pos: await slidePos() }, await p.evaluate(() => { const tr = document.querySelector('#__side [data-reveal-track]'); return { first: document.querySelector('#__side [data-reveal-thumb][data-idx="0"]').getAttribute('data-reveal-thumb'), x: tr.scrollLeft }; }));
   ok(s3.first === 'd' && s3.pos === '1 / 4' && s3.x < 5, 'új kép → az elejére ugrik, az új kép az első', JSON.stringify(s3));
 
   console.log('\n===== 7. OPERÁTOR: EGY KÉPERNYŐRE FÉR (v10.441) =====');
@@ -154,13 +157,14 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
     await p.waitForTimeout(400);
     return p.evaluate(() => { const r = document.getElementById('__full'), sc = r.querySelector('[data-reveal-opscroll]'), nav = r.querySelector('[data-reveal-slidenav]'),
       img = r.querySelector('[data-reveal-thumb][data-idx="0"] [data-reveal-slideimg]'), vp = r.querySelector('[data-reveal-thumb][data-idx="0"] [data-reveal-votepick]');
-      return { over: sc.scrollHeight - sc.clientHeight, navB: Math.round(nav.getBoundingClientRect().bottom), imgH: Math.round(img.getBoundingClientRect().height), pair: vp.getAttribute('data-pair'), vh: innerHeight }; });
+      const dk = document.querySelector('[data-reveal-opdock]');
+      return { over: sc.scrollHeight - sc.clientHeight, navB: Math.round(nav.getBoundingClientRect().bottom), dockT: dk ? Math.round(dk.getBoundingClientRect().top) : -1, imgH: Math.round(img.getBoundingClientRect().height), pair: vp.getAttribute('data-pair'), vh: innerHeight }; });
   };
   const f1 = await fit(390, 844);
-  ok(f1.over <= 1 && f1.navB <= 844 && f1.pair === '1', '390×844 (pár-móddal): nincs függőleges görgetés, a lapozó is látszik', JSON.stringify(f1));
+  ok(f1.over <= 1 && f1.navB <= f1.dockT && f1.pair === '1', '390×844 (pár-móddal): nincs görgetés, a bélyegkép-csík a fix feltöltő-dokk FÖLÖTT', JSON.stringify(f1));
   ok(f1.imgH >= 400, 'v10.445: a kép jól látható — páros módban is ≥ 400 px', f1.imgH);
   const f2 = await fit(375, 667);
-  ok(f2.over <= 1 && f2.navB <= 667 && f2.imgH >= 120, '375×667 (iPhone SE): itt is kifér', JSON.stringify(f2));
+  ok(f2.over <= 1 && f2.navB <= f2.dockT && f2.imgH >= 120, '375×667 (iPhone SE): itt is kifér', JSON.stringify(f2));
   await p.evaluate(() => { const d = document.getElementById('__full'); if (d) { d.__r.unmount(); d.remove(); } });
   await p.setViewportSize({ width: 1400, height: 820 });
 

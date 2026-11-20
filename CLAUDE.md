@@ -4117,3 +4117,27 @@ nincs átfedés.
   legalacsonyabb ALJA alatt kezdődik (a régi egyetlen `topRef` helyett). Kvíz és leleplezés
   alatt a sarkok nincsenek.
 Teszt: `reveal_extras_test.js` 6b. blokk.
+
+## Gender Reveal: Menü, Operátor, Jóváhagyás — a jóváhagyott design szerint (v10.450)
+A design-vászon 5–8. táblája (Jéghegy témában rajzolva, a DNR fejléccel). A színek a
+témából jönnek; FIX csak a szerep-csempék pasztell párja és az állapot-tónusok.
+- **Menü** (`data-reveal-menu`, jelszó után): felül kártya az esemény címével és a
+  leleplezés idejével (`data-reveal-menuwhen`, `revealFmtCoarse` — „még 2 ó 15 p", a sor
+  csak a „ · " után törhet), alatta „MI LESZ EZ A KÉSZÜLÉK?" és a három szerep sorokban,
+  mindegyiken a készülék-csip (`data-reveal-roledevice`), a Szülőkön lakat. Legalul a
+  vendégeknek: „Olvasd be a kivetítő QR-kódját". ⚠️ A `RevealScreen` új hookjai (`now`) a
+  vendég/album **korai return ELŐTT** állnak — utána hook-sorrend-hibával a galéria-link
+  üres maradt (a teszt el is kapta).
+- **Operátor:** a fejlécben a darabszám (`data-reveal-opcount`), alatta a sárga „N
+  Jóváhagyásra vár" gomb + a tippek csipje. A lap: „N. kép" + LEGÚJABB, alatta ki · mikor
+  (`revealAgo`), jobbra ikon-gombok (rejtés `eyeoff`/`eye`, törlés) — a kép sötét keretben,
+  „Nagyítás" jellel. **A ‹ › nyilak helyett bélyegkép-csík** (`data-reveal-slidenav`, elemei
+  `data-reveal-strip={i}`, az aktív `aria-current`), ami csak a SAJÁT sávját görgeti (az oldal
+  nem ugrik). **A feltöltés fix alsó dokkban** (`revealBottomDock`, `data-reveal-opdock` — a
+  Szülők dokkjának mintája, portál a body-ba), a haladásjelzővel együtt; a jóváhagyó lap és a
+  nagyítás alatt eltűnik. Mérve 390×844, páros tipp-móddal: a kép 403 px, a csík a dokk fölött.
+- **Jóváhagyás:** fejléc-pirula „1 / N" (`data-reveal-reviewpos`), a lapon a beküldő
+  kezdőbetűs korongja (`revealAvatar` — szín a névből), neve, „Fotó · 1 perce". **A döntés-
+  gombok a lap ALJÁN, fixen, az ÉPP látható tételre** (`data-reveal-reject` / `-approve`),
+  fölöttük pöttyök (`data-reveal-reviewdot`). ⚠️ Tesztben: előbb oda kell lapozni
+  (`decide()` helper a `reveal_extras_test`-ben), a gomb nem a laphoz tartozik.
