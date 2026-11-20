@@ -78,19 +78,36 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await mountSide('RevealTrigger'); await p.waitForTimeout(200);
   ok(!(await has('#__side [data-reveal-p-schedule]')), 'a Szülők beállításai a kód mögött vannak');
   await p.fill('#__side [data-reveal-code]', '2026'); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
-  const pcards = await p.evaluate(() => ['schedule', 'video', 'links', 'album'].filter(k => document.querySelector('#__side [data-reveal-p-' + k + ']')).join(','));
-  ok(pcards === 'schedule,video,links,album' && await has('#__side [data-reveal-parentctl]') && await has('#__side [data-reveal-p-quizeditbtn]'), 'kóddal: időpont, videó, vetítő, Babakvíz-kérdések, linkek, album', pcards);
+  // v10.444: négy fül — Leleplezés · Vetítő · Kvíz · Esemény; egyszerre csak egy látszik
+  const tabs = await p.evaluate(() => [...document.querySelectorAll('#__side [data-reveal-ptab]')].map(b => b.getAttribute('data-reveal-ptab')).join(','));
+  ok(tabs === 'reveal,proj,quiz,event' && await has('#__side [data-reveal-pstatus]'), 'v10.444: alul négy fül, felül az állapot-sáv', tabs);
+  const onTab = async () => p.evaluate(() => ['schedule', 'video', 'links', 'album'].filter(k => document.querySelector('#__side [data-reveal-p-' + k + ']')).join(',')
+    + (document.querySelector('#__side [data-reveal-parentctl]') ? '+ctl' : '') + (document.querySelector('#__side [data-reveal-quizctl]') ? '+quiz' : ''));
+  ok((await onTab()) === 'schedule,video', 'Leleplezés fül: előkészületek + videó', await onTab());
+  await p.click('#__side [data-reveal-ptab="proj"]'); await p.waitForTimeout(100);
+  ok((await onTab()) === '+ctl', 'Vetítő fül: csak a vetítő beállításai', await onTab());
+  await p.click('#__side [data-reveal-ptab="quiz"]'); await p.waitForTimeout(100);
+  ok((await onTab()) === '+quiz' && await has('#__side [data-reveal-p-quizeditbtn]'), 'Kvíz fül: lapozó + kérdések szerkesztése', await onTab());
+  await p.click('#__side [data-reveal-ptab="event"]'); await p.waitForTimeout(100);
+  ok((await onTab()) === 'links,album', 'Esemény fül: cím, linkek, album', await onTab());
   ok(await has('#__side [data-reveal-p-guesturl]') && await has('#__side [data-reveal-p-albumurl]'), 'a két link a Szülőknél');
-  await p.fill('#__side [data-reveal-p-title]', 'Anna & Bence babája'); await p.click('#__side [data-reveal-p-titlesave]'); await p.waitForTimeout(150);
-  await p.fill('#__side [data-reveal-p-when]', '2030-06-01T18:30');
-  await p.click('#__side [data-reveal-p-countdown]');   // alapból BE → KI
-  await p.click('#__side [data-reveal-p-schedsave]'); await p.waitForTimeout(200);
+  ok(!(await has('#__side [data-reveal-p-titlesave]')) && !(await has('#__side [data-reveal-p-schedsave]')), 'nincs külön Mentés gomb');
+  await p.fill('#__side [data-reveal-p-title]', 'Anna & Bence babája'); await p.waitForTimeout(700);   // azonnali mentés (450 ms késleltetés)
+  ok((await p.textContent('#__side [data-reveal-p-linksmsg]')).includes('Mentve'), 'a cím azonnal ment („Mentve")');
+  await p.click('#__side [data-reveal-ptab="reveal"]'); await p.waitForTimeout(100);
+  ok(!(await has('#__side [data-reveal-p-when]')), 'az időpont-mező a sorra koppintva nyílik');
+  await p.click('#__side [data-reveal-p-whenrow]'); await p.waitForTimeout(100);
+  await p.fill('#__side [data-reveal-p-when]', '2030-06-01T18:30'); await p.waitForTimeout(200);
+  ok((await attr('#__side [data-reveal-p-countdown]', 'aria-checked')) === 'true', 'a visszaszámláló alapból BE (kapcsoló)');
+  await p.click('#__side [data-reveal-p-countdown]'); await p.waitForTimeout(200);   // BE → KI, azonnal ment
   st = await store();
   ok(st.c.revealConfig.title === 'Anna & Bence babája', 'a cím a Szülőktől mentődik', st.c.revealConfig.title);
   ok(st.c.revealConfig.revealAt === new Date(2030, 5, 1, 18, 30).getTime() && st.c.revealConfig.countdownOn === false, 'az időpont (helyi idő) és a visszaszámláló-kapcsoló a revealConfig-ba megy', JSON.stringify([st.c.revealConfig.revealAt, st.c.revealConfig.countdownOn]));
   ok(!st.c.revealSecret.revealAt, 'az időpont nem a titkos dokumentumba kerül');
+  ok((await attr('#__side [data-reveal-p-countdown]', 'aria-checked')) === 'false' && await has('#__side [data-reveal-when]'), 'a kapcsoló és a sor követi a mentett állapotot');
+  await p.click('#__side [data-reveal-ptab="quiz"]'); await p.waitForTimeout(100);
   await p.click('#__side [data-reveal-p-quizeditbtn]'); await p.waitForTimeout(150);
-  ok(await has('#__side [data-admin-reveal-quiz]'), 'a Babakvíz kérdései a Szülőknél szerkeszthetők');
+  ok(await has('#__side [data-reveal-p-quizedit] [data-admin-reveal-quiz]'), 'a Babakvíz kérdései a Szülőknél szerkeszthetők (teljes képernyős lapon)');
   await p.evaluate(() => { const d = document.getElementById('__side'); d.__r.unmount(); d.remove(); });
   await p.evaluate(() => window.__rvSave());
 
@@ -275,17 +292,20 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await p.waitForTimeout(200);
   ok(!(await has('#__side [data-reveal-quizctl]')), 'a Szülők kvíz-vezérlője is a kód mögött van');
   await p.fill('#__side [data-reveal-code]', '2026'); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
-  ok(await has('#__side [data-reveal-parentquiz] [data-reveal-quizctl]'), 'a kóddal a Szülők nézetben ott a Babakvíz-lapozó');
-  // v10.438: a vetítő MINDEN beállítása a Szülőknél
+  await p.click('#__side [data-reveal-ptab="quiz"]'); await p.waitForTimeout(100);
+  ok(await has('#__side [data-reveal-parentquiz] [data-reveal-quizctl]'), 'a kóddal a Szülők Kvíz fülén ott a Babakvíz-lapozó');
+  // v10.438: a vetítő MINDEN beállítása a Szülőknél (v10.444: a Vetítő fülön)
+  await p.click('#__side [data-reveal-ptab="proj"]'); await p.waitForTimeout(100);
   const pc = await p.evaluate(() => ({ secs: [...document.querySelectorAll('#__side [data-reveal-ctl-secs]')].map(b => b.getAttribute('data-reveal-ctl-secs')).join(','),
     slots: [...document.querySelectorAll('#__side [data-reveal-ctl-slots]')].map(b => b.getAttribute('data-reveal-ctl-slots')).join(','),
     pause: !!document.querySelector('#__side [data-reveal-ctl-pause]'), next: !!document.querySelector('#__side [data-reveal-ctl-next]'), qr: document.querySelectorAll('#__side [data-reveal-ctl-qr]').length }));
-  ok(pc.secs === '3,5,8' && pc.slots === '1,2,3' && pc.pause && pc.next && pc.qr === 2, 'a Szülőknél: idő, polaroidok, szünet, következő, QR', JSON.stringify(pc));
+  ok(pc.secs === '3,5,8' && pc.slots === '1,2,3' && pc.pause && pc.next && pc.qr === 1, 'a Szülőknél: idő, polaroidok, szünet, következő, QR-kapcsoló', JSON.stringify(pc));
   await p.click('#__side [data-reveal-ctl-slots="2"]'); await p.waitForTimeout(150);
   ok(await p.evaluate(() => (window.__fbStore.config.revealProjector || {}).slots === 2), 'a Szülők a közös dokumentumba írnak (2 lap)');
-  await p.click('#__side [data-reveal-ctl-qr="0"]'); await p.waitForTimeout(150);
-  ok(await p.evaluate(() => (window.__fbStore.config.revealProjector || {}).qr === false), 'a QR is innen kapcsolható');
-  await p.click('#__side [data-reveal-ctl-qr="1"]'); await p.waitForTimeout(100);
+  await p.click('#__side [data-reveal-ctl-qr]'); await p.waitForTimeout(150);
+  ok(await p.evaluate(() => (window.__fbStore.config.revealProjector || {}).qr === false) && (await attr('#__side [data-reveal-ctl-qr]', 'aria-checked')) === 'false', 'a QR is innen kapcsolható');
+  await p.click('#__side [data-reveal-ctl-qr]'); await p.waitForTimeout(100);
+  await p.click('#__side [data-reveal-ptab="quiz"]'); await p.waitForTimeout(100);
   await p.click('#__side [data-reveal-quiz-next]'); await p.waitForTimeout(250);
   ok((await qz()) === 'cover' && (await p.textContent('[data-reveal-quiz-covertitle]')) === 'Babakvíz' && !(await has('[data-reveal-quiz-q]')), 'v10.442: az első oldal a BORÍTÓ, nem a kérdés');
   ok((await p.textContent('#__side [data-reveal-quiz-next]')).includes('Első kérdés'), 'a borító után „Első kérdés ›"');
@@ -307,21 +327,25 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await p.keyboard.press('ArrowLeft'); await p.waitForTimeout(150);
   ok((await qz()) === 'q' && (await qi()) === '1', '‹ visszalép a borítón át az utolsó kérdésre');
   await mountSide('RevealQuizControl'); await p.waitForTimeout(150);   // a Szülők lapozója (a kód mögötti rész)
-  ok(!(await has('#__side [data-reveal-quiz-jumps]')), 'az ugró-rács alapból csukva');
-  await p.click('#__side [data-reveal-quiz-jumpbtn]'); await p.waitForTimeout(120);
-  const jl = await p.evaluate(() => [...document.querySelectorAll('#__side [data-reveal-quiz-jump]')].map(b => b.getAttribute('data-reveal-quiz-jump') + ':' + b.textContent).join(','));
-  ok(jl === '0:Borító,1:1,2:2,3:Borító,4:1,5:2,6:Pontozás', 'ugró-rács: borító + kérdések, borító + megoldások, pontozás', jl);
+  ok(await has('#__side [data-reveal-quiz-jumps]'), 'v10.444: az ugró-rács mindig kint van');
+  const jlist = () => p.evaluate(() => [...document.querySelectorAll('#__side [data-reveal-quiz-jump]')].map(b => b.getAttribute('data-reveal-quiz-jump') + ':' + b.textContent).join(','));
+  const jl = await jlist();
+  ok(jl === '0:Borító,1:1,2:2,6:Pontozás', 'Kérdések rész: borító + kérdések + pontozás', jl);
   ok((await attr('#__side [data-reveal-quiz-jump="2"]', 'aria-pressed')) === 'true', 'a rács jelöli, hol tartunk (2. kérdés)');
+  await p.click('#__side [data-reveal-quiz-sec="sol"]'); await p.waitForTimeout(100);
+  ok((await jlist()) === '3:Borító,4:1,5:2,6:Pontozás', 'Megoldások rész: borító + megoldások + pontozás', await jlist());
   await p.click('#__side [data-reveal-quiz-jump="5"]'); await p.waitForTimeout(150);
   ok((await qz()) === 'sol' && (await qi()) === '1' && (await attr('[data-reveal-quiz-opt="0"]', 'data-correct')) === '1', 'ugrás: rögtön a 2. megoldás (A)');
   ok((await p.textContent('#__side [data-reveal-quiz-next]')).includes('Pontozás'), 'az utolsó megoldás után „Pontozás ›"');
   ok(!(await has('[data-reveal-quiznav]')), 'v10.438: a vetítőn nincs kvíz-lapozó gombsor');
+  await p.click('#__side [data-reveal-quiz-sec="q"]'); await p.waitForTimeout(80);
   await p.click('#__side [data-reveal-quiz-jump="0"]'); await p.waitForTimeout(150);
   ok((await qz()) === 'cover' && await p.evaluate(() => document.querySelector('#__side [data-reveal-quiz-prev]').disabled), 'ugrás vissza a borítóra (ott az „‹ Előző" tiltott)');
   await p.click('#__side [data-reveal-quiz-jump="6"]'); await p.waitForTimeout(200);
   ok((await qz()) === 'end' && (await p.evaluate(() => document.querySelectorAll('[data-reveal-quiz-band]').length)) === 4, 'ugrás a pontozásra: a négy pontsáv a lapról');
   await p.click('#__side [data-reveal-quiz-next]'); await p.waitForTimeout(200);
   ok(!(await has('[data-reveal-quiz]')) && await has('[data-reveal-board]'), 'kvíz vége → vissza a polaroid-fal');
+  await p.click('#__side [data-reveal-quiz-sec="sol"]'); await p.waitForTimeout(80);
   await p.click('#__side [data-reveal-quiz-jump="3"]'); await p.waitForTimeout(200);
   const qst = await p.evaluate(() => window.__fbStore.config.revealQuizState);
   ok((await qz()) === 'solcover' && qst.run && qst.qs && qst.qs.length === 2, 'nem futó kvíznél az ugrás el is indítja (rögtön a megoldásokhoz)', JSON.stringify({ ph: qst.phase, n: (qst.qs || []).length }));

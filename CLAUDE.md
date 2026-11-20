@@ -4000,3 +4000,38 @@ megoldásra / a borítóra / a pontozásra, és nem futó kvíznél az ugrás el
 Teszt: `reveal_test.js` 2. blokk (kulcs nélküli configon kulcs + QR a vetítőn),
 `reveal_extras_test.js` 6. blokk (Kép fül alapból, élő előnézet a névvel, „Beküldéseid"
 mindkét tétellel, a vetítőn ugyanaz az üzenet-arc).
+
+## ⚠️ Gender Reveal Szülők: NÉGY FÜL, a jóváhagyott design szerint (v10.444)
+A design-terv (artifact „Gender Reveal – Szülők design") beépítve. A régi hosszú, három
+képernyőnyi oldal helyett: felül **állapot-sáv** (`RevealParentStatus`: időpont ·
+engedély · kvíz/képfolyam), alul **fül-sáv** (`RevealParentTabs`, `data-reveal-ptab`):
+1. **Leleplezés** (`RevealParentRevealTab`): sötét kártya nagy visszaszámlálóval →
+   „Előkészületek" sorok (eredmény · időpont — a sorra koppintva nyílik a mező ·
+   visszaszámláló-kapcsoló · videó: `RevealVideoRow`) → lent a gombok (a helyzettől
+   függően: Engedélyezem / Leleplezés indítása / újra; Leleplezés most; Próba).
+2. **Vetítő** (`RevealProjectorPanel`): előnézet-rajz, Szünet + Következő kép, EGY kártyán
+   a képváltás / polaroidok (szegmens) és a QR (kapcsoló), tippek állása.
+3. **Kvíz** (`RevealQuizControl`): az épp vetített oldal, ‹ + Következő, az ugró-rács
+   MINDIG kint (Kérdések / Megoldások szegmens — `data-reveal-quiz-sec`), „Kérdések
+   szerkesztése" teljes képernyős lapon (`data-reveal-p-quizedit`, NEM portál).
+4. **Esemény**: cím, linkek (Másol, „Új linkek készítése" megerősítéssel), album, legalul
+   szaggatott piros keretben az ürítés.
+
+Ami mindenhol egységes, és amit könnyű elrontani:
+- **A színek a DNR TÉMÁBÓL jönnek** (tulajdonosi kérés): `T.bg` háttér, `T.surface`
+  kártya, `T.border` vonal, `T.mint` akció. FIX csak az állapot-tónus (`RV_TONES`: zöld =
+  kész, borostyán = teendő, kék = folyamatban, piros = hiba) és a leleplezés sötét
+  kártyája (`REVEAL_NIGHT`) — ezek jelentést hordoznak, nem lehetnek témafüggők.
+- **Nincs „Mentés" gomb**: az időpont `onChange`-re, a kapcsoló koppintásra, a cím 450 ms
+  késleltetéssel ment; mellette „Mentve" villan (`rvMsg`).
+- **Az építőelemek függvények** (`rvRow`, `rvSwitch`, `rvSeg`, `rvPill`, `rvIconBox`,
+  `rvIcon`, `rvBtn`), nem JSX-komponensek (v10.335). `rvRow` `onClick`-kel maga a sor gomb
+  — ilyenkor a `right` NEM tartalmazhat gombot (beágyazott `<button>`).
+- A fül **nincs megjegyezve** (`localStorage` nélkül): újranyitva a Leleplezés fül jön —
+  különben a tesztek egymás fülállapotát örökölnék.
+- A QR-kapcsoló EGY gomb (`data-reveal-ctl-qr` = `'1'`/`'0'`), nem két szegmens.
+
+Teszt: `reveal_extras_test.js` 1. blokk (négy fül, mi melyik fülön van, nincs Mentés
+gomb, a cím azonnal ment, az időpont a sorra koppintva nyílik, a kapcsoló ment), 7. blokk
+(Kvíz fül, Vetítő fül, az ugró-rács két része). Mérve jade témán, 390×844: mind a
+négy fül görgetés nélkül kifér.
