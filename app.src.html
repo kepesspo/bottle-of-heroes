@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.446';
+const APP_VERSION = 'v10.447';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -43957,11 +43957,7 @@ function RevealPendingReview({ items, onApprove, onReject, onClose }) {
   const navBtn = on => rvBtn('secondary', { width:52, height:44, borderRadius:14, opacity: on ? 1 : 0.35, cursor: on ? 'pointer' : 'default' });
   return (
     <div data-reveal-review style={{ position:'fixed', inset:0, zIndex:6800, display:'flex', flexDirection:'column', background:T.bg }}>
-      <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:8, padding:'calc(8px + env(safe-area-inset-top)) 12px 8px', background:T.surface, borderBottom:`1px solid ${T.border}` }}>
-        <button type="button" data-reveal-reviewclose aria-label="Bezárás" onClick={onClose} style={rvBtn('ghost', { width:44, height:44, padding:0, color:T.ink })}>{rvIcon('prev', 22)}</button>
-        <div style={{ flex:1, fontFamily:T.font, fontWeight:900, fontSize:19, color:T.ink }}>Jóváhagyás</div>
-        {rvPill(n + ' vár', 'pink')}
-      </div>
+      <AppBar title="Jóváhagyás" onBack={onClose} right={<span style={{ paddingRight:6 }}>{rvPill(n + ' vár', 'pink')}</span>} />
       <div style={{ flex:1, minHeight:0, display:'flex', flexDirection:'column', gap:8, padding:'10px 16px calc(10px + env(safe-area-inset-bottom))', boxSizing:'border-box', maxWidth:720, width:'100%', margin:'0 auto' }}>
         <div ref={trackRef} data-reveal-reviewtrack onScroll={onScroll}
           style={{ flex:'1 1 0', minHeight:0, display:'flex', alignItems:'stretch', overflowX:'auto', overflowY:'hidden', scrollSnapType:'x mandatory', WebkitOverflowScrolling:'touch', scrollbarWidth:'none', margin:'0 -4px' }}>
@@ -44339,7 +44335,7 @@ function RevealScreen({ go, deepLink }) {
     <div data-reveal-screen style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
       <AppBar title={title} onBack={back} />
       <div style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column', alignItems:'center', gap:16, padding:'22px 16px calc(24px + env(safe-area-inset-bottom))' }}>
-        <img src={REVEAL_LOGO} alt="" style={{ width:120, height:120 }} />
+        <img src={REVEAL_LOGO} alt="" style={{ width:104, height:104 }} />
         {!cfg.loaded ? (
           <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft }}>Betöltés…</div>
         ) : !pw ? (
@@ -44353,16 +44349,22 @@ function RevealScreen({ go, deepLink }) {
             <PrimaryButton onClick={submit} disabled={!inp.trim()}>Belépés</PrimaryButton>
           </div>
         ) : (
-          <div data-reveal-roles style={{ width:'100%', maxWidth:860, display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:14 }}>
+          // v10.447: EGY kártya, három sor (ikon · név + rövid leírás · nyíl) — a régi három
+          // nagy kártya telefonon nem fért ki, a Szülők lelógott a képernyőről.
+          <div data-reveal-roles style={rvCard({ maxWidth:520 })}>
             {[
-              { id:'projector', emoji:'📽️', name:'Vetítő', sub:'Laptop a kivetítőn — polaroid-fal, üzenetek, Babakvíz és a nagy leleplezés. Beállítás nincs rajta — az a Szülőknél van.' },
-              { id:'operator', emoji:'📷', name:'Operátor', sub:'Feltöltés és a vendégek képeinek, üzeneteinek jóváhagyása.' },
-              { id:'trigger', emoji:'👶', name:'Szülők', sub:'Külön kóddal — a nagy leleplezés, a Babakvíz és minden beállítás. Az eredményt ők sem látják.' },
-            ].map(r => (
-              <button key={r.id} data-reveal-role={r.id} onClick={() => { if (r.id === 'projector') revealAudio(); setRole(r.id); }} style={{ ...card, maxWidth:'none', border:'none', cursor:'pointer', textAlign:'left', display:'flex', flexDirection:'column', gap:6 }}>
-                <span style={{ fontSize:34 }}>{r.emoji}</span>
-                <span style={{ fontFamily:T.font, fontWeight:900, fontSize:19, color:T.ink }}>{r.name}</span>
-                <span style={{ fontFamily:T.font, fontWeight:600, fontSize:13, color:T.inkSoft, lineHeight:1.45 }}>{r.sub}</span>
+              { id:'projector', emoji:'📽️', tone:'info', name:'Vetítő', sub:'A laptop a kivetítőn — képek, üzenetek, kvíz és a leleplezés.' },
+              { id:'operator', emoji:'📷', tone:'ok', name:'Operátor', sub:'Képek feltöltése, tippek, a vendégek jóváhagyása.' },
+              { id:'trigger', emoji:'👶', tone:'pink', name:'Szülők', sub:'Külön kóddal — leleplezés, Babakvíz, minden beállítás.' },
+            ].map((r, i) => (
+              <button key={r.id} type="button" data-reveal-role={r.id} onClick={() => { if (r.id === 'projector') revealAudio(); setRole(r.id); }}
+                style={{ width:'100%', display:'flex', alignItems:'center', gap:14, padding:'14px 14px 14px 16px', border:'none', borderTop: i ? `1px solid ${T.border}` : 'none', background:'transparent', cursor:'pointer', textAlign:'left', boxSizing:'border-box' }}>
+                <span aria-hidden="true" style={{ width:48, height:48, flexShrink:0, borderRadius:14, background:RV_TONES[r.tone][0], display:'grid', placeItems:'center', fontSize:26, lineHeight:1 }}>{r.emoji}</span>
+                <span style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:2 }}>
+                  <span style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink }}>{r.name}</span>
+                  <span style={{ fontFamily:T.font, fontWeight:700, fontSize:13, color:T.inkSoft, lineHeight:1.4 }}>{r.sub}</span>
+                </span>
+                <span style={{ color:T.inkSoft, display:'flex' }}>{rvIcon('chev', 18)}</span>
               </button>
             ))}
           </div>
@@ -44788,10 +44790,7 @@ function RevealQuizControl() {
       {editOpen && (
         // ⚠️ NEM portál: a szülő DOM-jában marad (position:fixed), így a tesztek `#__side`-ből is elérik
         <div data-reveal-p-quizedit style={{ position:'fixed', inset:0, zIndex:7000, display:'flex', flexDirection:'column', background:T.bg }}>
-          <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:8, padding:'calc(10px + env(safe-area-inset-top)) 16px 10px', background:T.surface, borderBottom:`1px solid ${T.border}` }}>
-            <div style={{ flex:1, fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink }}>Babakvíz kérdései</div>
-            <button type="button" onClick={() => setEditOpen(false)} style={rvBtn('small')}>Kész</button>
-          </div>
+          <AppBar title="Babakvíz kérdései" onBack={() => setEditOpen(false)} />
           <div style={{ flex:1, overflowY:'auto', padding:'14px 16px calc(24px + env(safe-area-inset-bottom))' }}><div style={{ maxWidth:640, margin:'0 auto' }}><RevealQuizEditor /></div></div>
         </div>
       )}

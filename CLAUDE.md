@@ -4065,3 +4065,11 @@ nagy kép sötét háttéren / az üzenet a közös `RevealWishPolaroid`-dal, al
 - NEM portál (`position:fixed` a szülő DOM-jában), a tesztek `#__side`-ből érik el.
 Teszt: `reveal_extras_test.js` 6. blokk (gomb a darabszámmal, 1 / 2 → léptetés 2 / 2,
 nagy kép + üzenet-polaroid, bezárul az utolsó után, új beküldés nem nyitja fel magától).
+
+### Kompakt szerepválasztó + MINDENHOL a DNR AppBar (v10.447)
+- **A szerepválasztó EGY kártya, három sor** (`data-reveal-roles` · ikon-csempe · név +
+  rövid leírás · nyíl). A régi három nagy kártya telefonon nem fért ki — a Szülők lelógott.
+- ⚠️ **A felső navigáció (AppBar) a DNR app egyedi része — tulajdonosi döntés: marad.**
+  Saját fejlécet NE írj: a jóváhagyó felület (`RevealPendingReview`) és a Babakvíz
+  kérdés-szerkesztő lapja is az `AppBar`-t használja (`onBack` = bezárás, `right` = a
+  darabszám-pirula). A design-terv mockupjainak sima fehér fejléce csak vázlat volt.
