@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.447';
+const APP_VERSION = 'v10.448';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -44140,6 +44140,10 @@ function revealFmtWhen(ms) {
   if (!ms) return '';
   try { return new Date(ms).toLocaleString('hu-HU', { month:'long', day:'numeric', hour:'2-digit', minute:'2-digit' }); } catch(e) { return ''; }
 }
+function revealFmtShort(ms) {
+  if (!ms) return '';
+  try { return new Date(ms).toLocaleString('hu-HU', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }); } catch(e) { return ''; }
+}
 function revealFmtLeft(ms) {
   const s = Math.max(0, Math.ceil(ms / 1000)), d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
   const p2 = n => String(n).padStart(2, '0');
@@ -44472,9 +44476,9 @@ function rvBtn(kind, extra) {
   return Object.assign(base, k, extra || {});
 }
 function rvMsg(m, data) { return m ? <span {...{ [data]: '' }} style={{ display:'inline-flex', alignItems:'center', gap:4, fontFamily:T.font, fontWeight:800, fontSize:12, color:'#1F6B50', whiteSpace:'nowrap' }}>{/^Mentve|^Feltöltve|kész|törölve|kimásolva|letöltve/.test(m) && rvIcon('check', 14)}{m}</span> : null; }
-function rvPill(text, tone, data, icon) {
+function rvPill(text, tone, data, icon, sm) {
   const c = RV_TONES[tone];
-  return <span {...(data || {})} style={{ display:'inline-flex', alignItems:'center', gap:6, height:28, padding:'0 10px', borderRadius:999, flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:12,
+  return <span {...(data || {})} style={{ display:'inline-flex', alignItems:'center', gap: sm ? 5 : 6, height: sm ? 26 : 28, padding: sm ? '0 9px' : '0 10px', borderRadius:999, flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize: sm ? 11.5 : 12,
     background: c ? c[0] : T.surface, color: c ? c[1] : T.ink, border: c ? 'none' : `1px solid ${T.border}`, boxSizing:'border-box' }}>
     {icon ? rvIcon(icon, 14) : c ? <span style={{ width:8, height:8, borderRadius:'50%', background:c[2] }} /> : null}{text}</span>;
 }
@@ -44514,27 +44518,38 @@ function RevealParentStatus() {
   const at = +((cfg.v || {}).revealAt || 0), st = rs.v || {}, q = qd.v || {}, paused = !!(ctl.v || {}).paused;
   const done = st.phase === 'reveal' && !st.test, armed = st.phase === 'armed';
   return (
-    <div data-reveal-pstatus style={{ flexShrink:0, display:'flex', gap:6, padding:'10px 16px', overflowX:'auto', scrollbarWidth:'none' }}>
-      {rvPill(at ? revealFmtWhen(at) : 'Nincs időpont', null, null, 'timer')}
-      {done ? rvPill('Leleplezve', 'ok') : armed ? rvPill('Engedélyezve', 'ok') : rvPill('Engedélyre vár', 'warn')}
-      {q.phase && q.phase !== 'idle' ? rvPill('Kvíz megy', 'info') : paused ? rvPill('Vetítő szünetel', 'warn') : rvPill('Képfolyam megy', 'ok')}
+    <div data-reveal-pstatus style={{ flexShrink:0, display:'flex', flexWrap:'wrap', gap:6, padding:'10px 16px' }}>
+      {rvPill(at ? revealFmtShort(at) : 'Nincs időpont', null, null, 'timer', true)}
+      {done ? rvPill('Leleplezve', 'ok', null, null, true) : armed ? rvPill('Engedélyezve', 'ok', null, null, true) : rvPill('Engedélyre vár', 'warn', null, null, true)}
+      {q.phase && q.phase !== 'idle' ? rvPill('Kvíz megy', 'info', null, null, true) : paused ? rvPill('Vetítő áll', 'warn', null, null, true) : rvPill('Vetítő megy', 'ok', null, null, true)}
     </div>
   );
 }
 const REVEAL_PTABS = [['reveal', 'Leleplezés', 'star'], ['proj', 'Vetítő', 'screen'], ['quiz', 'Kvíz', 'quiz'], ['event', 'Esemény', 'list']];
-function RevealParentTabs({ tab, onTab }) {
-  return (
-    <nav aria-label="Szülők fülek" data-reveal-ptabs style={{ flexShrink:0, display:'grid', gridTemplateColumns:'repeat(4, minmax(0, 1fr))', background:T.surface, borderTop:`1px solid ${T.border}`, padding:'4px 6px calc(4px + env(safe-area-inset-bottom))' }}>
+// ⚠️ v10.448: PORTÁL + position:fixed, a képernyő ALJA ALÁ nyúlva (docs/safe-area.md — a
+// Pub gombsávjainak mintája). Folyamban (v10.444) iOS PWA-ban NEM ért le a képernyő aljára:
+// a gyökér konténer rövidebb a kijelzőnél, alatta üres sáv maradt, és a tartalom alja
+// (Leleplezés most / Próba) a sáv alá csúszott. A görgő terület alsó paddingja ezért nagy.
+// A dokk felső része (`dockRef` → slot) a fülök SAJÁT alsó gombjainak helye (a Leleplezés
+// fül oda portáloz). z-index 6600: a modalok (9998) és a kérdés-szerkesztő lap (7000) alatt.
+function RevealParentTabs({ tab, onTab, dockRef }) {
+  return ReactDOM.createPortal(
+    <div data-reveal-pdock style={{ position:'fixed', left:0, right:0, bottom:'calc(-1 * env(safe-area-inset-bottom) - 80px)', zIndex:6600,
+      background:T.surface, boxShadow:'0 -4px 18px rgba(20,30,50,0.10)', borderTopLeftRadius:20, borderTopRightRadius:20,
+      padding:'0 0 calc(env(safe-area-inset-bottom) + 108px)', boxSizing:'border-box' }}>
+    <div ref={dockRef} data-reveal-pdockslot />
+    <nav aria-label="Szülők fülek" data-reveal-ptabs style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(0, 1fr))', padding:'4px 6px 0', maxWidth:560, margin:'0 auto' }}>
       {REVEAL_PTABS.map(([id, label, ic]) => { const on = tab === id; return (
         <button key={id} type="button" data-reveal-ptab={id} aria-current={on ? 'page' : undefined} onClick={() => onTab(id)}
           style={{ minHeight:58, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4, border:'none', background:'transparent', cursor:'pointer', fontFamily:T.font, fontSize:11, fontWeight: on ? 900 : 800, color: on ? T.mint : T.inkSoft }}>
           <span style={{ width:52, height:30, borderRadius:999, display:'grid', placeItems:'center', background: on ? (T.mintSoft || T.bgSoft) : 'transparent' }}>{rvIcon(ic, 20)}</span>{label}</button>); })}
     </nav>
+    </div>, document.body
   );
 }
 
 // ── 1. fül: Leleplezés ──
-function RevealParentRevealTab() {
+function RevealParentRevealTab({ dock }) {
   const secret = useRevealDoc('revealSecret');
   const rstate = useRevealDoc('revealState');
   const cfg = useRevealCfg();
@@ -44571,7 +44586,7 @@ function RevealParentRevealTab() {
   const big = t => <div style={{ position:'relative', fontFamily:T.font, fontWeight:900, fontSize:34, lineHeight:1.05, marginTop:8 }}>{t}</div>;
   return (
     <React.Fragment>
-      <section data-reveal-phero style={{ position:'relative', overflow:'hidden', borderRadius:20, padding:'16px 18px', background:REVEAL_NIGHT, color:'#fff', flexShrink:0 }}>
+      <section data-reveal-phero style={{ position:'relative', overflow:'hidden', borderRadius:20, padding:'14px 18px', background:REVEAL_NIGHT, color:'#fff', flexShrink:0 }}>
         <div aria-hidden="true" style={{ position:'absolute', right:-30, top:-30, width:120, height:120, borderRadius:'50%', background:REVEAL_PINK, opacity:0.35 }} />
         <div aria-hidden="true" style={{ position:'absolute', right:40, bottom:-50, width:110, height:110, borderRadius:'50%', background:REVEAL_BLUE, opacity:0.3 }} />
         <div style={{ position:'relative', fontFamily:T.font, fontSize:11, fontWeight:900, letterSpacing:'0.16em', opacity:0.75 }}>{done ? 'KIDERÜLT' : 'A NAGY PILLANATIG'}</div>
@@ -44581,14 +44596,14 @@ function RevealParentRevealTab() {
               <React.Fragment key={u}>
                 {i > 0 && <span style={{ fontFamily:T.font, fontSize:30, fontWeight:900, opacity:0.5, paddingBottom:18 }}>:</span>}
                 <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
-                  <span style={{ fontFamily:T.font, fontSize:42, fontWeight:900, lineHeight:1, fontVariantNumeric:'tabular-nums' }}>{n}</span>
+                  <span style={{ fontFamily:T.font, fontSize:38, fontWeight:900, lineHeight:1, fontVariantNumeric:'tabular-nums' }}>{n}</span>
                   <span style={{ fontFamily:T.font, fontSize:11, fontWeight:800, opacity:0.7, marginTop:4 }}>{u}</span>
                 </div>
               </React.Fragment>
             ))}
           </div>
         ) : big(revealAt ? (armed ? 'Most indul!' : 'Elérkezett az idő') : 'Nincs időpont')}
-        <div style={{ position:'relative', fontFamily:T.font, fontSize:13, fontWeight:700, opacity:0.85, marginTop:10, lineHeight:1.4 }}>
+        <div style={{ position:'relative', fontFamily:T.font, fontSize:12.5, fontWeight:700, opacity:0.85, marginTop:8, lineHeight:1.4 }}>
           {done ? 'A vetítőn újra lejátszhatjátok.' : armed ? 'Engedélyezve — a vetítő az időpontra magától indul.' : 'Az eredményt ti sem látjátok — a vetítő mutatja meg mindenkinek egyszerre.'}
         </div>
       </section>
@@ -44608,8 +44623,8 @@ function RevealParentRevealTab() {
         <RevealVideoRow />
       </section>
 
-      <div style={{ flex:1, minHeight:4 }} />
-      <div data-reveal-firepanel data-armed={armed ? '1' : '0'} style={{ display:'flex', flexDirection:'column', gap:8, flexShrink:0 }}>
+      {(() => { const actions = (
+      <div data-reveal-firepanel data-armed={armed ? '1' : '0'} style={{ display:'flex', flexDirection:'column', gap:8, padding:'12px 16px 6px', maxWidth:520, margin:'0 auto', boxSizing:'border-box', borderBottom:`1px solid ${T.border}` }}>
         {!done && future && !armed && <button type="button" data-reveal-arm disabled={!ready} onClick={() => setAsk('arm')} style={rvBtn('primary', ready ? null : { opacity:0.45, cursor:'default' })}>Engedélyezem a leleplezést</button>}
         {(done || !future) && <button type="button" data-reveal-fire disabled={!ready} onClick={() => setAsk('now')} style={rvBtn('primary', ready ? null : { opacity:0.45, cursor:'default' })}>{done ? 'Leleplezés újra' : 'Leleplezés indítása'}</button>}
         <div style={{ display:'flex', gap:8 }}>
@@ -44618,7 +44633,8 @@ function RevealParentRevealTab() {
           <button type="button" data-reveal-test onClick={() => fire(true)} style={rvBtn('secondary', { flex:1 })}>Próba</button>
         </div>
         {msg && <div data-reveal-firemsg role="status" style={{ textAlign:'center', fontFamily:T.font, fontWeight:800, fontSize:13, color:'#1F6B50' }}>{msg}</div>}
-      </div>
+      </div>);
+      return dock ? ReactDOM.createPortal(actions, dock) : actions; })()}
       {ask && (
         <ActionModal kicker={ask === 'arm' ? 'Engedélyezed?' : 'Indulhat?'} onClose={() => setAsk(null)} onSecondary={() => setAsk(null)} secondaryLabel="Még ne"
           onPrimary={() => ask === 'arm' ? arm() : fire(false)} primaryLabel={ask === 'arm' ? 'Engedélyezem' : 'Indulhat!'} primaryColor={T.mint}>
@@ -44906,6 +44922,7 @@ function RevealTrigger({ onBack }) {
   const [ok, setOk] = React.useState(false);
   const [bad, setBad] = React.useState(false);
   const [tab, setTab] = React.useState('reveal');
+  const [dock, setDock] = React.useState(null);
   const sec = secret.v || {};
   const tryCode = () => { if (code.trim() === sec.code) setOk(true); else setBad(true); };
   if (!ok) return (
@@ -44931,15 +44948,15 @@ function RevealTrigger({ onBack }) {
     <div data-reveal-trigger data-reveal-ptabactive={tab} style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
       <AppBar title="Szülők" onBack={onBack} />
       <RevealParentStatus />
-      <div data-reveal-pscroll style={{ flex:1, minHeight:0, overflowY:'auto', display:'flex', flexDirection:'column', padding:'2px 16px 14px', boxSizing:'border-box', WebkitOverflowScrolling:'touch' }}>
+      <div data-reveal-pscroll style={{ flex:1, minHeight:0, overflowY:'auto', display:'flex', flexDirection:'column', padding:`2px 16px calc(env(safe-area-inset-bottom) + ${tab === 'reveal' ? 220 : 100}px)`, boxSizing:'border-box', WebkitOverflowScrolling:'touch' }}>
         <div style={{ flex:'1 0 auto', width:'100%', maxWidth:520, margin:'0 auto', display:'flex', flexDirection:'column', gap:12 }}>
-          {tab === 'reveal' && <RevealParentRevealTab />}
+          {tab === 'reveal' && <RevealParentRevealTab dock={dock} />}
           {tab === 'proj' && <RevealProjectorPanel />}
           {tab === 'quiz' && <div data-reveal-parentquiz style={{ display:'flex', flexDirection:'column', flex:1 }}><RevealQuizControl /></div>}
           {tab === 'event' && <React.Fragment><RevealLinksCard /><RevealAlbumCard /></React.Fragment>}
         </div>
       </div>
-      <RevealParentTabs tab={tab} onTab={setTab} />
+      <RevealParentTabs tab={tab} onTab={setTab} dockRef={setDock} />
     </div>
   );
 }

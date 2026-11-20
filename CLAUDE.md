@@ -4073,3 +4073,23 @@ nagy kép + üzenet-polaroid, bezárul az utolsó után, új beküldés nem nyit
   Saját fejlécet NE írj: a jóváhagyó felület (`RevealPendingReview`) és a Babakvíz
   kérdés-szerkesztő lapja is az `AppBar`-t használja (`onBack` = bezárás, `right` = a
   darabszám-pirula). A design-terv mockupjainak sima fehér fejléce csak vázlat volt.
+
+## ⚠️ Szülők: a fül-sáv és a Leleplezés gombjai FIX alsó DOKKBAN (v10.448)
+Bejelentés (iPhone-kép): „Az alsó rész szörnyen néz ki" — a fül-sáv a görgő oszlop
+folyamában ült, iOS PWA-ban nem ért le a képernyő aljáig, és a Leleplezés fül gombjait
+eltakarta. A javítás a Pub mintája (`docs/safe-area.md`):
+- **`RevealParentTabs` portál a `body`-ba** (`data-reveal-pdock`, `position:fixed`,
+  `bottom: calc(-1 * env(safe-area-inset-bottom) - 80px)` + ugyanennyi alsó padding) —
+  a háttér a home-indikátor mögé is lefest, a fülök fölötte állnak.
+- **A dokk felső része egy rés** (`data-reveal-pdockslot`, a `dockRef` callback-ref
+  állapotba teszi): a Leleplezés fül a gombjait (`data-reveal-firepanel`) **ide
+  portálozza** — így a fő akció mindig a hüvelykujj alatt van, és nem csúszhat a fül-sáv
+  alá. A többi fül nem használja (a rés üres).
+- **z-index 6600**: a megerősítő modal (`ActionModal` 9998) és a kérdés-szerkesztő lap
+  (7000) FÖLÉ kerül, a tartalom fölé igen.
+- A görgő terület alsó paddingja a fültől függ (Leleplezés: +220, a többi: +100), különben
+  az utolsó kártya a dokk alá görgetődne.
+⚠️ Tesztben a dokk a `body`-ban van, nem a `#__side`-ban — a szelektor `#__side` NÉLKÜL
+kell, és a kattintás JS `.click()` (a teszt-oldalpanel 6500-as rétege alatt van).
+Mérve iOS-szimulációval (402×812, 34 px home-sáv): a gombok alja = a fül-sáv teteje,
+nincs átfedés.
