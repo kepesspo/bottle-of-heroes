@@ -231,12 +231,18 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(await has('#__side [data-reveal-guest="main"]'), 'utána a feltöltő oldal');
   await p.setInputFiles('#__side [data-reveal-guestinput]', ROOT + '/assets/dnr_reveal_app.png');
   await p.waitForFunction(() => Object.values(window.__fbStore.revealPhotos).some(x => x.by === 'Zsófi' && x.src), null, { timeout: 8000 }).catch(() => {});
-  await p.fill('#__side [data-reveal-wishinput]', 'Isten hozott, kicsi!'); await p.click('#__side [data-reveal-wishsend]'); await p.waitForTimeout(200);
+  ok(!(await has('#__side [data-reveal-wishinput]')), 'v10.443: alapból a Kép fül nyílik');
+  await p.click('#__side [data-reveal-guesttab="wish"]'); await p.waitForTimeout(120);
+  await p.fill('#__side [data-reveal-wishinput]', 'Isten hozott, kicsi!'); await p.waitForTimeout(80);
+  ok((await p.textContent('#__side [data-reveal-wishpreview] [data-reveal-wishtext]')) === 'Isten hozott, kicsi!' && (await p.textContent('#__side [data-reveal-wishpreview]')).includes('— Zsófi'),
+    'élő polaroid-előnézet: a szöveg és a név a lapon');
+  await p.click('#__side [data-reveal-wishsend]'); await p.waitForTimeout(200);
   st = await store();
   const gPhoto = Object.entries(st.ph).find(([, v]) => v.by === 'Zsófi' && v.src), gWish = Object.entries(st.ph).find(([, v]) => v.kind === 'wish');
   ok(gPhoto && gPhoto[1].pending === true, 'a vendég képe jóváhagyásra vár (pending, a nevével)');
   ok(gWish && gWish[1].pending === true && gWish[1].text === 'Isten hozott, kicsi!' && gWish[1].by === 'Zsófi', 'az üzenet is jóváhagyásra vár');
   ok((await p.textContent('[data-reveal-count]')).trim() === '2 kép', '⚠️ a vetítő a jóváhagyás előtt NEM mutatja', await p.textContent('[data-reveal-count]'));
+  ok((await p.evaluate(() => document.querySelectorAll('#__side [data-reveal-mineitem][data-pending="1"]').length)) === 2, 'a vendég „Beküldéseid" listáján mindkettő: jóváhagyásra vár');
   await mountSide('RevealOperator');
   await p.waitForTimeout(250);
   ok(await has(`#__side [data-reveal-pend="${gPhoto[0]}"]`) && await has(`#__side [data-reveal-pend="${gWish[0]}"]`), 'az operátornál a „Jóváhagyásra vár" sorban');
@@ -244,6 +250,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await p.evaluate(() => revealCtlWrite({ next: revealToken() })); await p.waitForTimeout(200);   // a Szülők „Következő ›"-je
   ok((await attr('[data-reveal-projector]', 'data-reveal-current')) === gWish[0] && (await attr('[data-reveal-projector]', 'data-reveal-isnew')) === '1', 'jóváhagyás után az üzenet rögtön jön, ÚJ jelöléssel');
   ok(await has(`[data-reveal-wish="${gWish[0]}"]`) && (await p.textContent(`[data-reveal-wish="${gWish[0]}"]`)).includes('Zsófi'), 'jókívánság-kártya a küldő nevével');
+  ok(await has(`[data-reveal-wish="${gWish[0]}"] [data-reveal-wishface]`) && (await p.textContent(`[data-reveal-wish="${gWish[0]}"] [data-reveal-wishtext]`)) === 'Isten hozott, kicsi!', 'v10.443: a vetítőn UGYANAZ az üzenet-arc, mint az előnézetben');
   await p.click(`#__side [data-reveal-pend="${gPhoto[0]}"] [data-reveal-approve]`); await p.waitForTimeout(150);
   ok((await p.textContent('[data-reveal-count]')).trim() === '3 kép', 'a jóváhagyott kép bekerül a vetítőre');
   await p.evaluate(() => { window.__fbStore.revealPhotos.junk = { src: 'data:image/png;base64,AAAA', pending: true, by: 'X', at: 99 }; return firebase.firestore().collection('revealPhotos').doc('junk2').set({ kind: 'wish', text: 'rossz', by: 'Y', pending: true, at: 100 }); });

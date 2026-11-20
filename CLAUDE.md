@@ -3978,3 +3978,25 @@ megoldások is szó nélkül kezdődtek.
 Teszt: `reveal_extras_test.js` 7. blokk (az első oldal a borító, a megoldások előtt is
 borító, visszalépés a borítón át, az ugró-rács 7 oldala 2 kérdésnél, ugrás a 2.
 megoldásra / a borítóra / a pontozásra, és nem futó kvíznél az ugrás elindítja).
+
+## Gender Reveal: vendég-QR mindig, új beküldő oldal, üzenet-polaroid design (v10.443)
+- **⚠️ A QR azért nem látszott, mert nem volt kulcs.** A `guestKey` / `albumKey` eddig
+  CSAK mentéskor keletkezett (admin jelszó-mentés / Szülők cím-mentés). Most a
+  **`revealEnsureKeys(cfg)`** a vetítő és a Szülők link-kártyája nyitásakor pótolja —
+  csak a hiányzót írja, a meglévőt soha (különben a kint lévő QR-ok megszűnnének).
+- **A QR-kártya felirata**: „Küldj képet vagy üzenetet!" + „jóváhagyás után kerül ide".
+  ⚠️ A fal alja a QR FÖLÖTT van (`qrRoom`, a számlálóval közös `bottomCut`), és ilyenkor
+  is a `roomy` geometria jár — a lapok szélesség-korlátosak, tehát nem lesznek kisebbek.
+- **Vendégoldal** (`RevealGuest`, a téma színeivel): név-lépés („Küldj valamit a
+  kivetítőre!"), utána **Kép / Üzenet fül** (`data-reveal-guesttab`). Az Üzenet fülön
+  **élő polaroid-előnézet** (`RevealWishPolaroid`), alul **„Beküldéseid"** (`data-reveal-mine`,
+  név szerint, „Jóváhagyásra vár" / „A kivetítőn"). ⚠️ A két rejtett fájl-mező a fülektől
+  FÜGGETLENÜL a DOM-ban van — a fül-váltás nem viheti el a refeket.
+- **Az üzenet-polaroid** (`RevealWishFace`, modul-szintű, a vetítő ÉS az előnézet közös
+  arca): vonalas levélpapír rózsa → krém → kék átmenettel, rózsa margó, halvány nagy
+  idézőjel, két kis lufi a sarokban; a lapon felül csíkos washi-szalag (`RevealWishTape`).
+  A betűméretet a `revealWishFont(text, w, h)` adja (egy forrás).
+
+Teszt: `reveal_test.js` 2. blokk (kulcs nélküli configon kulcs + QR a vetítőn),
+`reveal_extras_test.js` 6. blokk (Kép fül alapból, élő előnézet a névvel, „Beküldéseid"
+mindkét tétellel, a vetítőn ugyanaz az üzenet-arc).
