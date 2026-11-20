@@ -3943,3 +3943,17 @@ gombokkal (`data-reveal-slideprev/next`, közöttük `N / M`) lép.
 
 Teszt: `reveal_votes_test.js` 6. blokk (a legújabb elöl, a gombok a fejlécben és nem a
 képen, ≥ 48 px-es tipp-gomb, „›" és húzás is lép, új képre visszaugrik az elejére).
+
+### Az operátor nézet egy képernyőre fér (v10.441)
+Bejelentés (iPhone-képpel): a kép 46vh-s fix magassága miatt a tipp-gombok és a lapozó
+a képernyő alá csúsztak. Most:
+- a görgő terület (`data-reveal-opscroll`) **oszlop-flex**, a belső oszlop `flex:'1 0 auto'`
+  (legalább akkora, mint a képernyő), a lapozó `flex:'1 1 0'` a maradékot kapja, a kép
+  (`data-reveal-slideimg`) pedig a lapon belül `flex:'1 1 0'` — **a kép magassága a
+  kijelzőhöz igazodik**, a fejléc, a tipp-gombok és a ‹ › fix méretűek;
+- ⚠️ a lapozó sáv sorai (`alignItems:'stretch'`) a sáv magasságát kapják, ezért a lap
+  `display:flex` + a kártya `flex:1` — `height:100%` itt nem kell;
+- a „Képek feltöltése" gomb vékony, egysoros (ikon a felirat mellett);
+- ha mégsem fér ki (hosszú „Jóváhagyásra vár" lista), görget: a lapozó min. 360 px.
+Mérve, páros tipp-móddal: 390×844 → kép 350 px, 375×667 → 173 px, mindkettő görgetés nélkül.
+Teszt: `reveal_votes_test.js` 7. blokk.

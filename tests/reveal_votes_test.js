@@ -137,6 +137,27 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   const s3 = await p.evaluate(() => { const tr = document.querySelector('#__side [data-reveal-track]'); return { first: document.querySelector('#__side [data-reveal-thumb][data-idx="0"]').getAttribute('data-reveal-thumb'), pos: document.querySelector('#__side [data-reveal-slidepos]').textContent, x: tr.scrollLeft }; });
   ok(s3.first === 'd' && s3.pos === '1 / 4' && s3.x < 5, 'új kép → az elejére ugrik, az új kép az első', JSON.stringify(s3));
 
+  console.log('\n===== 7. OPERÁTOR: EGY KÉPERNYŐRE FÉR (v10.441) =====');
+  await p.evaluate(() => { const d = document.getElementById('__side'); if (d) { d.__r.unmount(); d.remove(); } });
+  await p.evaluate(() => revealVoteWrite({ id: 'd' }, true, ['boy', null]));   // pár → a legtöbb gomb
+  const fit = async (w, h) => {
+    await p.setViewportSize({ width: w, height: h });
+    await p.evaluate(() => { let d = document.getElementById('__full'); if (d) { d.__r.unmount(); d.remove(); }
+      d = document.createElement('div'); d.id = '__full'; d.style.cssText = 'position:fixed;inset:0;z-index:6500;display:flex;flex-direction:column;background:#fff';
+      document.body.appendChild(d); d.__r = ReactDOM.createRoot(d); d.__r.render(React.createElement(RevealOperator, { onBack: () => {} })); });
+    await p.waitForTimeout(400);
+    return p.evaluate(() => { const r = document.getElementById('__full'), sc = r.querySelector('[data-reveal-opscroll]'), nav = r.querySelector('[data-reveal-slidenav]'),
+      img = r.querySelector('[data-reveal-thumb][data-idx="0"] [data-reveal-slideimg]'), vp = r.querySelector('[data-reveal-thumb][data-idx="0"] [data-reveal-votepick]');
+      return { over: sc.scrollHeight - sc.clientHeight, navB: Math.round(nav.getBoundingClientRect().bottom), imgH: Math.round(img.getBoundingClientRect().height), pair: vp.getAttribute('data-pair'), vh: innerHeight }; });
+  };
+  const f1 = await fit(390, 844);
+  ok(f1.over <= 1 && f1.navB <= 844 && f1.pair === '1', '390×844 (pár-móddal): nincs függőleges görgetés, a lapozó is látszik', JSON.stringify(f1));
+  ok(f1.imgH >= 300, 'a kép a maradék helyet kapja (≥ 300 px)', f1.imgH);
+  const f2 = await fit(375, 667);
+  ok(f2.over <= 1 && f2.navB <= 667 && f2.imgH >= 120, '375×667 (iPhone SE): itt is kifér', JSON.stringify(f2));
+  await p.evaluate(() => { const d = document.getElementById('__full'); if (d) { d.__r.unmount(); d.remove(); } });
+  await p.setViewportSize({ width: 1400, height: 820 });
+
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
   console.log(fail ? `\n${fail} HIBA` : '\nMIND ZÖLD');
