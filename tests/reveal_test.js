@@ -82,7 +82,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 
   console.log('\n===== 3. ELREJTÉS / ÜRES =====');
   await p.evaluate(() => { window.__revealSpeed = 100; });   // ne lépjen magától
-  await p.click('[data-reveal-next]'); await p.waitForTimeout(100);
+  await p.evaluate(() => revealCtlWrite({ next: revealToken() })); await p.waitForTimeout(100);   // v10.438: a Szülők „Következő ›"-je
   const before = (await cur()).id;
   await p.evaluate(id => firebase.firestore().collection('revealPhotos').doc(id).set({ hidden: true }, { merge: true }), before);
   await p.waitForTimeout(150);
@@ -100,7 +100,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok(!(await has('[data-reveal-modebtn]')), 'nincs módváltó — csak a Polaroid maradt (v10.433)');
   await p.setViewportSize({ width: 1280, height: 720 });
   await p.evaluate(() => { window.__revealSpeed = 0.1; });
-  await p.evaluate(() => document.querySelector('[data-reveal-slotsbtn="3"]').click());
+  await p.evaluate(() => revealCtlWrite({ slots: 3 }));   // v10.438: a Szülők állítják
   await p.waitForFunction(() => document.querySelectorAll('[data-reveal-board] [data-reveal-polaroid]').length >= 3, null, { timeout: 5000 }).catch(() => {});
   await p.evaluate(() => { window.__revealSpeed = 100; }); await p.waitForTimeout(1300);   // az ejtés-animáció (1,25× nagyítás) végét megvárjuk
   const wall = await p.evaluate(() => {
@@ -116,7 +116,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok(wall.minL >= 0 && wall.maxR <= 1280, 'a szélső lapok sem lógnak ki a vászonról', wall.minL.toFixed(0) + '…' + wall.maxR.toFixed(0));
   ok(wall.overlap, 'a lapok kicsit átfedik egymást');
   // v10.434: a lapok száma 1–3 között választható, és megmarad
-  const slotsAfter = async n => { await p.click(`[data-reveal-slotsbtn="${n}"]`); await p.waitForTimeout(200);
+  const slotsAfter = async n => { await p.evaluate(n => revealCtlWrite({ slots: n }), n); await p.waitForTimeout(200);
     return p.evaluate(() => ({ slots: +document.querySelector('[data-reveal-board]').getAttribute('data-slots'), n: document.querySelectorAll('[data-reveal-board] [data-reveal-polaroid]').length, st: localStorage.getItem('boh_reveal_slots') })); };
   const s1 = await slotsAfter(1);
   ok(s1.slots === 1 && s1.n === 1 && s1.st === '1', '„🖼 1" → egyetlen polaroid', JSON.stringify(s1));
@@ -126,36 +126,37 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok(s2.slots === 2 && s2b === 2 && s2.st === '2', '„🖼 2" → két polaroid', JSON.stringify(s2) + ' n=' + s2b);
   const s3 = await slotsAfter(3); await p.waitForTimeout(400);
   ok(s3.slots === 3 && s3.st === '3', '„🖼 3" → három hely', JSON.stringify(s3));
-  ok(!(await has('[data-reveal-slotsbtn="4"]')), 'nincs 4-es választó (1–3)');
-  const secsOpts = await p.evaluate(() => [...document.querySelectorAll('[data-reveal-secs]')].map(b => +b.getAttribute('data-reveal-secs')).join(','));
-  ok(secsOpts === '3,5,8', 'az idő-választó 3 / 5 / 8 mp', secsOpts);
+  ok(await p.evaluate(() => REVEAL_SLOT_OPTS.join(',') === '1,2,3' && REVEAL_SECS.join(',') === '3,5,8'), 'polaroid 1–3, idő 3 / 5 / 8 mp');
+  // v10.438: a vetítőn NINCS beállítás — minden a Szülők nézetben
+  const ctlBar = await p.evaluate(() => ({
+    gone: ['[data-reveal-secs]', '[data-reveal-slotsbtn]', '[data-reveal-pause]', '[data-reveal-next]', '[data-reveal-qrbtn]', '[data-reveal-replay]', '[data-reveal-quiznav]'].filter(s => document.querySelector(s)),
+    btns: [...document.querySelectorAll('[data-reveal-controls] button')].map(b => [...b.attributes].map(a => a.name).find(n => n.startsWith('data-reveal-'))).join(',') }));
+  ok(ctlBar.gone.length === 0 && ctlBar.btns === 'data-reveal-exit,data-reveal-videobtn,data-reveal-fs', 'a vetítő sávján csak Vissza · Videó · Teljes képernyő', JSON.stringify(ctlBar));
   const paper = await p.evaluate(() => getComputedStyle(document.querySelector('[data-reveal-projector]')).backgroundColor);
   ok(paper === 'rgb(255, 247, 238)', 'a vetítő felülete a Babakvíz krém papírja', paper);
   await p.evaluate(() => { window.__revealSpeed = 100; });
   await p.setViewportSize({ width: 390, height: 844 });
   await p.waitForTimeout(300);
-  const ph = await p.evaluate(() => ({ remote: !!document.querySelector('[data-reveal-remote]'), proj: !!document.querySelector('[data-reveal-projector]'), sw: document.documentElement.scrollWidth,
-    secs: [...document.querySelectorAll('[data-reveal-remote-secs]')].map(b => b.getAttribute('data-reveal-remote-secs')).join(','),
-    on: (document.querySelector('[data-reveal-remote-slots][aria-pressed="true"]') || {}).textContent }));
-  ok(ph.remote && !ph.proj && ph.sw <= 390, 'v10.435: telefonon a Vetítő TÁVIRÁNYÍTÓ (nincs vetítés), és nincs vízszintes kicsúszás', JSON.stringify(ph));
-  ok(ph.secs === '3,5,8' && ph.on === '3', 'a távirányító a közös beállítást mutatja (3 lap)', JSON.stringify(ph));
-  await p.click('[data-reveal-remote-slots="2"]'); await p.waitForTimeout(150);
-  ok(await p.evaluate(() => (window.__fbStore.config.revealProjector || {}).slots === 2), 'a távirányító a közös dokumentumba ír (2 lap)');
+  const ph = await p.evaluate(() => ({ note: !!document.querySelector('[data-reveal-phonenote]'), proj: !!document.querySelector('[data-reveal-projector]'), sw: document.documentElement.scrollWidth,
+    ctl: !!document.querySelector('[data-reveal-ctl-secs], [data-reveal-ctl-slots]'), txt: (document.querySelector('[data-reveal-phonenote]') || {}).textContent || '' }));
+  ok(ph.note && !ph.proj && !ph.ctl && ph.sw <= 390, 'v10.438: telefonon a Vetítő csak tájékoztat (nincs vetítés, nincs beállítás)', JSON.stringify(ph));
+  ok(ph.txt.includes('Szülők'), '… és a Szülők részhez irányít');
+  await p.evaluate(() => revealCtlWrite({ slots: 2 })); await p.waitForTimeout(150);
   await p.setViewportSize({ width: 1280, height: 760 });
   await p.waitForTimeout(300);
-  ok(await p.evaluate(() => document.querySelector('[data-reveal-board]').getAttribute('data-slots')) === '2', 'a laptop vetítője átveszi a távirányító beállítását (2 lap)');
+  ok(await p.evaluate(() => document.querySelector('[data-reveal-board]').getAttribute('data-slots')) === '2', 'a laptop vetítője átveszi a Szülők beállítását (2 lap)');
   await p.evaluate(() => { window.__revealSpeed = 100; });
   await p.waitForTimeout(200);
   const c0 = (await cur()).id;
   await p.evaluate(() => revealCtlWrite({ next: revealToken() })); await p.waitForTimeout(250);   // a távirányító „Következő ›" gombja
   const c1 = (await cur()).id;
-  ok(c1 && c1 !== c0, 'a távirányító „Következő" gombja léptet a laptopon', c0 + ' → ' + c1);
+  ok(c1 && c1 !== c0, 'a Szülők „Következő" gombja léptet a laptopon', c0 + ' → ' + c1);
   await p.evaluate(() => revealCtlWrite({ paused: true })); await p.waitForTimeout(200);
-  ok((await p.textContent('[data-reveal-pause]')).includes('Folytatás'), 'a távirányító „Szünet"-je a laptopot is megállítja');
+  ok(await has('[data-reveal-paused]'), 'a Szülők „Szünet"-je a laptopot is megállítja (a sávon jelzi)');
   await p.evaluate(() => revealCtlWrite({ paused: false })); await p.waitForTimeout(200);
-  ok((await p.textContent('[data-reveal-pause]')).includes('Szünet'), '… és a „Folytatás" elindítja');
-  await p.click('[data-reveal-secs="3"]');
-  ok(await p.evaluate(() => localStorage.getItem('boh_reveal_secs')) === '3', 'az idő is megmarad (3 mp)');
+  ok(!(await has('[data-reveal-paused]')), '… és a „Folytatás" elindítja');
+  await p.evaluate(() => revealCtlWrite({ secs: 3 })); await p.waitForTimeout(150);
+  ok(await p.evaluate(() => localStorage.getItem('boh_reveal_secs')) === '3', 'az idő is megmarad a laptopon (3 mp)');
   await p.waitForTimeout(3800);
   ok(await p.evaluate(() => getComputedStyle(document.querySelector('[data-reveal-controls]')).opacity) === '0', 'a vezérlők 3 mp tétlenség után eltűnnek');
   await p.click('[data-reveal-projector]', { position: { x: 5, y: 700 } }).catch(() => {});
@@ -163,7 +164,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   // ⚠️ HIBA (v10.434, képernyőkép): sok váltás után a polaroid a Babakvíz FÖLÉ került —
   // a lap z-indexe minden váltással nő, és a fal nem zárta le a saját rétegét.
   await p.evaluate(() => { window.__revealSpeed = 0.01; });                 // 3 mp → 30 ms / váltás
-  await p.evaluate(() => document.querySelector('[data-reveal-next]').click());   // a 100×-os sebességgel indult órát újraindítja
+  await p.evaluate(() => revealCtlWrite({ next: revealToken() }));   // a 100×-os sebességgel indult órát újraindítja
   await p.waitForFunction(() => Math.max(0, ...[...document.querySelectorAll('[data-reveal-board] [data-reveal-polaroid]')].map(c => +getComputedStyle(c).zIndex || 0)) > 30, null, { timeout: 20000 }).catch(() => {});
   const zMax = await p.evaluate(() => Math.max(...[...document.querySelectorAll('[data-reveal-board] [data-reveal-polaroid]')].map(c => +getComputedStyle(c).zIndex || 0)));
   ok(zMax > 30, 'sok váltás után a lapok z-indexe a kvízé (30) fölé nő — a hiba feltétele fennáll', zMax);
@@ -174,7 +175,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
     return { hit, board: !!document.querySelector('[data-reveal-board]') };
   });
   ok(lay.hit.every(Boolean) && !lay.board, 'a Babakvíz alatt nincs polaroid a kérdés fölött', JSON.stringify(lay));
-  await p.evaluate(() => document.querySelector('[data-reveal-quizexit]').click()); await p.waitForTimeout(300);
+  await p.evaluate(() => revealQuizWrite({ phase:'idle' })); await p.waitForTimeout(300);   // a Szülők kilépnek
   ok(await has('[data-reveal-board]'), 'a kvízből kilépve visszajön a képfolyam');
   await p.mouse.move(430, 330); await p.waitForTimeout(200);
   await p.click('[data-reveal-exit]'); await p.waitForTimeout(150);

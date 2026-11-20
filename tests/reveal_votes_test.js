@@ -104,10 +104,10 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
     'a kiderült oldal kiemelve, a másik nem');
   ok((await p.textContent('#__side [data-reveal-votes]')).includes('🎯'), '„🎯" jelzi, kik találták el');
 
-  console.log('\n===== 5. TÁVIRÁNYÍTÓ =====');
-  await mountSide('RevealRemote'); await p.waitForTimeout(300);
-  const rt = await p.evaluate(() => { const e = document.querySelector('#__side [data-reveal-remote-tally]'); return e ? e.textContent : null; });
-  ok(rt && /1.*·.*1/.test(rt), 'a távirányító is kiírja az állást', rt);
+  console.log('\n===== 5. SZÜLŐK: VETÍTŐ-PANEL =====');
+  await mountSide('RevealProjectorPanel'); await p.waitForTimeout(300);
+  const rt = await p.evaluate(() => { const e = document.querySelector('#__side [data-reveal-ctl-tally]'); return e ? e.textContent : null; });
+  ok(rt && /1.*·.*1/.test(rt), 'a Szülők vetítő-panelje is kiírja az állást', rt);
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();

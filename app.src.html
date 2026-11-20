@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.437';
+const APP_VERSION = 'v10.438';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -43551,10 +43551,26 @@ function revealCtlWrite(patch) { const db = revealDb(); if (db) db.collection('c
 function revealIsPhone(vp) { return Math.min(vp.w, vp.h) < REVEAL_PHONE_MAX; }
 function RevealProjectorHost({ title, cfg, onExit }) {
   const vp = useRevealViewport();
-  return revealIsPhone(vp) ? <RevealRemote onExit={onExit} /> : <RevealProjector title={title} cfg={cfg} onExit={onExit} />;
+  return revealIsPhone(vp) ? <RevealPhoneNote onExit={onExit} /> : <RevealProjector title={title} cfg={cfg} onExit={onExit} />;
 }
-// Telefonon a vetítés nem fér el (és nem is ott nézik) — csak a gombok kellenek.
-function RevealRemote({ onExit }) {
+// Telefonon a vetítés nem fér el (és nem is ott nézik). A beállítások (v10.438 óta) a
+// Szülők részen vannak — itt csak elmondjuk, hova kell menni.
+function RevealPhoneNote({ onExit }) {
+  return (
+    <div data-reveal-phonenote style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
+      <AppBar title="Vetítő" onBack={onExit} />
+      <div style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column', alignItems:'center', padding:'22px 16px', boxSizing:'border-box' }}>
+        <div style={{ width:'100%', maxWidth:440, background:T.surface, borderRadius:20, padding:'22px 18px', boxShadow:T.shadow, boxSizing:'border-box', textAlign:'center' }}>
+          <div aria-hidden="true" style={{ fontSize:34, lineHeight:1 }}>📽️</div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink, marginTop:8 }}>A vetítő a laptopon fut</div>
+          <div style={{ fontFamily:T.font, fontSize:14, color:T.inkSoft, lineHeight:1.5, marginTop:6 }}>Nyisd meg a Vetítőt a kivetítőre kötött gépen. A beállításokat (képváltás, polaroidok, szünet, következő kép) a <b>Szülők</b> részen találod.</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+// A vetítő MINDEN beállítása (v10.438): a Szülők nézetben, a szülői kód mögött.
+function RevealProjectorPanel() {
   const ctl = useRevealDoc('revealProjector');
   const { list: photos } = useRevealPhotos(false);
   const v = ctl.v || {};
@@ -43567,33 +43583,35 @@ function RevealRemote({ onExit }) {
   const label = t => <div style={{ fontFamily:T.font, fontWeight:900, fontSize:12, letterSpacing:'0.08em', color:T.inkSoft, marginBottom:10, textTransform:'uppercase' }}>{t}</div>;
   const segWrap = { display:'flex', gap:6, padding:4, borderRadius:14, background:T.bg };
   const seg = on => ({ flex:1, padding:'12px 6px', borderRadius:11, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:900, fontSize:15, background: on ? T.mint : 'transparent', color: on ? '#fff' : T.ink });
+  const qr = v.qr !== false;
   return (
-    <div data-reveal-remote style={{ flex:1, display:'flex', flexDirection:'column', background:T.bg, overflow:'hidden' }}>
-      <AppBar title="Vetítő" onBack={onExit} />
-      <div style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column', alignItems:'center', gap:14, padding:'18px 16px calc(24px + env(safe-area-inset-bottom))', boxSizing:'border-box' }}>
+    <div data-reveal-parentctl style={{ width:'100%', maxWidth:440, display:'flex', flexDirection:'column', alignItems:'center', gap:14 }}>
         <div style={{ ...card, textAlign:'center' }}>
           <div aria-hidden="true" style={{ fontSize:30, lineHeight:1 }}>📽️</div>
-          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink, marginTop:6 }}>Távirányító</div>
+          <div style={{ fontFamily:T.font, fontWeight:900, fontSize:18, color:T.ink, marginTop:6 }}>Vetítő beállításai</div>
           <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, lineHeight:1.45, marginTop:4 }}>A vetítést a kivetítőre kötött laptop mutatja — innen állíthatod.</div>
-          <div data-reveal-remote-count style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, marginTop:8 }}>{photos.filter(x => x.src || x.kind === 'wish').length} tétel a vetítőn</div>
-          {(() => { const t = revealVoteTally(photos); return t.boy + t.girl > 0 && <div data-reveal-remote-tally style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, marginTop:6 }}>Tippek: {REVEAL_RESULTS.boy.emoji} {t.boy} · {REVEAL_RESULTS.girl.emoji} {t.girl}</div>; })()}
+          <div data-reveal-ctl-count style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.ink, marginTop:8 }}>{photos.filter(x => x.src || x.kind === 'wish').length} tétel a vetítőn</div>
+          {(() => { const t = revealVoteTally(photos); return t.boy + t.girl > 0 && <div data-reveal-ctl-tally style={{ fontFamily:T.font, fontWeight:900, fontSize:14, color:T.ink, marginTop:6 }}>Tippek: {REVEAL_RESULTS.boy.emoji} {t.boy} · {REVEAL_RESULTS.girl.emoji} {t.girl}</div>; })()}
         </div>
         <div style={card}>
           {label('Képváltás')}
-          <div style={segWrap}>{REVEAL_SECS.map(n => <button key={n} data-reveal-remote-secs={n} aria-pressed={secs === n} onClick={() => revealCtlWrite({ secs:n })} style={seg(secs === n)}>{n} mp</button>)}</div>
+          <div style={segWrap}>{REVEAL_SECS.map(n => <button key={n} data-reveal-ctl-secs={n} aria-pressed={secs === n} onClick={() => revealCtlWrite({ secs:n })} style={seg(secs === n)}>{n} mp</button>)}</div>
         </div>
         <div style={card}>
           {label('Polaroidok egyszerre')}
-          <div style={segWrap}>{REVEAL_SLOT_OPTS.map(n => <button key={n} data-reveal-remote-slots={n} aria-pressed={slots === n} onClick={() => revealCtlWrite({ slots:n })} style={seg(slots === n)}>{n}</button>)}</div>
+          <div style={segWrap}>{REVEAL_SLOT_OPTS.map(n => <button key={n} data-reveal-ctl-slots={n} aria-pressed={slots === n} onClick={() => revealCtlWrite({ slots:n })} style={seg(slots === n)}>{n}</button>)}</div>
         </div>
         <div style={{ ...card, display:'flex', gap:10 }}>
-          <button data-reveal-remote-pause onClick={() => revealCtlWrite({ paused: !paused })}
+          <button data-reveal-ctl-pause onClick={() => revealCtlWrite({ paused: !paused })}
             style={{ flex:1, padding:'16px 8px', borderRadius:14, border:`1.5px solid ${T.border}`, cursor:'pointer', background: paused ? T.mintSoft : 'transparent', fontFamily:T.font, fontWeight:900, fontSize:16, color:T.ink }}>{paused ? '▶ Folytatás' : '⏸ Szünet'}</button>
-          <button data-reveal-remote-next onClick={() => { revealCtlWrite({ next: revealToken() }); flash('Következő kép'); }}
+          <button data-reveal-ctl-next onClick={() => { revealCtlWrite({ next: revealToken() }); flash('Következő kép'); }}
             style={{ flex:1.4, padding:'16px 8px', borderRadius:14, border:'none', cursor:'pointer', background:T.mint, fontFamily:T.font, fontWeight:900, fontSize:16, color:'#fff' }}>Következő ›</button>
         </div>
-        {msg && <div data-reveal-remote-msg style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.mint }}>{msg}</div>}
-      </div>
+        <div style={card}>
+          {label('Vendég QR-kód a vetítőn')}
+          <div style={segWrap}>{[[true, 'Látszik'], [false, 'Rejtve']].map(([on, t]) => <button key={t} data-reveal-ctl-qr={on ? '1' : '0'} aria-pressed={qr === on} onClick={() => revealCtlWrite({ qr:on })} style={seg(qr === on)}>{t}</button>)}</div>
+        </div>
+        {msg && <div data-reveal-ctl-msg style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.mint }}>{msg}</div>}
     </div>
   );
 }
@@ -43608,7 +43626,7 @@ function RevealProjector({ title, cfg, onExit }) {
   const narrow = vp.w < 700;
   const [secs, setSecs] = React.useState(() => { const n = +revealStore('boh_reveal_secs'); return REVEAL_SECS.includes(n) ? n : 5; });
   const [slotPref, setSlotPref] = React.useState(() => { const n = +revealStore('boh_reveal_slots'); return REVEAL_SLOT_OPTS.includes(n) ? n : 3; });
-  const [showQr, setShowQr] = React.useState(() => revealStore('boh_reveal_qr') !== '0');
+  const [showQr, setShowQr] = React.useState(true);
   const [paused, setPaused] = React.useState(false);
   const [ui, setUi] = React.useState(true);
   const [fs, setFs] = React.useState(false);
@@ -43619,11 +43637,13 @@ function RevealProjector({ title, cfg, onExit }) {
     if (REVEAL_SECS.includes(+v.secs)) setSecs(+v.secs);
     if (REVEAL_SLOT_OPTS.includes(+v.slots)) setSlotPref(+v.slots);
     if (typeof v.paused === 'boolean') setPaused(v.paused);
+    if (typeof v.qr === 'boolean') setShowQr(v.qr);
+    // a laptop megjegyzi az utolsó beállítást (ha a dokumentum egyszer üresen jönne)
+    if (REVEAL_SECS.includes(+v.secs)) revealStore('boh_reveal_secs', String(+v.secs));
+    if (REVEAL_SLOT_OPTS.includes(+v.slots)) revealStore('boh_reveal_slots', String(+v.slots));
   }, [ctl.v]);
   const pausedRef = React.useRef(false); pausedRef.current = paused;
   const togglePause = () => { const v = !pausedRef.current; setPaused(v); revealCtlWrite({ paused:v }); };
-  const pickSecs = n => { setSecs(n); revealStore('boh_reveal_secs', String(n)); revealCtlWrite({ secs:n }); };
-  const pickSlots = n => { setSlotPref(n); revealStore('boh_reveal_slots', String(n)); revealCtlWrite({ slots:n }); };
   // a leleplezés: `show` a futó előadás, `revealed` a kiderült eredmény (a háttér színe)
   const [show, setShow] = React.useState(null);
   const [revealed, setRevealed] = React.useState(null);
@@ -43668,7 +43688,6 @@ function RevealProjector({ title, cfg, onExit }) {
     if (v.run && v.run !== lastRun.current) { lastRun.current = v.run; setShow({ run:v.run, test:!!v.test, result:v.result, videoUrl:v.videoUrl || '' }); }
   }, [rstate]);
   const finishShow = () => { setShow(s => { if (s && !s.test && REVEAL_RESULTS[s.result]) setRevealed(s.result); return null; }); };
-  const replay = () => { const v = rstate.v || {}; if (v.phase === 'reveal') setShow({ run:'replay' + Date.now(), test:!!v.test, result:v.result, videoUrl:v.videoUrl || '' }); };
   const pickVideo = f => { if (!f) return; setVideo(old => { if (old) try { URL.revokeObjectURL(old.url); } catch(e) {} return { url: URL.createObjectURL(f), name: f.name || 'videó' }; }); };
   const quizStep = dir => revealQuizWrite(revealQuizStep(qdoc.v || { phase:'idle' }, dir, revealQuizQuestions(quizDoc.v)));
 
@@ -43749,6 +43768,15 @@ function RevealProjector({ title, cfg, onExit }) {
   // különben a középső lap felirata (és a rajta lévő tipp) a számláló alá kerülne.
   const meterOn = tally.boy + tally.girl > 0 && !qstate && !show;
   const boardH = meterOn ? vp.h * REVEAL_METER_ROOM : vp.h;
+  // ⚠️ A felül középen álló jelvény / visszaszámláló a középső lap tetejére esne: a fal az
+  // ALJA alatt kezdődik (mért érték — a szöveg mérete vh-függő).
+  const topRef = React.useRef(null);
+  const [topEdge, setTopEdge] = React.useState(0);
+  React.useLayoutEffect(() => {
+    const e = topRef.current;
+    const v = e ? Math.round(e.offsetTop + e.offsetHeight + 10) : 0;
+    if (v !== topEdge) setTopEdge(v);
+  });
   // ⚠️ A felület a Babakvíz krém papírja (v10.434): sötét tinta, fehér/pasztell chipek.
   const chip = (on) => ({ flexShrink:0, whiteSpace:'nowrap', padding: narrow ? '6px 10px' : '7px 12px', borderRadius:999, cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize: narrow ? 12 : 13,
     border: on ? `1.5px solid ${REVEAL_INK}` : '1.5px solid #EFE2D2', background: on ? REVEAL_INK : '#fff', color: on ? '#fff' : REVEAL_INK });
@@ -43762,9 +43790,9 @@ function RevealProjector({ title, cfg, onExit }) {
       </div>
     );
     return (
-      <div data-reveal-board data-slots={nSlots} style={{ position:'absolute', inset:0, zIndex:1, isolation:'isolate' }}>
+      <div data-reveal-board data-slots={nSlots} style={{ position:'absolute', left:0, right:0, top:topEdge, height:Math.max(1, boardH - topEdge), zIndex:1, isolation:'isolate' }}>
         {slots.map((s, i) => { const it = s && byId[s.id]; if (!it) return null;
-          return <RevealBoardCard key={s.key} item={it} g={revealCardGeom(i, nSlots, vp.w, boardH, it, s.key)} z={s.z} isNew={s.isNew} isCur={s.key === seq.cur.key} />; })}
+          return <RevealBoardCard key={s.key} item={it} g={revealCardGeom(i, nSlots, vp.w, Math.max(1, boardH - topEdge), it, s.key)} z={s.z} isNew={s.isNew} isCur={s.key === seq.cur.key} />; })}
         {seq.cur.isNew && <RevealNewBadge wish={seq.photo.kind === 'wish'} />}
       </div>
     );
@@ -43784,10 +43812,10 @@ function RevealProjector({ title, cfg, onExit }) {
       <RevealPaperBlobs tones={tones} />
       {!qstate && stage()}
       {RR && !show && !qstate && (
-        <div data-reveal-resultbadge style={{ position:'absolute', top: narrow ? 56 : 'max(3vh, 74px)', right:'2.4vw', zIndex:45, padding:'1vh 1.6vw', borderRadius:999, background:`linear-gradient(90deg, ${RR.c1}, ${RR.c2})`, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:'clamp(14px, 3vh, 36px)', boxShadow:'0 8px 30px rgba(0,0,0,0.35)' }}>{RR.emoji} {RR.word}</div>
+        <div ref={topRef} data-reveal-resultbadge style={{ position:'absolute', top: narrow ? 56 : 'max(3vh, 74px)', left:'50%', transform:'translateX(-50%)', whiteSpace:'nowrap', zIndex:45, padding:'1vh 1.6vw', borderRadius:999, background:`linear-gradient(90deg, ${RR.c1}, ${RR.c2})`, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:'clamp(14px, 3vh, 36px)', boxShadow:'0 8px 30px rgba(0,0,0,0.35)' }}>{RR.emoji} {RR.word}</div>
       )}
       {cfg && cfg.countdownOn && revealAt > 0 && !RR && !show && !qstate && (
-        <div data-reveal-corner style={{ position:'absolute', top: narrow ? 56 : 'max(3vh, 74px)', right:'2.4vw', zIndex:45, padding: narrow ? '8px 14px' : '1.2vh 1.6vw', borderRadius:18, textAlign:'right',
+        <div ref={topRef} data-reveal-corner style={{ position:'absolute', top: narrow ? 56 : 'max(3vh, 74px)', left:'50%', transform:'translateX(-50%)', whiteSpace:'nowrap', zIndex:45, padding: narrow ? '8px 14px' : '1.2vh 2.2vw', borderRadius:18, textAlign:'center',
           background:'#fff', border:'2px solid #EFE2D2', boxShadow:'0 1vh 2.6vh rgba(60,40,20,0.12)' }}>
           <div style={{ fontFamily:T.font, fontWeight:800, fontSize:'clamp(11px, 1.7vh, 20px)', letterSpacing:'0.18em', color:'#2F63A8' }}>{revealAt > now ? 'A LELEPLEZÉSIG' : 'MINDJÁRT KIDERÜL'}</div>
           <div data-reveal-corner-time style={{ fontFamily:T.font, fontWeight:900, fontSize:'clamp(22px, 5vh, 64px)', lineHeight:1.05, fontVariantNumeric:'tabular-nums',
@@ -43799,29 +43827,15 @@ function RevealProjector({ title, cfg, onExit }) {
       )}
       {meterOn && <RevealVoteMeter tally={tally} revealed={revealed} />}
       {qstate && !show && <RevealQuizStage qstate={qstate} narrow={narrow} />}
-      {qstate && !show && (
-        <div data-reveal-quiznav style={{ position:'absolute', left:0, right:0, bottom:0, zIndex:60, display:'flex', justifyContent:'center', gap:10, padding:'14px 16px', flexWrap:'wrap',
-          opacity: ui ? 1 : 0, pointerEvents: ui ? 'auto' : 'none', transition:'opacity .4s' }}>
-          {!(qstate.phase === 'q' && !qstate.idx) && <button data-reveal-quizprev onClick={() => quizStep(-1)} style={chip(false)}>‹ Előző</button>}
-          <button data-reveal-quiznext onClick={() => quizStep(1)} style={chip(true)}>{revealQuizNextLabel(qstate)}</button>
-          <button data-reveal-quizexit onClick={() => revealQuizWrite({ phase:'idle' })} style={chip(false)}>✕ Kilépés</button>
-        </div>
-      )}
       {show && <RevealShow key={show.run} show={show} video={video && video.url} onDone={finishShow} />}
       <div data-reveal-controls style={{ position:'absolute', left:0, right:0, top:0, display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflowX:'auto', WebkitOverflowScrolling:'touch',
         padding: narrow ? '10px 12px' : '14px 18px', background:`linear-gradient(${REVEAL_PAPER}F2 55%, ${REVEAL_PAPER}00)`, opacity: ui ? 1 : 0, pointerEvents: ui ? 'auto' : 'none', transition:'opacity .4s', zIndex:70, scrollbarWidth:'none' }}>
         <button data-reveal-exit onClick={() => { try { if (document.fullscreenElement) document.exitFullscreen(); } catch(e) {} onExit(); }} aria-label="Vissza" style={chip(false)}>‹ Vissza</button>
-        {REVEAL_SECS.map(n => <button key={n} data-reveal-secs={n} onClick={() => pickSecs(n)} style={chip(secs === n)}>{n} mp</button>)}
-        <span aria-hidden="true" style={{ flexShrink:0, width:1.5, alignSelf:'stretch', margin:'4px 2px', background:'#EFE2D2' }} />
-        {REVEAL_SLOT_OPTS.map(n => <button key={n} data-reveal-slotsbtn={n} aria-label={n + ' polaroid egyszerre'} title={n + ' polaroid egyszerre'} onClick={() => pickSlots(n)} style={chip(slotPref === n)}>🖼 {n}</button>)}
         <div style={{ flex:1, minWidth:8 }} />
         <span data-reveal-count style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:REVEAL_INK, opacity:0.7 }}>{photos.filter(p => p.src).length} kép</span>
-        {qrUrl && !narrow && <button data-reveal-qrbtn onClick={() => { const v = !showQr; setShowQr(v); revealStore('boh_reveal_qr', v ? '1' : '0'); }} style={chip(showQr)}>QR</button>}
         <button data-reveal-videobtn onClick={() => videoRef.current && videoRef.current.click()} title={video ? video.name : ''} style={chip(!!video)}>{video ? '🎬 Videó kész' : '🎬 Videó'}</button>
         <input ref={videoRef} data-reveal-videoinput type="file" accept="video/*" style={{ display:'none' }} onChange={e => { pickVideo(e.target.files && e.target.files[0]); e.target.value = ''; }} />
-        {rstate.v && rstate.v.phase === 'reveal' && !show && <button data-reveal-replay onClick={replay} style={chip(false)}>↻ Leleplezés újra</button>}
-        <button data-reveal-pause onClick={togglePause} style={chip(paused)}>{paused ? '▶ Folytatás' : '⏸ Szünet'}</button>
-        <button data-reveal-next onClick={() => qstate ? quizStep(1) : seq.next()} style={chip(false)}>Következő ›</button>
+        {paused && <span data-reveal-paused style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:REVEAL_INK, opacity:0.7 }}>⏸ Szünet</span>}
         <button data-reveal-fs onClick={toggleFs} style={chip(fs)}>{fs ? 'Kilépés a teljes képernyőből' : '⛶ Teljes képernyő'}</button>
       </div>
     </div>,
@@ -44013,7 +44027,7 @@ function RevealTrigger({ onBack }) {
         : !ok ? (
           <div data-reveal-codegate style={{ ...card, display:'flex', flexDirection:'column', gap:12 }}>
             <div style={{ fontFamily:T.font, fontWeight:900, fontSize:17, color:T.ink, textAlign:'center' }}>👶 Szülői kód</div>
-            <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', lineHeight:1.45 }}>Ez nem a közös jelszó — a leleplezést és a Babakvízt a szülők kezelik, ezzel a kóddal.</div>
+            <div style={{ fontFamily:T.font, fontSize:13, color:T.inkSoft, textAlign:'center', lineHeight:1.45 }}>Ez nem a közös jelszó — a leleplezést, a Babakvízt és a vetítő beállításait a szülők kezelik, ezzel a kóddal.</div>
             <input data-reveal-code type="password" value={code} autoFocus onChange={e => { setCode(e.target.value); setBad(false); }} onKeyDown={e => { if (e.key === 'Enter') { if (code.trim() === sec.code) setOk(true); else setBad(true); } }}
               style={{ width:'100%', boxSizing:'border-box', padding:'14px', borderRadius:14, border:`1.5px solid ${bad ? T.coral : T.border}`, background:T.bg, fontFamily:T.font, fontSize:17, fontWeight:700, color:T.ink, textAlign:'center', outline:'none' }} />
             {bad && <div data-reveal-codebad style={{ fontFamily:T.font, fontSize:13, fontWeight:800, color:T.coral, textAlign:'center' }}>Hibás kód</div>}
@@ -44035,6 +44049,7 @@ function RevealTrigger({ onBack }) {
             {msg && <div data-reveal-firemsg style={{ fontFamily:T.font, fontWeight:800, fontSize:13, color:T.mint }}>{msg}</div>}
           </div>
         )}
+        {secret.loaded && sec.code && ok && <RevealProjectorPanel />}
         {secret.loaded && sec.code && ok && <div data-reveal-parentquiz style={{ width:'100%', maxWidth:440 }}><RevealQuizControl /></div>}
       </div>
       {ask && (
@@ -44205,9 +44220,9 @@ function RevealScreen({ go, deepLink }) {
         ) : (
           <div data-reveal-roles style={{ width:'100%', maxWidth:860, display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:14 }}>
             {[
-              { id:'projector', emoji:'📽️', name:'Vetítő', sub:'Laptop a kivetítőn — polaroid-fal, üzenetek, Babakvíz és a nagy leleplezés. Telefonon távirányító.' },
+              { id:'projector', emoji:'📽️', name:'Vetítő', sub:'Laptop a kivetítőn — polaroid-fal, üzenetek, Babakvíz és a nagy leleplezés. Beállítás nincs rajta — az a Szülőknél van.' },
               { id:'operator', emoji:'📷', name:'Operátor', sub:'Feltöltés és a vendégek képeinek, üzeneteinek jóváhagyása.' },
-              { id:'trigger', emoji:'👶', name:'Szülők', sub:'Külön kóddal — a nagy leleplezés és a Babakvíz. Az eredményt ők sem látják.' },
+              { id:'trigger', emoji:'👶', name:'Szülők', sub:'Külön kóddal — a nagy leleplezés, a Babakvíz és a vetítő beállításai. Az eredményt ők sem látják.' },
             ].map(r => (
               <button key={r.id} data-reveal-role={r.id} onClick={() => { if (r.id === 'projector') revealAudio(); setRole(r.id); }} style={{ ...card, maxWidth:'none', border:'none', cursor:'pointer', textAlign:'left', display:'flex', flexDirection:'column', gap:6 }}>
                 <span style={{ fontSize:34 }}>{r.emoji}</span>
@@ -44382,7 +44397,7 @@ function AdminReveal() {
         <input data-admin-reveal-when type="datetime-local" value={when} onChange={e => setWhen(e.target.value)} style={inpSt} />
         <label style={{ display:'flex', alignItems:'center', gap:10, marginTop:10, cursor:'pointer', fontFamily:T.font, fontSize:13, fontWeight:700, color:T.ink }}>
           <input data-admin-reveal-countdown type="checkbox" checked={countdownOn} onChange={e => setCountdownOn(e.target.checked)} />
-          Visszaszámláló a vetítő jobb felső sarkában
+          Visszaszámláló a vetítő tetején, középen
         </label>
         {note('Az időpontra a vetítő MAGÁTÓL indul — de csak ha a szülő (Szülők szerep, a saját kódjával) előtte engedélyezte. Engedély nélkül nem történik semmi.')}
         {note('A videót a vetítő laptopjáról is be lehet tölteni (🎬 Videó gomb a vetítőn) — az biztosabb. Ha ott van betöltött videó, az megy a link helyett. Próbánál soha nincs videó.')}

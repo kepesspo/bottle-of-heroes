@@ -3870,3 +3870,29 @@ képet, és utána tölti fel — az appból nem fotóz. Az operátor nézetből
 fotó-gombja MARAD** — ott a gyors, telefonos kép a cél.
 Teszt: `reveal_test.js` 6. blokk (nincs `data-reveal-camera`, nincs `capture` attribútum,
 a feltöltő `multiple`).
+
+## Gender Reveal: a vetítőn nincs beállítás + a leleplezés fent középen (v10.438)
+Tulajdonosi kérés: „A vetítőn ne legyen beállítási opció, az csak a szülők részén."
+**Ez felülírja a v10.434–435 vetítő-gombjait és a telefonos távirányítót.**
+- **A vetítő sávján csak: ‹ Vissza · darabszám · 🎬 Videó · ⛶ Teljes képernyő.** A Videó
+  azért marad, mert a fájl a vetítő GÉPÉRŐL töltődik (máshonnan nem lehet). Kikerült: idő,
+  polaroid-szám, QR, Szünet, Következő, „Leleplezés újra", és a kvíz-lapozó gombsor
+  (`data-reveal-quiznav`). A billentyűk (→ ← szóköz F) maradnak. Szünetben a sáv csak
+  jelez (`data-reveal-paused`).
+- **Minden beállítás a Szülőknél**, a szülői kód mögött: `RevealProjectorPanel`
+  (`data-reveal-parentctl`, a leleplezés és a Babakvíz között) — idő 3/5/8, polaroid 1/2/3,
+  Szünet/Folytatás, Következő ›, vendég-QR látszik/rejtve, és a tippek állása. Mind a
+  `config/revealProjector`-ba ír (`{ secs, slots, paused, next, qr }`); a vetítő CSAK
+  olvassa (és a `localStorage`-ba menti tartaléknak). A „Leleplezés újra" a Szülők
+  meglévő gombja (új `run` → minden vetítő újra lejátssza).
+- **Telefonon a Vetítő szerep nem távirányító**, hanem tájékoztató (`RevealPhoneNote`):
+  „a vetítő a laptopon fut, a beállítások a Szülők részen". A `RevealRemote` megszűnt.
+- **A visszaszámláló és az eredmény-jelvény fent KÖZÉPEN** (`left:50%` + `translateX`),
+  a gombsor alatt. ⚠️ A polaroid-fal a jelvény ALJA alatt kezdődik: a `topRef` mért
+  alja (`topEdge`) a fal `top`-ja, és a `revealCardGeom` a maradék magassággal számol —
+  különben a középső lap teteje a visszaszámláló alá csúszna.
+
+Teszt: `reveal_test.js` 4. blokk (a sávon csak a három gomb; telefonon tájékoztató; a
+közös dokumentumot a laptop követi), `reveal_extras_test.js` (a jelvény és az óra középen,
+a fal alatta; a Szülők panelje ír; a kvízt a Szülők lapozója viszi végig),
+`reveal_votes_test.js` 5. blokk (a panel kiírja az állást).
