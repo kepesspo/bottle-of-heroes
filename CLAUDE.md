@@ -4252,3 +4252,30 @@ emelhető tetszőlegesen a padding nélkül.
 Teszt: `reveal_extras_test.js` 3c. blokk — 85 MB-os fájl: 130 darab, mind 1 MB alatt, a régi
 darabok törölve, és a vetítő „videó kész".
 
+
+## Gender Reveal: hang, lágy átmenet a videó után, saját zene a visszaszámlálásra (v10.458)
+- **A videó HANGGAL indul** (`v.muted = false`, `v.volume` = a Szülők hangereje). A hangerő
+  `config/revealProjector.vol` (`REVEAL_VOLS` = 25/50/75/100%, alap 100%, `revealVolOf`), a
+  Szülők Leleplezés fülén (`RevealVolumeRow`, csak ha van videó vagy zene). **Némítás opció
+  NINCS** — tulajdonosi kérés: mindenképp legyen hang. Ha a böngésző mégsem engedi a hangos
+  indítást, némítva megy, és KÖZÉPEN nagy „🔊 Hang bekapcsolása" gomb jön (`data-reveal-unmute`).
+  ⚠️ A böngésző csak felhasználói koppintás után ad hangot: ha a vetítő oldalát újratöltötték és
+  még senki nem nyúlt hozzá, a bal alsó szervezői csipben „🔇 koppints egyet a hangért" áll
+  (`data-reveal-needtap`, `navigator.userActivation`).
+- **Nincs éles vágás a videó után** (`outro` szakasz): a videó utolsó `REVEAL_OUTRO_FADE`
+  (2,5 mp, rövid videónál a harmada) másodpercében a kép a kiderült pasztellbe, a hang a csendbe
+  úszik (`data-reveal-videofade`, rAF). Utána a szín ~2,8 mp alatt **a polaroid-fal FÖLÖTT**
+  oldódik fel, lágy konfetti-esővel (`RevealConfettiRain` — felülről hullik, nem robban),
+  `REVEAL_OUTRO_MS` = 7 mp. ⚠️ A kiderült színt az `onLand` már az átmenet ELEJÉN beállítja
+  (nem az `onDone`), különben a feloldódó szín mögött még a krém papír állna. Az outro alatt a
+  réteg `pointerEvents:none`. A „Tovább ›" ugyanide visz.
+- **Saját zene a visszaszámlálásra** (`RevealMusicRow`, a dobpergés HELYETT): `revealAudio/<vid>_NNN`
+  + `config/revealAudio`, max. `REVEAL_MUSIC_MAX` = 20 MB. Ugyanaz a darabolt út, mint a videóé —
+  a `revealUploadVideo` / `revealDeleteVideo` / `useRevealVideo` és a Szülők sora
+  (`RevealMediaRow`) **gyűjtemény-paramétert** kapott (`coll`, a meta a `config/<coll>`). A zene
+  az elejéről indul, az utolsó ~1,2 mp-ben elhalkul, a „0"-nál megáll; ha nem indul el, a
+  dobpergés szól. ⚠️ A Firestore-szabályoknak a `revealAudio` gyűjteményt és a
+  `config/revealAudio`-t is engedniük kell.
+Teszt: `reveal_extras_test.js` 3b2. (`count>video>outro>none`, hanggal + 50%, a szín már az
+átmenet alatt) és 3c. blokk (négy hangerő-fokozat némítás nélkül, zene-feltöltés külön
+gyűjteménybe, a vetítő „zene kész", a zene a blobból szól a beállított hangerővel, törlés).

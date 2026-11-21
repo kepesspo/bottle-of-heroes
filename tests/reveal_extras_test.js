@@ -198,11 +198,20 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   const tinyVid = 'file://' + ROOT + '/tests/fixtures/tiny_reveal.webm';   // 1 mp-es webm (ffmpeg, rózsaszín kép)
   await p.evaluate(() => { window.__stages = []; const mo = new MutationObserver(() => { const e = document.querySelector('[data-reveal-show]'); const v = e ? e.getAttribute('data-reveal-show') : 'none'; if (window.__stages[window.__stages.length - 1] !== v) window.__stages.push(v); });
     mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-reveal-show'] }); window.__stMo = mo; });
+  await p.evaluate(() => firebase.firestore().collection('config').doc('revealProjector').set({ vol: 0.5 }, { merge: true }));
+  await p.evaluate(() => { window.__vidState = null; window.__landEarly = false;
+    window.__vsIv = setInterval(() => { const v = document.querySelector('video[data-reveal-video]'), e = document.querySelector('[data-reveal-show]');
+      if (v && e && e.getAttribute('data-reveal-show') === 'video' && !v.paused && !window.__vidState) window.__vidState = { muted: v.muted, vol: v.volume };
+      if (e && e.getAttribute('data-reveal-show') === 'outro' && document.querySelector('[data-reveal-projector]').getAttribute('data-reveal-revealed') === 'girl') window.__landEarly = true; }, 20); });
   await p.evaluate(u => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'vidok', test: false, result: 'girl', videoUrl: u, at: Date.now() }), tinyVid);
   await p.waitForFunction(() => window.__stages.includes('video'), null, { timeout: 6000 }).catch(() => {});
   await p.waitForFunction(() => !document.querySelector('[data-reveal-show]'), null, { timeout: 8000 }).catch(() => {});
-  const stg = await p.evaluate(() => { window.__stMo.disconnect(); return window.__stages.join('>'); });
+  const stg = await p.evaluate(() => { window.__stMo.disconnect(); clearInterval(window.__vsIv); return window.__stages.join('>'); });
   ok(stg.includes('video') && !stg.includes('boom'), 'a videó lement, és utána NEM jött robbanás-képernyő', stg);
+  ok(/video>outro/.test(stg), 'v10.458: a videó után lágy átmenet (outro) jön, nem éles vágás', stg);
+  const vstate = await p.evaluate(() => window.__vidState || null);
+  ok(vstate && vstate.muted === false && Math.abs(vstate.vol - 0.5) < 0.01, 'v10.458: a videó HANGGAL indul, a Szülők hangerejével (50%)', JSON.stringify(vstate));
+  ok(await p.evaluate(() => window.__landEarly === true), 'v10.458: a kiderült szín már az átmenet alatt a fal mögött van');
   ok((await attr('[data-reveal-projector]', 'data-reveal-revealed')) === 'girl', 'a vetítő a kiderült színnel folytatja');
   await p.evaluate(() => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'vidyt', test: false, result: 'girl', videoUrl: 'https://www.youtube.com/watch?v=abc', at: Date.now() }));
   await p.waitForTimeout(150);
@@ -227,9 +236,31 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(!(await has('#__side video')), 'a Szülők nem játsszák le (előnézet nincs)');
   await p.waitForFunction(() => !!document.querySelector('[data-reveal-videoready="1"]'), null, { timeout: 5000 }).catch(() => {});
   ok(await has('[data-reveal-videoready="1"]'), 'a vetítő betöltötte (a sávon „videó kész")');
+  // v10.458: hangerő (nincs némítás) + saját zene a visszaszámlálásra
+  ok(await has('#__side [data-reveal-p-volrow]'), 'v10.458: videóval a Szülőknél hangerő-sor van');
+  const volOpts = await p.evaluate(() => [...document.querySelectorAll('#__side [data-reveal-p-vol]')].map(b => b.textContent.trim()));
+  ok(volOpts.join(',') === '25%,50%,75%,100%', '…négy fokozat, némítás nélkül', volOpts.join(','));
+  await p.evaluate(() => { const b = [...document.querySelectorAll('#__side [data-reveal-p-vol]')].find(x => x.textContent.trim() === '75%'); b.click(); });
+  await p.waitForTimeout(150);
+  ok(await p.evaluate(() => (window.__fbStore.config.revealProjector || {}).vol === 0.75), '…a választás a közös vetítő-dokumentumba megy (0.75)');
+  const wav = vf.replace('fake_reveal.mp4', 'count_music.wav');
+  { const sr = 8000, n = sr, buf = Buffer.alloc(44 + n * 2); buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16);
+    buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(sr, 24); buf.writeUInt32LE(sr * 2, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40);
+    for (let i = 0; i < n; i++) buf.writeInt16LE(Math.round(Math.sin(i / 8) * 3000), 44 + i * 2); fs.writeFileSync(wav, buf); }
+  ok(await has('#__side [data-reveal-p-musicinput]'), 'v10.458: a Szülőknél van „Visszaszámlálás zenéje" feltöltő');
+  await p.setInputFiles('#__side [data-reveal-p-musicinput]', wav);
+  await p.waitForFunction(() => { const m = (window.__fbStore.config || {}).revealAudio; return m && m.vid; }, null, { timeout: 15000 }).catch(() => {});
+  ok(await p.evaluate(() => { const m = window.__fbStore.config.revealAudio || {}; return m.n === 1 && Object.values(window.__fbStore.revealAudio || {}).length === 1; }), '…a zene a saját gyűjteményébe kerül (revealAudio), a videó mellé');
+  ok(await p.evaluate(() => Object.values(window.__fbStore.revealVideo || {}).length === 3), '…és a videó darabjai érintetlenek');
+  await p.waitForFunction(() => !!document.querySelector('[data-reveal-musicready="1"]'), null, { timeout: 5000 }).catch(() => {});
+  ok(await has('[data-reveal-musicready="1"]'), '…a vetítő előre betöltötte („zene kész")');
+  await p.evaluate(() => { window.__plays = []; const orig = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { window.__plays.push({ tag: this.tagName, blob: String(this.src).startsWith('blob:'), vol: this.volume }); return orig.apply(this, arguments); }; });
   await p.evaluate(() => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'vid2', test: false, result: 'girl', videoUrl: '', at: Date.now() }));
   await p.waitForTimeout(150);
   const vsrc = await p.evaluate(() => { const v = document.querySelector('video[data-reveal-video]'); return v ? v.getAttribute('src') : null; });
+  ok((await attr('[data-reveal-show]', 'data-reveal-music')) === '1', 'v10.458: a visszaszámlálás a feltöltött zenével megy');
+  const mp = await p.evaluate(() => window.__plays.filter(x => x.tag === 'AUDIO'));
+  ok(mp.length === 1 && mp[0].blob && Math.abs(mp[0].vol - 0.75) < 0.01, '…a zene a feltöltött fájlból szól, a beállított hangerővel', JSON.stringify(mp));
   ok(vsrc && vsrc.startsWith('blob:'), 'a leleplezés a feltöltött videót viszi', vsrc);
   await p.waitForFunction(() => !document.querySelector('[data-reveal-show]'), null, { timeout: 6000 }).catch(() => {});
   // v10.457: nagy (85 MB) videó — darabonként olvasva fel, és a vetítő be is tölti
@@ -249,6 +280,11 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   const vgone = await p.evaluate(() => ({ vid: (window.__fbStore.config.revealVideo || {}).vid, ch: Object.keys(window.__fbStore.revealVideo || {}).length }));
   ok(!vgone.vid && vgone.ch === 0, 'törlés: a meta és a darabok is eltűnnek', JSON.stringify(vgone));
   ok(!(await has('[data-reveal-videoready]')), 'a vetítő is elengedi');
+  await p.click('#__side [data-reveal-p-musicdel]'); await p.waitForTimeout(100);
+  await p.locator('button:text-is("Törlés")').last().click(); await p.waitForTimeout(400);
+  ok(await p.evaluate(() => !(window.__fbStore.config.revealAudio || {}).vid && Object.keys(window.__fbStore.revealAudio || {}).length === 0), 'v10.458: a zene törölhető (meta + darab)');
+  ok(!(await has('[data-reveal-musicready]')) && !(await has('#__side [data-reveal-p-volrow]')), '…a vetítő elengedi, és média nélkül nincs hangerő-sor');
+  fs.unlinkSync(wav);
   await p.evaluate(() => { const d = document.getElementById('__side'); if (d) { d.__r.unmount(); d.remove(); } });
   await p.evaluate(() => window.__rvSave());
 

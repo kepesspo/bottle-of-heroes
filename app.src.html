@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.457';
+const APP_VERSION = 'v10.458';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -42934,6 +42934,13 @@ const REVEAL_RESULTS = {
   test: { word:'PRÓBA', name:'Próba', emoji:'✅', c1:'#8E7CC3', c2:'#C7B8EC', ink:'#1E1438' },
 };
 const REVEAL_COUNT_FROM = 10;
+// v10.458: a videó hangereje (Szülők → Leleplezés). NINCS „némítva" opció — a videó mindig hanggal megy.
+const REVEAL_VOLS = [0.25, 0.5, 0.75, 1];
+function revealVolOf(v) { const n = +((v || {}).vol); return REVEAL_VOLS.includes(n) ? n : 1; }
+// v10.458: a videó UTOLSÓ másodperceiben a kép a kiderült pasztellbe, a hang a csendbe úszik,
+// utána a szín lassan feloldódik a polaroid-fal fölött, lágy konfetti-esővel — nincs éles vágás.
+const REVEAL_OUTRO_FADE = 2.5;     // mp — ennyi ideig úszik ki a videó vége (rövid videónál a harmada)
+const REVEAL_OUTRO_MS = 7000;      // ms — a feloldódás + konfetti-eső hossza a fal fölött
 // A Babakvíz játékmesteri lapja (20 kérdés, A/B/C) — a vendégek papíron karikáznak.
 // `ok` = a helyes válasz indexe (0 = A). Az admin átírhatja (config/revealQuiz).
 const REVEAL_QUIZ_DEFAULT = [
@@ -43454,6 +43461,29 @@ function RevealQrCard({ url, big }) {
 // Szakaszok: visszaszámlálás (dobpergéssel) → [videó] → robbanás (konfetti, lufik,
 // óriási felirat) → `onDone`. A videó a vetítő gépéről betöltött fájl VAGY az admin
 // által megadott link; próbánál (test) soha nincs videó — az elárulná.
+// v10.458: LÁGY konfetti-eső (felülről, lassan, ringatózva) — a videó utáni átmenethez. A robbanás
+// `RevealConfetti`-je középről lő ki; ez nem robban, csak hullik, és magától elfogy.
+function RevealConfettiRain({ colors, ms }) {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const cv = ref.current; if (!cv) return;
+    const ctx = cv.getContext('2d'); let raf = 0, dead = false; const t0 = performance.now(), spawnFor = (ms || 7000) * 0.6;
+    const fit = () => { cv.width = innerWidth; cv.height = innerHeight; }; fit(); addEventListener('resize', fit);
+    const P = [];
+    const tick = now => {
+      if (dead) return; ctx.clearRect(0, 0, cv.width, cv.height);
+      if (now - t0 < spawnFor) for (let i = 0; i < 3; i++) P.push({ x: Math.random() * cv.width, y: -20, vy: 1.2 + Math.random() * 1.8, ph: Math.random() * 6.3, sw: 0.6 + Math.random() * 1.4,
+        s: 6 + Math.random() * 8, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.08, c: colors[(Math.random() * colors.length) | 0] });
+      for (let i = P.length - 1; i >= 0; i--) { const p = P[i]; p.y += p.vy; p.ph += 0.03; p.x += Math.sin(p.ph) * p.sw; p.r += p.vr;
+        if (p.y > cv.height + 30) { P.splice(i, 1); continue; }
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.globalAlpha = 0.85; ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); ctx.restore(); }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { dead = true; cancelAnimationFrame(raf); removeEventListener('resize', fit); };
+  }, []);
+  return <canvas ref={ref} data-reveal-rain aria-hidden="true" style={{ position:'absolute', inset:0, pointerEvents:'none' }} />;
+}
 function RevealConfetti({ colors }) {
   const ref = React.useRef(null);
   React.useEffect(() => {
@@ -43475,10 +43505,10 @@ function RevealConfetti({ colors }) {
   }, []);
   return <canvas ref={ref} aria-hidden="true" style={{ position:'absolute', inset:0, pointerEvents:'none' }} />;
 }
-function RevealShow({ show, video, onDone }) {
+function RevealShow({ show, video, music, onDone, onLand, volume }) {
   const R = REVEAL_RESULTS[show.test ? 'test' : show.result] || REVEAL_RESULTS.test;
   const sp = revealSpeed();
-  const [stage, setStage] = React.useState('count');     // count | video | boom
+  const [stage, setStage] = React.useState('count');     // count | video | outro | boom
   const [n, setN] = React.useState(REVEAL_COUNT_FROM);
   const [muted, setMuted] = React.useState(false);
   // ⚠️ YouTube-linket a <video> nem játszik le — figyelmen kívül hagyjuk (a régi mentett link se akasszon)
@@ -43486,13 +43516,29 @@ function RevealShow({ show, video, onDone }) {
   // v10.456: ha a videó LEMENT, a végén nincs „Kisfiú/Kislány" robbanás — a videó maga a
   // leleplezés, utána rögtön a vetítő jön (a kiderült színnel). Hibás/nem induló videónál
   // marad a robbanás, különben semmi nem mondaná ki az eredményt.
-  const finishVideo = () => onDone();
-  const vref = React.useRef(null), vBad = React.useRef(false);
+  // v10.458: …de nem éles vágással: a videó vége a kiderült pasztellbe úszik (`fadeRef`), utána
+  // az `outro` szakaszban a szín a polaroid-fal FÖLÖTT oldódik fel, lágy konfetti-esővel.
+  const vol = REVEAL_VOLS.includes(+volume) ? +volume : 1;
+  const vref = React.useRef(null), vBad = React.useRef(false), fadeRef = React.useRef(null), landed = React.useRef(false);
+  const finishVideo = () => {
+    if (landed.current) return; landed.current = true;
+    const v = vref.current; if (v) try { v.pause(); } catch(e) {}
+    setStage('outro'); if (onLand) onLand();
+  };
+  // v10.458: saját zene (Szülők → Leleplezés) a dobpergés HELYETT. Az elejéről indul, az utolsó
+  // ~1,2 mp-ben elhalkul, így a videó / robbanás tiszta hanggal kezdődik. Ha nem indul el, dobpergés.
+  const musRef = React.useRef(null);
   React.useEffect(() => {
-    revealDrumroll(REVEAL_COUNT_FROM * sp);
+    const total = REVEAL_COUNT_FROM * sp, fade = Math.min(1.2, total / 4), t0 = performance.now();
+    let fiv = 0;
+    if (music) {
+      const a = new Audio(music); musRef.current = a; a.volume = vol;
+      const p = a.play(); if (p && p.catch) p.catch(() => { musRef.current = null; revealDrumroll(total); });
+      fiv = setInterval(() => { const left = total - (performance.now() - t0) / 1000; try { a.volume = Math.max(0, vol * Math.min(1, left / fade)); } catch(e) {} }, 50);
+    } else revealDrumroll(total);
     let k = REVEAL_COUNT_FROM;
-    const iv = setInterval(() => { k--; if (k > 0) setN(k); else { clearInterval(iv); setStage(vidSrc && !vBad.current ? 'video' : 'boom'); } }, 1000 * sp);
-    return () => clearInterval(iv);
+    const iv = setInterval(() => { k--; if (k > 0) setN(k); else { clearInterval(iv); clearInterval(fiv); const a = musRef.current; if (a) try { a.pause(); } catch(e) {} setStage(vidSrc && !vBad.current ? 'video' : 'boom'); } }, 1000 * sp);
+    return () => { clearInterval(iv); clearInterval(fiv); const a = musRef.current; if (a) try { a.pause(); } catch(e) {} };
   }, []);
   // ⚠️ A videó MÁR a visszaszámlálás alatt betöltődik (rejtve), és a „0" pillanatában
   // KÉZZEL indítjuk — az `autoPlay` attribútumra nem számíthatunk. Ha a böngésző a hangos
@@ -43501,8 +43547,25 @@ function RevealShow({ show, video, onDone }) {
     if (stage !== 'video') return;
     const v = vref.current; if (!v) { setStage('boom'); return; }
     try { v.currentTime = 0; } catch(e) {}
+    v.muted = false; v.volume = vol;                       // v10.458: alapból HANGGAL, a Szülők hangerejével
     const p = v.play();
     if (p && p.catch) p.catch(() => { v.muted = true; setMuted(true); const p2 = v.play(); if (p2 && p2.catch) p2.catch(() => setStage('boom')); });
+    // a vég kiúsztatása: a hátralévő idő szerint a kép a pasztellbe, a hang a csendbe
+    let raf = 0;
+    const loop = () => {
+      const d = v.duration, f = (d && isFinite(d)) ? Math.min(REVEAL_OUTRO_FADE, d / 3) : 0;
+      const k = f > 0 ? Math.max(0, Math.min(1, 1 - (d - v.currentTime) / f)) : 0;
+      if (fadeRef.current) fadeRef.current.style.opacity = String(k);
+      try { v.volume = Math.max(0, vol * (1 - k)); } catch(e) {}
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [stage]);
+  React.useEffect(() => {
+    if (stage !== 'outro') return;
+    const t = setTimeout(onDone, REVEAL_OUTRO_MS * sp);
+    return () => clearTimeout(t);
   }, [stage]);
   React.useEffect(() => {
     if (stage !== 'boom') return;
@@ -43512,8 +43575,9 @@ function RevealShow({ show, video, onDone }) {
   }, [stage]);
   const balloons = React.useMemo(() => Array.from({ length:16 }, (_, i) => ({ x: (i * 6.3 + revealHash('b' + i) * 5) % 100, d: 5 + revealHash('d' + i) * 4, del: revealHash('t' + i) * 2.4, s: 7 + revealHash('s' + i) * 6, c: i % 3 === 2 ? '#fff' : (i % 2 ? R.c1 : R.c2) })), []);
   return (
-    <div data-reveal-show={stage} data-reveal-countdown={stage === 'count' ? n : ''} data-reveal-boom={stage === 'boom' ? (show.test ? 'test' : show.result) : ''}
-      style={{ position:'absolute', inset:0, zIndex:40, overflow:'hidden', background: stage === 'boom' ? `radial-gradient(circle at 50% 55%, ${R.c2}, ${R.c1} 70%)` : REVEAL_PAPER, transition:'background .5s' }}>
+    <div data-reveal-show={stage} data-reveal-music={music ? '1' : '0'} data-reveal-countdown={stage === 'count' ? n : ''} data-reveal-boom={stage === 'boom' ? (show.test ? 'test' : show.result) : ''}
+      style={{ position:'absolute', inset:0, zIndex:40, overflow:'hidden', pointerEvents: stage === 'outro' ? 'none' : 'auto',
+        background: stage === 'boom' ? `radial-gradient(circle at 50% 55%, ${R.c2}, ${R.c1} 70%)` : stage === 'outro' ? 'transparent' : REVEAL_PAPER, transition:'background .5s' }}>
       {stage === 'count' && <RevealPaperBlobs />}
       {stage === 'count' && (
         <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'3vh' }}>
@@ -43528,11 +43592,23 @@ function RevealShow({ show, video, onDone }) {
           onError={() => { vBad.current = true; if (stage === 'video') setStage('boom'); }}
           style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'contain', background:'#000', display: stage === 'video' ? 'block' : 'none' }} />
       )}
+      {stage === 'video' && <div ref={fadeRef} data-reveal-videofade aria-hidden="true" style={{ position:'absolute', inset:0, background:`radial-gradient(circle at 50% 50%, ${R.c2}, ${R.c1} 85%)`, opacity:0, pointerEvents:'none' }} />}
+      {stage === 'video' && muted && (
+        // ⚠️ Hang NÉLKÜL nem mehet le: ha a böngésző nem engedte a hangos indítást, nagy gomb középen
+        <button data-reveal-unmute onClick={() => { const v = vref.current; if (v) { v.muted = false; v.volume = vol; v.play().catch(() => {}); } setMuted(false); }}
+          style={{ position:'absolute', left:'50%', top:'50%', transform:'translate(-50%,-50%)', padding:'18px 30px', borderRadius:999, border:'none', cursor:'pointer', background:'#fff', color:'#1B1830',
+            fontFamily:T.font, fontWeight:900, fontSize:'clamp(18px, 3vh, 30px)', boxShadow:'0 10px 40px rgba(0,0,0,0.45)', animation:'revealBeat 1.4s ease-in-out infinite' }}>🔊 Hang bekapcsolása</button>
+      )}
       {stage === 'video' && (
         <div style={{ position:'absolute', right:18, bottom:18, display:'flex', gap:8 }}>
-          {muted && <button data-reveal-unmute onClick={() => { const v = vref.current; if (v) { v.muted = false; v.play().catch(() => {}); } setMuted(false); }} style={{ padding:'8px 14px', borderRadius:999, border:'none', cursor:'pointer', background:'#fff', color:'#1B1830', fontFamily:T.font, fontWeight:900, fontSize:13 }}>🔊 Hang</button>}
           <button data-reveal-skipvideo onClick={finishVideo} style={{ padding:'8px 14px', borderRadius:999, border:'none', cursor:'pointer', background:'rgba(255,255,255,0.18)', color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:13 }}>Tovább ›</button>
         </div>
+      )}
+      {stage === 'outro' && (
+        <React.Fragment>
+          <div data-reveal-outro aria-hidden="true" style={{ position:'absolute', inset:0, background:`radial-gradient(circle at 50% 50%, ${R.c2}, ${R.c1} 85%)`, animation:`revealOutroFade ${2.8 * sp}s ease-in-out both` }} />
+          <RevealConfettiRain colors={[R.c1, R.c2, '#ffffff', '#FFD54F']} ms={REVEAL_OUTRO_MS * sp} />
+        </React.Fragment>
       )}
       {stage === 'boom' && (
         <React.Fragment>
@@ -43694,29 +43770,32 @@ function revealVideoPartId(vid, i) { return vid + '_' + String(i).padStart(3, '0
 function revealRetry(fn, tries) { return fn().catch(e => (tries > 1 ? new Promise(r => setTimeout(r, 800)).then(() => revealRetry(fn, tries - 1)) : Promise.reject(e))); }
 function revealB64(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
 function revealUnB64(b) { const s = atob(b), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
-function revealWipeVideo(db) { return db.collection('revealVideo').get().then(snap => snap.docs.reduce((p, d) => p.then(() => d.ref.delete()), Promise.resolve())); }
-function revealUploadVideo(file, onProg) {
+const REVEAL_MUSIC_MAX = 20 * 1024 * 1024;   // v10.458: a visszaszámlálás zenéje (pár perces mp3 is bőven belefér)
+function revealWipeVideo(db, coll) { return db.collection(coll || 'revealVideo').get().then(snap => snap.docs.reduce((p, d) => p.then(() => d.ref.delete()), Promise.resolve())); }
+function revealUploadVideo(file, onProg, coll, max, what) {
+  coll = coll || 'revealVideo'; max = max || REVEAL_VIDEO_MAX; what = what || 'A videó';
   const db = revealDb(); if (!db) return Promise.reject(new Error('nincs adatbázis'));
-  if (file.size > REVEAL_VIDEO_MAX) return Promise.reject(new Error('A videó legfeljebb ' + Math.round(REVEAL_VIDEO_MAX / 1048576) + ' MB lehet'));
-  const vid = revealToken(), meta = db.collection('config').doc('revealVideo');
+  if (file.size > max) return Promise.reject(new Error(what + ' legfeljebb ' + Math.round(max / 1048576) + ' MB lehet'));
+  const vid = revealToken(), meta = db.collection('config').doc(coll);
   return meta.set({ vid:null, uploading:true, at:Date.now() })
-    .then(() => revealWipeVideo(db))
+    .then(() => revealWipeVideo(db, coll))
     .then(() => {
       // ⚠️ darabonként olvasunk (file.slice) — egy 80 MB-os fájl egyben + base64-ben a telefon memóriáját vinné el
       const CH = REVEAL_VIDEO_CHUNK, size = file.size, n = Math.max(1, Math.ceil(size / CH));
       let p = Promise.resolve();
       for (let i = 0; i < n; i++) p = p
         .then(() => file.slice(i * CH, Math.min(size, (i + 1) * CH)).arrayBuffer())
-        .then(b => { const d = revealB64(new Uint8Array(b)); return revealRetry(() => db.collection('revealVideo').doc(revealVideoPartId(vid, i)).set({ vid, i, d }), 3); })
+        .then(b => { const d = revealB64(new Uint8Array(b)); return revealRetry(() => db.collection(coll).doc(revealVideoPartId(vid, i)).set({ vid, i, d }), 3); })
         .then(() => onProg && onProg(i + 1, n));
-      return p.then(() => meta.set({ vid, n, name: file.name || 'videó', type: file.type || 'video/mp4', size, at: Date.now(), uploading:false }));
+      return p.then(() => meta.set({ vid, n, name: file.name || 'fájl', type: file.type || (coll === 'revealVideo' ? 'video/mp4' : 'audio/mpeg'), size, at: Date.now(), uploading:false }));
     })
     .catch(e => meta.set({ vid:null, uploading:false, at:Date.now() }).then(() => { throw e; }));
 }
-function revealDeleteVideo() { const db = revealDb(); if (!db) return Promise.resolve(); return db.collection('config').doc('revealVideo').set({ vid:null, uploading:false, at:Date.now() }).then(() => revealWipeVideo(db)); }
+function revealDeleteVideo(coll) { coll = coll || 'revealVideo'; const db = revealDb(); if (!db) return Promise.resolve(); return db.collection('config').doc(coll).set({ vid:null, uploading:false, at:Date.now() }).then(() => revealWipeVideo(db, coll)); }
 // a vetítő: a meta új `vid`-jére összerakja a darabokat egy helyi Blob-URL-be
-function useRevealVideo() {
-  const meta = useRevealDoc('revealVideo');
+function useRevealVideo(coll) {
+  coll = coll || 'revealVideo';
+  const meta = useRevealDoc(coll);
   const m = meta.v || {};
   const [st, setSt] = React.useState({ id:null, url:null, name:'', loading:false });
   React.useEffect(() => {
@@ -43729,7 +43808,7 @@ function useRevealVideo() {
     const worker = () => {
       if (dead || next >= n) return Promise.resolve();
       const i = next++;
-      return revealRetry(() => db.collection('revealVideo').doc(revealVideoPartId(m.vid, i)).get(), 3).then(snap => {
+      return revealRetry(() => db.collection(coll).doc(revealVideoPartId(m.vid, i)).get(), 3).then(snap => {
         const x = snap.exists ? snap.data() : null;
         if (!x || x.vid !== m.vid || !x.d) throw new Error('hiányos');
         bins[i] = revealUnB64(x.d); done++;
@@ -43787,6 +43866,15 @@ function RevealProjector({ title, cfg, onExit }) {
   const [paused, setPaused] = React.useState(false);
   const [ui, setUi] = React.useState(true);
   const [fs, setFs] = React.useState(false);
+  // v10.458: a böngésző CSAK felhasználói koppintás után enged hangos lejátszást. Ha a vetítő
+  // oldalát újratöltötték és még senki nem nyúlt hozzá, a szervezői csip szól (`data-reveal-needtap`).
+  const [needTap, setNeedTap] = React.useState(() => { try { return !!(navigator.userActivation && !navigator.userActivation.hasBeenActive); } catch(e) { return false; } });
+  React.useEffect(() => {
+    if (!needTap) return;
+    const off = () => setNeedTap(false);
+    addEventListener('pointerdown', off, true); addEventListener('keydown', off, true);
+    return () => { removeEventListener('pointerdown', off, true); removeEventListener('keydown', off, true); };
+  }, [needTap]);
   // a KÖZÖS vezérlés (telefonos távirányító): beállítások + „következő" jelölő
   const ctl = useRevealDoc('revealProjector');
   React.useEffect(() => {
@@ -43806,6 +43894,7 @@ function RevealProjector({ title, cfg, onExit }) {
   const [show, setShow] = React.useState(null);
   const [revealed, setRevealed] = React.useState(null);
   const video = useRevealVideo();                          // a Szülők feltöltött videója (v10.439)
+  const music = useRevealVideo('revealAudio');             // v10.458: a visszaszámlálás zenéje
   React.useEffect(() => { if (cfg) revealEnsureKeys(cfg); }, [cfg && cfg.guestKey, cfg && cfg.albumKey, !!cfg]);
   const seq = useRevealSequence(photos, loaded, secs, paused || !!show || !!qstate);
   const qrUrl = revealGuestUrl(cfg);
@@ -43975,6 +44064,7 @@ function RevealProjector({ title, cfg, onExit }) {
 @keyframes revealBeat { 0% { transform:scale(1.5); opacity:0 } 25% { opacity:1 } 100% { transform:scale(0.92); opacity:0.85 } }
 @keyframes revealSlam { 0% { transform:scale(3); opacity:0 } 60% { transform:scale(0.92); opacity:1 } 100% { transform:scale(1) } }
 @keyframes revealRise { from { transform:translateY(0) } to { transform:translateY(-140vh) } }
+@keyframes revealOutroFade { 0% { opacity:1 } 30% { opacity:1 } 100% { opacity:0 } }
 `}</style>
       <RevealPaperBlobs tones={tones} />
       {!qstate && stage()}
@@ -43996,6 +44086,7 @@ function RevealProjector({ title, cfg, onExit }) {
           padding:'3px 9px', borderRadius:999, background:'rgba(255,255,255,0.72)', border:'1px solid #EFE2D2', color:REVEAL_INK, opacity:0.8,
           fontFamily:T.font, fontWeight:800, fontSize:'clamp(10px, 1.3vh, 14px)' }}>
           <span aria-hidden="true">📷</span><span data-reveal-count>{nPhotos} kép</span>
+          {needTap && (video.url || music.url) && <span data-reveal-needtap style={{ color:'#A3342C' }}><span aria-hidden="true" style={{ opacity:0.35, color:REVEAL_INK }}> · </span>🔇 koppints egyet a hangért</span>}
           {nWish > 0 && <React.Fragment><span aria-hidden="true" style={{ opacity:0.35 }}>·</span><span aria-hidden="true">💌</span><span data-reveal-wishcount>{nWish}</span></React.Fragment>}
           {pendingN > 0 && <span data-reveal-pendbadge={pendingN} title={pendingN + ' jóváhagyásra vár'} style={{ display:'inline-flex', alignItems:'center', gap:4, marginLeft:2, color:'#7A4F00' }}>
             <span aria-hidden="true" style={{ opacity:0.35, color:REVEAL_INK }}>·</span>
@@ -44007,11 +44098,13 @@ function RevealProjector({ title, cfg, onExit }) {
       )}
       {meterOn && <RevealVoteMeter tally={tally} revealed={revealed} />}
       {qstate && !show && <RevealQuizStage qstate={qstate} narrow={narrow} />}
-      {show && <RevealShow key={show.run} show={show} video={video && video.url} onDone={finishShow} />}
+      {show && <RevealShow key={show.run} show={show} video={video && video.url} music={music && music.url} volume={revealVolOf(ctl.v)} onDone={finishShow}
+        onLand={() => { if (!show.test && REVEAL_RESULTS[show.result]) setRevealed(show.result); }} />}
       <div data-reveal-controls style={{ position:'absolute', left:0, right:0, top:0, display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflowX:'auto', WebkitOverflowScrolling:'touch',
         padding: narrow ? '10px 12px' : '14px 18px', background:`linear-gradient(${REVEAL_PAPER}F2 55%, ${REVEAL_PAPER}00)`, opacity: ui ? 1 : 0, pointerEvents: ui ? 'auto' : 'none', transition:'opacity .4s', zIndex:70, scrollbarWidth:'none' }}>
         <button data-reveal-exit onClick={() => { try { if (document.fullscreenElement) document.exitFullscreen(); } catch(e) {} onExit(); }} aria-label="Vissza" style={chip(false)}>‹ Vissza</button>
         <div style={{ flex:1, minWidth:8 }} />
+        {(music.url || music.loading) && <span data-reveal-musicready={music.url ? '1' : '0'} style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:REVEAL_INK, opacity:0.7 }}>{music.url ? '🎵 zene kész' : `🎵 zene töltődik… ${music.pct || 0}%`}</span>}
         {(video.url || video.loading) && <span data-reveal-videoready={video.url ? '1' : '0'} style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:REVEAL_INK, opacity:0.7 }}>{video.url ? '🎬 videó kész' : `🎬 videó töltődik… ${video.pct || 0}%`}</span>}
         {paused && <span data-reveal-paused style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:REVEAL_INK, opacity:0.7 }}>⏸ Szünet</span>}
         <button data-reveal-fs onClick={toggleFs} style={chip(fs)}>{fs ? 'Kilépés a teljes képernyőből' : '⛶ Teljes képernyő'}</button>
@@ -44946,7 +45039,9 @@ function RevealParentRevealTab({ dock }) {
             {revealAt > 0 && <button type="button" onClick={() => { saveCfg({ revealAt:0 }); setEditWhen(false); }} style={rvBtn('small')}>Törlés</button>}
           </div>
         )}
+        <RevealMusicRow />
         <RevealVideoRow />
+        <RevealVolumeRow />
       </section>
       {secretOpen && <RevealSecretCard onClose={() => setSecretOpen(false)} />}
 
@@ -44972,8 +45067,25 @@ function RevealParentRevealTab({ dock }) {
   );
 }
 // a leleplező videó sora (feltöltés / csere / törlés). Előnézet SZÁNDÉKOSAN nincs.
-function RevealVideoRow() {
-  const meta = useRevealDoc('revealVideo');
+// v10.458: a videó hangereje — csak ha van feltöltött videó. Némítás NINCS: hanggal megy.
+function RevealVolumeRow() {
+  const meta = useRevealDoc('revealVideo'), mus = useRevealDoc('revealAudio'), ctl = useRevealDoc('revealProjector');
+  const [msg, flash] = useRevealFlash();
+  if (!(meta.v || {}).vid && !(mus.v || {}).vid) return null;
+  const vol = revealVolOf(ctl.v);
+  return rvRow({ tight:true, data:{ 'data-reveal-p-volrow':'' },
+    label: <span>Hangerő{msg ? <span style={{ display:'block', marginTop:2 }}>{rvMsg(msg)}</span> : <span style={{ display:'block', fontWeight:700, fontSize:12, color:T.inkSoft, marginTop:2 }}>Zene és videó — mindig hanggal megy</span>}</span>,
+    right: rvSeg(REVEAL_VOLS.map(n => ({ v:n, t: Math.round(n * 100) + '%' })), vol, n => { revealCtlWrite({ vol:n }); flash('Mentve'); }, 'data-reveal-p-vol', 'Videó hangereje') });
+}
+function RevealVideoRow() { return <RevealMediaRow />; }
+// v10.458: a visszaszámlálás zenéje — ha van, a dobpergés HELYETT szól, a „0" előtt elhalkul
+function RevealMusicRow() {
+  return <RevealMediaRow coll="revealAudio" dp="music" icon="timer" title="Visszaszámlálás zenéje" accept="audio/*" max={REVEAL_MUSIC_MAX} what="A zene"
+    emptyText="Nincs — a dobpergés szól" delTitle="Zene törlése" delText="A visszaszámlálás alatt a dobpergés fog szólni." gone="Zene törölve" />;
+}
+function RevealMediaRow({ coll, dp, icon, title, accept, max, what, emptyText, delTitle, delText, gone }) {
+  coll = coll || 'revealVideo'; dp = dp || 'video'; max = max || REVEAL_VIDEO_MAX;
+  const meta = useRevealDoc(coll);
   const m = meta.v || {};
   const [prog, setProg] = React.useState(null);      // { done, n }
   const [msg, flash] = useRevealFlash();
@@ -44983,25 +45095,25 @@ function RevealVideoRow() {
   const pick = f => {
     if (!f) return;
     setProg({ done:0, n:1 });
-    revealUploadVideo(f, (done, n) => setProg({ done, n }))
+    revealUploadVideo(f, (done, n) => setProg({ done, n }), coll, max, what)
       .then(() => { setProg(null); flash('Feltöltve'); })
       .catch(e => { setProg(null); flash((e && e.message) || 'A feltöltés nem sikerült'); });
   };
-  const status = prog ? `Feltöltés… ${Math.round(prog.done * 100 / Math.max(1, prog.n))}% (${prog.done} / ${prog.n})` : m.uploading ? 'Feltöltés folyamatban…' : m.vid ? `${m.name || 'videó'} · ${(m.size / 1048576).toFixed(1)} MB` : `Nincs — max. ${Math.round(REVEAL_VIDEO_MAX / 1048576)} MB, a visszaszámlálás után megy`;
+  const status = prog ? `Feltöltés… ${Math.round(prog.done * 100 / Math.max(1, prog.n))}% (${prog.done} / ${prog.n})` : m.uploading ? 'Feltöltés folyamatban…' : m.vid ? `${m.name || 'videó'} · ${(m.size / 1048576).toFixed(1)} MB` : (emptyText ? `${emptyText} · max. ${Math.round(max / 1048576)} MB` : `Nincs — max. ${Math.round(max / 1048576)} MB, a visszaszámlálás után megy`);
   return (
-    <div data-reveal-p-video data-has={m.vid ? '1' : '0'} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 12px 10px 16px', borderTop:`1px solid ${T.border}` }}>
-      {rvIconBox('video', m.vid ? 'ok' : 'warn')}
+    <div {...{ ['data-reveal-p-' + dp]: '' }} data-has={m.vid ? '1' : '0'} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 12px 10px 16px', borderTop:`1px solid ${T.border}` }}>
+      {rvIconBox(icon || 'video', m.vid ? 'ok' : (dp === 'video' ? 'warn' : 'info'))}
       <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>Leleplező videó</div>
-        <div data-reveal-p-videostatus style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.inkSoft, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{msg ? <React.Fragment>{rvMsg(msg, 'data-reveal-p-videomsg')}{m.vid && !busy ? ' · ' + status : ''}</React.Fragment> : status}</div>
+        <div style={{ fontFamily:T.font, fontWeight:800, fontSize:14, color:T.ink }}>{title || 'Leleplező videó'}</div>
+        <div {...{ ['data-reveal-p-' + dp + 'status']: '' }} style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.inkSoft, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{msg ? <React.Fragment>{rvMsg(msg, 'data-reveal-p-' + dp + 'msg')}{m.vid && !busy ? ' · ' + status : ''}</React.Fragment> : status}</div>
       </div>
-      <button type="button" data-reveal-p-videopick disabled={busy} onClick={() => ref.current && ref.current.click()} style={rvBtn('small', busy ? { opacity:0.5, cursor:'default' } : null)}>{m.vid ? 'Csere' : 'Feltöltés'}</button>
-      {m.vid && !busy && <button type="button" data-reveal-p-videodel onClick={() => setAsk(true)} style={rvBtn('small', { color:'#A3342C', borderColor:'#E8B4AE' })}>Törlés</button>}
-      <input ref={ref} data-reveal-p-videoinput type="file" accept="video/*" style={{ display:'none' }} onChange={e => { pick(e.target.files && e.target.files[0]); e.target.value = ''; }} />
+      <button type="button" {...{ ['data-reveal-p-' + dp + 'pick']: '' }} disabled={busy} onClick={() => ref.current && ref.current.click()} style={rvBtn('small', busy ? { opacity:0.5, cursor:'default' } : null)}>{m.vid ? 'Csere' : 'Feltöltés'}</button>
+      {m.vid && !busy && <button type="button" {...{ ['data-reveal-p-' + dp + 'del']: '' }} onClick={() => setAsk(true)} style={rvBtn('small', { color:'#A3342C', borderColor:'#E8B4AE' })}>Törlés</button>}
+      <input ref={ref} {...{ ['data-reveal-p-' + dp + 'input']: '' }} type="file" accept={accept || 'video/*'} style={{ display:'none' }} onChange={e => { pick(e.target.files && e.target.files[0]); e.target.value = ''; }} />
       {ask && (
-        <ActionModal kicker="Videó törlése" onClose={() => setAsk(false)} onSecondary={() => setAsk(false)} secondaryLabel="Mégse"
-          onPrimary={() => { setAsk(false); revealDeleteVideo().then(() => flash('Videó törölve')).catch(() => {}); }} primaryLabel="Törlés" primaryColor={T.coral}>
-          A leleplezéskor nem lesz videó (csak az admin linkje, ha van).
+        <ActionModal kicker={delTitle || 'Videó törlése'} onClose={() => setAsk(false)} onSecondary={() => setAsk(false)} secondaryLabel="Mégse"
+          onPrimary={() => { setAsk(false); revealDeleteVideo(coll).then(() => flash(gone || 'Videó törölve')).catch(() => {}); }} primaryLabel="Törlés" primaryColor={T.coral}>
+          {delText || 'A leleplezéskor nem lesz videó.'}
         </ActionModal>
       )}
     </div>
