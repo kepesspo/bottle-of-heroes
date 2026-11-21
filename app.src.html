@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.465';
+const APP_VERSION = 'v10.466';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -42920,9 +42920,6 @@ function canvasToCompressedURL(canvas, quality) {
 const REVEAL_LOGO = 'assets/dnr_reveal_logo_mark.png';
 const REVEAL_PINK = '#F496B4', REVEAL_BLUE = '#96C8F0', REVEAL_NIGHT = '#15121F';
 const REVEAL_MAX_SIDE = 1920, REVEAL_MAX_CHARS = 900000, REVEAL_WISH_MAX = 140;
-// v10.465: a listákba csak BÉLYEG kerül (a revealPhotos figyelője mindent a memóriában tart);
-// a teljes kép a revealFull/<id>-ben ül, és csak akkor töltődik, amikor tényleg kell.
-const REVEAL_THUMB_SIDE = 800, REVEAL_THUMB_CHARS = 150000, REVEAL_FULL_CACHE = 8;
 const REVEAL_SECS = [3, 5, 8];
 // A vetítőn egyszerre látszó polaroidok száma: a vetítő gépén választható (1–3).
 const REVEAL_SLOT_OPTS = [1, 2, 3];
@@ -43074,74 +43071,17 @@ function revealCompress(file) {
       if (out.length <= REVEAL_MAX_CHARS) break;
       side = Math.round(side * 0.85); q = Math.max(0.5, q - 0.06);
     }
-    // v10.465: bélyeg ugyanabból a képből (≤ 800 px) — a listák és a nézők ezt tartják a memóriában
-    let tside = REVEAL_THUMB_SIDE, tq = 0.74, thumb = '', tw = 0;
-    for (let i = 0; i < 6; i++) {
-      const k = Math.min(1, tside / Math.max(W, H)), th = Math.max(1, Math.round(H * k)); tw = Math.max(1, Math.round(W * k));
-      const c = document.createElement('canvas'); c.width = tw; c.height = th;
-      const ctx = c.getContext('2d'); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, tw, th); ctx.drawImage(img, 0, 0, tw, th);
-      thumb = canvasToCompressedURL(c, tq);
-      if (thumb.length <= REVEAL_THUMB_CHARS) break;
-      tside = Math.round(tside * 0.85); tq = Math.max(0.5, tq - 0.06);
-    }
     if (img.close) { try { img.close(); } catch(e) {} }
     if (out.length > REVEAL_MAX_CHARS) throw new Error('size');
-    return { src:out, w, h, thumb: thumb.length < out.length ? thumb : out, tw: thumb.length < out.length ? tw : w };
+    return { src:out, w, h };
   });
 }
 // `extra`: a vendég feltöltése { pending:true, by:<név> } — az operátoré mehet egyből.
 function revealUpload(file, extra) {
   return revealCompress(file).then(r => {
     const db = revealDb(); if (!db) throw new Error('offline');
-    // ⚠️ előbb a teljes kép: amikor a fő dokumentum megjelenik, a teljes már ott van
-    const ref = db.collection('revealPhotos').doc();
-    return revealRetry(() => db.collection('revealFull').doc(ref.id).set({ src:r.src, at:Date.now() }), 3)
-      .then(() => ref.set(Object.assign({ src:r.thumb, full:true, tw:r.tw, w:r.w, h:r.h, at:Date.now(), hidden:false, pending:false }, extra || {})))
-      .then(() => ref);
+    return db.collection('revealPhotos').add(Object.assign({ src:r.src, w:r.w, h:r.h, at:Date.now(), hidden:false, pending:false }, extra || {}));
   });
-}
-// v10.465: a teljes kép igény szerint, kis LRU-gyorsítótárral (csak a falon lévők és a következő).
-// Régi dokumentumnál (`full` nélkül) az `src` maga a teljes kép.
-const revealFullCache = new Map(), revealFullWait = new Map();
-function revealFullCached(p) { return !p ? null : !p.full ? p.src : (revealFullCache.get(p.id) || null); }
-function revealFetchFull(p) {
-  if (!p || !p.full) return Promise.resolve(p ? p.src : null);
-  const hit = revealFullCache.get(p.id);
-  if (hit) { revealFullCache.delete(p.id); revealFullCache.set(p.id, hit); return Promise.resolve(hit); }
-  if (revealFullWait.has(p.id)) return revealFullWait.get(p.id);
-  const db = revealDb(); if (!db) return Promise.resolve(p.src);
-  const pr = revealRetry(() => db.collection('revealFull').doc(p.id).get(), 3).then(d => {
-    const src = d && d.exists && d.data() && d.data().src;
-    if (!src) return p.src;                                  // nincs teljes → marad a bélyeg
-    revealFullCache.set(p.id, src);
-    while (revealFullCache.size > REVEAL_FULL_CACHE) revealFullCache.delete(revealFullCache.keys().next().value);
-    return src;
-  }).catch(() => p.src).then(src => { revealFullWait.delete(p.id); return src; });
-  revealFullWait.set(p.id, pr);
-  return pr;
-}
-// A teljes kép, amint megjött — addig a bélyeg (soha nincs üres kép).
-function useRevealFullSrc(p, want) {
-  const [src, setSrc] = React.useState(() => revealFullCached(p));
-  React.useEffect(() => {
-    if (!p || want === false) return;
-    const c = revealFullCached(p); if (c) { setSrc(c); return; }
-    let dead = false; revealFetchFull(p).then(x => { if (!dead) setSrc(x); });
-    return () => { dead = true; };
-  }, [p && p.id, p && p.full, want]);
-  // a régi (full nélküli) képnél az `src` maga a teljes kép
-  return { src: (want === false ? null : src) || (p && p.src), isFull: !!p && (!p.full || (want !== false && !!src && src !== p.src)) };
-}
-function RevealFullImg({ p, want, style, alt }) {
-  const r = useRevealFullSrc(p, want);
-  return <img src={r.src} alt={alt || ''} data-reveal-full={r.isFull ? '1' : '0'} style={style} />;
-}
-// A ZIP-hez minden jóváhagyott kép teljes méretben (4 szálon)
-function revealWithFull(items) {
-  const list = items.slice(), idx = list.map((p, i) => (p && p.full && !p.hidden && !p.pending) ? i : -1).filter(i => i >= 0);
-  let next = 0;
-  const worker = () => next >= idx.length ? Promise.resolve() : (i => revealFetchFull(list[i]).then(src => { list[i] = Object.assign({}, list[i], { src }); }).then(worker))(idx[next++]);
-  return Promise.all([0, 1, 2, 3].map(worker)).then(() => list);
 }
 function revealSendWish(text, by, gid) {
   const db = revealDb(); if (!db) return Promise.reject(new Error('offline'));
@@ -43152,11 +43092,7 @@ function revealSendWish(text, by, gid) {
 // v10.449: jóváhagyás / eldobás — az operátor ÉS a Szülők ugyanezt hívja.
 // ⚠️ Jóváhagyáskor az `at` friss lesz: így a vetítő ÚJ tételnek látja, és rögtön a mostani után jön.
 function revealApprove(p) { const db = revealDb(); if (db && p) db.collection('revealPhotos').doc(p.id).set({ pending:false, at:Date.now() }, { merge:true }).catch(() => {}); }
-function revealRemove(p) {
-  const db = revealDb(); if (!db || !p) return;
-  db.collection('revealPhotos').doc(p.id).delete().catch(() => {});
-  if (p.full) { revealFullCache.delete(p.id); db.collection('revealFull').doc(p.id).delete().catch(() => {}); }   // v10.465
-}
+function revealRemove(p) { const db = revealDb(); if (db && p) db.collection('revealPhotos').doc(p.id).delete().catch(() => {}); }
 // v10.449: vendég-azonosító ESZKÖZÖNKÉNT (nem név szerint) — a „Nem te vagy?" névcsere nem
 // nyit új keretet. Egy vendég 1 képet + 1 üzenetet küldhet; ha a beküldését eldobják
 // (törlődik), újra küldhet.
@@ -43231,12 +43167,9 @@ function revealDownload(blob, name) {
   setTimeout(() => URL.revokeObjectURL(u), 4000);
 }
 function revealDownloadAlbum(items) {
-  // v10.465: a listában csak bélyeg van — a ZIP-be a teljes képek kerülnek
-  return revealWithFull(items).then(full => {
-    const r = revealBuildAlbum(full);
-    revealDownload(r.blob, 'gender_reveal_album.zip');
-    return r.count;
-  });
+  const r = revealBuildAlbum(items);
+  revealDownload(r.blob, 'gender_reveal_album.zip');
+  return r.count;
 }
 
 // ── Hang: dobpergés + cintányér (WebAudio, fájl nélkül) ──────────────────────────
@@ -43326,11 +43259,7 @@ function useRevealSequence(photos, loaded, secs, paused) {
     return () => clearTimeout(t);
   }, [cur && cur.key, secs, paused]);
   const next = React.useCallback(() => advRef.current(), []);
-  // v10.465: ki jön legközelebb (az előtöltéshez) — a sor eleje, vagy a kör következője
-  const s0 = st.current, qi = s0.queue.find(id => byId[id]);
-  const ri = s0.lastRegular ? photos.findIndex(p => p.id === s0.lastRegular) : -1;
-  const upcoming = qi ? byId[qi] : (photos.length ? photos[(ri + 1) % photos.length] : null);
-  return { cur, photo: cur ? byId[cur.id] : null, next, upcoming };
+  return { cur, photo: cur ? byId[cur.id] : null, next };
 }
 
 // ── A polaroid-asztal (v10.433, v10.434) ────────────────────────────────────────
@@ -43427,7 +43356,7 @@ function RevealWishPolaroid({ text, by, width }) {
     </div>
   );
 }
-function RevealBoardCard({ item, g, z, isNew, isCur, hideVotes, hiRes }) {
+function RevealBoardCard({ item, g, z, isNew, isCur, hideVotes }) {
   const wish = item.kind === 'wish';
   // az üzenetnél a küldő neve a lényeg — az ÚJ jelzést ott a sarok-jelvény adja
   const cap = wish ? (item.by ? '— ' + item.by : (isNew ? '✨ friss! ✨' : '')) : (isNew ? '✨ friss! ✨' : (item.by || ''));
@@ -43439,7 +43368,7 @@ function RevealBoardCard({ item, g, z, isNew, isCur, hideVotes, hiRes }) {
         boxShadow: isCur ? '0 2.6vh 6vh rgba(60,40,20,0.28)' : '0 1.4vh 3.4vh rgba(60,40,20,0.18)', animation: isCur ? 'revealDrop 0.9s cubic-bezier(.2,1.2,.4,1) both' : undefined, ['--rot']: g.rot.toFixed(2) + 'deg' }}>
       {wish && <RevealWishTape w={g.cw} pad={g.pad} />}
       {wish ? <RevealWishFace text={item.text} w={g.iw} h={g.ih} /> : (
-        <RevealFullImg p={item} want={hiRes !== false} style={{ display:'block', width: g.iw, height: g.ih, objectFit:'cover', borderRadius:2 }} />
+        <img src={item.src} alt="" style={{ display:'block', width: g.iw, height: g.ih, objectFit:'cover', borderRadius:2 }} />
       )}
       {vs.length > 0 && <div data-reveal-cardvotes={vs.join(',')} aria-hidden="true" style={{ position:'absolute', right: g.pad, bottom:0, height: g.bottom, display:'flex', alignItems:'center', gap:2, fontSize: Math.max(13, g.bottom * 0.42), lineHeight:1 }}>{vs.map((v, i) => <span key={i}>{REVEAL_RESULTS[v].emoji}</span>)}</div>}
       {cap && <div style={{ position:'absolute', left:0, right:0, bottom:0, height: g.bottom, display:'flex', alignItems:'center', justifyContent:'center', padding: vs.length ? `0 ${Math.round(g.bottom * (vs.length > 1 ? 1.5 : 1))}px` : '0 8px', boxSizing:'border-box',
@@ -44020,8 +43949,6 @@ function RevealProjector({ title, cfg, onExit, watch }) {
   const soundOk = medSrcs.length > 0 && medSrcs.every(u => snd[u] === true);
   React.useEffect(() => { if (cfg && !watch) revealEnsureKeys(cfg); }, [cfg && cfg.guestKey, cfg && cfg.albumKey, !!cfg]);
   const seq = useRevealSequence(photos, loaded, secs, paused || !!show || !!qstate);
-  // v10.465: a következő lap teljes képe előre (a buli vetítőjén; a néző a lapmérettől függően)
-  React.useEffect(() => { if (seq.upcoming && seq.upcoming.full && (!watch || vp.w * (window.devicePixelRatio || 1) > (seq.upcoming.tw || REVEAL_THUMB_SIDE) * 1.5)) revealFetchFull(seq.upcoming); }, [seq.upcoming && seq.upcoming.id]);
   const qrUrl = revealGuestUrl(cfg);
   // ── időzített leleplezés: az admin időpontja + a szülő engedélye (`phase:'armed'`) ──
   const revealAt = +((cfg && cfg.revealAt) || 0);
@@ -44176,9 +44103,7 @@ function RevealProjector({ title, cfg, onExit, watch }) {
     return (
       <div data-reveal-board data-slots={nSlots} style={{ position:'absolute', left:0, right:0, top:topEdge, height:Math.max(1, boardH - topEdge), zIndex:1, isolation:'isolate' }}>
         {slots.map((s, i) => { const it = s && byId[s.id]; if (!it) return null;
-          const g = revealCardGeom(i, nSlots, vp.w, Math.max(1, boardH - topEdge), it, s.key, topEdge > 0 || boardH < vp.h);
-          // v10.465: a buli vetítője mindig teljes képet tesz ki; a távoli néző csak akkor, ha a lap nagyobb a bélyegnél
-          return <RevealBoardCard key={s.key} item={it} g={g} z={s.z} isNew={s.isNew} isCur={s.key === seq.cur.key} hideVotes={!showVotes} hiRes={!watch || g.iw * (window.devicePixelRatio || 1) > (it.tw || REVEAL_THUMB_SIDE) * 1.05} />; })}
+          return <RevealBoardCard key={s.key} item={it} g={revealCardGeom(i, nSlots, vp.w, Math.max(1, boardH - topEdge), it, s.key, topEdge > 0 || boardH < vp.h)} z={s.z} isNew={s.isNew} isCur={s.key === seq.cur.key} hideVotes={!showVotes} />; })}
         {seq.cur.isNew && <RevealNewBadge wish={seq.photo.kind === 'wish'} />}
       </div>
     );
@@ -44565,7 +44490,7 @@ function RevealOperator({ onBack }) {
       {zoom && (
         // teljes képernyős nézet — a kép a lehető legnagyobb; koppintásra bezárul
         <div data-reveal-oplightbox onClick={() => setZoom(null)} style={{ position:'fixed', inset:0, zIndex:7000, background:'#000', display:'flex', alignItems:'center', justifyContent:'center', cursor:'zoom-out' }}>
-          <RevealFullImg p={zoom} style={{ maxWidth:'100%', maxHeight:'100%', objectFit:'contain', display:'block' }} />
+          <img src={zoom.src} alt="" style={{ maxWidth:'100%', maxHeight:'100%', objectFit:'contain', display:'block' }} />
           <button type="button" onClick={e => { e.stopPropagation(); setZoom(null); }} style={rvBtn('small', { position:'absolute', top:'calc(12px + env(safe-area-inset-top))', right:12, background:'rgba(255,255,255,0.92)', border:'none' })}>Bezárás</button>
           {zoom.by && <div style={{ position:'absolute', left:16, bottom:'calc(16px + env(safe-area-inset-bottom))', padding:'6px 12px', borderRadius:999, background:'rgba(0,0,0,0.6)', color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:13 }}>{zoom.by}</div>}
         </div>
@@ -44773,7 +44698,7 @@ function RevealAlbum({ cfg }) {
       </div>
       {open >= 0 && photos[open] && ReactDOM.createPortal(
         <div data-reveal-lightbox onClick={() => setOpen(-1)} style={{ position:'fixed', inset:0, zIndex:7000, background:'rgba(0,0,0,0.92)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <RevealFullImg key={photos[open].id} p={photos[open]} style={{ maxWidth:'96vw', maxHeight:'90vh', objectFit:'contain' }} />
+          <img src={photos[open].src} alt="" style={{ maxWidth:'96vw', maxHeight:'90vh', objectFit:'contain' }} />
           {open > 0 && <button onClick={e => { e.stopPropagation(); setOpen(open - 1); }} aria-label="Előző" style={{ position:'absolute', left:12, top:'50%', width:46, height:46, borderRadius:'50%', border:'none', background:'rgba(255,255,255,0.2)', color:'#fff', fontSize:24, cursor:'pointer' }}>‹</button>}
           {open < photos.length - 1 && <button onClick={e => { e.stopPropagation(); setOpen(open + 1); }} aria-label="Következő" style={{ position:'absolute', right:12, top:'50%', width:46, height:46, borderRadius:'50%', border:'none', background:'rgba(255,255,255,0.2)', color:'#fff', fontSize:24, cursor:'pointer' }}>›</button>}
         </div>, document.body)}
@@ -45480,7 +45405,7 @@ function RevealAlbumCard() {
   const download = () => {
     if (!db) return;
     db.collection('revealPhotos').get().then(snap => {
-      return revealDownloadAlbum(snap.docs.map(d => Object.assign({ id:d.id }, d.data()))).then(n => flash(`Album letöltve (${n} fájl)`));
+      const n = revealDownloadAlbum(snap.docs.map(d => Object.assign({ id:d.id }, d.data()))); flash(`Album letöltve (${n} fájl)`);
     }).catch(() => flash('Az album nem sikerült'));
   };
   const clearAll = () => {
@@ -45491,7 +45416,7 @@ function RevealAlbumCard() {
       const chunks = []; for (let i = 0; i < refs.length; i += 400) chunks.push(refs.slice(i, i + 400));
       return chunks.reduce((p, ch) => p.then(() => { const bt = db.batch(); ch.forEach(r => bt.delete(r)); return bt.commit(); }), Promise.resolve()).then(() => refs.length);
     });
-    wipe('revealPhotos').then(n => wipe('revealFull').then(() => wipe('revealQuizAns')).then(() => n))
+    wipe('revealPhotos').then(n => wipe('revealQuizAns').then(() => n))
       .then(n => { setClearing(false); flash(`${n} kép és üzenet törölve`); }).catch(() => { setClearing(false); flash('Az ürítés nem sikerült'); });
   };
   return (

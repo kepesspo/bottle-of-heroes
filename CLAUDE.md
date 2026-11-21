@@ -4379,33 +4379,10 @@ mint a `RV_TONES.ok` tintája), és nincs mögötte „kész" szó: `🔊 hang �
 hibás állapota marad piros, teljes mondattal („🔇 kattints egyet a hangért"), mert ott
 teendő van. Teszt: `reveal_extras_test.js` 3c. blokk (zöld, és nincs „kész").
 
-## ⚠️ Gender Reveal: bélyegkép a listákban, teljes kép csak igény szerint (v10.465)
-A `revealPhotos` figyelője (vetítő, élő nézők, operátor, vendég, album) **minden** dokumentumot
-a memóriában tart. Teljes méretű képekkel (≤ 900 000 kar.) 150–200 képnél ez több száz MB
-lett volna. Innentől feltöltéskor **két** kép keletkezik:
-- `revealPhotos/<id>.src` = **bélyeg** (≤ `REVEAL_THUMB_SIDE` 800 px, ≤ `REVEAL_THUMB_CHARS`
-  150 000 kar.), mellette `full:true` és `tw` (a bélyeg valódi szélessége). A `w`/`h` a
-  TELJES kép mérete marad (a fal aránya ebből jön);
-- `revealFull/<id>.src` = a **teljes** kép (≤ 1920 px). ⚠️ Előbb ez íródik, utána a fő
-  dokumentum — amikor a fő megjelenik, a teljes már ott van.
-
-**Ki kér teljes képet** (`useRevealFullSrc` / `RevealFullImg` / `revealFetchFull`, LRU
-gyorsítótár: `REVEAL_FULL_CACHE` = 8): a **buli vetítőjének** falán lévő lapok MINDIG; a
-**távoli néző** (`watch`) csak akkor, ha a lap nagyobb a bélyegnél
-(`g.iw × dpr > tw × 1,05`), telefonon tehát a bélyeget kapja; az **operátor nagyítása**,
-az **album nagyítása** és a **ZIP** (`revealWithFull`). Minden más (operátor lapozó,
-bélyegcsík, jóváhagyás, vendég „Beküldéseid", album rács) a bélyeget mutatja. Amíg a
-teljes kép tölt, a bélyeg látszik — üres kép soha. A következő lapot a vetítő előre
-betölti (`seq.upcoming`).
-
-Amit könnyű elrontani:
-- **Régi (full nélküli) dokumentum**: az `src` maga a teljes kép, és változatlanul működik.
-  Ezért NINCS migráció.
-- **Törlés és ürítés a `revealFull`-t is viszi** (`revealRemove`, az album-kártya
-  ürítése). Új törlési útnál ezt ne felejtsd el, különben árva teljes képek maradnak.
-- ⚠️ **A Firestore-szabályoknak a `revealFull` gyűjteményt is engedniük kell** (írás,
-  olvasás, törlés). Enélkül a feltöltés már az első lépésnél elbukik.
-Teszt: `node tests/reveal_thumb_test.js` (a mérés a STORE-ra megy: a felület mindkét
-esetben képet mutat, a memória-különbség csak ott látszik; a buli vetítője teljes képet tesz
-ki, a régi kép is megy, a telefonos néző bélyeget kap — kontrollal nagy kijelzőn —, a
-nagyítás teljes, a ZIP teljes, a törlés és az ürítés a `revealFull`-t is viszi).
+### v10.465 visszavonva (v10.466)
+A v10.465 (bélyegkép a listákban, teljes kép a `revealFull` gyűjteményben) tulajdonosi
+döntésre **visszavonva** — a kód a v10.464 állapotán áll, csak a verziószám lépett
+(v10.466), hogy a már v10.465-öt futtató eszközök is frissüljenek. Ha valaki a v10.465
+alatt töltött fel képet, annak a `revealPhotos` dokumentumában csak a bélyeg (≤ 800 px)
+van, a teljes kép a `revealFull`-ban maradt — a vetítő ilyenkor a bélyeget mutatja.
+Ha a memória-kérdés később újra előjön, a megoldás a git-előzményben van (`0bc4609`).
