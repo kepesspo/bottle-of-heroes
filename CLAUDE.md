@@ -4237,3 +4237,18 @@ Teszt: `reveal_extras_test.js` 3b2. blokk — egy valódi, 1 mp-es webm-mel
 (`tests/fixtures/tiny_reveal.webm`, ffmpeg-gel készült) a szakaszok sorrendje
 `count > video > none` (NINCS `boom`), és a vetítő a kiderült színnel folytatja; YouTube-
 linknél nincs `<video>`, a robbanás jön.
+
+## Gender Reveal: nagy (80 MB+) leleplező videó (v10.457)
+A `REVEAL_VIDEO_MAX` 60 → **200 MB**. Egy 80 MB-os videó ~117 darab (≈ 107 MB base64 a
+Firestore-ban). Két dolog kellett hozzá, nem csak a szám:
+- **A feltöltés darabonként olvas** (`file.slice(...).arrayBuffer()`), nem `file.arrayBuffer()`
+  egyben — az egész fájl + a base64-másolat egy telefon memóriáját vinné el. Darabonként 3
+  próba (`revealRetry`), mert a telefonos net egy-egy írást elejthet.
+- **A vetítő id alapján tölt** (`revealVideoPartId(vid, i)`), 4 szálon, darabonként rögtön
+  visszafejtve — nem egyetlen ~110 MB-os `collection.get()`-tel. A sávon százalék látszik
+  („🎬 videó töltődik… 40%"), a Szülőknél is („Feltöltés… 34% (40 / 117)").
+⚠️ A darab-index 3 jegyű (`_NNN`) → legfeljebb 999 darab ≈ 690 MB; a plafon ezért nem
+emelhető tetszőlegesen a padding nélkül.
+Teszt: `reveal_extras_test.js` 3c. blokk — 85 MB-os fájl: 130 darab, mind 1 MB alatt, a régi
+darabok törölve, és a vetítő „videó kész".
+

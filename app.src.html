@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.456';
+const APP_VERSION = 'v10.457';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -43688,7 +43688,10 @@ function RevealQuizStage({ qstate, narrow }) {
 // darabokban megy (690 000 nyers bájt ≈ 920 KB base64). A `config/revealVideo` meta CSAK a
 // teljes feltöltés UTÁN kapja meg a `vid`-et — addig `uploading:true`, a vetítő nem tölt.
 const REVEAL_VIDEO_CHUNK = 690000;
-const REVEAL_VIDEO_MAX = 60 * 1024 * 1024;
+const REVEAL_VIDEO_MAX = 200 * 1024 * 1024;   // v10.457: 60 → 200 MB (egy 80 MB-os videó ~117 darab)
+function revealVideoPartId(vid, i) { return vid + '_' + String(i).padStart(3, '0'); }
+// hálózati hibánál (telefonos net) egy darab 3-szor is próbálkozik, mielőtt az egész elbukna
+function revealRetry(fn, tries) { return fn().catch(e => (tries > 1 ? new Promise(r => setTimeout(r, 800)).then(() => revealRetry(fn, tries - 1)) : Promise.reject(e))); }
 function revealB64(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
 function revealUnB64(b) { const s = atob(b), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
 function revealWipeVideo(db) { return db.collection('revealVideo').get().then(snap => snap.docs.reduce((p, d) => p.then(() => d.ref.delete()), Promise.resolve())); }
@@ -43698,12 +43701,15 @@ function revealUploadVideo(file, onProg) {
   const vid = revealToken(), meta = db.collection('config').doc('revealVideo');
   return meta.set({ vid:null, uploading:true, at:Date.now() })
     .then(() => revealWipeVideo(db))
-    .then(() => file.arrayBuffer())
-    .then(buf => {
-      const u8 = new Uint8Array(buf), CH = REVEAL_VIDEO_CHUNK, n = Math.max(1, Math.ceil(u8.length / CH));
+    .then(() => {
+      // ⚠️ darabonként olvasunk (file.slice) — egy 80 MB-os fájl egyben + base64-ben a telefon memóriáját vinné el
+      const CH = REVEAL_VIDEO_CHUNK, size = file.size, n = Math.max(1, Math.ceil(size / CH));
       let p = Promise.resolve();
-      for (let i = 0; i < n; i++) p = p.then(() => db.collection('revealVideo').doc(vid + '_' + String(i).padStart(3, '0')).set({ vid, i, d: revealB64(u8.subarray(i * CH, (i + 1) * CH)) })).then(() => onProg && onProg(i + 1, n));
-      return p.then(() => meta.set({ vid, n, name: file.name || 'videó', type: file.type || 'video/mp4', size: u8.length, at: Date.now(), uploading:false }));
+      for (let i = 0; i < n; i++) p = p
+        .then(() => file.slice(i * CH, Math.min(size, (i + 1) * CH)).arrayBuffer())
+        .then(b => { const d = revealB64(new Uint8Array(b)); return revealRetry(() => db.collection('revealVideo').doc(revealVideoPartId(vid, i)).set({ vid, i, d }), 3); })
+        .then(() => onProg && onProg(i + 1, n));
+      return p.then(() => meta.set({ vid, n, name: file.name || 'videó', type: file.type || 'video/mp4', size, at: Date.now(), uploading:false }));
     })
     .catch(e => meta.set({ vid:null, uploading:false, at:Date.now() }).then(() => { throw e; }));
 }
@@ -43717,14 +43723,25 @@ function useRevealVideo() {
     if (!meta.loaded || m.uploading) return;
     if (!m.vid) { setSt(o => { if (o.url) try { URL.revokeObjectURL(o.url); } catch(e) {} return { id:null, url:null, name:'', loading:false }; }); return; }
     let dead = false; const db = revealDb(); if (!db) return;
-    setSt(o => Object.assign({}, o, { loading:true }));
-    db.collection('revealVideo').get().then(snap => {
+    setSt(o => Object.assign({}, o, { loading:true, pct:0 }));
+    // id alapján, 4 szálon, darabonként rögtön visszafejtve — nem egy ~110 MB-os lekérdezés egyben
+    const n = m.n || 0, bins = new Array(n); let next = 0, done = 0;
+    const worker = () => {
+      if (dead || next >= n) return Promise.resolve();
+      const i = next++;
+      return revealRetry(() => db.collection('revealVideo').doc(revealVideoPartId(m.vid, i)).get(), 3).then(snap => {
+        const x = snap.exists ? snap.data() : null;
+        if (!x || x.vid !== m.vid || !x.d) throw new Error('hiányos');
+        bins[i] = revealUnB64(x.d); done++;
+        if (!dead) setSt(o => Object.assign({}, o, { pct: Math.round(done * 100 / n) }));
+      }).then(worker);
+    };
+    Promise.all([0, 1, 2, 3].map(worker)).then(() => {
       if (dead) return;
-      const parts = snap.docs.map(d => d.data()).filter(x => x.vid === m.vid).sort((a, b) => a.i - b.i);
-      if (parts.length !== m.n) throw new Error('hiányos');
-      const url = URL.createObjectURL(new Blob(parts.map(x => revealUnB64(x.d)), { type: m.type || 'video/mp4' }));
-      setSt(o => { if (o.url) try { URL.revokeObjectURL(o.url); } catch(e) {} return { id:m.vid, url, name:m.name || 'videó', loading:false }; });
-    }).catch(() => { if (!dead) setSt(o => Object.assign({}, o, { loading:false })); });
+      if (!n || done !== n) throw new Error('hiányos');
+      const url = URL.createObjectURL(new Blob(bins, { type: m.type || 'video/mp4' }));
+      setSt(o => { if (o.url) try { URL.revokeObjectURL(o.url); } catch(e) {} return { id:m.vid, url, name:m.name || 'videó', loading:false, pct:100 }; });
+    }).catch(() => { if (!dead) setSt(o => Object.assign({}, o, { loading:false, failed:true })); });
     return () => { dead = true; };
   }, [meta.loaded, m.vid, m.uploading]);
   return st;
@@ -43995,7 +44012,7 @@ function RevealProjector({ title, cfg, onExit }) {
         padding: narrow ? '10px 12px' : '14px 18px', background:`linear-gradient(${REVEAL_PAPER}F2 55%, ${REVEAL_PAPER}00)`, opacity: ui ? 1 : 0, pointerEvents: ui ? 'auto' : 'none', transition:'opacity .4s', zIndex:70, scrollbarWidth:'none' }}>
         <button data-reveal-exit onClick={() => { try { if (document.fullscreenElement) document.exitFullscreen(); } catch(e) {} onExit(); }} aria-label="Vissza" style={chip(false)}>‹ Vissza</button>
         <div style={{ flex:1, minWidth:8 }} />
-        {(video.url || video.loading) && <span data-reveal-videoready={video.url ? '1' : '0'} style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:REVEAL_INK, opacity:0.7 }}>{video.url ? '🎬 videó kész' : '🎬 videó töltődik…'}</span>}
+        {(video.url || video.loading) && <span data-reveal-videoready={video.url ? '1' : '0'} style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:REVEAL_INK, opacity:0.7 }}>{video.url ? '🎬 videó kész' : `🎬 videó töltődik… ${video.pct || 0}%`}</span>}
         {paused && <span data-reveal-paused style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:REVEAL_INK, opacity:0.7 }}>⏸ Szünet</span>}
         <button data-reveal-fs onClick={toggleFs} style={chip(fs)}>{fs ? 'Kilépés a teljes képernyőből' : '⛶ Teljes képernyő'}</button>
       </div>
@@ -44970,7 +44987,7 @@ function RevealVideoRow() {
       .then(() => { setProg(null); flash('Feltöltve'); })
       .catch(e => { setProg(null); flash((e && e.message) || 'A feltöltés nem sikerült'); });
   };
-  const status = prog ? `Feltöltés… ${prog.done} / ${prog.n}` : m.uploading ? 'Feltöltés folyamatban…' : m.vid ? `${m.name || 'videó'} · ${(m.size / 1048576).toFixed(1)} MB` : `Nincs — max. ${Math.round(REVEAL_VIDEO_MAX / 1048576)} MB, a visszaszámlálás után megy`;
+  const status = prog ? `Feltöltés… ${Math.round(prog.done * 100 / Math.max(1, prog.n))}% (${prog.done} / ${prog.n})` : m.uploading ? 'Feltöltés folyamatban…' : m.vid ? `${m.name || 'videó'} · ${(m.size / 1048576).toFixed(1)} MB` : `Nincs — max. ${Math.round(REVEAL_VIDEO_MAX / 1048576)} MB, a visszaszámlálás után megy`;
   return (
     <div data-reveal-p-video data-has={m.vid ? '1' : '0'} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 12px 10px 16px', borderTop:`1px solid ${T.border}` }}>
       {rvIconBox('video', m.vid ? 'ok' : 'warn')}

@@ -232,6 +232,18 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   const vsrc = await p.evaluate(() => { const v = document.querySelector('video[data-reveal-video]'); return v ? v.getAttribute('src') : null; });
   ok(vsrc && vsrc.startsWith('blob:'), 'a leleplezés a feltöltött videót viszi', vsrc);
   await p.waitForFunction(() => !document.querySelector('[data-reveal-show]'), null, { timeout: 6000 }).catch(() => {});
+  // v10.457: nagy (85 MB) videó — darabonként olvasva fel, és a vetítő be is tölti
+  const vbig = vf.replace('fake_reveal.mp4', 'fake_reveal_big.mp4'); const BIG = 85 * 1048576;
+  fs.writeFileSync(vbig, Buffer.alloc(BIG, 3));
+  await p.setInputFiles('#__side [data-reveal-p-videoinput]', vbig);
+  await p.waitForFunction(B => { const m = (window.__fbStore.config || {}).revealVideo; return m && m.vid && m.size === B; }, BIG, { timeout: 120000 }).catch(() => {});
+  const vb = await p.evaluate(() => { const m = window.__fbStore.config.revealVideo || {}, ch = Object.values(window.__fbStore.revealVideo || {});
+    return { n: m.n, size: m.size, chunks: ch.filter(c => c.vid === m.vid).length, stale: ch.filter(c => c.vid !== m.vid).length, maxLen: Math.max(0, ...ch.map(c => c.d.length)) }; });
+  ok(vb.size === BIG && vb.n === Math.ceil(BIG / 690000) && vb.chunks === vb.n && vb.stale === 0 && vb.maxLen < 1000000, '85 MB-os videó: feltöltve, minden darab 1 MB alatt, a régi darabok törölve', JSON.stringify(vb));
+  await p.waitForFunction(() => !!document.querySelector('[data-reveal-videoready="1"]'), null, { timeout: 60000 }).catch(() => {});
+  const vbsz = await p.evaluate(() => { const v = document.querySelector('[data-reveal-videoready="1"]'); return v ? 1 : 0; });
+  ok(vbsz === 1, 'a vetítő a 85 MB-os videót is betöltötte („videó kész")');
+  fs.unlinkSync(vbig);
   await p.click('#__side [data-reveal-p-videodel]'); await p.waitForTimeout(100);
   await p.locator('button:text-is("Törlés")').last().click(); await p.waitForTimeout(400);
   const vgone = await p.evaluate(() => ({ vid: (window.__fbStore.config.revealVideo || {}).vid, ch: Object.keys(window.__fbStore.revealVideo || {}).length }));
