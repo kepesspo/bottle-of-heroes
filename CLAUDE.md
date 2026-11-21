@@ -4362,3 +4362,12 @@ vendég- és a galéria-link között.
 Teszt: `reveal_extras_test.js` 9. blokk (kulcs, jelszó nélkül néző-mód, az elmúlt időpontú
 engedélyezett leleplezést NEM indítja, a szóköz nem ír szünetet, nincs várakozó-szám, a
 menet közben érkező leleplezés lejátszódik, telefonon is vetít, rossz kulcs).
+
+### A média-állapot is a bal alsó csipben (v10.463)
+A „🎵 (alap)zene kész” (`data-reveal-musicready`) és a „🎬 videó kész”
+(`data-reveal-videoready`) a felső vezérlősávból a bal alsó szervezői csipbe
+(`data-reveal-tally`) került, a hang-állapot után. Töltés közben a csip százalékot mutat
+(„🎵 zene 40%”). Ezek a szervezőknek szólnak, nem a vendégeknek, ezért a felső sávon
+csak a Vissza / ÉLŐ jelzés, a Szünet és a Teljes képernyő maradt. A csip leleplezés és
+kvíz alatt nem látszik (`cornersOn`), tehát az állapotot a show előtt kell ellenőrizni.
+Teszt: `reveal_extras_test.js` 3c. blokk (a jelzés a csipben van, a felső sávban nincs).

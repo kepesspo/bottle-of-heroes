@@ -254,6 +254,9 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(await p.evaluate(() => Object.values(window.__fbStore.revealVideo || {}).length === 3), '…és a videó darabjai érintetlenek');
   await p.waitForFunction(() => !!document.querySelector('[data-reveal-musicready="1"]'), null, { timeout: 5000 }).catch(() => {});
   ok(await has('[data-reveal-musicready="1"]'), '…a vetítő előre betöltötte („zene kész")');
+  ok(await p.evaluate(() => { const m = document.querySelector('[data-reveal-musicready]'), v = document.querySelector('[data-reveal-videoready]');
+    return !!m && !!m.closest('[data-reveal-tally]') && (!v || !!v.closest('[data-reveal-tally]')) && !document.querySelector('[data-reveal-controls] [data-reveal-musicready], [data-reveal-controls] [data-reveal-videoready]'); }),
+    'v10.463: a zene-/videó-állapot a bal alsó csipben, nem a felső sávban');
   await p.evaluate(() => { window.__plays = []; const orig = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { window.__plays.push({ tag: this.tagName, blob: String(this.src).startsWith('blob:'), vol: this.volume }); return orig.apply(this, arguments); }; });
   await p.evaluate(() => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'vid2', test: false, result: 'girl', videoUrl: '', at: Date.now() }));
   await p.waitForTimeout(150);
