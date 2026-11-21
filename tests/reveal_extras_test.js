@@ -86,10 +86,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   st = await store();
   ok(st.c.revealSecret.result === 'girl' && st.c.revealSecret.code === '2026', 'az eredmény koppintásra a TITKOS dokumentumba megy', JSON.stringify(st.c.revealSecret));
   ok(!st.c.revealState, '⚠️ a leleplezésig a revealState-ben nincs eredmény');
-  await p.fill('#__side [data-reveal-p-videourl]', 'https://www.youtube.com/watch?v=abc'); await p.waitForTimeout(800);
-  ok(await has('#__side [data-reveal-p-videowarn]') && (await store()).c.revealSecret.videoUrl === 'https://www.youtube.com/watch?v=abc', 'YouTube-linkre figyelmeztet (nem játszható le), a link azért mentődik');
-  await p.fill('#__side [data-reveal-p-videourl]', ''); await p.waitForTimeout(800);
-  ok(!(await has('#__side [data-reveal-p-videowarn]')) && (await store()).c.revealSecret.videoUrl === '', 'a link törölhető');
+  ok(!(await has('#__side [data-reveal-p-videourl]')), 'v10.456: a titkos kártyán NINCS videó-link mező (a videót feltöltik)');
   await p.fill('#__side [data-reveal-p-code]', '20'); await p.waitForTimeout(60);
   ok(await p.evaluate(() => document.querySelector('#__side [data-reveal-p-codesave]').disabled), 'a kódcsere rövid kóddal tiltott');
   await p.fill('#__side [data-reveal-p-code]', '2026'); await p.waitForTimeout(60);
@@ -195,6 +192,23 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(vs === 'video' || vs === 'boom', 'a visszaszámlálás után a videó-szakasz jön', vs);
   await p.waitForFunction(() => { const e = document.querySelector('[data-reveal-show]'); return e && e.getAttribute('data-reveal-show') === 'boom'; }, null, { timeout: 4000 }).catch(() => {});
   ok((await attr('[data-reveal-show]', 'data-reveal-boom')) === 'girl', 'betölthetetlen videónál is a robbanás jön');
+  await p.waitForFunction(() => !document.querySelector('[data-reveal-show]'), null, { timeout: 4000 }).catch(() => {});
+
+  console.log('\n===== 3b2. VIDEÓ LEMENT → NINCS „KISLÁNY!" KÉPERNYŐ, A VETÍTŐ JÖN (v10.456) =====');
+  const tinyVid = 'file://' + ROOT + '/tests/fixtures/tiny_reveal.webm';   // 1 mp-es webm (ffmpeg, rózsaszín kép)
+  await p.evaluate(() => { window.__stages = []; const mo = new MutationObserver(() => { const e = document.querySelector('[data-reveal-show]'); const v = e ? e.getAttribute('data-reveal-show') : 'none'; if (window.__stages[window.__stages.length - 1] !== v) window.__stages.push(v); });
+    mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-reveal-show'] }); window.__stMo = mo; });
+  await p.evaluate(u => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'vidok', test: false, result: 'girl', videoUrl: u, at: Date.now() }), tinyVid);
+  await p.waitForFunction(() => window.__stages.includes('video'), null, { timeout: 6000 }).catch(() => {});
+  await p.waitForFunction(() => !document.querySelector('[data-reveal-show]'), null, { timeout: 8000 }).catch(() => {});
+  const stg = await p.evaluate(() => { window.__stMo.disconnect(); return window.__stages.join('>'); });
+  ok(stg.includes('video') && !stg.includes('boom'), 'a videó lement, és utána NEM jött robbanás-képernyő', stg);
+  ok((await attr('[data-reveal-projector]', 'data-reveal-revealed')) === 'girl', 'a vetítő a kiderült színnel folytatja');
+  await p.evaluate(() => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'vidyt', test: false, result: 'girl', videoUrl: 'https://www.youtube.com/watch?v=abc', at: Date.now() }));
+  await p.waitForTimeout(150);
+  ok(!(await has('[data-reveal-show] video[data-reveal-video]')), 'YouTube-linket a vetítő nem próbál lejátszani (nincs <video>)');
+  await p.waitForFunction(() => { const e = document.querySelector('[data-reveal-show]'); return e && e.getAttribute('data-reveal-show') === 'boom'; }, null, { timeout: 4000 }).catch(() => {});
+  ok((await attr('[data-reveal-show]', 'data-reveal-boom')) === 'girl', '…ilyenkor a robbanás mondja ki az eredményt');
   await p.waitForFunction(() => !document.querySelector('[data-reveal-show]'), null, { timeout: 4000 }).catch(() => {});
 
   console.log('\n===== 3c. VIDEÓ A SZÜLŐKTŐL (darabolt feltöltés, v10.439) =====');

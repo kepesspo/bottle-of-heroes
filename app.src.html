@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.455';
+const APP_VERSION = 'v10.456';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -43177,10 +43177,28 @@ function revealNoise(ctx, t, dur, gain, hp) {
   if (hp) { const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp; s.connect(f); f.connect(g); } else s.connect(g);
   g.connect(ctx.destination); s.start(t);
 }
+// v10.456: a pergés LÁGY — a régi (600 Hz fölötti, hirtelen indított zaj) élesen
+// sercegett. Most sávszűrt (≈ 260 Hz körüli, a dob „teste"), puha felfutású ütések, és
+// alatta egy halk, mély dübörgés erősödik — a hangerő a végére is mérsékelt marad.
+function revealSoftHit(ctx, t, dur, gain) {
+  const len = Math.max(1, Math.floor(ctx.sampleRate * dur)), b = ctx.createBuffer(1, len, ctx.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const s = ctx.createBufferSource(); s.buffer = b;
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 260; bp.Q.value = 0.9;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1400;
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(gain, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(bp); bp.connect(lp); lp.connect(g); g.connect(ctx.destination); s.start(t); s.stop(t + dur + 0.02);
+}
 function revealDrumroll(sec) {
   const c = revealAudio(); if (!c) return;
   const t0 = c.currentTime; let t = 0;
-  while (t < sec) { const p = t / sec; revealNoise(c, t0 + t, 0.07, 0.12 + 0.4 * p, 600); t += 0.12 - 0.075 * p; }
+  while (t < sec) { const p = t / sec; revealSoftHit(c, t0 + t, 0.11, 0.16 + 0.26 * p); t += 0.11 - 0.06 * p; }
+  // mély dübörgés alatta (60 Hz körül), lassan erősödik, a végén elhal
+  try {
+    const o = c.createOscillator(), g = c.createGain(); o.type = 'sine'; o.frequency.value = 62;
+    g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.12, t0 + sec * 0.9); g.gain.exponentialRampToValueAtTime(0.0001, t0 + sec + 0.3);
+    o.connect(g); g.connect(c.destination); o.start(t0); o.stop(t0 + sec + 0.4);
+  } catch(e) {}
 }
 function revealCrash() {
   const c = revealAudio(); if (!c) return;
@@ -43463,7 +43481,12 @@ function RevealShow({ show, video, onDone }) {
   const [stage, setStage] = React.useState('count');     // count | video | boom
   const [n, setN] = React.useState(REVEAL_COUNT_FROM);
   const [muted, setMuted] = React.useState(false);
-  const vidSrc = show.test ? '' : (video || show.videoUrl || '');
+  // ⚠️ YouTube-linket a <video> nem játszik le — figyelmen kívül hagyjuk (a régi mentett link se akasszon)
+  const vidSrc = show.test ? '' : (video || (show.videoUrl && !revealIsYoutube(show.videoUrl) ? show.videoUrl : ''));
+  // v10.456: ha a videó LEMENT, a végén nincs „Kisfiú/Kislány" robbanás — a videó maga a
+  // leleplezés, utána rögtön a vetítő jön (a kiderült színnel). Hibás/nem induló videónál
+  // marad a robbanás, különben semmi nem mondaná ki az eredményt.
+  const finishVideo = () => onDone();
   const vref = React.useRef(null), vBad = React.useRef(false);
   React.useEffect(() => {
     revealDrumroll(REVEAL_COUNT_FROM * sp);
@@ -43501,14 +43524,14 @@ function RevealShow({ show, video, onDone }) {
         </div>
       )}
       {vidSrc && (
-        <video ref={vref} data-reveal-video src={vidSrc} preload="auto" playsInline onEnded={() => setStage('boom')}
+        <video ref={vref} data-reveal-video src={vidSrc} preload="auto" playsInline onEnded={finishVideo}
           onError={() => { vBad.current = true; if (stage === 'video') setStage('boom'); }}
           style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'contain', background:'#000', display: stage === 'video' ? 'block' : 'none' }} />
       )}
       {stage === 'video' && (
         <div style={{ position:'absolute', right:18, bottom:18, display:'flex', gap:8 }}>
           {muted && <button data-reveal-unmute onClick={() => { const v = vref.current; if (v) { v.muted = false; v.play().catch(() => {}); } setMuted(false); }} style={{ padding:'8px 14px', borderRadius:999, border:'none', cursor:'pointer', background:'#fff', color:'#1B1830', fontFamily:T.font, fontWeight:900, fontSize:13 }}>🔊 Hang</button>}
-          <button data-reveal-skipvideo onClick={() => setStage('boom')} style={{ padding:'8px 14px', borderRadius:999, border:'none', cursor:'pointer', background:'rgba(255,255,255,0.18)', color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:13 }}>Tovább ›</button>
+          <button data-reveal-skipvideo onClick={finishVideo} style={{ padding:'8px 14px', borderRadius:999, border:'none', cursor:'pointer', background:'rgba(255,255,255,0.18)', color:'#fff', fontFamily:T.font, fontWeight:800, fontSize:13 }}>Tovább ›</button>
         </div>
       )}
       {stage === 'boom' && (
@@ -44795,14 +44818,10 @@ function RevealSecretCard({ onClose }) {
   const sec = secret.v || {}, st = rstate.v || {};
   const [peek, setPeek] = React.useState(false);
   const [code, setCode] = React.useState(null);
-  const [url, setUrl] = React.useState(null);
   const [msg, flash] = useRevealFlash();
-  const codeV = code === null ? (sec.code || '') : code, urlV = url === null ? (sec.videoUrl || '') : url;
+  const codeV = code === null ? (sec.code || '') : code;
   const db = revealDb();
   const save = (patch, m) => { if (db) db.collection('config').doc('revealSecret').set(patch, { merge:true }).then(() => flash(m || 'Mentve')).catch(e => flash('Nem sikerült (' + ((e && e.code) || 'hiba') + ')')); };
-  const urlT = React.useRef(null);
-  const onUrl = v => { setUrl(v); clearTimeout(urlT.current); urlT.current = setTimeout(() => save({ videoUrl: v.trim() }), 600); };
-  React.useEffect(() => () => clearTimeout(urlT.current), []);
   const codeOk = /^\d{4,12}$/.test(codeV), codeChanged = codeV !== (sec.code || '');
   const result = sec.result;
   const lbl = t => <div style={{ fontFamily:T.font, fontSize:11, fontWeight:900, letterSpacing:'0.08em', color:T.inkSoft, textTransform:'uppercase', margin:'14px 0 6px' }}>{t}</div>;
@@ -44832,11 +44851,6 @@ function RevealSecretCard({ onClose }) {
           style={rvBtn('primary', { height:48, padding:'0 16px', fontSize:15, opacity: codeOk && codeChanged ? 1 : 0.45, cursor: codeOk && codeChanged ? 'pointer' : 'default' })}>Mentés</button>
       </div>
       {codeV && !codeOk && <div style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:'#A3342C', marginTop:6 }}>Legalább 4 számjegy.</div>}
-      {lbl('Videó-link (nem kötelező)')}
-      <input data-reveal-p-videourl value={urlV} onChange={e => onUrl(e.target.value)} placeholder="https://…/leleplezes.mp4" aria-label="Videó-link" style={rvInp()} />
-      {revealIsYoutube(urlV)
-        ? <div data-reveal-p-videowarn style={{ fontFamily:T.font, fontWeight:800, fontSize:12, color:'#A3342C', marginTop:6, lineHeight:1.45 }}>YouTube-linket a vetítő nem tud lejátszani. Töltsd fel a videót (Leleplező videó sor), vagy adj meg közvetlen .mp4 linket.</div>
-        : rvNote('Közvetlen .mp4 link. Ha van feltöltött videó, az megy helyette. Próbánál soha nincs videó.')}
       <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:14, flexWrap:'wrap' }}>
         <span data-reveal-p-state style={{ flex:1, minWidth:0, fontFamily:T.font, fontWeight:800, fontSize:13, color:T.inkSoft }}>Állapot: {st.phase === 'reveal' ? (st.test ? 'próba lefutott' : 'leleplezve 🎉') : st.phase === 'armed' ? 'engedélyezve' : 'engedélyre vár'}</span>
         {(st.phase === 'reveal' || st.phase === 'armed') && <button type="button" data-reveal-p-reset onClick={() => { if (db) db.collection('config').doc('revealState').set({ phase:'idle', run: revealToken(), at: Date.now() }).then(() => flash('Visszaállítva')).catch(() => {}); }} style={rvBtn('danger', { height:40 })}>Visszaállítás</button>}
@@ -44899,7 +44913,7 @@ function RevealParentRevealTab({ dock }) {
           </div>
         ) : big(revealAt ? (armed ? 'Most indul!' : 'Elérkezett az idő') : 'Nincs időpont')}
         <div style={{ position:'relative', fontFamily:T.font, fontSize:12.5, fontWeight:700, opacity:0.85, marginTop:8, lineHeight:1.4 }}>
-          {done ? 'A vetítőn újra lejátszhatjátok.' : armed ? 'Engedélyezve — a vetítő az időpontra magától indul.' : 'Az eredményt ti sem látjátok — a vetítő mutatja meg mindenkinek egyszerre.'}
+          {done ? 'A vetítőn újra lejátszhatjátok.' : armed ? 'Engedélyezve — a vetítő az időpontra magától indul.' : 'A vetítő mutatja meg mindenkinek egyszerre.'}
         </div>
       </section>
 

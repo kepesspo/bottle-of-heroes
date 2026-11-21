@@ -4217,3 +4217,23 @@ lett a maszk alapértelmezett.
 Teszt: `reveal_extras_test.js` 1. blokk (az adminban nincs titkos mező; első kód a
 Szülőknél, rövid kód tiltva; csukott kártya; eredmény → titkos doksi; YouTube-figyelmeztetés;
 újranyitva maszkolva, Mutat után a Kislány kijelölve).
+
+## Gender Reveal: lágy dobpergés, videó után nincs robbanás-képernyő, nincs videó-link (v10.456)
+- **A dobpergés LÁGY** (`revealSoftHit` + `revealDrumroll`): sávszűrt (≈ 260 Hz, a dob
+  „teste") + aluláteresztő zaj puha felfutással, alatta halk, erősödő 62 Hz-es dübörgés. A
+  régi a 600 Hz FÖLÖTTI zajt engedte át hirtelen indítással — „nagyon éles" volt. Mérve
+  (OfflineAudioContext): a magas-frekvenciás arány 1,18 → 0,02, a csúcs 0,58 → 0,17, az RMS
+  kb. a kétharmadára — tompább ÉS halkabb, de nem némább.
+- **Ha a videó LEMENT, a végén NINCS „Kisfiú/Kislány" robbanás** (`finishVideo` → `onDone`):
+  a videó maga a leleplezés, utána rögtön a vetítő jön a kiderült színnel és a felső
+  jelvénnyel. A videó-szakasz „Tovább ›" gombja is így zár. **Hibás / el nem induló
+  videónál marad a robbanás** — különben semmi nem mondaná ki az eredményt.
+- **A Szülők titkos kártyájáról kikerült a videó-link mező** (a videót feltöltik). A
+  `revealSecret.videoUrl` a régi adatban maradhat — a vetítő ezért a **YouTube-linket
+  figyelmen kívül hagyja** (`revealIsYoutube` a `vidSrc`-ben): nincs `<video>`, a robbanás jön.
+- A Leleplezés fül sötét kártyáján a „Az eredményt ti sem látjátok" mondat kikerült —
+  a szülők tudják az eredményt (v10.455).
+Teszt: `reveal_extras_test.js` 3b2. blokk — egy valódi, 1 mp-es webm-mel
+(`tests/fixtures/tiny_reveal.webm`, ffmpeg-gel készült) a szakaszok sorrendje
+`count > video > none` (NINCS `boom`), és a vetítő a kiderült színnel folytatja; YouTube-
+linknél nincs `<video>`, a robbanás jön.
