@@ -4279,3 +4279,27 @@ darabok törölve, és a vetítő „videó kész".
 Teszt: `reveal_extras_test.js` 3b2. (`count>video>outro>none`, hanggal + 50%, a szín már az
 átmenet alatt) és 3c. blokk (négy hangerő-fokozat némítás nélkül, zene-feltöltés külön
 gyűjteménybe, a vetítő „zene kész", a zene a blobból szól a beállított hangerővel, törlés).
+
+## ⚠️ Gender Reveal: a hang a leleplezés ELŐTT élesedik — nincs nagy „Hang bekapcsolása" gomb (v10.459)
+**Felülírja a v10.458 középső nagy gombját.** Tulajdonosi kérés: amikor a videó már megy,
+senki ne akarjon (és ne kelljen) interaktálni.
+- **A `<video>` és az `<audio>` a VETÍTŐÉ, nem a show-é** (`vEl` / `aEl`, `data-reveal-video` /
+  `data-reveal-musicel`, állandóan a DOM-ban, `display:none`). A `RevealShow` ezeket kapja
+  propként, a „video" szakaszban maga kapcsolja láthatóra (`style.display`), lebontáskor
+  megállítja és elrejti. A régi, link-alapú videónál a show adja meg a `src`-t.
+  ⚠️ Ok: Safari elemenként engedi a hangos lejátszást (egy koppintásban elindított elem
+  később is szólhat), Chrome dokumentumonként — egy a show-val együtt születő elem a
+  „0"-nál már gesztus nélkül indulna.
+- **Élesítés (`probeEl`)**: minden koppintáskor / billentyűnél és amikor a média betöltött
+  (`onLoadedData`), a vetítő csendben elindítja az elemet hangosan, 0 hangerővel, és azonnal
+  megállítja. Az eredmény `snd[src]` — a bal alsó szervezői csipben **🔊 hang kész** vagy
+  **🔇 kattints egyet a hangért** (`data-reveal-sound` = `ok`/`off`). ⚠️ Leleplezés alatt nem
+  próbál (`showRef`), különben megállítaná a már induló videót.
+- **Újratöltött vetítő** (`navigator.userActivation.hasBeenActive` hamis) + van média →
+  teljes képernyős **„▶ Vetítő indítása"** kapu (`data-reveal-startgate`): egy kattintás
+  élesít ÉS teljes képernyőre vált. Leleplezés alatt nem jön elő.
+- Ha a böngésző mégis megtagadja: a videó némítva megy, és csak egy **kicsi, halk 🔇** áll a
+  bal alsó sarokban (`data-reveal-unmute`, < 40 px) — a nagy középső gomb megszűnt.
+Teszt: `reveal_extras_test.js` 3d. blokk (valódi webm + wav: a csip „hang kész", a próba
+után a videó áll és rejtve, a leleplezés hanggal, interakció nélkül indul, nincs nagy gomb;
+`userActivation` nélkül a kapu megjelenik, egy kattintás után eltűnik és élesít).

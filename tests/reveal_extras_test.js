@@ -186,7 +186,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
 
   console.log('\n===== 3b. VIDEÓ: hibás link sem akasztja meg =====');
   await p.evaluate(() => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'vid1', test: false, result: 'girl', videoUrl: 'file:///nincs/ilyen.mp4', at: Date.now() }));
-  ok(await has('[data-reveal-show="count"] video[data-reveal-video][preload="auto"]'), 'a videó már a visszaszámlálás alatt betöltődik (rejtve)');
+  ok(await has('[data-reveal-show="count"]') && await p.evaluate(() => { const v = document.querySelector('video[data-reveal-video][preload="auto"]'); return !!v && /ilyen\.mp4$/.test(v.getAttribute('src') || '') && v.style.display === 'none'; }), 'a videó már a visszaszámlálás alatt betöltődik (rejtve, a vetítő állandó elemében)');
   await p.waitForFunction(() => { const e = document.querySelector('[data-reveal-show]'); return e && e.getAttribute('data-reveal-show') !== 'count'; }, null, { timeout: 4000 }).catch(() => {});
   const vs = await attr('[data-reveal-show]', 'data-reveal-show');
   ok(vs === 'video' || vs === 'boom', 'a visszaszámlálás után a videó-szakasz jön', vs);
@@ -215,7 +215,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok((await attr('[data-reveal-projector]', 'data-reveal-revealed')) === 'girl', 'a vetítő a kiderült színnel folytatja');
   await p.evaluate(() => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'vidyt', test: false, result: 'girl', videoUrl: 'https://www.youtube.com/watch?v=abc', at: Date.now() }));
   await p.waitForTimeout(150);
-  ok(!(await has('[data-reveal-show] video[data-reveal-video]')), 'YouTube-linket a vetítő nem próbál lejátszani (nincs <video>)');
+  ok(await p.evaluate(() => !/youtube/.test((document.querySelector('video[data-reveal-video]') || {}).getAttribute?.('src') || '')), 'YouTube-linket a vetítő nem próbál lejátszani (nem kerül a <video>-ba)');
   await p.waitForFunction(() => { const e = document.querySelector('[data-reveal-show]'); return e && e.getAttribute('data-reveal-show') === 'boom'; }, null, { timeout: 4000 }).catch(() => {});
   ok((await attr('[data-reveal-show]', 'data-reveal-boom')) === 'girl', '…ilyenkor a robbanás mondja ki az eredményt');
   await p.waitForFunction(() => !document.querySelector('[data-reveal-show]'), null, { timeout: 4000 }).catch(() => {});
@@ -275,6 +275,31 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   const vbsz = await p.evaluate(() => { const v = document.querySelector('[data-reveal-videoready="1"]'); return v ? 1 : 0; });
   ok(vbsz === 1, 'a vetítő a 85 MB-os videót is betöltötte („videó kész")');
   fs.unlinkSync(vbig);
+  // v10.459: a hang a leleplezés ELŐTT élesedik — nincs nagy „Hang bekapcsolása" gomb
+  console.log('\n===== 3d. HANG ELŐRE ÉLESÍTVE (v10.459) =====');
+  await p.setInputFiles('#__side [data-reveal-p-videoinput]', ROOT + '/tests/fixtures/tiny_reveal.webm');
+  await p.waitForFunction(() => { const m = (window.__fbStore.config || {}).revealVideo; return m && m.vid && m.size < 1000000; }, null, { timeout: 15000 }).catch(() => {});
+  await p.waitForFunction(() => !!document.querySelector('[data-reveal-videoready="1"]'), null, { timeout: 8000 }).catch(() => {});
+  await p.waitForFunction(() => { const e = document.querySelector('[data-reveal-sound]'); return e && e.getAttribute('data-reveal-sound') === 'ok'; }, null, { timeout: 4000 }).catch(() => {});
+  if ((await attr('[data-reveal-sound]', 'data-reveal-sound')) !== 'ok') { await p.mouse.click(20, 400); await p.waitForTimeout(400); }
+  ok((await attr('[data-reveal-sound]', 'data-reveal-sound')) === 'ok', 'a bal alsó csip jelzi: 🔊 hang kész (videó + zene)', await p.textContent('[data-reveal-tally]'));
+  ok(await p.evaluate(() => { const v = document.querySelector('video[data-reveal-video]'); return v && v.paused && v.style.display === 'none'; }), '…a próba után a videó áll és rejtve van (nem szivárog ki a vetítőre)');
+  await p.evaluate(() => { window.__vs2 = null; window.__vs2Iv = setInterval(() => { const v = document.querySelector('video[data-reveal-video]'), e = document.querySelector('[data-reveal-show]');
+    if (v && e && e.getAttribute('data-reveal-show') === 'video' && !v.paused && !window.__vs2) window.__vs2 = { muted: v.muted, shown: v.style.display, big: [...document.querySelectorAll('[data-reveal-unmute]')].map(b => b.getBoundingClientRect().height) }; }, 20); });
+  await p.evaluate(() => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'vid3', test: false, result: 'girl', videoUrl: '', at: Date.now() }));
+  await p.waitForFunction(() => !!window.__vs2, null, { timeout: 8000 }).catch(() => {});
+  const vs2 = await p.evaluate(() => { clearInterval(window.__vs2Iv); return window.__vs2; });
+  ok(vs2 && vs2.muted === false && vs2.shown === 'block', 'a leleplezésnél a videó HANGGAL, interakció nélkül indul', JSON.stringify(vs2));
+  ok(vs2 && vs2.big.every(h => h < 40), 'nincs nagy „Hang bekapcsolása" gomb a videó közepén', JSON.stringify(vs2));
+  await p.waitForFunction(() => !document.querySelector('[data-reveal-show]'), null, { timeout: 8000 }).catch(() => {});
+  // újratöltött vetítő (még senki nem kattintott): a „Vetítő indítása" kapu kéri az EGY kattintást
+  await p.evaluate(() => { Object.defineProperty(navigator, 'userActivation', { configurable: true, get: () => ({ hasBeenActive: false, isActive: false }) }); });
+  await p.evaluate(() => document.querySelector('[data-reveal-exit]').click()); await p.waitForTimeout(300);
+  await p.evaluate(() => document.querySelector('[data-reveal-role="projector"]').click());
+  await p.waitForFunction(() => !!document.querySelector('[data-reveal-startgate]'), null, { timeout: 8000 }).catch(() => {});
+  ok(await has('[data-reveal-startgate]'), 'kattintás nélküli vetítőn megjelenik a „Vetítő indítása" kapu');
+  await p.click('[data-reveal-startgate]'); await p.waitForTimeout(500);
+  ok(!(await has('[data-reveal-startgate]')) && (await attr('[data-reveal-sound]', 'data-reveal-sound')) === 'ok', '…egy kattintás után eltűnik, és a hang élesítve');
   await p.click('#__side [data-reveal-p-videodel]'); await p.waitForTimeout(100);
   await p.locator('button:text-is("Törlés")').last().click(); await p.waitForTimeout(400);
   const vgone = await p.evaluate(() => ({ vid: (window.__fbStore.config.revealVideo || {}).vid, ch: Object.keys(window.__fbStore.revealVideo || {}).length }));
