@@ -4303,3 +4303,16 @@ senki ne akarjon (és ne kelljen) interaktálni.
 Teszt: `reveal_extras_test.js` 3d. blokk (valódi webm + wav: a csip „hang kész", a próba
 után a videó áll és rejtve, a leleplezés hanggal, interakció nélkül indul, nincs nagy gomb;
 `userActivation` nélkül a kapu megjelenik, egy kattintás után eltűnik és élesít).
+
+## Gender Reveal: új logó — „Lufipár" (v10.460)
+Tulajdonosi választás három javaslatból („A · Lufipár"): rózsaszín és kék lufi kicsit
+egymásra fedve, a zsinórjuk egy kétszínű masniban fut össze, a DNR ikon-nyelvén (kék|narancs
+félkör, talajvonal, fekete kontúr, fehér matrica-sáv). A régi rajz (szögletes zsinór, törött
+kérdőjel) lecserélve.
+- **Új fájlnév** (v10.424 szabálya): `assets/dnr_reveal_logo_app.png` (1024, fehér háttér —
+  főképernyő-ikon, manifest, központ, admin) és `assets/dnr_reveal_logo_mark.png` (512,
+  átlátszó — `REVEAL_LOGO`, nyitókép). A régi `dnr_reveal_app/mark.png` a repóban maradt (a
+  tesztek feltöltési mintaképnek használják), de az app már nem hivatkozza.
+- **Generátor: `node make_reveal_logo.js`** — SVG-ből Playwrighttal (nem PIL: sima görbék). A
+  `make_unified_icons.py` `reveal()` rajza elavult, ne abból generáld újra.
+⚠️ Egy már telepített Gender Reveal főképernyő-ikont semmi nem cserél ki — újra ki kell tenni.
