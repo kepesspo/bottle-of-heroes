@@ -4337,3 +4337,28 @@ megint a beépített szól.
   Tartalomcserénél **új fájlnév** kell (v10.424).
 Teszt: `reveal_extras_test.js` 3c. blokk vége (törlés után a beépítettre áll vissza, 9–10,3 mp
 hosszú, a Szülők felirata és a hangerő-sor).
+
+## Gender Reveal: élő vetítés-link azoknak, akik nem tudnak eljönni (v10.462)
+`?screen=reveal&live=<liveKey>`: jelszó nélkül nyílik, és **csak a vetítő** látszik,
+élőben (képfolyam, Babakvíz, leleplezés). A kulcs a `config/revealConfig.liveKey`-ben ül.
+A `revealEnsureKeys` a vendég- és az album-kulccsal együtt pótolja, az „Új linkek készítése"
+mindhármat cseréli. A link a Szülők **Esemény** fülén áll (`data-reveal-p-liveurl`), a
+vendég- és a galéria-link között.
+- **Ugyanaz a `RevealProjector`, `watch` proppal** — nem másolat. A gyökéren
+  `data-reveal-watch="1"`.
+- **⚠️ A néző SEMMIT nem ír a közös dokumentumokba.** Nincs időzített indítás (a `<run>-go`
+  írását a buli vetítője végzi), nincs `revealEnsureKeys`, a szóköz nem állít szünetet
+  (`togglePause`), és a nyilak nem lapozzák a közös kvízt (`revealQuizWrite`). Csak az `F`
+  (teljes képernyő) él. Enélkül egy távoli néző billentyűje megállíthatná vagy lapozhatná a
+  buli kivetítőjét.
+- **Telefonon is vetít.** A buli „Vetítő" szerepe telefonon tájékoztató (`RevealPhoneNote`),
+  az élő link viszont egyenesen a `RevealProjector`-t rendereli. Távolról többnyire
+  telefonon nézik.
+- ‹ Vissza helyett „● ÉLŐ" jelzés (`data-reveal-livebadge`). A szervezői csipből kimarad a
+  jóváhagyásra várók száma. A start-kapu „Élő vetítés indítása": egy koppintás kell, hogy a
+  leleplezés hanggal menjen.
+- Később nyitva ugyanaz a szabály, mint a vetítőnél: a már lezajlott leleplezést nem
+  játssza le, rögtön a kiderült színt kapja.
+Teszt: `reveal_extras_test.js` 9. blokk (kulcs, jelszó nélkül néző-mód, az elmúlt időpontú
+engedélyezett leleplezést NEM indítja, a szóköz nem ír szünetet, nincs várakozó-szám, a
+menet közben érkező leleplezés lejátszódik, telefonon is vetít, rossz kulcs).

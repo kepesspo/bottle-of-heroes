@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.461';
+const APP_VERSION = 'v10.462';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -42907,7 +42907,7 @@ function canvasToCompressedURL(canvas, quality) {
 // A vendégek a vetítő QR-kódjával (jelszó nélkül, a `guestKey`-jel) képet és
 // jókívánságot küldhetnek — ezek az operátor jóváhagyásáig `pending`-ek.
 // Adat:
-//   config/revealConfig    = { password, title, guestKey, albumKey }
+//   config/revealConfig    = { password, title, guestKey, albumKey, liveKey }
 //   config/revealSecret    = { result:'boy'|'girl', code, videoUrl }   — CSAK az admin írja
 //   config/revealState     = { phase:'idle'|'reveal', run, test, result, videoUrl, at }
 //   config/revealQuiz      = { questions:[{ q, opts:[…], ok }] }
@@ -42982,12 +42982,15 @@ function revealGuestUrl(cfg) { return cfg && cfg.guestKey ? revealBaseUrl() + '?
 // Szülők cím) — ha senki nem mentett, a vetítőn nem volt QR-kód. Most a vetítő és a
 // Szülők nézet nyitáskor pótolja, ha hiányzik (csak a hiányzót írja, a meglévőt soha).
 function revealEnsureKeys(cfg) {
-  if (!cfg || (cfg.guestKey && cfg.albumKey)) return;
+  if (!cfg || (cfg.guestKey && cfg.albumKey && cfg.liveKey)) return;
   const db = revealDb(); if (!db) return;
   const patch = {}; if (!cfg.guestKey) patch.guestKey = revealKeyGen(); if (!cfg.albumKey) patch.albumKey = revealKeyGen();
+  if (!cfg.liveKey) patch.liveKey = revealKeyGen();   // v10.462: élő vetítés-link
   db.collection('config').doc('revealConfig').set(patch, { merge:true }).catch(() => {});
 }
 function revealAlbumUrl(cfg) { return cfg && cfg.albumKey ? revealBaseUrl() + '?screen=reveal&album=' + cfg.albumKey : ''; }
+// v10.462: akik nem tudnak eljönni — csak a vetítő, élőben, jelszó nélkül, nézőként
+function revealLiveUrl(cfg) { return cfg && cfg.liveKey ? revealBaseUrl() + '?screen=reveal&live=' + cfg.liveKey : ''; }
 function revealParam(k) { try { return new URLSearchParams(location.search).get(k) || ''; } catch(e) { return ''; } }
 function revealSpeed() { return (typeof window !== 'undefined' && window.__revealSpeed) || 1; }
 function useRevealDoc(name) {
@@ -43881,11 +43884,13 @@ function RevealPhoneNote({ onExit }) {
     </div>
   );
 }
-function RevealProjector({ title, cfg, onExit }) {
+// v10.462: `watch` = az élő vetítés-link nézője. Ugyanazt látja, de SEMMIT nem ír a közös
+// dokumentumokba (nem indít időzített leleplezést, nem állít szünetet, nem lapoz kvízt).
+function RevealProjector({ title, cfg, onExit, watch }) {
   // v10.449: MINDEN tételt figyelünk — a vetítő a várakozók számát is kiírja (jobb fent)
   const { list: allItems, loaded } = useRevealPhotos(true);
   const photos = React.useMemo(() => allItems.filter(p => !p.hidden && !p.pending), [allItems]);
-  const pendingN = allItems.filter(p => p.pending).length;
+  const pendingN = watch ? 0 : allItems.filter(p => p.pending).length;   // a várakozók száma a szervezőké
   const rstate = useRevealDoc('revealState');
   const qdoc = useRevealDoc('revealQuizState');
   const quizDoc = useRevealDoc('revealQuiz');
@@ -43934,7 +43939,7 @@ function RevealProjector({ title, cfg, onExit }) {
     if (REVEAL_SLOT_OPTS.includes(+v.slots)) revealStore('boh_reveal_slots', String(+v.slots));
   }, [ctl.v]);
   const pausedRef = React.useRef(false); pausedRef.current = paused;
-  const togglePause = () => { const v = !pausedRef.current; setPaused(v); revealCtlWrite({ paused:v }); };
+  const togglePause = () => { if (watch) return; const v = !pausedRef.current; setPaused(v); revealCtlWrite({ paused:v }); };
   // a leleplezés: `show` a futó előadás, `revealed` a kiderült eredmény (a háttér színe)
   const [show, setShow] = React.useState(null);
   const [revealed, setRevealed] = React.useState(null);
@@ -43942,7 +43947,7 @@ function RevealProjector({ title, cfg, onExit }) {
   const music = useRevealMusic();                          // v10.458: a visszaszámlálás zenéje (v10.461: beépített is)
   const medSrcs = [video.url, music.url].filter(Boolean);
   const soundOk = medSrcs.length > 0 && medSrcs.every(u => snd[u] === true);
-  React.useEffect(() => { if (cfg) revealEnsureKeys(cfg); }, [cfg && cfg.guestKey, cfg && cfg.albumKey, !!cfg]);
+  React.useEffect(() => { if (cfg && !watch) revealEnsureKeys(cfg); }, [cfg && cfg.guestKey, cfg && cfg.albumKey, !!cfg]);
   const seq = useRevealSequence(photos, loaded, secs, paused || !!show || !!qstate);
   const qrUrl = revealGuestUrl(cfg);
   // ── időzített leleplezés: az admin időpontja + a szülő engedélye (`phase:'armed'`) ──
@@ -43955,6 +43960,7 @@ function RevealProjector({ title, cfg, onExit }) {
   const firedRef = React.useRef('');
   React.useEffect(() => {
     const v = rstate.v || {};
+    if (watch) return;   // v10.462: az időzített indítást a buli vetítője végzi, nem a távoli néző
     if (v.phase !== 'armed' || !v.run || firedRef.current === v.run) return;
     if (revealAt && now < revealAt - REVEAL_COUNT_FROM * 1000 * revealSpeed()) return;
     firedRef.current = v.run;
@@ -44047,10 +44053,11 @@ function RevealProjector({ title, cfg, onExit }) {
   React.useEffect(() => {
     const key = e => {
       const qz = quizRef.current;
+      if (e.key === 'f' || e.key === 'F') { toggleFs(); return; }
+      if (watch) return;   // v10.462: a néző nem lapozza a közös kvízt és nem állít szünetet
       if (e.key === 'ArrowRight') { if (qz.on) qz.step(1); else seq.next(); }
       else if (e.key === 'ArrowLeft') { if (qz.on) qz.step(-1); }
       else if (e.key === ' ') { e.preventDefault(); if (qz.on) qz.step(1); else togglePause(); }
-      else if (e.key === 'f' || e.key === 'F') toggleFs();
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
@@ -44102,7 +44109,7 @@ function RevealProjector({ title, cfg, onExit }) {
     );
   };
   return ReactDOM.createPortal(
-    <div ref={rootRef} data-reveal-projector data-reveal-current={seq.cur ? seq.cur.id : ''} data-reveal-isnew={seq.cur && seq.cur.isNew ? '1' : '0'} data-reveal-revealed={revealed || ''}
+    <div ref={rootRef} data-reveal-projector data-reveal-watch={watch ? '1' : '0'} data-reveal-current={seq.cur ? seq.cur.id : ''} data-reveal-isnew={seq.cur && seq.cur.isNew ? '1' : '0'} data-reveal-revealed={revealed || ''}
       style={{ position:'fixed', inset:0, zIndex:6000, overflow:'hidden', cursor: ui ? 'default' : 'none', background:REVEAL_PAPER }}>
       <style>{`
 @keyframes revealFadeIn { from { opacity:0 } to { opacity:1 } }
@@ -44157,15 +44164,17 @@ function RevealProjector({ title, cfg, onExit }) {
         <button data-reveal-startgate onClick={() => { setActivated(true); probeAll(); try { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); } catch(e) {} }}
           style={{ position:'absolute', inset:0, zIndex:80, border:'none', cursor:'pointer', background:'rgba(255,248,240,0.94)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:14, fontFamily:T.font, color:REVEAL_INK }}>
           <span style={{ fontSize:'min(12vh, 90px)' }}>▶</span>
-          <span style={{ fontWeight:900, fontSize:'clamp(22px, 4vh, 44px)' }}>Vetítő indítása</span>
-          <span style={{ fontWeight:700, fontSize:'clamp(13px, 1.9vh, 20px)', opacity:0.7 }}>Egy kattintás, hogy a leleplezés hanggal menjen</span>
+          <span style={{ fontWeight:900, fontSize:'clamp(22px, 4vh, 44px)' }}>{watch ? 'Élő vetítés indítása' : 'Vetítő indítása'}</span>
+          <span style={{ fontWeight:700, fontSize:'clamp(13px, 1.9vh, 20px)', opacity:0.7, padding:'0 16px' }}>{watch ? (title || 'Gender Reveal') + ' · koppints, hogy a leleplezést hanggal lásd' : 'Egy kattintás, hogy a leleplezés hanggal menjen'}</span>
         </button>
       )}
       {show && <RevealShow key={show.run} show={show} video={video && video.url} music={music && music.url} volume={revealVolOf(ctl.v)} onDone={finishShow} vEl={vEl} aEl={aEl}
         onLand={() => { if (!show.test && REVEAL_RESULTS[show.result]) setRevealed(show.result); }} />}
       <div data-reveal-controls style={{ position:'absolute', left:0, right:0, top:0, display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflowX:'auto', WebkitOverflowScrolling:'touch',
         padding: narrow ? '10px 12px' : '14px 18px', background:`linear-gradient(${REVEAL_PAPER}F2 55%, ${REVEAL_PAPER}00)`, opacity: ui ? 1 : 0, pointerEvents: ui ? 'auto' : 'none', transition:'opacity .4s', zIndex:70, scrollbarWidth:'none' }}>
-        <button data-reveal-exit onClick={() => { try { if (document.fullscreenElement) document.exitFullscreen(); } catch(e) {} onExit(); }} aria-label="Vissza" style={chip(false)}>‹ Vissza</button>
+        {watch ? <span data-reveal-livebadge style={{ flexShrink:0, whiteSpace:'nowrap', display:'inline-flex', alignItems:'center', gap:6, fontFamily:T.font, fontWeight:900, fontSize: narrow ? 12 : 13, color:'#A3342C' }}>
+            <span aria-hidden="true" style={{ width:8, height:8, borderRadius:99, background:'#E0453B' }} />ÉLŐ</span>
+          : <button data-reveal-exit onClick={() => { try { if (document.fullscreenElement) document.exitFullscreen(); } catch(e) {} onExit(); }} aria-label="Vissza" style={chip(false)}>‹ Vissza</button>}
         <div style={{ flex:1, minWidth:8 }} />
         {(music.url || music.loading) && <span data-reveal-musicready={music.url ? '1' : '0'} style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:REVEAL_INK, opacity:0.7 }}>{music.url ? (music.builtin ? '🎵 alapzene kész' : '🎵 zene kész') : `🎵 zene töltődik… ${music.pct || 0}%`}</span>}
         {(video.url || video.loading) && <span data-reveal-videoready={video.url ? '1' : '0'} style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:REVEAL_INK, opacity:0.7 }}>{video.url ? '🎬 videó kész' : `🎬 videó töltődik… ${video.pct || 0}%`}</span>}
@@ -44701,6 +44710,7 @@ function RevealScreen({ go, deepLink }) {
   const title = (cfg.v && cfg.v.title) || 'Gender Reveal';
   const gParam = React.useMemo(() => revealParam('g'), []);
   const albumParam = React.useMemo(() => revealParam('album'), []);
+  const liveParam = React.useMemo(() => revealParam('live'), []);
   // ⚠️ A jelszót NEM mentjük (tulajdonosi döntés, v10.431): minden megnyitáskor bekéri.
   // Csak a munkamenetre él; a v10.430-ban esetleg eltárolt értéket is töröljük.
   const [saved, setSaved] = React.useState('');
@@ -44714,8 +44724,10 @@ function RevealScreen({ go, deepLink }) {
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => { const iv = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(iv); }, []);
   // vendég- és album-link: jelszó nélkül, a saját kulcsukkal
-  if ((gParam || albumParam) && cfg.loaded) {
+  if ((gParam || albumParam || liveParam) && cfg.loaded) {
     const v = cfg.v || {};
+    // v10.462: élő vetítés-link — telefonon is vetít (nem a buli „Vetítő" szerepének tájékoztatója)
+    if (liveParam && v.liveKey && liveParam === v.liveKey) return <RevealProjector watch title={title} cfg={v} onExit={() => {}} />;
     if (gParam && v.guestKey && gParam === v.guestKey) return <RevealGuest cfg={v} />;
     if (albumParam && v.albumKey && albumParam === v.albumKey) return <RevealAlbum cfg={v} />;
     return (
@@ -45338,13 +45350,13 @@ function RevealLinksCard() {
   const [msg, flash] = useRevealFlash();
   const tRef = React.useRef(null);
   React.useEffect(() => { if (cfg.loaded && !init) { setTitle((cfg.v || {}).title || ''); setInit(true); } }, [cfg.loaded]);
-  React.useEffect(() => { if (cfg.loaded) revealEnsureKeys(cfg.v || {}); }, [cfg.loaded, cfg.v && cfg.v.guestKey, cfg.v && cfg.v.albumKey]);
+  React.useEffect(() => { if (cfg.loaded) revealEnsureKeys(cfg.v || {}); }, [cfg.loaded, cfg.v && cfg.v.guestKey, cfg.v && cfg.v.albumKey, cfg.v && cfg.v.liveKey]);
   React.useEffect(() => () => clearTimeout(tRef.current), []);
   const db = revealDb();
   const v = cfg.v || {};
   // azonnali mentés, kis késleltetéssel (ne minden betűnél írjon)
   const onTitle = val => { setTitle(val); clearTimeout(tRef.current); tRef.current = setTimeout(() => { if (db) db.collection('config').doc('revealConfig').set({ title: val.trim() }, { merge:true }).then(() => flash('Mentve')).catch(e => flash('Nem sikerült (' + ((e && e.code) || 'hiba') + ')')); }, 450); };
-  const newKeys = () => { setAskNew(false); if (db) db.collection('config').doc('revealConfig').set({ guestKey: revealKeyGen(), albumKey: revealKeyGen() }, { merge:true }).then(() => flash('Új linkek kész')).catch(() => {}); };
+  const newKeys = () => { setAskNew(false); if (db) db.collection('config').doc('revealConfig').set({ guestKey: revealKeyGen(), albumKey: revealKeyGen(), liveKey: revealKeyGen() }, { merge:true }).then(() => flash('Új linkek kész')).catch(() => {}); };
   const copy = u => { try { navigator.clipboard.writeText(u); flash('Link kimásolva'); } catch(e) {} };
   const linkRow = (label, sub, url, data, icon, tone) => (
     <div style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 12px 10px 16px', borderTop:`1px solid ${T.border}` }}>
@@ -45369,13 +45381,14 @@ function RevealLinksCard() {
       <section style={rvCard()}>
         {rvH('Linkek')}
         {linkRow('Vendég-link', 'Képet és üzenetet küldhetnek · ez a vetítő QR-kódja', revealGuestUrl(v), 'data-reveal-p-guesturl', 'qr', 'info')}
+        {linkRow('Élő vetítés', 'Akik nem tudnak eljönni · csak a vetítő, élőben', revealLiveUrl(v), 'data-reveal-p-liveurl', 'video', 'warn')}
         {linkRow('Galéria-link', 'Csak nézhető · a buli után', revealAlbumUrl(v), 'data-reveal-p-albumurl', 'gallery', 'pink')}
         <button type="button" onClick={() => setAskNew(true)} style={rvBtn('ghost', { width:'100%', borderRadius:0, borderTop:`1px solid ${T.border}`, fontSize:13 })}>Új linkek készítése</button>
       </section>
       {askNew && (
         <ActionModal kicker="Új linkek?" onClose={() => setAskNew(false)} onSecondary={() => setAskNew(false)} secondaryLabel="Mégse"
           onPrimary={newKeys} primaryLabel="Új linkek" primaryColor={T.coral}>
-          A mostani vendég-link és QR-kód, valamint a galéria-link megszűnik.
+          A mostani vendég-link és QR-kód, az élő vetítés-link és a galéria-link is megszűnik.
         </ActionModal>
       )}
     </div>

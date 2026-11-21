@@ -116,7 +116,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok((await onTab()) === '+quiz' && await has('#__side [data-reveal-p-quizeditbtn]'), 'Kvíz fül: lapozó + kérdések szerkesztése', await onTab());
   await p.evaluate(() => document.querySelector('[data-reveal-ptab="event"]').click()); await p.waitForTimeout(100);
   ok((await onTab()) === 'links,album', 'Esemény fül: cím, linkek, album', await onTab());
-  ok(await has('#__side [data-reveal-p-guesturl]') && await has('#__side [data-reveal-p-albumurl]'), 'a két link a Szülőknél');
+  ok(await has('#__side [data-reveal-p-guesturl]') && await has('#__side [data-reveal-p-albumurl]') && await has('#__side [data-reveal-p-liveurl]'), 'a három link a Szülőknél (v10.462: + élő vetítés)');
   ok(!(await has('#__side [data-reveal-p-titlesave]')) && !(await has('#__side [data-reveal-p-schedsave]')), 'nincs külön Mentés gomb');
   await p.fill('#__side [data-reveal-p-title]', 'Anna & Bence babája'); await p.waitForTimeout(700);   // azonnali mentés (450 ms késleltetés)
   ok((await p.textContent('#__side [data-reveal-p-linksmsg]')).includes('Mentve'), 'a cím azonnal ment („Mentve")');
@@ -565,6 +565,38 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(await has('[data-reveal-guest]') && !(await has('[data-reveal-gate]')), 'vendég-link: jelszó nélkül nyílik');
   await go('&g=rossz');
   ok(await has('[data-reveal-badlink]'), 'rossz kulccsal: „Ez a link már nem érvényes"');
+
+  console.log('\n===== 9. ÉLŐ VETÍTÉS-LINK (v10.462) =====');
+  // a Szülők Esemény fülén megjelenik, és a kulcs magától létrejön
+  const liveKey = await p.evaluate(() => (window.__fbStore.config.revealConfig || {}).liveKey || '');
+  ok(/^[\w-]{6,}$/.test(liveKey), 'v10.462: az élő vetítés-kulcs létrejött (revealEnsureKeys)', liveKey);
+  ok(await p.evaluate(() => typeof revealLiveUrl === 'function' && /\?screen=reveal&live=/.test(revealLiveUrl({ liveKey: 'abc' }))), 'a link alakja ?screen=reveal&live=<kulcs>');
+  // időzített, ENGEDÉLYEZETT leleplezés, aminek az ideje már elmúlt: a buli vetítője elindítaná —
+  // a távoli néző NEM írhat (az indítás a buli vetítőjéé)
+  await p.evaluate(() => { const c = window.__fbStore.config; c.revealConfig = Object.assign({}, c.revealConfig, { revealAt: Date.now() - 60000 });
+    c.revealState = { phase: 'armed', run: 'live1', at: Date.now() }; c.revealSecret = Object.assign({}, c.revealSecret, { result: 'girl' }); window.__rvSave(); });
+  await go('&live=' + liveKey);
+  ok(await has('[data-reveal-projector][data-reveal-watch="1"]') && !(await has('[data-reveal-gate]')), 'élő link: jelszó nélkül a vetítő nyílik, néző-módban');
+  ok(await has('[data-reveal-livebadge]') && !(await has('[data-reveal-exit]')), '„ÉLŐ" jelzés, nincs ‹ Vissza');
+  await p.waitForTimeout(800);
+  ok(await p.evaluate(() => (window.__fbStore.config.revealState || {}).phase === 'armed'), 'a néző NEM indítja el az időzített leleplezést (nem ír)',
+    JSON.stringify(await p.evaluate(() => window.__fbStore.config.revealState)));
+  await p.mouse.click(5, 300); await p.waitForTimeout(100);   // a start-kapu / aktiválás
+  await p.keyboard.press('Space'); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => (window.__fbStore.config.revealProjector || {}).paused !== true), 'a szóköz a nézőnél nem állít szünetet a közös vetítőn');
+  ok(!(await has('[data-reveal-pendbadge]')), 'a jóváhagyásra várók száma nem látszik a nézőnek');
+  // a leleplezés a nézőnél is lejátszódik, ha a buli vetítője elindítja
+  await p.evaluate(() => { window.__fbStore.config.revealState = { phase: 'reveal', run: 'live1-go', test: false, result: 'girl', at: Date.now() }; window.__fbStore.__emit && window.__fbStore.__emit(); });
+  await p.evaluate(() => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'live1-go2', test: false, result: 'girl', at: Date.now() }));
+  await p.waitForTimeout(400);
+  ok(await has('[data-reveal-show]'), 'a menet közben érkező leleplezés a nézőnél is lejátszódik');
+  // telefonon is vetít (a buli „Vetítő" szerepe telefonon csak tájékoztató)
+  await p.evaluate(() => { const c = window.__fbStore.config; c.revealState = { phase: 'idle' }; window.__rvSave(); });
+  await p.setViewportSize({ width: 390, height: 844 });
+  await go('&live=' + liveKey);
+  ok(await has('[data-reveal-projector][data-reveal-watch="1"]') && !(await has('[data-reveal-phonenote]')), 'telefonon is a vetítő jön, nem a tájékoztató');
+  await go('&live=rossz');
+  ok(await has('[data-reveal-badlink]'), 'rossz élő-kulccsal: „Ez a link már nem érvényes"');
 
   ok(errs.length === 0, 'nincs JS hiba', errs.join(' | '));
   await b.close();
