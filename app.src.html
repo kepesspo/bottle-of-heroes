@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.460';
+const APP_VERSION = 'v10.461';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -43538,7 +43538,8 @@ function RevealShow({ show, video, music, onDone, onLand, volume, vEl, aEl }) {
       const own = aEl && aEl.current, a = (own && own.getAttribute('src')) ? own : new Audio(music); musRef.current = a;
       try { a.currentTime = 0; } catch(e) {} a.muted = false; a.volume = vol;
       const p = a.play(); if (p && p.catch) p.catch(() => { musRef.current = null; revealDrumroll(total); });
-      fiv = setInterval(() => { const left = total - (performance.now() - t0) / 1000; try { a.volume = Math.max(0, vol * Math.min(1, left / fade)); } catch(e) {} }, 50);
+      // v10.461: ami magától véget ér a „0” előtt (a beépített zene 9,7 mp), azt nem halkítjuk — az utolsó ütés kell
+      fiv = setInterval(() => { if (a.duration && a.duration <= total + 0.3) return; const left = total - (performance.now() - t0) / 1000; try { a.volume = Math.max(0, vol * Math.min(1, left / fade)); } catch(e) {} }, 50);
     } else revealDrumroll(total);
     let k = REVEAL_COUNT_FROM;
     const iv = setInterval(() => { k--; if (k > 0) setN(k); else { clearInterval(iv); clearInterval(fiv); const a = musRef.current; if (a) try { a.pause(); } catch(e) {} setStage(vidSrc && !vBad.current ? 'video' : 'boom'); } }, 1000 * sp);
@@ -43784,6 +43785,8 @@ function revealRetry(fn, tries) { return fn().catch(e => (tries > 1 ? new Promis
 function revealB64(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
 function revealUnB64(b) { const s = atob(b), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
 const REVEAL_MUSIC_MAX = 20 * 1024 * 1024;   // v10.458: a visszaszámlálás zenéje (pár perces mp3 is bőven belefér)
+// v10.461: beépített zene, ha a Szülők nem töltöttek fel sajátot. 9,7 mp, a 10 ütése a 10 számváltásra esik.
+const REVEAL_DEFAULT_MUSIC = 'assets/reveal_countdown_music.mp3';
 function revealWipeVideo(db, coll) { return db.collection(coll || 'revealVideo').get().then(snap => snap.docs.reduce((p, d) => p.then(() => d.ref.delete()), Promise.resolve())); }
 function revealUploadVideo(file, onProg, coll, max, what) {
   coll = coll || 'revealVideo'; max = max || REVEAL_VIDEO_MAX; what = what || 'A videó';
@@ -43836,7 +43839,24 @@ function useRevealVideo(coll) {
     }).catch(() => { if (!dead) setSt(o => Object.assign({}, o, { loading:false, failed:true })); });
     return () => { dead = true; };
   }, [meta.loaded, m.vid, m.uploading]);
-  return st;
+  return Object.assign({}, st, { metaLoaded: meta.loaded, has: !!m.vid, uploading: !!m.uploading });
+}
+// v10.461: a visszaszámlálás zenéje — a feltöltött, vagy ha nincs, a beépített. A beépítettet is
+// Blob-URL-ként adjuk (a service worker cache-first válasza a médiaelem Range-kérésére Safariban
+// elakadhat); ha a fetch nem megy (file://), a sima útvonal.
+function useRevealMusic() {
+  const up = useRevealVideo('revealAudio');
+  const useDef = up.metaLoaded && !up.has && !up.uploading;
+  const [def, setDef] = React.useState({ url:null, loading:false });
+  React.useEffect(() => {
+    if (!useDef || def.url) return;
+    let dead = false; setDef({ url:null, loading:true, pct:0 });
+    fetch(REVEAL_DEFAULT_MUSIC).then(r => { if (!r.ok) throw new Error('http'); return r.blob(); })
+      .then(b => { if (!dead) setDef({ url: URL.createObjectURL(b.type ? b : new Blob([b], { type:'audio/mpeg' })), loading:false, pct:100, builtin:true }); })
+      .catch(() => { if (!dead) setDef({ url: REVEAL_DEFAULT_MUSIC, loading:false, pct:100, builtin:true }); });
+    return () => { dead = true; };
+  }, [useDef]);
+  return useDef ? def : up;
 }
 // ── Szülők: a videó feltöltése. Előnézet SZÁNDÉKOSAN nincs — a szülők sem nézik meg előre.
 function revealCtlWrite(patch) { const db = revealDb(); if (db) db.collection('config').doc('revealProjector').set(patch, { merge:true }).catch(() => {}); }
@@ -43919,7 +43939,7 @@ function RevealProjector({ title, cfg, onExit }) {
   const [show, setShow] = React.useState(null);
   const [revealed, setRevealed] = React.useState(null);
   const video = useRevealVideo();                          // a Szülők feltöltött videója (v10.439)
-  const music = useRevealVideo('revealAudio');             // v10.458: a visszaszámlálás zenéje
+  const music = useRevealMusic();                          // v10.458: a visszaszámlálás zenéje (v10.461: beépített is)
   const medSrcs = [video.url, music.url].filter(Boolean);
   const soundOk = medSrcs.length > 0 && medSrcs.every(u => snd[u] === true);
   React.useEffect(() => { if (cfg) revealEnsureKeys(cfg); }, [cfg && cfg.guestKey, cfg && cfg.albumKey, !!cfg]);
@@ -44147,7 +44167,7 @@ function RevealProjector({ title, cfg, onExit }) {
         padding: narrow ? '10px 12px' : '14px 18px', background:`linear-gradient(${REVEAL_PAPER}F2 55%, ${REVEAL_PAPER}00)`, opacity: ui ? 1 : 0, pointerEvents: ui ? 'auto' : 'none', transition:'opacity .4s', zIndex:70, scrollbarWidth:'none' }}>
         <button data-reveal-exit onClick={() => { try { if (document.fullscreenElement) document.exitFullscreen(); } catch(e) {} onExit(); }} aria-label="Vissza" style={chip(false)}>‹ Vissza</button>
         <div style={{ flex:1, minWidth:8 }} />
-        {(music.url || music.loading) && <span data-reveal-musicready={music.url ? '1' : '0'} style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:REVEAL_INK, opacity:0.7 }}>{music.url ? '🎵 zene kész' : `🎵 zene töltődik… ${music.pct || 0}%`}</span>}
+        {(music.url || music.loading) && <span data-reveal-musicready={music.url ? '1' : '0'} style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:REVEAL_INK, opacity:0.7 }}>{music.url ? (music.builtin ? '🎵 alapzene kész' : '🎵 zene kész') : `🎵 zene töltődik… ${music.pct || 0}%`}</span>}
         {(video.url || video.loading) && <span data-reveal-videoready={video.url ? '1' : '0'} style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:REVEAL_INK, opacity:0.7 }}>{video.url ? '🎬 videó kész' : `🎬 videó töltődik… ${video.pct || 0}%`}</span>}
         {paused && <span data-reveal-paused style={{ flexShrink:0, whiteSpace:'nowrap', fontFamily:T.font, fontWeight:800, fontSize:13, color:REVEAL_INK, opacity:0.7 }}>⏸ Szünet</span>}
         <button data-reveal-fs onClick={toggleFs} style={chip(fs)}>{fs ? 'Kilépés a teljes képernyőből' : '⛶ Teljes képernyő'}</button>
@@ -45114,17 +45134,18 @@ function RevealParentRevealTab({ dock }) {
 function RevealVolumeRow() {
   const meta = useRevealDoc('revealVideo'), mus = useRevealDoc('revealAudio'), ctl = useRevealDoc('revealProjector');
   const [msg, flash] = useRevealFlash();
-  if (!(meta.v || {}).vid && !(mus.v || {}).vid) return null;
+  // v10.461: zene mindig van (a beépített), tehát a hangerő is mindig számít
   const vol = revealVolOf(ctl.v);
   return rvRow({ tight:true, data:{ 'data-reveal-p-volrow':'' },
     label: <span>Hangerő{msg ? <span style={{ display:'block', marginTop:2 }}>{rvMsg(msg)}</span> : <span style={{ display:'block', fontWeight:700, fontSize:12, color:T.inkSoft, marginTop:2 }}>Zene és videó — mindig hanggal megy</span>}</span>,
     right: rvSeg(REVEAL_VOLS.map(n => ({ v:n, t: Math.round(n * 100) + '%' })), vol, n => { revealCtlWrite({ vol:n }); flash('Mentve'); }, 'data-reveal-p-vol', 'Videó hangereje') });
 }
 function RevealVideoRow() { return <RevealMediaRow />; }
-// v10.458: a visszaszámlálás zenéje — ha van, a dobpergés HELYETT szól, a „0" előtt elhalkul
+// v10.458: a visszaszámlálás zenéje — ha van, a dobpergés HELYETT szól, a „0" előtt elhalkul.
+// v10.461: feltöltés nélkül a beépített zene (REVEAL_DEFAULT_MUSIC) szól.
 function RevealMusicRow() {
   return <RevealMediaRow coll="revealAudio" dp="music" icon="timer" title="Visszaszámlálás zenéje" accept="audio/*" max={REVEAL_MUSIC_MAX} what="A zene"
-    emptyText="Nincs — a dobpergés szól" delTitle="Zene törlése" delText="A visszaszámlálás alatt a dobpergés fog szólni." gone="Zene törölve" />;
+    emptyText="Beépített visszaszámláló zene" delTitle="Saját zene törlése" delText="A visszaszámlálás alatt a beépített zene fog szólni." gone="Zene törölve" />;
 }
 function RevealMediaRow({ coll, dp, icon, title, accept, max, what, emptyText, delTitle, delText, gone }) {
   coll = coll || 'revealVideo'; dp = dp || 'video'; max = max || REVEAL_VIDEO_MAX;

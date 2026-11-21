@@ -308,7 +308,14 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await p.click('#__side [data-reveal-p-musicdel]'); await p.waitForTimeout(100);
   await p.locator('button:text-is("Törlés")').last().click(); await p.waitForTimeout(400);
   ok(await p.evaluate(() => !(window.__fbStore.config.revealAudio || {}).vid && Object.keys(window.__fbStore.revealAudio || {}).length === 0), 'v10.458: a zene törölhető (meta + darab)');
-  ok(!(await has('[data-reveal-musicready]')) && !(await has('#__side [data-reveal-p-volrow]')), '…a vetítő elengedi, és média nélkül nincs hangerő-sor');
+  // v10.461: saját zene nélkül a BEÉPÍTETT zene szól — a vetítő arra áll vissza, a hangerő-sor marad
+  await p.waitForTimeout(3200);   // a „Zene törölve” visszajelzés lejár, utána látszik a felirat
+  const bi = await p.evaluate(() => { const r = document.querySelector('[data-reveal-musicready]'), a = document.querySelector('[data-reveal-musicel]');
+    const st = document.querySelector('#__side [data-reveal-p-musicstatus]');
+    return { txt: r ? r.textContent : '', src: a ? a.getAttribute('src') || '' : '', dur: a ? a.duration : 0, row: st ? st.textContent : '' }; });
+  ok(/alapzene kész/.test(bi.txt) && /reveal_countdown_music\.mp3$/.test(bi.src), 'v10.461: …a vetítő a beépített zenére áll vissza', JSON.stringify(bi));
+  ok(bi.dur > 9 && bi.dur <= 10.3, 'v10.461: a beépített zene a 10 mp-es visszaszámláláson belül véget ér (nincs halkítás)', bi.dur);
+  ok(/Beépített/.test(bi.row) && await has('#__side [data-reveal-p-volrow]'), 'v10.461: a Szülőknél „Beépített visszaszámláló zene", és a hangerő-sor marad', bi.row);
   fs.unlinkSync(wav);
   await p.evaluate(() => { const d = document.getElementById('__side'); if (d) { d.__r.unmount(); d.remove(); } });
   await p.evaluate(() => window.__rvSave());

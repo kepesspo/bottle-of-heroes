@@ -4316,3 +4316,24 @@ kérdőjel) lecserélve.
 - **Generátor: `node make_reveal_logo.js`** — SVG-ből Playwrighttal (nem PIL: sima görbék). A
   `make_unified_icons.py` `reveal()` rajza elavult, ne abból generáld újra.
 ⚠️ Egy már telepített Gender Reveal főképernyő-ikont semmi nem cserél ki — újra ki kell tenni.
+
+## Gender Reveal: beépített visszaszámláló zene (v10.461)
+Ha a Szülők nem töltöttek fel saját zenét, a dobpergés helyett a **beépített zene** szól:
+`assets/reveal_countdown_music.mp3` (`REVEAL_DEFAULT_MUSIC`, 9,7 mp, 192 kbps). A forrás a
+tulajdonos által küldött „10 Seconds Timer – 3D Countdown" (McZerrill). A 10 ütése a 10
+számváltásra van igazítva: **0,55 mp levágva az elejéről, `atempo=1.03`**. Az ütések így
+≈ 0,05 · 1,04 · 2,07 · … · 9,04 mp-nél szólnak. Feltöltött saját zene felülírja; törlése után
+megint a beépített szól.
+- **`useRevealMusic()`**: a feltöltött zene, vagy ha nincs, a beépített. A beépítettet is
+  **Blob-URL-ként** adja (`fetch` → blob). A service worker cache-first válasza egy médiaelem
+  Range-kérésére Safariban elakadhat. Ha a fetch nem megy (file://), a sima útvonalat adja.
+  A `useRevealVideo` ehhez `metaLoaded`/`has`/`uploading` mezőt is visszaad.
+- **⚠️ Nincs halkítás, ha a zene a „0” előtt magától véget ér** (`a.duration <= total + 0.3`).
+  A régi 1,2 mp-es halkítás pont az utolsó ütést (9 mp) nyelte volna el. Hosszabb, saját
+  zenénél a halkítás marad.
+- A hangerő-sor (`RevealVolumeRow`) innentől mindig kint van, mert zene mindig van. A
+  Szülőknél a sor „Beépített visszaszámláló zene", a vetítő csipje „🎵 alapzene kész".
+- Újravágás: `ffmpeg -ss 0.55 -i src.mp3 -af "atempo=1.03,afade=t=in:d=0.02,areverse,silenceremove=start_periods=1:start_threshold=-60dB,areverse" -c:a libmp3lame -b:a 192k`.
+  Tartalomcserénél **új fájlnév** kell (v10.424).
+Teszt: `reveal_extras_test.js` 3c. blokk vége (törlés után a beépítettre áll vissza, 9–10,3 mp
+hosszú, a Szülők felirata és a hangerő-sor).
