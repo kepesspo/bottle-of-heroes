@@ -4371,3 +4371,10 @@ A „🎵 (alap)zene kész” (`data-reveal-musicready`) és a „🎬 videó k�
 csak a Vissza / ÉLŐ jelzés, a Szünet és a Teljes képernyő maradt. A csip leleplezés és
 kvíz alatt nem látszik (`cornersOn`), tehát az állapotot a show előtt kell ellenőrizni.
 Teszt: `reveal_extras_test.js` 3c. blokk (a jelzés a csipben van, a felső sávban nincs).
+
+### A csipben a „kész" = ZÖLD, felirat nélkül (v10.464)
+A bal alsó csipben a hang, a zene és a videó kész állapota **zöld** (`#1F6B50`, ugyanaz,
+mint a `RV_TONES.ok` tintája), és nincs mögötte „kész" szó: `🔊 hang · 🎵 alapzene ·
+🎬 videó`. Töltés közben a tinta színével és százalékkal áll („🎵 zene 40%"). A hang
+hibás állapota marad piros, teljes mondattal („🔇 kattints egyet a hangért"), mert ott
+teendő van. Teszt: `reveal_extras_test.js` 3c. blokk (zöld, és nincs „kész").

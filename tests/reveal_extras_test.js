@@ -257,6 +257,8 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(await p.evaluate(() => { const m = document.querySelector('[data-reveal-musicready]'), v = document.querySelector('[data-reveal-videoready]');
     return !!m && !!m.closest('[data-reveal-tally]') && (!v || !!v.closest('[data-reveal-tally]')) && !document.querySelector('[data-reveal-controls] [data-reveal-musicready], [data-reveal-controls] [data-reveal-videoready]'); }),
     'v10.463: a zene-/videó-állapot a bal alsó csipben, nem a felső sávban');
+  ok(await p.evaluate(() => { const m = document.querySelector('[data-reveal-musicready="1"]'); return !!m && getComputedStyle(m).color === 'rgb(31, 107, 80)' && !/kész/.test(m.textContent); }),
+    'v10.464: a kész zene ZÖLD, és nincs mögötte „kész"');
   await p.evaluate(() => { window.__plays = []; const orig = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { window.__plays.push({ tag: this.tagName, blob: String(this.src).startsWith('blob:'), vol: this.volume }); return orig.apply(this, arguments); }; });
   await p.evaluate(() => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'vid2', test: false, result: 'girl', videoUrl: '', at: Date.now() }));
   await p.waitForTimeout(150);
@@ -316,7 +318,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   const bi = await p.evaluate(() => { const r = document.querySelector('[data-reveal-musicready]'), a = document.querySelector('[data-reveal-musicel]');
     const st = document.querySelector('#__side [data-reveal-p-musicstatus]');
     return { txt: r ? r.textContent : '', src: a ? a.getAttribute('src') || '' : '', dur: a ? a.duration : 0, row: st ? st.textContent : '' }; });
-  ok(/alapzene kész/.test(bi.txt) && /reveal_countdown_music\.mp3$/.test(bi.src), 'v10.461: …a vetítő a beépített zenére áll vissza', JSON.stringify(bi));
+  ok(/alapzene/.test(bi.txt) && !/kész/.test(bi.txt) && /reveal_countdown_music\.mp3$/.test(bi.src), 'v10.461: …a vetítő a beépített zenére áll vissza', JSON.stringify(bi));
   ok(bi.dur > 9 && bi.dur <= 10.3, 'v10.461: a beépített zene a 10 mp-es visszaszámláláson belül véget ér (nincs halkítás)', bi.dur);
   ok(/Beépített/.test(bi.row) && await has('#__side [data-reveal-p-volrow]'), 'v10.461: a Szülőknél „Beépített visszaszámláló zene", és a hangerő-sor marad', bi.row);
   fs.unlinkSync(wav);
