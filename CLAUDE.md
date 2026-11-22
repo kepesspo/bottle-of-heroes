@@ -4434,3 +4434,16 @@ felirat („A NAGY PILLANATIG" / „KIDERÜLT") és egy rövid mondat („A vet�
 (`data-reveal-pcount`, 24 px-es számok, 9,5 px-es egységek). A mondatok szándékosan rövidek:
 a jobb oldali óra mellett hosszabb szöveg több sorba törne, és a kártya visszanőne.
 Teszt: `reveal_extras_test.js` (≤ 72 px).
+
+## Gender Reveal belépés: trimelt kód + útmutató a betűs kódhoz (v10.471)
+Bejelentés (képpel): a belépőn számbillentyűzet helyett szövegmező állt. A `RevealCodePad`
+CSAK számkódnál ad billentyűzetet (`revealIsNumCode`), a tárolt `revealConfig.password` tehát
+nem tiszta számjegysor volt. Két javítás:
+- **A tárolt kódot trimeljük** (`revealIsNumCode`, a `RevealCodePad` `code`-ja és a
+  `RevealScreen` `pw`-je) — egy szóköz vagy sortörés a kód körül ne kapcsoljon vissza
+  szövegmezőre („ 1245⏎” → számbillentyűzet, 1245 beenged).
+- **Betűs (régi) kódnál a szövegmező MARAD** (különben senki nem tudna belépni), de fölötte
+  sárga sáv mondja meg, hol kell számkódra cserélni (`data-reveal-legacypw`, `legacyWhere`
+  prop: belépő → „Admin → Gender Reveal → Belépő kód”, szülői → „Szülők → Leleplezés →
+  Eredmény és kód”). A beállítás helye NEM változott.
+Teszt: `reveal_test.js` 1. blokk.

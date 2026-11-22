@@ -62,6 +62,13 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
   ok(await has('[data-reveal-roles]'), 'fizikai billentyűzettel is beenged (laptop a vetítőn)');
   await setCfg({ password: 'uj-jelszo' }); await p.waitForTimeout(200);
   ok(await has('[data-reveal-gate]') && await has('input[data-reveal-pw]'), 'kódcsere után újra kéri — régi, betűs jelszónál a szövegmező marad (nincs kizárás)');
+  ok(/Admin → Gender Reveal/.test(await p.textContent('[data-reveal-legacypw]')), 'v10.471: a betűs kódnál megmondja, hol kell számkódra cserélni');
+  // v10.471: szóköz / sortörés a kód körül NEM kapcsol vissza szövegmezőre
+  await setCfg({ password: ' 1245\n' }); await p.waitForTimeout(250);
+  ok(await has('[data-reveal-key]') && !(await has('input[data-reveal-pw]')) && !(await has('[data-reveal-legacypw]')), 'v10.471: „ 1245⏎” tárolva is számbillentyűzet jön');
+  await p.keyboard.type('1245'); await p.waitForTimeout(350);
+  ok(await has('[data-reveal-roles]'), 'v10.471: …és az 1245 beenged');
+  await setCfg({ password: 'uj-jelszo' }); await p.waitForTimeout(200);
   await p.fill('[data-reveal-pw]', 'uj-jelszo'); await p.keyboard.press('Enter'); await p.waitForTimeout(200);
 
   console.log('\n===== 2. VETÍTŐ: KÖR + ÉLŐ ÚJ KÉP =====');

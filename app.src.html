@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.470';
+const APP_VERSION = 'v10.471';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -44223,12 +44223,14 @@ function RevealProjector({ title, cfg, onExit, watch }) {
 // billentyűzet (laptop a vetítőn) is működik: számok, Backspace, Enter.
 // ⚠️ Ha a beállított kód NEM csak számjegy (régi, betűs jelszó), a szövegmező marad — különben
 // a billentyűzettel be sem lehetne lépni. Az admin mezője innentől csak számot fogad.
-const revealIsNumCode = c => /^\d{1,12}$/.test(String(c || ''));
-function RevealCodePad({ title, hint, expect, onOk, badText, inputAttr, badAttr }) {
+const revealIsNumCode = c => /^\d{1,12}$/.test(String(c == null ? '' : c).trim());   // v10.471: szóköz / sortörés nem rontja el
+function RevealCodePad({ title, hint, expect, onOk, badText, inputAttr, badAttr, legacyWhere }) {
   const [v, setV] = React.useState('');
   const [bad, setBad] = React.useState(false);
-  const numeric = revealIsNumCode(expect), len = String(expect || '').length;
-  const check = val => { if (val && val === String(expect)) { setV(''); onOk(); } else { setBad(true); setV(''); } };
+  // v10.471: a tárolt kódot trimeljük — egy véletlen szóköz miatt ne essen vissza a szövegmezőre
+  const code = String(expect == null ? '' : expect).trim();
+  const numeric = revealIsNumCode(code), len = code.length;
+  const check = val => { if (val && val === code) { setV(''); onOk(); } else { setBad(true); setV(''); } };
   const press = d => { setBad(false); setV(x => (numeric && x.length >= len) ? x : x + d); };
   const back = () => { setBad(false); setV(x => x.slice(0, -1)); };
   const vRef = React.useRef(v); vRef.current = v;
@@ -44256,6 +44258,10 @@ function RevealCodePad({ title, hint, expect, onOk, badText, inputAttr, badAttr 
   if (!numeric) return (
     <React.Fragment>
       {head}
+      {/* v10.471: a betűs kód régi beállítás — megmondjuk, hol lesz belőle számkód (és vele számbillentyűzet) */}
+      <div data-reveal-legacypw style={{ fontFamily:T.font, fontSize:12.5, fontWeight:700, lineHeight:1.45, textAlign:'center', color:'#8A5A12', background:'#FFF3D6', borderRadius:12, padding:'8px 12px' }}>
+        Ez még a régi, betűs kód. Számbillentyűzethez állíts be számkódot{legacyWhere ? <React.Fragment> itt: <b>{legacyWhere}</b></React.Fragment> : null}.
+      </div>
       <input {...{ [inputAttr]: '' }} type="password" value={v} autoFocus aria-label={title} onChange={e => { setV(e.target.value); setBad(false); }} onKeyDown={e => { if (e.key === 'Enter') check(v.trim()); }}
         style={rvInp({ height:52, fontSize:18, textAlign:'center', borderColor: bad ? T.coral : T.border })} />
       {badLine}
@@ -44732,7 +44738,7 @@ function RevealAlbum({ cfg }) {
 
 function RevealScreen({ go, deepLink }) {
   const cfg = useRevealCfg();
-  const pw = (cfg.v && cfg.v.password) || '';
+  const pw = String((cfg.v && cfg.v.password) || '').trim();   // v10.471: trimelve
   const title = (cfg.v && cfg.v.title) || 'Gender Reveal';
   const gParam = React.useMemo(() => revealParam('g'), []);
   const albumParam = React.useMemo(() => revealParam('album'), []);
@@ -44778,7 +44784,7 @@ function RevealScreen({ go, deepLink }) {
           <div data-reveal-nopw style={{ ...card, textAlign:'center', fontFamily:T.font, fontSize:14, fontWeight:700, color:T.inkSoft, lineHeight:1.5 }}>Még nincs belépő kód beállítva.<br/>Admin → Gender Reveal</div>
         ) : !ok ? (
           <div data-reveal-gate style={{ ...card, display:'flex', flexDirection:'column', gap:14, maxWidth:360 }}>
-            <RevealCodePad title="Belépő kód" hint="Ugyanaz a kód a vetítőnek és az operátornak." expect={pw} onOk={() => setSaved(pw)} badText="Hibás kód" inputAttr="data-reveal-pw" badAttr="data-reveal-bad" />
+            <RevealCodePad title="Belépő kód" hint="Ugyanaz a kód a vetítőnek és az operátornak." expect={pw} onOk={() => setSaved(pw)} badText="Hibás kód" inputAttr="data-reveal-pw" badAttr="data-reveal-bad" legacyWhere="Admin → Gender Reveal → Belépő kód" />
           </div>
         ) : (
           // v10.450 (a jóváhagyott design): felül az esemény és a leleplezés ideje, alatta a három
@@ -45518,7 +45524,7 @@ function RevealTrigger({ onBack }) {
         )
         : (
           <div data-reveal-codegate style={rvCard({ maxWidth:360, padding:'22px 20px', display:'flex', flexDirection:'column', gap:14, border:'none', boxShadow:T.shadow })}>
-            <RevealCodePad title="Szülői kód" hint="Nem a közös belépő kód — ezzel a szülők kezelik a leleplezést és minden beállítást." expect={sec.code} onOk={() => setOk(true)} badText="Hibás kód" inputAttr="data-reveal-code" badAttr="data-reveal-codebad" />
+            <RevealCodePad title="Szülői kód" hint="Nem a közös belépő kód — ezzel a szülők kezelik a leleplezést és minden beállítást." expect={sec.code} onOk={() => setOk(true)} badText="Hibás kód" inputAttr="data-reveal-code" badAttr="data-reveal-codebad" legacyWhere="Szülők → Leleplezés → Eredmény és kód" />
           </div>
         )}
       </div>
