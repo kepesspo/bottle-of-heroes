@@ -163,6 +163,8 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   const fr = await p.evaluate(() => [...document.querySelectorAll('[data-reveal-firerow] button')].map(b => { const r = b.getBoundingClientRect(); return { t: b.textContent.trim(), top: Math.round(r.top), w: Math.round(r.width) }; }));
   ok(fr.length >= 2 && fr.every(x => x.top === fr[0].top) && fr[fr.length - 1].t === 'Próba' && fr.slice(0, -1).every(x => x.w >= fr[fr.length - 1].w),
     'v10.469: a leleplezés gombjai EGY sorban — elöl a nagy fő gomb, a végén a kicsi „Próba”', JSON.stringify(fr));
+  const heroH = await p.evaluate(() => Math.round(document.querySelector('[data-reveal-phero]').getBoundingClientRect().height));
+  ok(heroH <= 72, 'v10.470: „A nagy pillanatig” kártya fele akkora (≤ 72 px)', heroH);
 
   console.log('\n===== 4. PRÓBA-LELEPLEZÉS =====');
   await p.click('[data-reveal-test]'); await p.waitForTimeout(150);

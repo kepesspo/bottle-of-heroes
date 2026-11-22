@@ -4426,3 +4426,11 @@ csak jövőbeli időpontnál) és **Próba** (`data-reveal-test`). A fő gomb fe
 sorba tör (`lineHeight:1.15`) — ez szándékos, a két kicsi gomb így fér mellé. A görgő terület
 alsó ráhagyása a Leleplezés fülön ezért 220 → 170 px.
 Teszt: `reveal_extras_test.js` (egy sorban, a fő gomb a legszélesebb, a végén a „Próba").
+
+## Gender Reveal Szülők: „A nagy pillanatig" fele akkora (v10.470)
+A Leleplezés fül sötét kártyája (`data-reveal-phero`) ~136 → **~59 px**: EGY sor — balra a
+felirat („A NAGY PILLANATIG" / „KIDERÜLT") és egy rövid mondat („A vetítő mutatja meg." /
+„Engedélyezve · magától indul." / „A vetítőn újra lejátszható."), jobbra a visszaszámláló
+(`data-reveal-pcount`, 24 px-es számok, 9,5 px-es egységek). A mondatok szándékosan rövidek:
+a jobb oldali óra mellett hosszabb szöveg több sorba törne, és a kártya visszanőne.
+Teszt: `reveal_extras_test.js` (≤ 72 px).
