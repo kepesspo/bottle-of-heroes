@@ -4416,3 +4416,13 @@ milliomos zenére vált, 20-tól számol 1-ig, vissza 10-re az óra-zene jön).
 - **A visszaszámlálás fejléce** „FIÚ VAGY LÁNY?" → **„KISFIÚ VAGY KISLÁNY?"**
   (`data-reveal-question`), ugyanaz a szóhasználat, mint az eredményé (v10.435).
 Teszt: `reveal_extras_test.js` 3. blokk (a fejléc) és 3b2. blokk (az outro alatt „KISLÁNY!").
+
+## Gender Reveal Szülők: a leleplezés gombjai EGY sorban (v10.469)
+A dokkba portálozott gombsor (`data-reveal-firepanel`) egyetlen sor (`data-reveal-firerow`):
+balra a **nagy fő gomb** (`flex:1`, 56 px — „Engedélyezem a leleplezést", engedélyezve
+„Engedély visszavonása", időpont után / nélkül „Leleplezés indítása" / „újra"), mellette
+két **kicsi, 76 px-es** gomb: **Most** (`data-reveal-fire`, `aria-label="Leleplezés most"`,
+csak jövőbeli időpontnál) és **Próba** (`data-reveal-test`). A fő gomb felirata 390 px-en két
+sorba tör (`lineHeight:1.15`) — ez szándékos, a két kicsi gomb így fér mellé. A görgő terület
+alsó ráhagyása a Leleplezés fülön ezért 220 → 170 px.
+Teszt: `reveal_extras_test.js` (egy sorban, a fő gomb a legszélesebb, a végén a „Próba").

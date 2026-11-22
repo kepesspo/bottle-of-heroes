@@ -160,6 +160,9 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await p.keyboard.type('2026'); await p.waitForTimeout(350);
   ok(await has('[data-reveal-fire]'), 'a jó kóddal ott a LELEPLEZÉS gomb');
   ok(!/lány|fiú/i.test(await p.textContent('[data-reveal-firepanel]')), 'a leleplező sem látja az eredményt');
+  const fr = await p.evaluate(() => [...document.querySelectorAll('[data-reveal-firerow] button')].map(b => { const r = b.getBoundingClientRect(); return { t: b.textContent.trim(), top: Math.round(r.top), w: Math.round(r.width) }; }));
+  ok(fr.length >= 2 && fr.every(x => x.top === fr[0].top) && fr[fr.length - 1].t === 'Próba' && fr.slice(0, -1).every(x => x.w >= fr[fr.length - 1].w),
+    'v10.469: a leleplezés gombjai EGY sorban — elöl a nagy fő gomb, a végén a kicsi „Próba”', JSON.stringify(fr));
 
   console.log('\n===== 4. PRÓBA-LELEPLEZÉS =====');
   await p.click('[data-reveal-test]'); await p.waitForTimeout(150);
