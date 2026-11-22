@@ -176,6 +176,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(st.c.revealState.phase === 'reveal' && st.c.revealState.result === 'girl' && !st.c.revealState.test, 'a gomb a titkos eredményt a szobába másolja', JSON.stringify(st.c.revealState));
   const cd = await attr('[data-reveal-show]', 'data-reveal-countdown');
   ok((await attr('[data-reveal-show]', 'data-reveal-show')) === 'count' && +cd >= 1 && +cd <= 10, 'visszaszámlálás a vetítőn', cd);
+  ok((await p.textContent('[data-reveal-question]')).trim() === 'KISFIÚ VAGY KISLÁNY?', 'v10.468: a visszaszámlálás fejléce „KISFIÚ VAGY KISLÁNY?”');
   await p.waitForFunction(() => { const e = document.querySelector('[data-reveal-show]'); return e && e.getAttribute('data-reveal-show') === 'boom'; }, null, { timeout: 4000 }).catch(() => {});
   ok((await attr('[data-reveal-show]', 'data-reveal-boom')) === 'girl' && (await p.textContent('[data-reveal-word]')).trim() === 'KISLÁNY!', 'robbanás: „KISLÁNY!”');
   await p.waitForFunction(() => !document.querySelector('[data-reveal-show]'), null, { timeout: 4000 }).catch(() => {});
@@ -202,7 +203,8 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   await p.evaluate(() => { window.__vidState = null; window.__landEarly = false;
     window.__vsIv = setInterval(() => { const v = document.querySelector('video[data-reveal-video]'), e = document.querySelector('[data-reveal-show]');
       if (v && e && e.getAttribute('data-reveal-show') === 'video' && !v.paused && !window.__vidState) window.__vidState = { muted: v.muted, vol: v.volume };
-      if (e && e.getAttribute('data-reveal-show') === 'outro' && document.querySelector('[data-reveal-projector]').getAttribute('data-reveal-revealed') === 'girl') window.__landEarly = true; }, 20); });
+      if (e && e.getAttribute('data-reveal-show') === 'outro' && document.querySelector('[data-reveal-projector]').getAttribute('data-reveal-revealed') === 'girl') window.__landEarly = true;
+      const ow = document.querySelector('[data-reveal-outroword]'); if (ow && !window.__outroWord) window.__outroWord = ow.textContent.trim(); }, 20); });
   await p.evaluate(u => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'vidok', test: false, result: 'girl', videoUrl: u, at: Date.now() }), tinyVid);
   await p.waitForFunction(() => window.__stages.includes('video'), null, { timeout: 6000 }).catch(() => {});
   await p.waitForFunction(() => !document.querySelector('[data-reveal-show]'), null, { timeout: 8000 }).catch(() => {});
@@ -213,6 +215,7 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(vstate && vstate.muted === false && Math.abs(vstate.vol - 0.5) < 0.01, 'v10.458: a videó HANGGAL indul, a Szülők hangerejével (50%)', JSON.stringify(vstate));
   ok(await p.evaluate(() => window.__landEarly === true), 'v10.458: a kiderült szín már az átmenet alatt a fal mögött van');
   ok((await attr('[data-reveal-projector]', 'data-reveal-revealed')) === 'girl', 'a vetítő a kiderült színnel folytatja');
+  ok(await p.evaluate(() => window.__outroWord === 'KISLÁNY!'), 'v10.468: a kiderült színen a felirat is ott áll („KISLÁNY!”)', await p.evaluate(() => window.__outroWord));
   await p.evaluate(() => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'vidyt', test: false, result: 'girl', videoUrl: 'https://www.youtube.com/watch?v=abc', at: Date.now() }));
   await p.waitForTimeout(150);
   ok(await p.evaluate(() => !/youtube/.test((document.querySelector('video[data-reveal-video]') || {}).getAttribute?.('src') || '')), 'YouTube-linket a vetítő nem próbál lejátszani (nem kerül a <video>-ba)');

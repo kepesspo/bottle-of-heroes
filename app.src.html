@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.467';
+const APP_VERSION = 'v10.468';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -42949,6 +42949,7 @@ function revealVolOf(v) { const n = +((v || {}).vol); return REVEAL_VOLS.include
 // utána a szín lassan feloldódik a polaroid-fal fölött, lágy konfetti-esővel — nincs éles vágás.
 const REVEAL_OUTRO_FADE = 2.5;     // mp — ennyi ideig úszik ki a videó vége (rövid videónál a harmada)
 const REVEAL_OUTRO_MS = 7000;      // ms — a feloldódás + konfetti-eső hossza a fal fölött
+const REVEAL_OUTRO_HOLD = 5.5;     // mp — v10.468: a szín + a „KISLÁNY!” felirat ennyi alatt oldódik fel (fele ideig teljesen áll)
 // A Babakvíz játékmesteri lapja (20 kérdés, A/B/C) — a vendégek papíron karikáznak.
 // `ok` = a helyes válasz indexe (0 = A). Az admin átírhatja (config/revealQuiz).
 const REVEAL_QUIZ_DEFAULT = [
@@ -43611,7 +43612,7 @@ function RevealShow({ show, video, music, onDone, onLand, volume, vEl, aEl, coun
       {stage === 'count' && <RevealPaperBlobs />}
       {stage === 'count' && (
         <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'3vh' }}>
-          <div style={{ fontFamily:T.font, fontWeight:800, fontSize:'clamp(16px, 3.4vh, 40px)', letterSpacing:'0.3em', color:'#2F63A8', textAlign:'center' }}>{show.test ? 'PRÓBA-LELEPLEZÉS' : 'FIÚ VAGY LÁNY?'}</div>
+          <div data-reveal-question style={{ fontFamily:T.font, fontWeight:800, fontSize:'clamp(16px, 3.4vh, 40px)', letterSpacing:'0.3em', color:'#2F63A8', textAlign:'center', padding:'0 4vw' }}>{show.test ? 'PRÓBA-LELEPLEZÉS' : 'KISFIÚ VAGY KISLÁNY?'}</div>
           <div key={n} style={{ fontFamily:T.font, fontWeight:900, fontSize:'min(46vh, 40vw)', lineHeight:1, color:'#fff',
             background:`linear-gradient(90deg, ${REVEAL_PINK}, ${REVEAL_BLUE})`, WebkitBackgroundClip:'text', backgroundClip:'text', WebkitTextFillColor:'transparent',
             animation:`revealBeat ${sp}s ease-out both` }}>{n}</div>
@@ -43632,8 +43633,15 @@ function RevealShow({ show, video, music, onDone, onLand, volume, vEl, aEl, coun
       )}
       {stage === 'outro' && (
         <React.Fragment>
-          <div data-reveal-outro aria-hidden="true" style={{ position:'absolute', inset:0, background:`radial-gradient(circle at 50% 50%, ${R.c2}, ${R.c1} 85%)`, animation:`revealOutroFade ${2.8 * sp}s ease-in-out both` }} />
+          <div data-reveal-outro aria-hidden="true" style={{ position:'absolute', inset:0, background:`radial-gradient(circle at 50% 50%, ${R.c2}, ${R.c1} 85%)`, animation:`revealOutroFade ${REVEAL_OUTRO_HOLD * sp}s ease-in-out both` }} />
           <RevealConfettiRain colors={[R.c1, R.c2, '#ffffff', '#FFD54F']} ms={REVEAL_OUTRO_MS * sp} />
+          {/* v10.468: a kiderült színen a felirat is ott áll — a színnel EGYÜTT halványul el */}
+          <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'2vh', pointerEvents:'none', padding:'0 4vw',
+            animation:`revealOutroFade ${REVEAL_OUTRO_HOLD * sp}s ease-in-out both` }}>
+            <div style={{ fontSize:'min(16vh, 14vw)', animation:'revealPop .8s cubic-bezier(.3,1.6,.5,1) both' }}>{R.emoji}</div>
+            <div data-reveal-outroword style={{ fontFamily:T.font, fontWeight:900, fontSize:'min(26vh, 13vw)', whiteSpace:'nowrap', lineHeight:0.95, color:'#fff', textShadow:`0 1.4vh 0 ${R.ink}55, 0 3vh 8vh rgba(0,0,0,0.3)`,
+              animation:'revealSlam 1s cubic-bezier(.2,1.5,.4,1) both' }}>{R.word}</div>
+          </div>
         </React.Fragment>
       )}
       {stage === 'boom' && (
@@ -44135,7 +44143,7 @@ function RevealProjector({ title, cfg, onExit, watch }) {
 @keyframes revealBeat { 0% { transform:scale(1.5); opacity:0 } 25% { opacity:1 } 100% { transform:scale(0.92); opacity:0.85 } }
 @keyframes revealSlam { 0% { transform:scale(3); opacity:0 } 60% { transform:scale(0.92); opacity:1 } 100% { transform:scale(1) } }
 @keyframes revealRise { from { transform:translateY(0) } to { transform:translateY(-140vh) } }
-@keyframes revealOutroFade { 0% { opacity:1 } 30% { opacity:1 } 100% { opacity:0 } }
+@keyframes revealOutroFade { 0% { opacity:1 } 50% { opacity:1 } 100% { opacity:0 } }
 `}</style>
       <RevealPaperBlobs tones={tones} />
       {!qstate && stage()}

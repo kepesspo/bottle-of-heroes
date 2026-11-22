@@ -4405,3 +4405,14 @@ Feltöltött saját zene felülírja a beépítettet, a hosszt viszont a kapcsol
 20 mp-en belül magától véget ér, ezért nincs rajta halkítás (v10.461 szabálya).
 Teszt: `reveal_extras_test.js` 3c2. blokk (alap 10, a választás a dokumentumba megy, a vetítő a
 milliomos zenére vált, 20-tól számol 1-ig, vissza 10-re az óra-zene jön).
+
+## Gender Reveal: felirat a kiderült színen + „KISFIÚ VAGY KISLÁNY?" (v10.468)
+- **A videó utáni átmenetben (outro)** a pasztell szín és a konfetti fölött ott áll a
+  „KISLÁNY!" / „KISFIÚ!" felirat az emojival (`data-reveal-outroword`, ugyanaz a stílus, mint a
+  robbanásé). A szín ehhez tovább marad: `REVEAL_OUTRO_HOLD` = 5,5 mp (a régi 2,8 helyett), a
+  `revealOutroFade` fele ideig teljesen áll. ⚠️ A felirat UGYANAZZAL az animációval halványul,
+  mint a szín — külön időzítéssel a felirat a már átlátszó szín fölött, a képfal előtt lógna.
+  A `REVEAL_OUTRO_MS` (7 mp) változatlan, így a konfetti a felirat eltűnése után is hull még.
+- **A visszaszámlálás fejléce** „FIÚ VAGY LÁNY?" → **„KISFIÚ VAGY KISLÁNY?"**
+  (`data-reveal-question`), ugyanaz a szóhasználat, mint az eredményé (v10.435).
+Teszt: `reveal_extras_test.js` 3. blokk (a fejléc) és 3b2. blokk (az outro alatt „KISLÁNY!").
