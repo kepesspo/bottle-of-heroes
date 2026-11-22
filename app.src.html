@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.466';
+const APP_VERSION = 'v10.467';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -42908,6 +42908,7 @@ function canvasToCompressedURL(canvas, quality) {
 // jókívánságot küldhetnek — ezek az operátor jóváhagyásáig `pending`-ek.
 // Adat:
 //   config/revealConfig    = { password, title, guestKey, albumKey, liveKey }
+//   config/revealProjector.countdown = 10 | 20  (v10.467: a visszaszámlálás hossza)
 //   config/revealSecret    = { result:'boy'|'girl', code, videoUrl }   — CSAK az admin írja
 //   config/revealState     = { phase:'idle'|'reveal', run, test, result, videoUrl, at }
 //   config/revealQuiz      = { questions:[{ q, opts:[…], ok }] }
@@ -42934,6 +42935,13 @@ const REVEAL_RESULTS = {
   test: { word:'PRÓBA', name:'Próba', emoji:'✅', c1:'#8E7CC3', c2:'#C7B8EC', ink:'#1E1438' },
 };
 const REVEAL_COUNT_FROM = 10;
+// v10.467: a visszaszámlálás hossza választható (Szülők → Leleplezés), és mindkettőhöz saját
+// beépített zene tartozik. A beállítás a config/revealProjector.countdown (hiányzó = 10).
+const REVEAL_COUNTDOWNS = [
+  { s:10, music:'assets/reveal_countdown_music.mp3',     name:'Óra' },
+  { s:20, music:'assets/reveal_countdown_milliomos.mp3', name:'Legyen Ön is milliomos' },
+];
+function revealCountdownOf(v) { const n = +((v || {}).countdown); return REVEAL_COUNTDOWNS.find(c => c.s === n) || REVEAL_COUNTDOWNS[0]; }
 // v10.458: a videó hangereje (Szülők → Leleplezés). NINCS „némítva" opció — a videó mindig hanggal megy.
 const REVEAL_VOLS = [0.25, 0.5, 0.75, 1];
 function revealVolOf(v) { const n = +((v || {}).vol); return REVEAL_VOLS.includes(n) ? n : 1; }
@@ -43508,11 +43516,12 @@ function RevealConfetti({ colors }) {
   }, []);
   return <canvas ref={ref} aria-hidden="true" style={{ position:'absolute', inset:0, pointerEvents:'none' }} />;
 }
-function RevealShow({ show, video, music, onDone, onLand, volume, vEl, aEl }) {
+function RevealShow({ show, video, music, onDone, onLand, volume, vEl, aEl, countFrom }) {
+  const CF = [10, 20].includes(+countFrom) ? +countFrom : REVEAL_COUNT_FROM;   // v10.467: 10 vagy 20 mp
   const R = REVEAL_RESULTS[show.test ? 'test' : show.result] || REVEAL_RESULTS.test;
   const sp = revealSpeed();
   const [stage, setStage] = React.useState('count');     // count | video | outro | boom
-  const [n, setN] = React.useState(REVEAL_COUNT_FROM);
+  const [n, setN] = React.useState(CF);
   const [muted, setMuted] = React.useState(false);
   // ⚠️ YouTube-linket a <video> nem játszik le — figyelmen kívül hagyjuk (a régi mentett link se akasszon)
   const vidSrc = show.test ? '' : (video || (show.videoUrl && !revealIsYoutube(show.videoUrl) ? show.videoUrl : ''));
@@ -43535,7 +43544,7 @@ function RevealShow({ show, video, music, onDone, onLand, volume, vEl, aEl }) {
   // ~1,2 mp-ben elhalkul, így a videó / robbanás tiszta hanggal kezdődik. Ha nem indul el, dobpergés.
   const musRef = React.useRef(null);
   React.useEffect(() => {
-    const total = REVEAL_COUNT_FROM * sp, fade = Math.min(1.2, total / 4), t0 = performance.now();
+    const total = CF * sp, fade = Math.min(1.2, total / 4), t0 = performance.now();
     let fiv = 0;
     if (music) {
       const own = aEl && aEl.current, a = (own && own.getAttribute('src')) ? own : new Audio(music); musRef.current = a;
@@ -43544,7 +43553,7 @@ function RevealShow({ show, video, music, onDone, onLand, volume, vEl, aEl }) {
       // v10.461: ami magától véget ér a „0” előtt (a beépített zene 9,7 mp), azt nem halkítjuk — az utolsó ütés kell
       fiv = setInterval(() => { if (a.duration && a.duration <= total + 0.3) return; const left = total - (performance.now() - t0) / 1000; try { a.volume = Math.max(0, vol * Math.min(1, left / fade)); } catch(e) {} }, 50);
     } else revealDrumroll(total);
-    let k = REVEAL_COUNT_FROM;
+    let k = CF;
     const iv = setInterval(() => { k--; if (k > 0) setN(k); else { clearInterval(iv); clearInterval(fiv); const a = musRef.current; if (a) try { a.pause(); } catch(e) {} setStage(vidSrc && !vBad.current ? 'video' : 'boom'); } }, 1000 * sp);
     return () => { clearInterval(iv); clearInterval(fiv); const a = musRef.current; if (a) try { a.pause(); } catch(e) {} };
   }, []);
@@ -43847,18 +43856,24 @@ function useRevealVideo(coll) {
 // v10.461: a visszaszámlálás zenéje — a feltöltött, vagy ha nincs, a beépített. A beépítettet is
 // Blob-URL-ként adjuk (a service worker cache-first válasza a médiaelem Range-kérésére Safariban
 // elakadhat); ha a fetch nem megy (file://), a sima útvonal.
-function useRevealMusic() {
+// v10.467: `path` = a választott visszaszámlálás beépített zenéje — váltáskor újratölt.
+function useRevealMusic(path) {
+  path = path || REVEAL_DEFAULT_MUSIC;
   const up = useRevealVideo('revealAudio');
   const useDef = up.metaLoaded && !up.has && !up.uploading;
   const [def, setDef] = React.useState({ url:null, loading:false });
   React.useEffect(() => {
-    if (!useDef || def.url) return;
-    let dead = false; setDef({ url:null, loading:true, pct:0 });
-    fetch(REVEAL_DEFAULT_MUSIC).then(r => { if (!r.ok) throw new Error('http'); return r.blob(); })
-      .then(b => { if (!dead) setDef({ url: URL.createObjectURL(b.type ? b : new Blob([b], { type:'audio/mpeg' })), loading:false, pct:100, builtin:true }); })
-      .catch(() => { if (!dead) setDef({ url: REVEAL_DEFAULT_MUSIC, loading:false, pct:100, builtin:true }); });
+    if (!useDef || (def.url && def.path === path)) return;
+    let dead = false, made = '';
+    setDef({ url:null, loading:true, pct:0, path });
+    fetch(path).then(r => { if (!r.ok) throw new Error('http'); return r.blob(); })
+      .then(b => { if (dead) return; made = URL.createObjectURL(b.type ? b : new Blob([b], { type:'audio/mpeg' })); setDef({ url: made, loading:false, pct:100, builtin:true, path }); })
+      .catch(() => { if (!dead) setDef({ url: path, loading:false, pct:100, builtin:true, path }); });
     return () => { dead = true; };
-  }, [useDef]);
+  }, [useDef, path]);
+  // a régi blob felszabadítása, ha a zene cserélődött
+  const prevBlob = React.useRef('');
+  React.useEffect(() => { const u = def.url || ''; if (prevBlob.current && prevBlob.current !== u && /^blob:/.test(prevBlob.current)) { try { URL.revokeObjectURL(prevBlob.current); } catch(e) {} } prevBlob.current = u; }, [def.url]);
   return useDef ? def : up;
 }
 // ── Szülők: a videó feltöltése. Előnézet SZÁNDÉKOSAN nincs — a szülők sem nézik meg előre.
@@ -43944,7 +43959,8 @@ function RevealProjector({ title, cfg, onExit, watch }) {
   const [show, setShow] = React.useState(null);
   const [revealed, setRevealed] = React.useState(null);
   const video = useRevealVideo();                          // a Szülők feltöltött videója (v10.439)
-  const music = useRevealMusic();                          // v10.458: a visszaszámlálás zenéje (v10.461: beépített is)
+  const cdown = revealCountdownOf(ctl.v);                  // v10.467: 10 vagy 20 mp, saját beépített zenével
+  const music = useRevealMusic(cdown.music);               // v10.458: a visszaszámlálás zenéje (v10.461: beépített is)
   const medSrcs = [video.url, music.url].filter(Boolean);
   const soundOk = medSrcs.length > 0 && medSrcs.every(u => snd[u] === true);
   React.useEffect(() => { if (cfg && !watch) revealEnsureKeys(cfg); }, [cfg && cfg.guestKey, cfg && cfg.albumKey, !!cfg]);
@@ -43954,7 +43970,7 @@ function RevealProjector({ title, cfg, onExit, watch }) {
   const revealAt = +((cfg && cfg.revealAt) || 0);
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => { const iv = setInterval(() => setNow(Date.now()), Math.max(50, 1000 * Math.min(1, revealSpeed()))); return () => clearInterval(iv); }, []);
-  // ⚠️ A nagy 10-es visszaszámlálás az időpont ELŐTT 10 mp-cel indul, hogy a „0" pont az
+  // ⚠️ A nagy (10 vagy 20 mp-es) visszaszámlálás az időpont ELŐTT ennyivel indul, hogy a „0" pont az
   // időpontra essen. Az eredményt a vetítő CSAK EKKOR olvassa ki a titkos dokumentumból, és a
   // szobába írja (`<run>-go`) — több vetítőnél is ugyanazzal az azonosítóval, tehát egyszer fut.
   const firedRef = React.useRef('');
@@ -43962,7 +43978,7 @@ function RevealProjector({ title, cfg, onExit, watch }) {
     const v = rstate.v || {};
     if (watch) return;   // v10.462: az időzített indítást a buli vetítője végzi, nem a távoli néző
     if (v.phase !== 'armed' || !v.run || firedRef.current === v.run) return;
-    if (revealAt && now < revealAt - REVEAL_COUNT_FROM * 1000 * revealSpeed()) return;
+    if (revealAt && now < revealAt - cdown.s * 1000 * revealSpeed()) return;   // v10.467: a választott hossz
     firedRef.current = v.run;
     const db = revealDb(); if (!db) return;
     db.collection('config').doc('revealSecret').get().then(d => {
@@ -43970,7 +43986,7 @@ function RevealProjector({ title, cfg, onExit, watch }) {
       if (!REVEAL_RESULTS[sec.result] || sec.result === 'test') { firedRef.current = ''; return; }
       return db.collection('config').doc('revealState').set({ phase:'reveal', run: v.run + '-go', test:false, result: sec.result, videoUrl: sec.videoUrl || '', at: Date.now(), auto:true });
     }).catch(() => { firedRef.current = ''; });
-  }, [rstate, now, revealAt]);
+  }, [rstate, now, revealAt, cdown.s]);
 
   // ⚠️ Az ELSŐ pillanatképben ülő leleplezést NEM játsszuk le (az már megtörtént — a
   // később nyitó vetítő rögtön a kiderült színt kapja). Csak a menet közben érkező
@@ -44172,7 +44188,7 @@ function RevealProjector({ title, cfg, onExit, watch }) {
           <span style={{ fontWeight:700, fontSize:'clamp(13px, 1.9vh, 20px)', opacity:0.7, padding:'0 16px' }}>{watch ? (title || 'Gender Reveal') + ' · koppints, hogy a leleplezést hanggal lásd' : 'Egy kattintás, hogy a leleplezés hanggal menjen'}</span>
         </button>
       )}
-      {show && <RevealShow key={show.run} show={show} video={video && video.url} music={music && music.url} volume={revealVolOf(ctl.v)} onDone={finishShow} vEl={vEl} aEl={aEl}
+      {show && <RevealShow key={show.run} show={show} video={video && video.url} music={music && music.url} volume={revealVolOf(ctl.v)} countFrom={cdown.s} onDone={finishShow} vEl={vEl} aEl={aEl}
         onLand={() => { if (!show.test && REVEAL_RESULTS[show.result]) setRevealed(show.result); }} />}
       <div data-reveal-controls style={{ position:'absolute', left:0, right:0, top:0, display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflowX:'auto', WebkitOverflowScrolling:'touch',
         padding: narrow ? '10px 12px' : '14px 18px', background:`linear-gradient(${REVEAL_PAPER}F2 55%, ${REVEAL_PAPER}00)`, opacity: ui ? 1 : 0, pointerEvents: ui ? 'auto' : 'none', transition:'opacity .4s', zIndex:70, scrollbarWidth:'none' }}>
@@ -45116,6 +45132,7 @@ function RevealParentRevealTab({ dock }) {
             {revealAt > 0 && <button type="button" onClick={() => { saveCfg({ revealAt:0 }); setEditWhen(false); }} style={rvBtn('small')}>Törlés</button>}
           </div>
         )}
+        <RevealCountdownRow />
         <RevealMusicRow />
         <RevealVideoRow />
         <RevealVolumeRow />
@@ -45155,11 +45172,22 @@ function RevealVolumeRow() {
     right: rvSeg(REVEAL_VOLS.map(n => ({ v:n, t: Math.round(n * 100) + '%' })), vol, n => { revealCtlWrite({ vol:n }); flash('Mentve'); }, 'data-reveal-p-vol', 'Videó hangereje') });
 }
 function RevealVideoRow() { return <RevealMediaRow />; }
+// v10.467: a visszaszámlálás hossza — 10 mp (óra) vagy 20 mp (Legyen Ön is milliomos). A vetítő
+// ennyitől számol vissza, és a választott beépített zene szól (feltöltött saját zene felülírja).
+function RevealCountdownRow() {
+  const ctl = useRevealDoc('revealProjector');
+  const [msg, flash] = useRevealFlash();
+  const cur = revealCountdownOf(ctl.v);
+  return rvRow({ tight:true, data:{ 'data-reveal-p-countrow':'', 'data-cur': String(cur.s) },
+    label: <span>Visszaszámlálás{msg ? <span style={{ display:'block', marginTop:2 }}>{rvMsg(msg)}</span> : <span style={{ display:'block', fontWeight:700, fontSize:12, color:T.inkSoft, marginTop:2 }}>{cur.s} mp · {cur.name}</span>}</span>,
+    right: rvSeg(REVEAL_COUNTDOWNS.map(c => ({ v:c.s, t: c.s + ' mp' })), cur.s, n => { revealCtlWrite({ countdown:n }); flash('Mentve'); }, 'data-reveal-p-countfrom', 'Visszaszámlálás hossza') });
+}
 // v10.458: a visszaszámlálás zenéje — ha van, a dobpergés HELYETT szól, a „0" előtt elhalkul.
 // v10.461: feltöltés nélkül a beépített zene (REVEAL_DEFAULT_MUSIC) szól.
 function RevealMusicRow() {
+  const ctl = useRevealDoc('revealProjector'), cur = revealCountdownOf(ctl.v);   // v10.467
   return <RevealMediaRow coll="revealAudio" dp="music" icon="timer" title="Visszaszámlálás zenéje" accept="audio/*" max={REVEAL_MUSIC_MAX} what="A zene"
-    emptyText="Beépített visszaszámláló zene" delTitle="Saját zene törlése" delText="A visszaszámlálás alatt a beépített zene fog szólni." gone="Zene törölve" />;
+    emptyText={'Beépített: ' + cur.name} delTitle="Saját zene törlése" delText="A visszaszámlálás alatt a beépített zene fog szólni." gone="Zene törölve" />;
 }
 function RevealMediaRow({ coll, dp, icon, title, accept, max, what, emptyText, delTitle, delText, gone }) {
   coll = coll || 'revealVideo'; dp = dp || 'video'; max = max || REVEAL_VIDEO_MAX;

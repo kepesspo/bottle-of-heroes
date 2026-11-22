@@ -321,6 +321,35 @@ const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
   ok(/alapzene/.test(bi.txt) && !/kész/.test(bi.txt) && /reveal_countdown_music\.mp3$/.test(bi.src), 'v10.461: …a vetítő a beépített zenére áll vissza', JSON.stringify(bi));
   ok(bi.dur > 9 && bi.dur <= 10.3, 'v10.461: a beépített zene a 10 mp-es visszaszámláláson belül véget ér (nincs halkítás)', bi.dur);
   ok(/Beépített/.test(bi.row) && await has('#__side [data-reveal-p-volrow]'), 'v10.461: a Szülőknél „Beépített visszaszámláló zene", és a hangerő-sor marad', bi.row);
+
+  console.log('\n===== 3c2. VISSZASZÁMLÁLÁS: 10 mp (óra) / 20 mp (milliomos) — v10.467 =====');
+  ok((await attr('#__side [data-reveal-p-countrow]', 'data-cur')) === '10', 'alapból 10 mp');
+  const cdOpts = await p.evaluate(() => [...document.querySelectorAll('#__side [data-reveal-p-countfrom]')].map(b => b.textContent.trim()));
+  ok(JSON.stringify(cdOpts) === '["10 mp","20 mp"]', 'két választás: 10 mp és 20 mp', JSON.stringify(cdOpts));
+  await p.evaluate(() => document.querySelector('#__side [data-reveal-p-countfrom="20"]').click()); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => (window.__fbStore.config.revealProjector || {}).countdown === 20), 'a választás a közös dokumentumba megy (countdown: 20)');
+  await p.waitForFunction(() => /reveal_countdown_milliomos\.mp3$/.test((document.querySelector('[data-reveal-musicel]') || {}).getAttribute && document.querySelector('[data-reveal-musicel]').getAttribute('src') || ''), null, { timeout: 8000 }).catch(() => {});
+  await p.waitForFunction(() => { const a = document.querySelector('[data-reveal-musicel]'); return a && a.duration > 0; }, null, { timeout: 8000 }).catch(() => {});
+  const mil = await p.evaluate(() => { const a = document.querySelector('[data-reveal-musicel]'); return { src: a.getAttribute('src') || '', dur: a.duration }; });
+  ok(/reveal_countdown_milliomos\.mp3$/.test(mil.src), 'a vetítő a milliomos zenére vált', mil.src);
+  ok(mil.dur > 19.5 && mil.dur <= 20.3, 'a milliomos zene a 20 mp-en belül véget ér (nincs halkítás)', mil.dur);
+  await p.waitForTimeout(2700);
+  ok(/20 mp · Legyen Ön is milliomos/.test(await p.evaluate(() => document.querySelector('#__side [data-reveal-p-countrow]').textContent)), 'a sor kiírja: 20 mp · Legyen Ön is milliomos');
+  ok(/Milliomos/i.test(await p.evaluate(() => document.querySelector('#__side [data-reveal-p-musicstatus]').textContent)), 'a Szülőknél „Beépített: Legyen Ön is milliomos"');
+  // a vetítő 20-tól számol vissza
+  await p.evaluate(() => { window.__cdSeen = []; window.__cdObs = new MutationObserver(() => { const e = document.querySelector('[data-reveal-countdown]'); const v = e && e.getAttribute('data-reveal-countdown'); if (v && window.__cdSeen[window.__cdSeen.length - 1] !== v) window.__cdSeen.push(v); }); window.__cdObs.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-reveal-countdown'] }); });
+  const rsPrev = await p.evaluate(() => JSON.parse(JSON.stringify(window.__fbStore.config.revealState || {})));
+  await p.evaluate(() => firebase.firestore().collection('config').doc('revealState').set({ phase: 'reveal', run: 'cd20', test: true, at: Date.now() }));
+  await p.waitForFunction(() => !document.querySelector('[data-reveal-show]') && window.__cdSeen.length > 0, null, { timeout: 15000 }).catch(() => {});
+  const seen = await p.evaluate(() => { window.__cdObs.disconnect(); return window.__cdSeen.map(Number); });
+  await p.evaluate(v => firebase.firestore().collection('config').doc('revealState').set(v), rsPrev);   // a próba ne írja felül a későbbi blokkok állapotát
+  ok(seen[0] === 20 && Math.max(...seen) === 20 && seen.includes(11) && seen.includes(1), '20-tól számol vissza 1-ig', JSON.stringify(seen));
+  // vissza 10-re: a régi zene jön vissza
+  await p.evaluate(() => document.querySelector('#__side [data-reveal-p-countfrom="10"]').click()); await p.waitForTimeout(300);
+  await p.waitForFunction(() => /reveal_countdown_music\.mp3$/.test(document.querySelector('[data-reveal-musicel]').getAttribute('src') || ''), null, { timeout: 8000 }).catch(() => {});
+  ok(await p.evaluate(() => (window.__fbStore.config.revealProjector || {}).countdown === 10 && /reveal_countdown_music\.mp3$/.test(document.querySelector('[data-reveal-musicel]').getAttribute('src') || '')), 'vissza 10 mp-re: az óra-zene jön vissza');
+  // az időzített indítás a választott hosszal előbb indul (forrás-szint)
+  ok(/now < revealAt - cdown\.s \* 1000/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'app.src.html'), 'utf8')), 'az időzített indítás a választott hosszal indul előbb');
   fs.unlinkSync(wav);
   await p.evaluate(() => { const d = document.getElementById('__side'); if (d) { d.__r.unmount(); d.remove(); } });
   await p.evaluate(() => window.__rvSave());

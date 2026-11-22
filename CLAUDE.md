@@ -4386,3 +4386,22 @@ döntésre **visszavonva** — a kód a v10.464 állapotán áll, csak a verzió
 alatt töltött fel képet, annak a `revealPhotos` dokumentumában csak a bélyeg (≤ 800 px)
 van, a teljes kép a `revealFull`-ban maradt — a vetítő ilyenkor a bélyeget mutatja.
 Ha a memória-kérdés később újra előjön, a megoldás a git-előzményben van (`0bc4609`).
+
+## Gender Reveal: 10 vagy 20 mp-es visszaszámlálás (v10.467)
+A Szülők Leleplezés fülén (`RevealCountdownRow`, `data-reveal-p-countfrom`) választható a
+visszaszámlálás hossza, és mindkettőhöz saját beépített zene tartozik (`REVEAL_COUNTDOWNS`):
+- **10 mp · Óra** — `assets/reveal_countdown_music.mp3` (a v10.461-es, alap);
+- **20 mp · Legyen Ön is milliomos** — `assets/reveal_countdown_milliomos.mp3` (a tulajdonos által
+  küldött mp3, a végi csend levágva → 20,0 mp, 192 kbps).
+
+A beállítás a közös `config/revealProjector.countdown` (10 | 20; hiányzó = 10, `revealCountdownOf`),
+a vetítő CSAK olvassa — mint a többi vetítő-beállítás. Három helyen kell ugyanannak a számnak lennie:
+- a show (`RevealShow` `countFrom` propja) — ettől számol vissza;
+- a beépített zene (`useRevealMusic(cdown.music)` — váltáskor újratölt, a régi blobot elengedi);
+- **az időzített indítás küszöbe** (`revealAt - cdown.s * 1000`) — különben 20 mp-es módban a „0"
+  10 mp-cel az időpont UTÁN esne.
+
+Feltöltött saját zene felülírja a beépítettet, a hosszt viszont a kapcsoló adja. A milliomos zene
+20 mp-en belül magától véget ér, ezért nincs rajta halkítás (v10.461 szabálya).
+Teszt: `reveal_extras_test.js` 3c2. blokk (alap 10, a választás a dokumentumba megy, a vetítő a
+milliomos zenére vált, 20-tól számol 1-ig, vissza 10-re az óra-zene jön).
