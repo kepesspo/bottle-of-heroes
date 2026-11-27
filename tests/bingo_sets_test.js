@@ -131,7 +131,7 @@ const txt = p => p.evaluate(() => (document.getElementById('root').innerText || 
   await p.click('#__ab [data-bingo-set="otp"]'); await p.waitForTimeout(200);
   await p.locator('button:text-is("Váltás")').click(); await p.waitForTimeout(600);
   bc = await p.evaluate(() => window.__fbStore.config.bingoConfig);
-  ok(bc.items.length === 36 && bc.center.t === 'OTP Gála 2027' && bc.bingoSets.otp.pv === 3, 'a régi verziós másolat helyett a 36 szavas preset jön (pv:3)', JSON.stringify({ n: bc.items.length, c: bc.center.t, pv: bc.bingoSets.otp.pv }));
+  ok(bc.items.length === 36 && bc.center.t === 'OTP Gála 2027' && bc.bingoSets.otp.pv === 4 && bc.titleEmoji === '', 'a régi verziós másolat helyett a 36 szavas, mikrofon nélküli preset jön (pv:4)', JSON.stringify({ n: bc.items.length, c: bc.center.t, pv: bc.bingoSets.otp.pv, e: bc.titleEmoji }));
   // kézi visszatöltés: elrontjuk, majd „Alap lista visszatöltése" + Mentés
   await p.evaluate(() => document.querySelector('#__ab [data-bingo-item-k="0"]').click());
   await p.click('#__ab [data-bingo-preset]'); await p.waitForTimeout(100);
@@ -140,6 +140,22 @@ const txt = p => p.evaluate(() => (document.getElementById('root').innerText || 
   bc = await p.evaluate(() => window.__fbStore.config.bingoConfig);
   ok(bc.items[0].k === preset.items[0].k && bc.items.length === 36, 'az „Alap lista visszatöltése” az eredeti listát hozza vissza');
   ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+  await p.close();
+  // v10.480: az ÉLES helyzet — az OTP szett már aktív, a címen még 🎤 (és 24 szó). A visszatöltés +
+  // Mentés leveszi a mikrofont, és a képernyő fejlécében sincs többé.
+  p = await open(b, '', { bingoConfig: Object.assign({}, OTP, { center: preset.center, items: preset.items.slice(0, 24) }) });
+  await p.evaluate(() => { const r = document.getElementById('root'); if (r) r.style.display = 'none';
+    const d = document.createElement('div'); d.id = '__ab'; document.body.appendChild(d); ReactDOM.createRoot(d).render(React.createElement(AdminBingo, { app: 'bingo' })); });
+  await p.waitForTimeout(800);
+  await p.click('#__ab [data-bingo-preset]'); await p.waitForTimeout(100);
+  await p.evaluate(() => { const bt = [...document.querySelectorAll('#__ab button')].find(x => x.textContent.trim() === 'Mentés'); bt && bt.click(); });
+  await p.waitForTimeout(500);
+  bc = await p.evaluate(() => window.__fbStore.config.bingoConfig);
+  ok(bc.titleEmoji === '' && bc.items.length === 36, 'élő OTP szett: a visszatöltés + Mentés után nincs 🎤, és 36 szó', JSON.stringify({ e: bc.titleEmoji, n: bc.items.length }));
+  await p.close();
+  p = await open(b, '?screen=bingo', { bingoConfig: bc }, { boh_bingo_who: 'p0' });
+  const head = await p.evaluate(() => (document.querySelector('.appbar-shell') || document.body).innerText);
+  ok(/OTP Gála Bingó/.test(head) && !/🎤/.test(head), 'a fejlécben „OTP Gála Bingó", mikrofon nélkül', head.split('\n')[0]);
   await p.close();
 
   console.log('\n===== 6. KEVÉS TÉTEL =====');

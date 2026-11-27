@@ -4593,3 +4593,12 @@ Nincs / +2 BINGÓ-korty a sávban és a gombon; admin; hosszváltás → új kö
   `index.html`-ből Playwrighttal felvett képernyőkkel (OTP téma, OTP Gála szett, Kaparós
   kinézet). Ha a felület változik, a képernyőket újra kell venni.
 Teszt: `contrast_test.js` (az `otp` téma is a körben — nincs 2,5 alatti kontraszt).
+
+### OTP Gála: mikrofon nélkül (v10.480)
+Az OTP Gála szett címéről lekerült a 🎤 (`titleEmoji:''`, `pv` 3 → 4); az üres emojinál a fejléc
+csak a címet írja. ⚠️ A már AKTÍV szetten a mentett `titleEmoji` marad, amíg az admin nem nyúl
+hozzá: Admin → DNR Bingó → „Alap lista visszatöltése" + Mentés (ez a 36 szót is hozza, és — mivel
+a darabszám változik — új kört indít), vagy a Cím-emoji mező kiürítése + Mentés.
+A plakát (`docs/otp_gala_bingo_utmutato.png`) is mikrofon nélkül készült újra.
+Teszt: `bingo_sets_test.js` 5c. blokk (pv:4 + üres emoji; élő OTP szett 🎤-mal → visszatöltés után
+a fejlécben nincs mikrofon).
