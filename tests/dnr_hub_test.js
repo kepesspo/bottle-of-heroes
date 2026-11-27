@@ -111,6 +111,22 @@ async function open(b, query, init) {
   }));
   // v10.423: az egységes ikoncsalád minden tagja a Games kompozícióját követi → mind a Games méretén (134/160 ≈ 84%)
   ok(fit.every(f => Math.abs(f.r - 84) <= 2), '⚠️ minden app-ikon ugyanakkora a körben, mint a Games', JSON.stringify(fit));
+  // ⚠️ v10.476: a gyűrű a KÉP FÖLÖTT — a négyzetes, fehér hátterű ikon sarka átlósan nem takarhatja ki.
+  // Pixel-mérés: a Bingó kör gyűrűjén (r≈77, 45°-on, ahol a négyzet sarka ül) ne fehér legyen.
+  await p.evaluate(() => document.querySelector('[data-hub-card="bingo"]').click()); await p.waitForTimeout(700);
+  const ringPx = async () => {
+    const el = await p.$('[data-hub-card="bingo"] [data-hub-circle]');
+    const png = (await el.screenshot()).toString('base64');
+    return p.evaluate(async src => {
+      const im = new Image(); im.src = 'data:image/png;base64,' + src; await im.decode();
+      const cv = document.createElement('canvas'); cv.width = im.width; cv.height = im.height;
+      const cx = cv.getContext('2d'); cx.drawImage(im, 0, 0);
+      const R = im.width / 2, d = 77 / 80 * R * Math.SQRT1_2, pts = [[R + d, R - d], [R - d, R - d], [R + d, R + d], [R - d, R + d]];
+      return pts.map(([x, y]) => { const q = cx.getImageData(Math.round(x), Math.round(y), 1, 1).data; return q[0] + q[1] + q[2]; });
+    }, png);
+  };
+  const diag = await ringPx();
+  ok(diag.every(v => v < 735), '⚠️ a gyűrű a négy átlón sem szakad meg (nem fehér)', JSON.stringify(diag));
   ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
   await p.close();
 

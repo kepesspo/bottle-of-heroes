@@ -4528,3 +4528,11 @@ törölné.
   A már bent lévő vendégek jelölései és az Állás-soruk megmaradnak.
 Teszt: `hub_bingoguest_test.js` D. blokk (a teljes Mentés tényleges lefutását is ellenőrzi —
 a Mentés gomb csak módosítás után él, a teszt ezért előbb átír egy mezőt).
+
+### Központ: a kör-ikon gyűrűje a KÉP FÖLÖTT (v10.476)
+A kártya körének gyűrűje `inset box-shadow` volt a kör `span`-ján — az a tartalom ALÁ
+festődik, ezért a négyzetes, fehér hátterű ikon (134 px, a sarka ~95 px-re a középtől) a négy
+átlón kitakarta a 74–80 px-es gyűrűt („megszakad a kör"). Most a gyűrű külön réteg a kép
+fölött (`data-hub-ring`, `position:absolute; inset:0`, `pointerEvents:none`), a kör
+`data-hub-circle`. Teszt: `dnr_hub_test` — pixel-mérés a Bingó kör négy átlóján (a régi
+buildon fehér → HIBA).
