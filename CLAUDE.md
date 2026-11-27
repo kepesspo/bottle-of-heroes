@@ -4447,3 +4447,25 @@ nem tiszta számjegysor volt. Két javítás:
   prop: belépő → „Admin → Gender Reveal → Belépő kód”, szülői → „Szülők → Leleplezés →
   Eredmény és kód”). A beállítás helye NEM változott.
 Teszt: `reveal_test.js` 1. blokk.
+
+## ⚠️ DNR központ: nincs automatikus átugrás + a Games is kikapcsolható; Bingó-vendég (v10.472)
+**A központ NEM ugrik át magától a Games-re**, ha csak az az egy app látszik. Korábban
+ilyenkor (`others.length === 0` → `onOpen('home')`) a központ és vele az **admin gomb
+elérhetetlen** lett, a Games „‹ DNR" gombja pedig rögtön visszadobott a Games-re.
+Felülírja a v10.409 „ha csak a Games maradna, egyenesen a Games-t nyitja" szabályát.
+- **A DNR Games is kikapcsolható**: `homeConfig.dnrApps.home` (Admin → Általános → DNR
+  központ, a lista tetején külön sor: `data-admin-games-row`). A mester-kapcsoló
+  („DNR appok a központban") ettől FÜGGETLEN — az csak a többi appot viszi.
+- Ha egy app sem látszik: üres állapot (`data-hub-empty`), az admin fogaskerék ott is kint.
+- A `?screen=games` deep link kikapcsolt Games mellett is nyílik (csak a kártya tűnik el).
+
+**DNR Bingó „Ki vagy?" két részben** (csak a Bingóban — a Tipp e-mailes kódhoz, a Tortán
+csapathoz kötött, ott marad a profil-rács):
+- **Profilok** — lenyitható (`data-who-profiles`, alapból CSUKVA), benne a `data-who-pick` gombok;
+- **Vendég** (`data-who-guestbox`) — név (`data-who-guestname`), vagy üresen **„Vendég N"**,
+  gomb: `data-who-guest`. A vendég a `config/bingo` **`_guests`** térképébe kerül
+  (`{ name, color, at }`, `g_…` azonosító) — ugyanabba a doksiba, mint a jelölések, így
+  új Firestore-szabály nem kell. Az eszköz megjegyzi (`boh_bingo_guest`): újra belépve
+  UGYANAZT a vendéget kapja (kártya és jelölések megmaradnak). Az Állásban „· vendég" jelöléssel.
+Teszt: `node tests/hub_bingoguest_test.js`. Igazítva: `dnr_toggle_test` (a központ marad;
+a mester-kapcsoló kereső kihagyja a Games sorát).

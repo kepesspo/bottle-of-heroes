@@ -27,8 +27,8 @@ async function home(b, homeCfg) {
   return p;
 }
 // v10.409 óta a „TOVÁBBI DNR" sor helyett a DNR KÖZPONT kártyái viszik a többi appot:
-// a kapcsoló BE → a Games mellett más app-kártya is áll; KI → csak a Games, és az app
-// egyenesen a Games főoldalával nyit. (A régi felirat-kereső v10.409 óta tartósan piros volt.)
+// a kapcsoló BE → a Games mellett más app-kártya is áll; KI → csak a Games (v10.472 óta
+// a központ marad, nem ugrik át). (A régi felirat-kereső v10.409 óta tartósan piros volt.)
 const hasRow = (p) => p.evaluate(() => [...document.querySelectorAll('[data-hub-card]')].some(c => c.getAttribute('data-hub-card') !== 'home'));
 
 (async () => {
@@ -45,6 +45,10 @@ const hasRow = (p) => p.evaluate(() => [...document.querySelectorAll('[data-hub-
   console.log('\n===== FOOLDAL · KIKAPCSOLVA =====');
   p = await home(b, { dnrAppsEnabled: false });
   ok('dnrAppsEnabled:false -> NEM latszik', (await hasRow(p)) === false);
+  // v10.472: a központ NEM ugrik át magától a Games-re (különben az admin elérhetetlen) —
+  // a Games-t a kártyájával nyitjuk meg
+  ok('v10.472: a kozpont marad (nem ugrik at a Games-re)', await p.evaluate(() => !!document.querySelector('[data-dnr-hub]')));
+  await p.evaluate(() => { const x = document.querySelector('[data-hub-open="home"]'); x && x.click(); }); await p.waitForTimeout(1200);
   // ⚠️ A feliratot a FORRASBOL kerdezzuk. Korabban bedrotozott „Quick Game" allt
   // itt, a gomb viszont regota „Villám Játék" — a sor emiatt tartosan piros volt,
   // holott a termek jol mukodott.
@@ -74,8 +78,8 @@ const hasRow = (p) => p.evaluate(() => [...document.querySelectorAll('[data-hub-
   const admTxt = await p.evaluate(() => document.getElementById('__adm').innerText);
   ok('van "DNR központ" kartya a kapcsoloval (v10.420)', /DNR központ/.test(admTxt) && /DNR appok a központban/.test(admTxt), admTxt.replace(/\n/g, ' | ').slice(0, 120));
   const toggleState = () => p.evaluate(() => {
-    const t = document.querySelector('#__adm div[style*="border-radius: 16px"][style*="width: 52px"]') ||
-      Array.from(document.querySelectorAll('#__adm div')).find(d => d.style.width === '52px' && d.style.height === '32px');
+    // v10.472: a DNR Games saját sora (data-admin-games-row) elöl áll — a mester-kapcsolót keressük
+    const t = Array.from(document.querySelectorAll('#__adm div')).filter(d => !d.closest('[data-admin-games-row]')).find(d => d.style.width === '52px' && d.style.height === '32px');
     return t ? getComputedStyle(t).backgroundColor : null;
   });
   const onColor = await toggleState();
@@ -83,7 +87,7 @@ const hasRow = (p) => p.evaluate(() => [...document.querySelectorAll('[data-hub-
 
   // kikapcsolas
   await p.evaluate(() => {
-    const t = Array.from(document.querySelectorAll('#__adm div')).find(d => d.style.width === '52px' && d.style.height === '32px');
+    const t = Array.from(document.querySelectorAll('#__adm div')).filter(d => !d.closest('[data-admin-games-row]')).find(d => d.style.width === '52px' && d.style.height === '32px');
     if (t) t.click();
   });
   await p.waitForTimeout(700);
@@ -95,7 +99,7 @@ const hasRow = (p) => p.evaluate(() => [...document.querySelectorAll('[data-hub-
 
   // vissza be
   await p.evaluate(() => {
-    const t = Array.from(document.querySelectorAll('#__adm div')).find(d => d.style.width === '52px' && d.style.height === '32px');
+    const t = Array.from(document.querySelectorAll('#__adm div')).filter(d => !d.closest('[data-admin-games-row]')).find(d => d.style.width === '52px' && d.style.height === '32px');
     if (t) t.click();
   });
   await p.waitForTimeout(700);
