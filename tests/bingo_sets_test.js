@@ -53,7 +53,7 @@ const txt = p => p.evaluate(() => (document.getElementById('root').innerText || 
   await p.click('#__ab [data-bingo-set="otp"]'); await p.waitForTimeout(200);
   await p.locator('button:text-is("Váltás")').click(); await p.waitForTimeout(600);
   let bc = await p.evaluate(() => window.__fbStore.config.bingoConfig);
-  ok(bc.bingoSetId === 'otp' && bc.title === 'OTP Gála Bingó' && bc.items.length === 24 && !!bc.bingoRound && bc.center.t === 'OTP Gála 2027', 'az OTP Gála aktív: 24 tétel, középen „OTP Gála 2027”, új kör', JSON.stringify({ id: bc.bingoSetId, t: bc.title, n: bc.items.length, r: bc.bingoRound }));
+  ok(bc.bingoSetId === 'otp' && bc.title === 'OTP Gála Bingó' && bc.items.length === 36 && !!bc.bingoRound && bc.center.t === 'OTP Gála 2027', 'az OTP Gála aktív: 36 tétel, középen „OTP Gála 2027”, új kör', JSON.stringify({ id: bc.bingoSetId, t: bc.title, n: bc.items.length, r: bc.bingoRound }));
   const rev = bc.items.find(x => x.t === 'Revolut'), dig = bc.items.find(x => x.t === 'Digitális bankolás');
   ok(rev && rev.k === 3 && dig && dig.k === 1, 'a korty-értékek a küldött táblázat szerint (Revolut 3, Digitális bankolás 1)');
   ok(bc.bingoSets && bc.bingoSets.foci && bc.bingoSets.foci.items.length === 24, 'a foci-szett elmentődött (24 tétel)');
@@ -108,9 +108,15 @@ const txt = p => p.evaluate(() => (document.getElementById('root').innerText || 
   const preset = await p.evaluate(() => BINGO_PRESETS.otp);
   await p.close();
   p = await open(b, '?screen=bingo', { bingoConfig: Object.assign({}, OTP, { center: preset.center, items: preset.items }) }, { boh_bingo_who: 'p0' });
-  ok(preset.items.length === 24 && preset.items.slice(0, 18).map(x => x.t).join('|').includes('Revolut'), 'a preset: a tavalyi 18 + 6 új = 24 szó', preset.items.length);
+  ok(preset.items.length === 36 && preset.items.slice(0, 18).map(x => x.t).join('|').includes('Revolut') && new Set(preset.items.map(x => x.t)).size === 36, 'a preset: a tavalyi 18 + 18 új = 36 különböző szó', preset.items.length);
   ok((await p.evaluate(() => document.querySelector('[data-bingo-grid]').getAttribute('data-bingo-grid'))) === '5' && /OTP Gála 2027/.test(await txt(p)), '5×5-ös kártya, középen „OTP Gála 2027”');
   ok((await p.evaluate(() => document.querySelectorAll('[data-bingo-k]').length)) === 24, '24 korty-jelvény (az ingyen közép nélkül)');
+  // v10.478: 36 szóból mindenki SAJÁT 24-et kap — két játékos szókészlete eltér, egy kártyán nincs ismétlés
+  const sets2 = await p.evaluate(() => ['p0', 'p1'].map(id => bingoCardFor(id, BINGO_PRESETS.otp.items.length).slice(0, 24)));
+  const a0 = new Set(sets2[0]), a1 = new Set(sets2[1]), common = sets2[0].filter(x => a1.has(x)).length;
+  ok(a0.size === 24 && a1.size === 24 && common < 24 && sets2[0].concat(sets2[1]).every(i => i >= 0 && i < 36), '⚠️ 36 szónál két játékos más-más 24-et kap (közös: ' + common + ')', common);
+  const shown = await p.evaluate(() => [...document.querySelectorAll('[data-bingo]')].map(c => c.innerText.replace(/\s+/g, ' ').trim()));
+  ok(new Set(shown).size === 25, 'a kártyán 25 különböző mező (nincs ismétlés)');
   await p.close();
 
   console.log('\n===== 5c. ⚠️ A RÉGI (18 SZAVAS) MENTETT MÁSOLAT HELYETT A FRISS PRESET =====');
@@ -125,14 +131,14 @@ const txt = p => p.evaluate(() => (document.getElementById('root').innerText || 
   await p.click('#__ab [data-bingo-set="otp"]'); await p.waitForTimeout(200);
   await p.locator('button:text-is("Váltás")').click(); await p.waitForTimeout(600);
   bc = await p.evaluate(() => window.__fbStore.config.bingoConfig);
-  ok(bc.items.length === 24 && bc.center.t === 'OTP Gála 2027' && bc.bingoSets.otp.pv === 2, 'a régi verziós másolat helyett a 24 szavas preset jön (pv:2)', JSON.stringify({ n: bc.items.length, c: bc.center.t, pv: bc.bingoSets.otp.pv }));
+  ok(bc.items.length === 36 && bc.center.t === 'OTP Gála 2027' && bc.bingoSets.otp.pv === 3, 'a régi verziós másolat helyett a 36 szavas preset jön (pv:3)', JSON.stringify({ n: bc.items.length, c: bc.center.t, pv: bc.bingoSets.otp.pv }));
   // kézi visszatöltés: elrontjuk, majd „Alap lista visszatöltése" + Mentés
   await p.evaluate(() => document.querySelector('#__ab [data-bingo-item-k="0"]').click());
   await p.click('#__ab [data-bingo-preset]'); await p.waitForTimeout(100);
   await p.evaluate(() => { const bt = [...document.querySelectorAll('#__ab button')].find(x => /^Mentés/.test(x.textContent.trim())); bt && bt.click(); });
   await p.waitForTimeout(500);
   bc = await p.evaluate(() => window.__fbStore.config.bingoConfig);
-  ok(bc.items[0].k === preset.items[0].k && bc.items.length === 24, 'az „Alap lista visszatöltése” az eredeti listát hozza vissza');
+  ok(bc.items[0].k === preset.items[0].k && bc.items.length === 36, 'az „Alap lista visszatöltése” az eredeti listát hozza vissza');
   ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
   await p.close();
 
@@ -202,6 +208,52 @@ const txt = p => p.evaluate(() => (document.getElementById('root').innerText || 
   await p.waitForTimeout(800);
   await p.evaluate(() => document.querySelector('#__adm [data-bingo-style="scratch"]').click()); await p.waitForTimeout(400);
   ok(await p.evaluate(() => (window.__fbStore.config.bingoConfig || {}).bingoCardStyle) === 'scratch', 'admin: a kinézet-választó a bingoConfig.bingoCardStyle-t írja');
+  await p.close();
+
+  console.log('\n===== 9. BINGÓ = +N KORTY (ADMINBAN ÁLLÍTHATÓ) + ÚJ KÖR, HA A LISTA HOSSZA VÁLTOZIK (v10.478) =====');
+  for (const [ls, label] of [[undefined, 'alap (hiányzó mező)'], [0, 'Nincs'], [2, '+2']]) {
+    const cfgB = Object.assign({}, OTP, { center: preset.center, items: preset.items }, ls === undefined ? {} : { bingoLineSips: ls });
+    p = await open(b, '?screen=bingo', { bingoConfig: cfgB }, { boh_bingo_who: 'p0' });
+    // az első sor (0–4) teljes kipipálása → 1 BINGÓ
+    const expK = await p.evaluate(() => { const cd = bingoCardFor('p0', BINGO_PRESETS.otp.items.length); return [0,1,2,3,4].reduce((t, c) => t + bingoK(BINGO_PRESETS.otp.items[cd[c]]), 0); });
+    for (const c of [0, 1, 2, 3, 4]) { await p.evaluate(c => document.querySelector(`[data-bingo="${c}"]`).click(), c); await p.waitForTimeout(80); }
+    await p.waitForTimeout(400);
+    const r = await p.evaluate(() => ({ sips: +document.querySelector('[data-bingo-mysips]').textContent,
+      btn: (document.querySelector('[data-bingo-celebrate-ok]') || {}).textContent, pop: !!document.querySelector('[data-bingo-celebrate="1"]') }));
+    const n = ls === undefined ? 1 : ls;
+    ok(r.pop && r.sips === expK + n, `${label}: BINGÓ után a korty = mezők (${expK}) + ${n}`, JSON.stringify(r));
+    ok(n ? r.btn === '+' + n + ' korty 🍺' : /Fenékig/.test(r.btn), `${label}: a gomb felirata`, r.btn);
+    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+    await p.close();
+  }
+  // admin: a BINGÓ-korty választó azonnal ment
+  p = await open(b, '', { bingoConfig: { enabled: true, mode: 'bingo', apps: { bingo: true } } });
+  await p.evaluate(() => { const r = document.getElementById('root'); if (r) r.style.display = 'none';
+    const d = document.createElement('div'); d.id = '__ab'; document.body.appendChild(d); ReactDOM.createRoot(d).render(React.createElement(AdminBingo, { app: 'bingo' })); });
+  await p.waitForTimeout(800);
+  ok(await p.evaluate(() => document.querySelector('#__ab [data-bingo-linesips="1"]').getAttribute('aria-pressed') === 'true'), 'admin: alapból +1');
+  await p.evaluate(() => document.querySelector('#__ab [data-bingo-linesips="2"]').click()); await p.waitForTimeout(400);
+  ok(await p.evaluate(() => window.__fbStore.config.bingoConfig.bingoLineSips) === 2, 'admin: a választó a bingoLineSips-et írja');
+  await p.close();
+  // ⚠️ a lista hossza változik (24 → 36) → a Mentés ÚJ KÖRT indít (a pipák különben más szavakra csúsznának)
+  const OTP24 = Object.assign({}, OTP, { center: preset.center, items: preset.items.slice(0, 24), bingoRound: 'r24' });
+  p = await open(b, '', { bingoConfig: OTP24 });
+  await p.evaluate(() => { const r = document.getElementById('root'); if (r) r.style.display = 'none';
+    const d = document.createElement('div'); d.id = '__ab'; document.body.appendChild(d); ReactDOM.createRoot(d).render(React.createElement(AdminBingo, { app: 'bingo' })); });
+  await p.waitForTimeout(800);
+  const saveBtn = () => p.evaluate(() => { const bt = [...document.querySelectorAll('#__ab button')].find(x => x.textContent.trim() === 'Mentés'); bt && bt.click(); });
+  // kontroll: azonos darabszám (egy korty-érték átírása) → a kör marad
+  await p.evaluate(() => document.querySelector('#__ab [data-bingo-item-k="0"]').click()); await p.waitForTimeout(100);
+  ok(!(await p.evaluate(() => !!document.querySelector('#__ab [data-bingo-newround-note]'))), 'azonos darabszámnál nincs új-kör figyelmeztetés');
+  await saveBtn(); await p.waitForTimeout(500);
+  ok(await p.evaluate(() => window.__fbStore.config.bingoConfig.bingoRound) === 'r24', 'kontroll: azonos darabszám → a kör marad (a pipák a helyükön)');
+  await p.click('#__ab [data-bingo-preset]'); await p.waitForTimeout(150);
+  ok(await p.evaluate(() => /24 → 36/.test((document.querySelector('#__ab [data-bingo-newround-note]') || {}).textContent || '')), 'a visszatöltés után kiírja: 24 → 36, új kör jön');
+  await saveBtn(); await p.waitForTimeout(500);
+  const bcN = await p.evaluate(() => window.__fbStore.config.bingoConfig);
+  ok(bcN.items.length === 36 && bcN.bingoRound && bcN.bingoRound !== 'r24', '⚠️ a hosszabb lista mentése új kört indít', JSON.stringify({ n: bcN.items.length, r: bcN.bingoRound }));
+  ok(!(await p.evaluate(() => !!document.querySelector('#__ab [data-bingo-newround-note]'))), 'mentés után a figyelmeztetés eltűnik');
+  ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
   await p.close();
 
   await b.close();

@@ -4556,3 +4556,25 @@ Admin → DNR Bingó → „Kártya kinézete" (`data-bingo-style`) → `bingoCo
 Teszt: `bingo_sets_test.js` 8. blokk (rejtett korty, nincs ikon, minden felirat befér, egyetlen szó
 sem törik elválasztás nélkül — a detektor kipróbálva: egy túl nagy betűs „„Micsoda" 2 sort ad —,
 felfedés + saját sáv, a kaparós szín, kontroll: az ikonos változatlan, az admin ír).
+
+## OTP Gála: 36 szó, BINGÓ-korty, új kör hosszváltáskor (v10.478)
+- **36 szó** (`BINGO_PRESETS.otp`, `pv:3`): a 24-hez +12 OTP-hez és gálabeszédekhez kötött szó
+  (OTP Csoport, Simple app, Lakáshitel, Infláció, Kamat, Régió, Díj, Pénzügyi tudatosság, Jövő,
+  Partnerség, Részvényesek, Tehetség). ⚠️ Miért nem 24: 24 mezőbe 24 szóból MINDENKINEK ugyanaz a
+  24 kerül (csak más sorrendben), és a „csak az iszik, akinek a kártyáján van" szabály semmit nem
+  szűr. 36-ból mindenki saját 24-et kap (`bingoCardFor(pid, 36).slice(0, 24)` — két játékos átlag
+  ~16 közös szóval).
+- **⚠️ A lista HOSSZÁNAK változása új kört indít** a Mentésnél (`roundN` = a futó kör tételszáma, a
+  `persist` frissíti). A kártya-elrendezés a tételszámból jön, tehát 24 → 36-nál a futó kör pipái
+  más szavakra csúsznának át. Azonos darabszámnál (elírás javítása, korty átírása) a kör marad.
+  Mentés előtt figyelmeztet: `data-bingo-newround-note` („24 → 36 — mentéskor új kör indul").
+- **BINGÓ-korty** — `bingoConfig.bingoLineSips` 0–3 (hiányzó = **1**, `bingoLineSipsOf`), admin:
+  `data-bingo-linesips`, azonnal ment + `buildPayload`. Minden összejött sor N korty, és
+  **beszámít a kortyösszegbe** (`sipsOf` = mezők `k`-összege + bingók × N — a saját sáv és az
+  Állás is). A felugró gombja „+N korty 🍺" (`data-bingo-celebrate-ok`); a 0 a régi viselkedés
+  („Fenékig!", nem számít bele). A teli kártya ünneplése változatlan.
+  ⚠️ A `BINGO_LINE_SIPS` a `sipsOf` ELŐTT áll — utána deklarálva a ranglista-számítás TDZ-hibával
+  elszállt (a képernyő üres maradt).
+Teszt: `bingo_sets_test.js` 5b (36 különböző szó; két játékos más-más 24-et kap) és 9. blokk (alap /
+Nincs / +2 BINGÓ-korty a sávban és a gombon; admin; hosszváltás → új kör, kontroll: azonos darabszám
+→ a kör marad).

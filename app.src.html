@@ -35260,7 +35260,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.477';
+const APP_VERSION = 'v10.478';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -41106,6 +41106,9 @@ function AdminBingo({ app }) {
   const [askSet, setAskSet] = React.useState(null);   // váltás / új kör megerősítése
   const [whoMode, setWhoMode] = React.useState('both'); // v10.475: ki léphet be
   const [cardStyle, setCardStyle] = React.useState('icon'); // v10.477: kártya-kinézet
+  const [roundN, setRoundN] = React.useState(0);
+  const [lineSips, setLineSips] = React.useState(1);   // v10.478: BINGÓ-korty
+  const [lineMsg, setLineMsg] = React.useState('');   // v10.478: a futó kör tételszáma (a kártya ebből épül)
   const [styleMsg, setStyleMsg] = React.useState('');
   const [whoMsg, setWhoMsg] = React.useState('');
   const [tippTitle, setTippTitle] = React.useState('Tippbajnokság');
@@ -41144,6 +41147,7 @@ function AdminBingo({ app }) {
       setBWinner(Object.assign({ enabled: false, deadline: '', correct: '' }, (c && c.bonusWinner) || {}));
       setBScorer(Object.assign({ enabled: false, deadline: '', correct: '' }, (c && c.bonusScorer) || {}));
       setItems((c && Array.isArray(c.items) && c.items.length) ? c.items.map(it => ({ e: it.e || '', t: it.t || '', k: bingoK(it) })) : BINGO_PRESETS.foci.items.map(it => ({ ...it })));
+      setRoundN((c && Array.isArray(c.items) && c.items.length) ? c.items.filter(it => (it.t || '').trim()).length : BINGO_PRESETS.foci.items.length);
       setTitleEmoji((c && typeof c.titleEmoji === 'string') ? c.titleEmoji : '⚽');
       setCenter((c && c.center && c.center.t) ? { e: c.center.e || '', t: c.center.t } : BINGO_PRESETS.foci.center);
       setSetId((c && c.bingoSetId) || 'foci');
@@ -41151,6 +41155,7 @@ function AdminBingo({ app }) {
       setRound((c && c.bingoRound) || '');
       setWhoMode(bingoWhoOf(c));
       setCardStyle(bingoStyleOf(c));
+      setLineSips(bingoLineSipsOf(c));
       { const sid = (c && c.bingoSetId) || 'foci', sv = c && c.bingoSets && c.bingoSets[sid]; setSetPv((sv && sv.pv) || 0); }
     }).catch(() => { setItems(BINGO_PRESETS.foci.items.map(it => ({ ...it }))); });
   }, []);
@@ -41181,6 +41186,7 @@ function AdminBingo({ app }) {
 
   const persist = (payload) => {
     setSaving(true); setSaveErr('');
+    if (payload && Array.isArray(payload.items)) setRoundN(payload.items.length);
     (window.setBingoConfig ? window.setBingoConfig(payload) : Promise.resolve())
       .then(() => { setSaving(false); setDirty(false); setSaved(true); setConfirmReset(false); })
       .catch(e => { setSaving(false); setSaved(false); setSaveErr('Nem sikerült menteni' + (e && e.code ? ` (${e.code})` : '') + ' — próbáld újra.'); });
@@ -41210,9 +41216,15 @@ function AdminBingo({ app }) {
       guestIds: (ev.guestIds || []).filter(g => g && ttIds.has(g) && g !== ev.hostId).filter((g, i, a) => a.indexOf(g) === i),
       locked: !!ev.locked,
     })).filter(ev => ev.hostId);
-    return Object.assign({ enabled: legacy.enabled, mode: legacy.mode, apps: apps || bingoAppsOf(null), title: bTitle, items: cleanItems, titleEmoji: (titleEmoji || '').trim(), center: cleanCenter, bingoSetId: setId, bingoSets: nextSets, bingoRound: round, bingoWho: whoMode, bingoCardStyle: cardStyle, tippTitle: (tippTitle || '').trim() || 'Tippbajnokság', tippRequireCode, tippMailUrl: (tippMailUrl || '').trim(), teams: teamsArr, matches: cleanM, bonusWinner: bw, bonusScorer: bs, questions: [], tortaTitle: (tortaTitle || '').trim() || 'DNR a tortán', tortaTeams: cleanTT, tortaEvenings: cleanTE }, over || {});
+    return Object.assign({ enabled: legacy.enabled, mode: legacy.mode, apps: apps || bingoAppsOf(null), title: bTitle, items: cleanItems, titleEmoji: (titleEmoji || '').trim(), center: cleanCenter, bingoSetId: setId, bingoSets: nextSets, bingoRound: round, bingoWho: whoMode, bingoCardStyle: cardStyle, bingoLineSips: lineSips, tippTitle: (tippTitle || '').trim() || 'Tippbajnokság', tippRequireCode, tippMailUrl: (tippMailUrl || '').trim(), teams: teamsArr, matches: cleanM, bonusWinner: bw, bonusScorer: bs, questions: [], tortaTitle: (tortaTitle || '').trim() || 'DNR a tortán', tortaTeams: cleanTT, tortaEvenings: cleanTE }, over || {});
   };
-  const save = () => persist(buildPayload());
+  // ⚠️ v10.478: a kártya-elrendezés a TÉTELSZÁMBÓL jön (bingoCardFor), tehát ha a lista hossza
+  // változik, a futó kör pipái más szavakra csúsznának át — ilyenkor a Mentés új kört indít.
+  // Egy elírt szó javítása (azonos darabszám) a helyén cseréli a szót, a pipák maradnak.
+  const save = () => {
+    if (mode === 'bingo' && roundN && validCount !== roundN) { const nr = newRound(); setRound(nr); persist(buildPayload({ bingoRound: nr })); }
+    else persist(buildPayload());
+  };
   // v10.473: szettváltás — a mostanit elmenti a bingoSets-be, a célt onnan (vagy a presetből)
   // tölti, és ÚJ KÖRT indít: mindenki tiszta kártyát kap (a jelölések a kör alatt ülnek).
   const newRound = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
@@ -41376,6 +41388,27 @@ function AdminBingo({ app }) {
                 : 'Ikon + felirat, a korty a sarokban mindig látszik.'}{styleMsg ? ` · ${styleMsg}` : ''}
             </div>
           </div>
+          {/* v10.478: BINGÓ-korty — AZONNAL ment (merge) */}
+          <div data-bingo-linebox style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
+            {lbl('Korty egy BINGÓ-ért (teljes sor / oszlop / átló)')}
+            <div style={{ display:'flex', gap:6, background:T.bg, borderRadius:12, padding:4 }}>
+              {[0, 1, 2, 3].map(v => {
+                const on = v === lineSips;
+                return <button key={v} type="button" data-bingo-linesips={v} aria-pressed={on} onClick={() => {
+                  if (on) return;
+                  const prev = lineSips; setLineSips(v); setLineMsg('mentés…');
+                  if (typeof firebase === 'undefined') { setLineMsg(''); return; }
+                  firebase.firestore().collection('config').doc('bingoConfig').set({ bingoLineSips: v }, { merge: true })
+                    .then(() => setLineMsg('mentve'))
+                    .catch(e => { setLineSips(prev); setLineMsg('nem sikerült menteni' + (e && e.code ? ` (${e.code})` : '')); });
+                }} style={{ flex:1, minWidth:0, height:38, borderRadius:9, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:12.5, whiteSpace:'nowrap',
+                  background: on ? T.surface : 'transparent', color: on ? T.ink : T.inkSoft, boxShadow: on ? T.shadow : 'none' }}>{v === 0 ? 'Nincs' : '+' + v}</button>;
+              })}
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:11.5, color:T.inkSoft, marginTop:7, lineHeight:1.4 }}>
+              {lineSips ? `Minden összejött sor +${lineSips} korty, és beszámít a kortyösszegbe.` : 'A BINGÓ csak ünneplés („Fenékig!"), a kortyösszegbe nem számít.'}{lineMsg ? ` · ${lineMsg}` : ''}
+            </div>
+          </div>
           {/* v10.473: szettek — egy koppintás, és mindenki az új szett tiszta kártyáját kapja */}
           <div data-bingo-sets style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
             {lbl('Szett')}
@@ -41398,6 +41431,7 @@ function AdminBingo({ app }) {
             </ActionModal>
           )}
           <div data-bingo-gridnote style={{ fontFamily:T.font, fontWeight:800, fontSize:12.5, color:T.ink, marginBottom:6 }}>{validCount >= 24 ? `${validCount} tétel → 5×5-ös kártya (24 sorsolt mező + ingyen közép)` : validCount >= 16 ? `${validCount} tétel → 4×4-es kártya (16 sorsolt mező, nincs ingyen közép)` : `${validCount} tétel — kártyához legalább 16 kell`}</div>
+          {roundN > 0 && validCount !== roundN && <div data-bingo-newround-note style={{ fontFamily:T.font, fontWeight:700, fontSize:11.5, color:T.coral, marginBottom:6, lineHeight:1.4 }}>A tételek száma változott ({roundN} → {validCount}) — mentéskor új kör indul, mindenki új kártyát kap.</div>}
           <div style={{ fontFamily:T.font, fontSize:12.5, color:T.sub, marginBottom:12 }}>24 tételtől 5×5-ös, 16–23 tételnél 4×4-es kártya jár; mindenki a listából kap saját válogatást — kevesebbnél a beépített lista marad érvényben. <span style={{ fontWeight:800, color: tooFew ? T.coral : T.mint }}>{validCount} mező</span></div>
           <div style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
             {lbl('Cím / tematika')}
@@ -41746,7 +41780,9 @@ const BINGO_PRESETS = {
   // v10.474: a tavalyi Gála 18 szava (a tulajdonos táblázata) + 6 új → 24 → 5×5, középen „OTP Gála 2027".
   // `pv` = a preset verziója: ha egy korábbi verzióból mentett másolat ül a bingoSets-ben, váltáskor a
   // friss preset jön (a 18 szavas másolat különben örökre bent ragadna).
-  otp: { name:'OTP Gála', pv:2, title:'OTP Gála Bingó', titleEmoji:'🎤', center:{ e:'🥂', t:'OTP Gála 2027' },
+  // v10.478: 36 szó → mindenki a 36-ból egy saját 24-et kap (a 24 mezőbe különben MINDENKINEK
+  // ugyanaz a 24 kerülne, és a „csak az iszik, akinek a kártyáján van" szabály semmit nem szűrne)
+  otp: { name:'OTP Gála', pv:3, title:'OTP Gála Bingó', titleEmoji:'🎤', center:{ e:'🥂', t:'OTP Gála 2027' },
     items: [
       { e:'💻', t:'Digitális bankolás', k:1 }, { e:'🌱', t:'Fenntartható növekedés', k:3 }, { e:'🤝', t:'Ügyfeleinkért', k:2 },
       { e:'🥇', t:'Piacvezető', k:2 }, { e:'💡', t:'Innováció', k:1 }, { e:'♻️', t:'Fenntarthatóság', k:3 },
@@ -41756,6 +41792,10 @@ const BINGO_PRESETS = {
       { e:'🤖', t:'Technológia', k:2 }, { e:'🏦', t:'Bankfiók', k:1 }, { e:'🙊', t:'Elszólás', k:2 },
       { e:'🧠', t:'Mesterséges intelligencia', k:3 }, { e:'🛡️', t:'Kiberbiztonság', k:2 }, { e:'🤲', t:'Bizalom', k:2 },
       { e:'👥', t:'Csapatmunka', k:1 }, { e:'♟️', t:'Stratégia', k:1 }, { e:'🙏', t:'Köszönöm a figyelmet', k:1 },
+      { e:'🟢', t:'OTP Csoport', k:1 }, { e:'📱', t:'Simple app', k:2 }, { e:'🏠', t:'Lakáshitel', k:2 },
+      { e:'📉', t:'Infláció', k:2 }, { e:'💹', t:'Kamat', k:1 }, { e:'🗺️', t:'Régió', k:2 },
+      { e:'🏆', t:'Díj', k:1 }, { e:'🎓', t:'Pénzügyi tudatosság', k:3 }, { e:'🚀', t:'Jövő', k:1 },
+      { e:'🔗', t:'Partnerség', k:2 }, { e:'📊', t:'Részvényesek', k:3 }, { e:'🌟', t:'Tehetség', k:2 },
     ] },
 };
 // v10.473: a kártya mérete a tételek számából jön — a tulajdonos OTP Gála listája 18 szavas.
@@ -41763,6 +41803,12 @@ const BINGO_PRESETS = {
 // (16 kisorsolt tétel) · 16 alatt nincs kártya. Mindenki a teljes listából kap véletlen
 // (de a saját azonosítójából stabil) válogatást, így a kártyák különböznek.
 function bingoGridOf(n) { return n >= 24 ? { s:5, free:12, need:24 } : n >= 16 ? { s:4, free:-1, need:16 } : null; }
+// v10.478: minden összejött sor (BINGÓ) N korty — a kortyösszegbe is beszámít. Az adminban
+// állítható (0–3), a hiányzó mező = 1. A 0 a régi viselkedés („Fenékig!", nem számít bele).
+function bingoLineSipsOf(cfg) {
+  const v = cfg && cfg.bingoLineSips;
+  return (v === 0 || v === 1 || v === 2 || v === 3) ? v : 1;
+}
 function bingoLinesOf(sz) {
   const L = [], r5 = Array.from({ length: sz }, (_, i) => i);
   for (let r = 0; r < sz; r++) L.push(r5.map(c => r * sz + c));
@@ -42390,7 +42436,8 @@ function BingoScreen({ go, deepLink, app }) {
   const bingosOf = set => gridLines.filter(l => l.every(c => c === grid.free || set.has(c))).length;
   const myBingos = (who && mode === 'bingo') ? bingosOf(myMarks) : 0;
   // v10.473: korty — a megjelölt mezők tételeinek `k` összege (akinek a kártyáján van, az iszik)
-  const sipsOf = (pid, set) => { const cd = bingoCardFor(pid, ITEMS.length); let t = 0; set.forEach(c => { if (c !== grid.free && c < grid.s * grid.s) { const it = ITEMS[bingoItemIdx(grid, cd, c)]; if (it) t += bingoK(it); } }); return t; };
+  const BINGO_LINE_SIPS = bingoLineSipsOf(cfg);   // v10.478 (a sipsOf ELŐTT — TDZ)
+  const sipsOf = (pid, set) => { const cd = bingoCardFor(pid, ITEMS.length); let t = 0; set.forEach(c => { if (c !== grid.free && c < grid.s * grid.s) { const it = ITEMS[bingoItemIdx(grid, cd, c)]; if (it) t += bingoK(it); } }); return t + bingosOf(set) * BINGO_LINE_SIPS; };
   const myFull = (who && mode === 'bingo') ? myMarks.size >= grid.need : false;
   const prevFull = React.useRef(null);
   React.useEffect(() => {
@@ -43169,7 +43216,7 @@ function BingoScreen({ go, deepLink, app }) {
                   );
               })}
             </div>
-            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:10 }}>{cardStyle === 'icon' ? 'Koppints a mezőre, ha megtörtént / elhangzott, és idd meg a sarkában álló kortyot (🍺1–3).' : 'Koppints a mezőre, ha elhangzott — csak akkor derül ki, hány kortyot iszol (1–3).'} Teljes sor, oszlop vagy átló = BINGÓ — a teli kártya a csúcs! 🍻</div>
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:10 }}>{cardStyle === 'icon' ? 'Koppints a mezőre, ha megtörtént / elhangzott, és idd meg a sarkában álló kortyot (🍺1–3).' : 'Koppints a mezőre, ha elhangzott — csak akkor derül ki, hány kortyot iszol (1–3).'} Teljes sor, oszlop vagy átló = BINGÓ{BINGO_LINE_SIPS ? ', +' + BINGO_LINE_SIPS + ' korty' : ''} — a teli kártya a csúcs! 🍻</div>
             {/* Állás */}
             {bingoBoard.length > 0 && (
               <div style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow, marginTop:14 }}>
@@ -43250,8 +43297,8 @@ function BingoScreen({ go, deepLink, app }) {
         <div onClick={() => setCelebrate(null)} style={{ position:'fixed', top:'calc(-1 * env(safe-area-inset-top))', left:0, right:0, bottom:'calc(-1 * env(safe-area-inset-bottom))', background:'rgba(14,14,24,0.72)', zIndex:70, display:'flex', alignItems:'center', justifyContent:'center', padding:'calc(env(safe-area-inset-top) + 24px) 24px calc(env(safe-area-inset-bottom) + 24px)', boxSizing:'border-box', animation:'fadeIn .2s' }}>
           <div onClick={e => e.stopPropagation()} style={{ background:T.surface, borderRadius:28, padding:'26px 24px 22px', width:'100%', maxWidth:340, display:'flex', flexDirection:'column', alignItems:'center', gap:10, boxShadow:'0 24px 64px rgba(0,0,0,0.3)', animation:'popIn .3s cubic-bezier(.2,.9,.3,1.3)' }}>
             <div data-bingo-celebrate={celebrate} style={{ fontFamily:T.font, fontWeight:900, fontSize:30, color:T.ink, letterSpacing:'0.04em' }}>{celebrate === 'full' ? 'TELI KÁRTYA! 🎉' : 'BINGÓ! 🏆'}</div>
-            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13.5, color:T.inkSoft, textAlign:'center' }}>{celebrate === 'full' ? 'Minden mező kipipálva — összegyűjtötted az egészet!' : celebrate + '. sorod jött össze — ezt meg kell ünnepelni!'} 🍻</div>
-            <button onClick={() => setCelebrate(null)} style={{ marginTop:6, width:'100%', padding:'13px 0', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer' }}>Fenékig! 🍻</button>
+            <div style={{ fontFamily:T.font, fontWeight:700, fontSize:13.5, color:T.inkSoft, textAlign:'center' }}>{celebrate === 'full' ? 'Minden mező kipipálva — összegyűjtötted az egészet! 🍻' : BINGO_LINE_SIPS ? celebrate + '. sorod jött össze — ez +' + BINGO_LINE_SIPS + ' korty!' : celebrate + '. sorod jött össze — ezt meg kell ünnepelni! 🍻'}</div>
+            <button data-bingo-celebrate-ok onClick={() => setCelebrate(null)} style={{ marginTop:6, width:'100%', padding:'13px 0', borderRadius:14, border:'none', background:T.mint, color:'#fff', fontFamily:T.font, fontWeight:900, fontSize:15, cursor:'pointer' }}>{celebrate === 'full' || !BINGO_LINE_SIPS ? 'Fenékig! 🍻' : '+' + BINGO_LINE_SIPS + ' korty 🍺'}</button>
           </div>
         </div>
       )}
