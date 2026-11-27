@@ -4469,3 +4469,33 @@ csapathoz kötött, ott marad a profil-rács):
   UGYANAZT a vendéget kapja (kártya és jelölések megmaradnak). Az Állásban „· vendég" jelöléssel.
 Teszt: `node tests/hub_bingoguest_test.js`. Igazítva: `dnr_toggle_test` (a központ marad;
 a mester-kapcsoló kereső kihagyja a Games sorát).
+
+## ⚠️ DNR Bingó: szettek, korty, kör-alapú jelölés, 4×4-es kártya (v10.473)
+Tulajdonosi kérés (OTP Gála): az előadók beszélnek, és ha elhangzik egy szó, **akinek a
+kártyáján rajta van**, az iszik 1/2/3 kortyot; **mindenki maga jelöl**; a személyenkénti
+kortyszám ÉS a teli kártya is számít. A foci-listát nem kellett átírni.
+
+**Szettek** (`BINGO_PRESETS`: `foci` · `otp`). Az AKTÍV szett mezői a `bingoConfig` felső
+szintjén ülnek (`title`, `titleEmoji`, `center:{e,t}`, `items:[{e,t,k}]` — a képernyő ezt
+olvassa), a mentett szettek a `bingoSets[<id>]`-ben, az aktív a `bingoSetId`. Admin →
+DNR Bingó: szett-csipek (`data-bingo-set`); váltáskor a mostani a `bingoSets`-be mentődik,
+a cél onnan (vagy a presetből) töltődik, és **új kör** indul. Az OTP Gála preset a tulajdonos
+táblázata: **18 szó** korty-értékkel.
+- ⚠️ A `setBingoConfig` TELJES felülírás (`set` merge nélkül) — minden új mező a
+  `buildPayload`-ban kell legyen, különben a Tipp/Tortán fül mentése kitörli.
+
+**Korty** — tételenként `k` (1–3, `bingoK`), admin gomb `data-bingo-item-k` (1→2→3→1). A mezőn
+jelvény (`data-bingo-k`); a saját sáv (`data-bingo-mysips`) és az Állás (`data-bingo-sips`) a
+megjelölt tételek `k`-összegét mutatja. Teli kártya → `setCelebrate('full')`, az Állásban „TELI".
+
+**⚠️ Kör-alapú jelölés** — a jelölés MEZŐ-pozíció, tehát listacserénél régen más tételekre
+csúszott át (és nem volt mindenkit nulláző gomb). Most `config/bingo.r_<bingoRound>.<who>`
+(`bingoMarkStore`); szettváltás és az admin „Új kör" (`data-bingo-newround`) új `bingoRound`-ot ír.
+Kör nélküli régi config a régi, felső szintű mezőket olvassa (visszafelé kompatibilis).
+
+**Kártyaméret a tételszámból** (`bingoGridOf`): 24+ → 5×5, középen a szett ingyen mezője ·
+16–23 → **4×4, ingyen mező nélkül** · 16 alatt nincs kártya, hanem üzenet (`data-bingo-toofew`)
+— ⚠️ régen 24 alatt CSENDBEN a foci-lista jött. Mindenki a teljes listából kap stabil, saját
+válogatást (`bingoCardFor`). 4×4-en a leghosszabb szó szabja a betűt (`bingoCellFont`).
+A foci-beégetések (DÖNTŐ, ⚽, „…a döntőben") a szettbe kerültek.
+Teszt: `node tests/bingo_sets_test.js`.
