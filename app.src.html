@@ -35259,7 +35259,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.473';
+const APP_VERSION = 'v10.474';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -41013,6 +41013,7 @@ function AdminBingo({ app }) {
   const [setId, setSetId] = React.useState('foci');
   const [sets, setSets] = React.useState({});
   const [round, setRound] = React.useState('');
+  const [setPv, setSetPv] = React.useState(0);       // v10.474: az aktív szett preset-verziója
   const [askSet, setAskSet] = React.useState(null);   // váltás / új kör megerősítése
   const [tippTitle, setTippTitle] = React.useState('Tippbajnokság');
   const [tippRequireCode, setTippRequireCode] = React.useState(false);
@@ -41055,6 +41056,7 @@ function AdminBingo({ app }) {
       setSetId((c && c.bingoSetId) || 'foci');
       setSets((c && c.bingoSets && typeof c.bingoSets === 'object') ? c.bingoSets : {});
       setRound((c && c.bingoRound) || '');
+      { const sid = (c && c.bingoSetId) || 'foci', sv = c && c.bingoSets && c.bingoSets[sid]; setSetPv((sv && sv.pv) || 0); }
     }).catch(() => { setItems(BINGO_PRESETS.foci.items.map(it => ({ ...it }))); });
   }, []);
   const markDirty = () => { setDirty(true); setSaved(false); };
@@ -41093,7 +41095,7 @@ function AdminBingo({ app }) {
     const cleanCenter = { e: (center.e || '').trim(), t: (center.t || '').trim() || 'BINGÓ' };
     const bTitle = (title || '').trim() || 'Bingó';
     // a mostani szett mentett másolata — szettváltás után innen jön vissza
-    const nextSets = Object.assign({}, sets, { [setId]: { name: ((sets[setId] && sets[setId].name) || (BINGO_PRESETS[setId] && BINGO_PRESETS[setId].name) || bTitle), title: bTitle, titleEmoji: (titleEmoji || '').trim(), center: cleanCenter, items: cleanItems } });
+    const nextSets = Object.assign({}, sets, { [setId]: { name: ((sets[setId] && sets[setId].name) || (BINGO_PRESETS[setId] && BINGO_PRESETS[setId].name) || bTitle), title: bTitle, titleEmoji: (titleEmoji || '').trim(), center: cleanCenter, items: cleanItems, pv: setPv } });
     const cleanM = (matches || []).map(m => ({
       id: m.id, home: (m.home || '').trim(), away: (m.away || '').trim(), kickoff: m.kickoff || '', knockout: !!m.knockout,
       hs: (m.hs === '' || m.hs == null) ? null : Math.max(0, parseInt(m.hs) || 0),
@@ -41121,15 +41123,26 @@ function AdminBingo({ app }) {
   const newRound = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
   const switchSet = id => {
     const cur = buildPayload({});
-    const src = (cur.bingoSets[id]) || BINGO_PRESETS[id];
+    const saved = cur.bingoSets[id], pre = BINGO_PRESETS[id];
+    // ⚠️ egy RÉGEBBI preset-verzióból mentett másolat helyett a friss preset jön (v10.474)
+    const src = (saved && !(pre && (saved.pv || 0) < (pre.pv || 0))) ? saved : (pre || saved);
     if (!src) return;
+    setSetPv(src.pv || 0);
     const nr = newRound();
-    setSets(cur.bingoSets); setSetId(id); setRound(nr);
+    const srcSnap = { name: src.name || (pre && pre.name) || src.title, title: src.title, titleEmoji: src.titleEmoji || '', center: src.center || BINGO_PRESETS.foci.center, items: (src.items || []).map(it => ({ e: it.e, t: it.t, k: bingoK(it) })), pv: src.pv || 0 };
+    const nextSets = Object.assign({}, cur.bingoSets, { [id]: srcSnap });
+    setSets(nextSets); setSetId(id); setRound(nr);
     setTitle(src.title); setTitleEmoji(src.titleEmoji || ''); setCenter(src.center || BINGO_PRESETS.foci.center);
     setItems((src.items || []).map(it => ({ e: it.e || '', t: it.t || '', k: bingoK(it) })));
-    persist(Object.assign({}, cur, { bingoSetId: id, bingoRound: nr, title: src.title, titleEmoji: src.titleEmoji || '', center: src.center || BINGO_PRESETS.foci.center, items: (src.items || []).map(it => ({ e: it.e, t: it.t, k: bingoK(it) })) }));
+    persist(Object.assign({}, cur, { bingoSets: nextSets, bingoSetId: id, bingoRound: nr, title: src.title, titleEmoji: src.titleEmoji || '', center: src.center || BINGO_PRESETS.foci.center, items: (src.items || []).map(it => ({ e: it.e, t: it.t, k: bingoK(it) })) }));
   };
   const startNewRound = () => { const nr = newRound(); setRound(nr); persist(buildPayload({ bingoRound: nr })); };
+  // v10.474: a beépített szett alap listájának visszatöltése (a szerkesztőbe — a Mentés viszi ki)
+  const loadPreset = () => {
+    const pre = BINGO_PRESETS[setId]; if (!pre) return;
+    setTitle(pre.title); setTitleEmoji(pre.titleEmoji || ''); setCenter(pre.center); setSetPv(pre.pv || 0);
+    setItems(pre.items.map(it => ({ ...it }))); markDirty();
+  };
   // Alaphelyzet CSAK az adott app adatait nullázza (v10.419) — a Bingó fülön nyomott
   // gomb nem törölheti a Tortán csapatait. A láthatóság és a közös kódvédelem marad.
   const reset = () => {
@@ -41234,6 +41247,7 @@ function AdminBingo({ app }) {
               })}
             </div>
             <div style={{ fontFamily:T.font, fontSize:12, color:T.sub, marginTop:9, lineHeight:1.45 }}>Váltáskor a mostani szett elmentődik, és mindenki tiszta kártyával indul. A szettek bármikor visszaválthatók.</div>
+            {BINGO_PRESETS[setId] && <button data-bingo-preset onClick={loadPreset} style={{ marginTop:10, marginRight:8, padding:'9px 14px', borderRadius:10, border:`1.5px solid ${T.border}`, background:'transparent', color:T.ink, fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer' }}>Alap lista visszatöltése</button>}
             <button data-bingo-newround onClick={() => setAskSet({ kind:'round' })} style={{ marginTop:10, padding:'9px 14px', borderRadius:10, border:`1.5px solid ${T.border}`, background:'transparent', color:T.ink, fontFamily:T.font, fontWeight:800, fontSize:13, cursor:'pointer' }}>Új kör — mindenki jelölése nullázódik</button>
           </div>
           {askSet && (
@@ -41253,7 +41267,7 @@ function AdminBingo({ app }) {
             <div style={{ marginTop:12 }}>{lbl('Középső (ingyen) mező')}</div>
             <div style={{ display:'flex', gap:7 }}>
               <input value={center.e} onChange={e => { setCenter(c => ({ ...c, e: e.target.value })); markDirty(); }} placeholder="🏆" aria-label="Középső mező emoji" style={{ ...inpS, width:52, textAlign:'center', fontSize:17, padding:'8px 4px', flexShrink:0 }} />
-              <input data-bingo-centertext value={center.t} onChange={e => { setCenter(c => ({ ...c, t: e.target.value })); markDirty(); }} placeholder="DÖNTŐ" maxLength={12} style={{ ...inpS, flex:1, minWidth:0 }} />
+              <input data-bingo-centertext value={center.t} onChange={e => { setCenter(c => ({ ...c, t: e.target.value })); markDirty(); }} placeholder="DÖNTŐ" maxLength={20} style={{ ...inpS, flex:1, minWidth:0 }} />
             </div>
           </div>
           {tooFew && <div style={{ fontFamily:T.font, fontWeight:700, fontSize:12, color:T.coral, background:T.coralSoft, borderRadius:10, padding:'8px 12px', marginBottom:10 }}>Legalább 16 mező kell — jelenleg {validCount}.</div>}
@@ -41588,7 +41602,10 @@ const BINGO_FOCI_K = { 'Piros lap':2, 'Tizenegyes':2, 'Kapufa':2, 'Öngól':3, '
 const BINGO_PRESETS = {
   foci: { name:'Foci VB', title:'VB Bingó', titleEmoji:'⚽', center:{ e:'🏆', t:'DÖNTŐ' },
     items: BINGO_ITEMS.map(it => ({ e: it.e, t: it.t, k: BINGO_FOCI_K[it.t] || 1 })) },
-  otp: { name:'OTP Gála', title:'OTP Gála Bingó', titleEmoji:'🎤', center:{ e:'🎤', t:'GÁLA' },
+  // v10.474: a tavalyi Gála 18 szava (a tulajdonos táblázata) + 6 új → 24 → 5×5, középen „OTP Gála 2027".
+  // `pv` = a preset verziója: ha egy korábbi verzióból mentett másolat ül a bingoSets-ben, váltáskor a
+  // friss preset jön (a 18 szavas másolat különben örökre bent ragadna).
+  otp: { name:'OTP Gála', pv:2, title:'OTP Gála Bingó', titleEmoji:'🎤', center:{ e:'🥂', t:'OTP Gála 2027' },
     items: [
       { e:'💻', t:'Digitális bankolás', k:1 }, { e:'🌱', t:'Fenntartható növekedés', k:3 }, { e:'🤝', t:'Ügyfeleinkért', k:2 },
       { e:'🥇', t:'Piacvezető', k:2 }, { e:'💡', t:'Innováció', k:1 }, { e:'♻️', t:'Fenntarthatóság', k:3 },
@@ -41596,6 +41613,8 @@ const BINGO_PRESETS = {
       { e:'💳', t:'Revolut', k:3 }, { e:'📈', t:'Rekord bevétel', k:2 }, { e:'🏘️', t:'Közösség', k:2 },
       { e:'⭐', t:'Prime', k:1 }, { e:'🧗', t:'Kihívás', k:1 }, { e:'🌍', t:'Külföldi ország', k:1 },
       { e:'🤖', t:'Technológia', k:2 }, { e:'🏦', t:'Bankfiók', k:1 }, { e:'🙊', t:'Elszólás', k:2 },
+      { e:'🧠', t:'Mesterséges intelligencia', k:3 }, { e:'🛡️', t:'Kiberbiztonság', k:2 }, { e:'🤲', t:'Bizalom', k:2 },
+      { e:'👥', t:'Csapatmunka', k:1 }, { e:'♟️', t:'Stratégia', k:1 }, { e:'🙏', t:'Köszönöm a figyelmet', k:1 },
     ] },
 };
 // v10.473: a kártya mérete a tételek számából jön — a tulajdonos OTP Gála listája 18 szavas.

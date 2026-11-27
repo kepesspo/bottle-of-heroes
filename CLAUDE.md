@@ -4499,3 +4499,17 @@ Kör nélküli régi config a régi, felső szintű mezőket olvassa (visszafel�
 válogatást (`bingoCardFor`). 4×4-en a leghosszabb szó szabja a betűt (`bingoCellFont`).
 A foci-beégetések (DÖNTŐ, ⚽, „…a döntőben") a szettbe kerültek.
 Teszt: `node tests/bingo_sets_test.js`.
+
+### OTP Gála 2027: 24 szó, 5×5, középen „OTP Gála 2027" (v10.474)
+A tulajdonos táblázata a TAVALYI Gála 18 szava — ehhez jött 6 új (Mesterséges intelligencia,
+Kiberbiztonság, Bizalom, Csapatmunka, Stratégia, Köszönöm a figyelmet), így 24 → 5×5-ös kártya,
+a középső ingyen mező: 🥂 **OTP Gála 2027** (a középső mező felirata max. 20 karakter).
+- **A preset verziót kap (`pv`)**: a `bingoSets`-be egy RÉGEBBI verzióból mentett másolat
+  helyett váltáskor a friss preset töltődik (`(saved.pv||0) < (preset.pv||0)`), és a váltás a
+  betöltött szettet a verziójával együtt rögtön el is menti. ⚠️ Új preset-tartalomnál a `pv`-t
+  emelni kell — különben aki egyszer már átváltott, a régi listát kapja vissza. A foci `pv`
+  nélküli marad: a régi, kézzel szerkesztett foci-listát nem írja felül.
+- Admin: „Alap lista visszatöltése" (`data-bingo-preset`) a beépített szett listáját tölti a
+  szerkesztőbe (a Mentés viszi ki) — ha az OTP szett már a régi listával aktív.
+Teszt: `bingo_sets_test.js` 5b. (24 szó, 5×5, a felirat) és 5c. blokk (a régi 18 szavas
+másolat helyett a preset jön; a visszatöltés működik).
