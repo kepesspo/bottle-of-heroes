@@ -258,6 +258,7 @@
       opacity:0;
     }
 
+    @keyframes bingoPop { 0% { transform: scale(0.3); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
     @keyframes impactDrop {
       0%  { transform:translateY(-120vh) scaleY(0.85); }
       85% { transform:translateY(8px) scaleY(1.08); }
@@ -35259,7 +35260,7 @@ window.bohFloat = function (el, text, color) {
 
 
 // ─── Theme (Polished · Mint) ───────────────────────────────────
-const APP_VERSION = 'v10.476';
+const APP_VERSION = 'v10.477';
 
 // ── Service Worker: cache az azonnali indításhoz (csak http/https alatt) ──
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
@@ -40997,6 +40998,78 @@ function AdminTasks() {
   );
 }
 
+// v10.477: a kártya kinézete — 'icon' (alap, hiányzó mező is) · 'text' · 'scratch'
+const BINGO_STYLES = [
+  { id:'icon',    label:'Ikonos' },
+  { id:'text',    label:'Nagy szöveg' },
+  { id:'scratch', label:'Kaparós' },
+];
+function bingoStyleOf(cfg) {
+  const v = cfg && cfg.bingoCardStyle;
+  return (v === 'text' || v === 'scratch') ? v : 'icon';
+}
+// Ikon nélküli mező betűmérete: a LEGHOSSZABB szó férjen ki egy sorba (a szótörés csúnya —
+// „Csapatmunk|a"). A szót canvason MÉRJÜK (900-as súly), és a mező tényleges szélességéhez
+// igazítjuk; becsült betűszélességgel a keskeny/széles betűk miatt hol tört, hol túl kicsi lett.
+const _bingoMeasure = { ctx: null, cache: {} };
+function bingoWordW(word, font) {
+  const key = font + '|' + word;
+  if (_bingoMeasure.cache[key] != null) return _bingoMeasure.cache[key];
+  try {
+    if (!_bingoMeasure.ctx) _bingoMeasure.ctx = document.createElement('canvas').getContext('2d');
+    _bingoMeasure.ctx.font = '900 100px ' + font;
+    return (_bingoMeasure.cache[key] = _bingoMeasure.ctx.measureText(word).width / 100);
+  } catch (e) { return word.length * 0.6; }
+}
+// Magyar elválasztás egy helyen: mássalhangzó + magánhangzó ELŐTT (a kétjegyű betű — sz, cs, gy…
+// — együtt marad). A legkiegyensúlyozottabb vágás nyer. Puha kötőjellel (U+00AD) tesszük be:
+// a böngésző CSAK akkor tör ott, ha kell, és akkor kiírja a kötőjelet.
+const BINGO_VOW = 'aáeéiíoóöőuúüűAÁEÉIÍOÓÖŐUÚÜŰ';
+const BINGO_DIGRAPHS = ['sz', 'cs', 'gy', 'ny', 'ty', 'ly', 'zs', 'dz'];
+function bingoHyphenCuts(w) {
+  const out = [];
+  for (let i = 2; i < w.length - 2; i++) {
+    const c = w[i], n = w[i + 1];
+    if (BINGO_VOW.indexOf(c) >= 0 || BINGO_VOW.indexOf(n) < 0 || !/[a-zA-ZÀ-ž]/.test(c)) continue;
+    const cut = BINGO_DIGRAPHS.indexOf((w[i - 1] + c).toLowerCase()) >= 0 ? i - 1 : i;
+    if (cut >= 2 && out.indexOf(cut) < 0) out.push(cut);
+  }
+  return out;
+}
+// → { size, text } — a szöveg a puha kötőjellel (ha az elválasztás nagyobb betűt ad)
+function bingoFitText(t, s, cellW, font) {
+  const f = font || 'sans-serif', cap = s === 4 ? 17 : 13.5;
+  const room = Math.max(30, (cellW || (s === 4 ? 84 : 64)) - 10);
+  const words = String(t || '').split(/\s+/).filter(Boolean);
+  const W = x => bingoWordW(x, f);
+  // a sorok száma adott méretnél (mohó tördelés, a darabok a szavak/szótag-darabok)
+  const lines = (pieces, size) => { let n = 1, cur = 0; const sp = W(' ');
+    pieces.forEach(p => { const w = p.w * size, gap = cur ? sp * size : 0;
+      if (cur && cur + gap + w > room) { n++; cur = w; } else cur += gap + w; });
+    return n; };
+  const fit = pieces => {
+    const widest = Math.max(0.5, ...pieces.map(p => p.w));
+    let size = Math.min(cap, room / widest);
+    // a mező magassága is szab: n sor × 1,1 sorköz ≤ room
+    for (let k = 0; k < 6 && lines(pieces, size) * size * 1.1 > room; k++) size *= 0.92;
+    return Math.max(7, Math.floor(size * 10) / 10);
+  };
+  const plain = words.map(w => ({ w: W(w) }));
+  let best = { size: fit(plain), text: words.join(' ') };
+  if (best.size >= cap * 0.85) return best;
+  // a leghosszabb szót elválasztjuk, ha attól nagyobb lesz a betű
+  const li = plain.reduce((m, p, i) => p.w > plain[m].w ? i : m, 0), lw = words[li];
+  bingoHyphenCuts(lw).forEach(cut => {
+    const a = lw.slice(0, cut), b = lw.slice(cut);
+    const pieces = plain.slice(0, li).concat([{ w: W(a + '-') }, { w: W(b) }], plain.slice(li + 1));
+    const size = fit(pieces);
+    if (size > best.size + 0.3) best = { size, text: words.slice(0, li).concat([a + '\u00AD' + b], words.slice(li + 1)).join(' ') };
+  });
+  return best;
+}
+function bingoTextFont(t, s, cellW, font) { return bingoFitText(t, s, cellW, font).size; }
+// Kaparós: a felfedett mező színe a TÉTET mondja (fix, nem témafüggő — mint a nehézség-színek)
+const BINGO_K_TONES = { 1: '#2E9E76', 2: '#E8961E', 3: '#E0533F' };
 // v10.475: ki léphet be a Bingóba — 'both' (alap, hiányzó mező is) · 'guest' · 'profile'
 const BINGO_WHO_MODES = [
   { id:'both',    label:'Profil + vendég' },
@@ -41032,6 +41105,8 @@ function AdminBingo({ app }) {
   const [setPv, setSetPv] = React.useState(0);       // v10.474: az aktív szett preset-verziója
   const [askSet, setAskSet] = React.useState(null);   // váltás / új kör megerősítése
   const [whoMode, setWhoMode] = React.useState('both'); // v10.475: ki léphet be
+  const [cardStyle, setCardStyle] = React.useState('icon'); // v10.477: kártya-kinézet
+  const [styleMsg, setStyleMsg] = React.useState('');
   const [whoMsg, setWhoMsg] = React.useState('');
   const [tippTitle, setTippTitle] = React.useState('Tippbajnokság');
   const [tippRequireCode, setTippRequireCode] = React.useState(false);
@@ -41075,6 +41150,7 @@ function AdminBingo({ app }) {
       setSets((c && c.bingoSets && typeof c.bingoSets === 'object') ? c.bingoSets : {});
       setRound((c && c.bingoRound) || '');
       setWhoMode(bingoWhoOf(c));
+      setCardStyle(bingoStyleOf(c));
       { const sid = (c && c.bingoSetId) || 'foci', sv = c && c.bingoSets && c.bingoSets[sid]; setSetPv((sv && sv.pv) || 0); }
     }).catch(() => { setItems(BINGO_PRESETS.foci.items.map(it => ({ ...it }))); });
   }, []);
@@ -41134,7 +41210,7 @@ function AdminBingo({ app }) {
       guestIds: (ev.guestIds || []).filter(g => g && ttIds.has(g) && g !== ev.hostId).filter((g, i, a) => a.indexOf(g) === i),
       locked: !!ev.locked,
     })).filter(ev => ev.hostId);
-    return Object.assign({ enabled: legacy.enabled, mode: legacy.mode, apps: apps || bingoAppsOf(null), title: bTitle, items: cleanItems, titleEmoji: (titleEmoji || '').trim(), center: cleanCenter, bingoSetId: setId, bingoSets: nextSets, bingoRound: round, bingoWho: whoMode, tippTitle: (tippTitle || '').trim() || 'Tippbajnokság', tippRequireCode, tippMailUrl: (tippMailUrl || '').trim(), teams: teamsArr, matches: cleanM, bonusWinner: bw, bonusScorer: bs, questions: [], tortaTitle: (tortaTitle || '').trim() || 'DNR a tortán', tortaTeams: cleanTT, tortaEvenings: cleanTE }, over || {});
+    return Object.assign({ enabled: legacy.enabled, mode: legacy.mode, apps: apps || bingoAppsOf(null), title: bTitle, items: cleanItems, titleEmoji: (titleEmoji || '').trim(), center: cleanCenter, bingoSetId: setId, bingoSets: nextSets, bingoRound: round, bingoWho: whoMode, bingoCardStyle: cardStyle, tippTitle: (tippTitle || '').trim() || 'Tippbajnokság', tippRequireCode, tippMailUrl: (tippMailUrl || '').trim(), teams: teamsArr, matches: cleanM, bonusWinner: bw, bonusScorer: bs, questions: [], tortaTitle: (tortaTitle || '').trim() || 'DNR a tortán', tortaTeams: cleanTT, tortaEvenings: cleanTE }, over || {});
   };
   const save = () => persist(buildPayload());
   // v10.473: szettváltás — a mostanit elmenti a bingoSets-be, a célt onnan (vagy a presetből)
@@ -41275,6 +41351,29 @@ function AdminBingo({ app }) {
               {whoMode === 'guest' ? 'Mindenki névvel (vagy „Vendég N"-ként) lép be — a profilok nem látszanak.'
                 : whoMode === 'profile' ? 'Csak a mentett profilok választhatók — vendégként nem lehet belépni.'
                 : 'Lenyitható profil-lista és vendég-belépés is.'}{whoMsg ? ` · ${whoMsg}` : ''}
+            </div>
+          </div>
+          {/* v10.477: kártya-kinézet — AZONNAL ment (merge) */}
+          <div data-bingo-stylebox style={{ background:T.surface, borderRadius:14, padding:'12px 14px', boxShadow:T.shadow, marginBottom:12 }}>
+            {lbl('Kártya kinézete')}
+            <div style={{ display:'flex', gap:6, background:T.bg, borderRadius:12, padding:4 }}>
+              {BINGO_STYLES.map(m => {
+                const on = m.id === cardStyle;
+                return <button key={m.id} type="button" data-bingo-style={m.id} aria-pressed={on} onClick={() => {
+                  if (on) return;
+                  const prev = cardStyle; setCardStyle(m.id); setStyleMsg('mentés…');
+                  if (typeof firebase === 'undefined') { setStyleMsg(''); return; }
+                  firebase.firestore().collection('config').doc('bingoConfig').set({ bingoCardStyle: m.id }, { merge: true })
+                    .then(() => setStyleMsg('mentve'))
+                    .catch(e => { setCardStyle(prev); setStyleMsg('nem sikerült menteni' + (e && e.code ? ` (${e.code})` : '')); });
+                }} style={{ flex:1, minWidth:0, height:38, borderRadius:9, border:'none', cursor:'pointer', fontFamily:T.font, fontWeight:800, fontSize:12.5, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
+                  background: on ? T.surface : 'transparent', color: on ? T.ink : T.inkSoft, boxShadow: on ? T.shadow : 'none' }}>{m.label}</button>;
+              })}
+            </div>
+            <div style={{ fontFamily:T.font, fontSize:11.5, color:T.inkSoft, marginTop:7, lineHeight:1.4 }}>
+              {cardStyle === 'text' ? 'Ikon nélkül, nagy betűvel. A korty-szám rejtett — kipipáláskor derül ki.'
+                : cardStyle === 'scratch' ? 'Ikon nélkül, nagy betűvel. Kipipáláskor a mező a tét színére vált (zöld 1 · narancs 2 · piros 3), és kiírja a kortyot.'
+                : 'Ikon + felirat, a korty a sarokban mindig látszik.'}{styleMsg ? ` · ${styleMsg}` : ''}
             </div>
           </div>
           {/* v10.473: szettek — egy koppintás, és mindenki az új szett tiszta kártyáját kapja */}
@@ -42243,6 +42342,18 @@ function BingoScreen({ go, deepLink, app }) {
   const people = mode === 'bingo' ? profiles.concat(guestList) : profiles;
   const whoProf = people.find(p => p.id === who) || null;
   const [profOpen, setProfOpen] = React.useState(false);
+  // v10.477: a rács szélessége (a mező-betűméret ehhez igazodik) + újramérés a webfont betöltése után
+  const [gridW, setGridW] = React.useState(0);
+  const [, setFontTick] = React.useState(0);
+  const gridRef = React.useCallback(el => {
+    if (!el) return;
+    const upd = () => setGridW(el.getBoundingClientRect().width);
+    upd();
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(upd).observe(el);
+  }, []);
+  React.useEffect(() => {
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { _bingoMeasure.cache = {}; setFontTick(t => t + 1); }).catch(() => {});
+  }, []);
   const [guestName, setGuestName] = React.useState('');
   const enterGuest = () => {
     let gid = null;
@@ -42533,6 +42644,7 @@ function BingoScreen({ go, deepLink, app }) {
   // v10.475: a Bingóban az admin dönti el, ki léphet be. Egy elmentett, de a mostani módban
   // nem engedett „who" (pl. vendég „Csak profil" mellett) visszakerül a választóra.
   const whoMode = bingoWhoOf(cfg);
+  const cardStyle = bingoStyleOf(cfg);   // v10.477
   const showPicker = !who || (mode === 'torta' && tortaTeams.length > 0 && profiles.length > 0 && !tortaTeamOf(who))
     || (mode === 'bingo' && !bingoWhoAllowed(whoMode, who));
   const pickerSub = mode === 'torta'
@@ -43023,22 +43135,41 @@ function BingoScreen({ go, deepLink, app }) {
               </div>
             </div>
             {/* 5×5 rács */}
-            <div data-bingo-grid={grid.s} style={{ display:'grid', gridTemplateColumns:`repeat(${grid.s}, 1fr)`, gap:6 }}>
+            <div ref={gridRef} data-bingo-grid={grid.s} style={{ display:'grid', gridTemplateColumns:`repeat(${grid.s}, 1fr)`, gap:6 }}>
               {Array.from({ length: grid.s * grid.s }).map((_, c) => {
                 const free = c === grid.free;
                 const item = free ? null : ITEMS[bingoItemIdx(grid, card, c)];
                 const on = free || myMarks.has(c);
-                return (
+                // v10.477: ikon nélküli kinézetek — a szám a kipipálásig rejtett
+                  if (cardStyle !== 'icon') {
+                    const k = free ? 0 : bingoK(item), txt = free ? bingoCenter.t : item.t;
+                    const fitT = bingoFitText(txt, grid.s, gridW ? (gridW - 6 * (grid.s - 1)) / grid.s : 0, T.font);
+                    const bg = free ? (T.yellow || '#F4C95A') : !on ? T.surface : cardStyle === 'scratch' ? BINGO_K_TONES[k] : T.mint;
+                    return (
+                      <button key={c} data-bingo={c} data-bingo-cellstyle={cardStyle} onClick={() => toggle(c)} style={{ position:'relative', aspectRatio:'1', border:'none', borderRadius:12, cursor: free ? 'default' : 'pointer', background: bg, boxShadow: on && !free ? 'none' : T.shadowPill, padding:3, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', overflow:'hidden', WebkitTapHighlightColor:'transparent', transition:'background .25s' }}>
+                        {(!on || free) ? (
+                          <span style={{ fontFamily:T.font, fontWeight:900, fontSize: fitT.size, lineHeight:1.08, textAlign:'center', color: free ? '#1A2A4A' : T.ink, hyphens:'manual', WebkitHyphens:'manual' }}>{fitT.text}</span>
+                        ) : (
+                          <React.Fragment>
+                            <span data-bingo-reveal={k} style={{ fontFamily:T.font, fontWeight:900, fontSize: grid.s === 4 ? 40 : 30, lineHeight:0.95, color:'#fff', textShadow:'0 2px 6px rgba(0,0,0,0.18)', animation:'bingoPop .35s cubic-bezier(.2,1.6,.4,1)' }}>{cardStyle === 'scratch' ? k : '+' + k}</span>
+                            <span style={{ fontFamily:T.font, fontWeight:900, fontSize: grid.s === 4 ? 10.5 : 8, lineHeight:1.1, color:'rgba(255,255,255,0.92)', textTransform:'uppercase', letterSpacing:'0.04em', marginTop:2 }}>{cardStyle === 'scratch' ? 'korty' : '🍺'}</span>
+                            <span style={{ position:'absolute', left:3, right:3, bottom:3, fontFamily:T.font, fontWeight:800, fontSize: grid.s === 4 ? 8.5 : 6.6, lineHeight:1.05, color:'rgba(255,255,255,0.72)', textAlign:'center', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{txt}</span>
+                          </React.Fragment>
+                        )}
+                      </button>
+                    );
+                  }
+                  return (
                   <button key={c} data-bingo={c} onClick={() => toggle(c)} style={{ position:'relative', aspectRatio:'1', border:'none', borderRadius:12, cursor: free ? 'default' : 'pointer', background: free ? (T.yellow || '#F4C95A') : on ? T.mint : T.surface, boxShadow: on ? 'none' : T.shadowPill, padding:3, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:2, overflow:'hidden', WebkitTapHighlightColor:'transparent' }}>
                     <span style={{ fontSize: grid.s === 4 ? 20 : 15, lineHeight:1, opacity: on && !free ? 0.3 : 1 }}>{free ? bingoCenter.e : item.e}</span>
                     <span style={{ fontFamily:T.font, fontWeight:800, fontSize: grid.s === 4 ? bingoCellFont(free ? bingoCenter.t : item.t) : 7.6, lineHeight:1.12, textAlign:'center', color: free ? '#1A2A4A' : on ? 'rgba(255,255,255,0.6)' : T.ink, wordBreak:'break-word' }}>{free ? bingoCenter.t : item.t}</span>
                     {!free && <span data-bingo-k={bingoK(item)} style={{ position:'absolute', top:3, right:4, fontFamily:T.font, fontWeight:900, fontSize:8.5, lineHeight:1, color: on ? 'rgba(255,255,255,0.75)' : (bingoK(item) >= 3 ? T.coral : T.inkSoft) }}>{'🍺' + bingoK(item)}</span>}
                     {on && !free && <span style={{ position:'absolute', inset:0, display:'grid', placeItems:'center', fontFamily:T.font, fontWeight:900, fontSize:30, color:'#fff', textShadow:'0 2px 6px rgba(0,0,0,0.25)' }}>✕</span>}
                   </button>
-                );
+                  );
               })}
             </div>
-            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:10 }}>Koppints a mezőre, ha megtörtént / elhangzott, és idd meg a sarkában álló kortyot (🍺1–3). Teljes sor, oszlop vagy átló = BINGÓ — a teli kártya a csúcs! 🍻</div>
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.inkMute, textAlign:'center', marginTop:10 }}>{cardStyle === 'icon' ? 'Koppints a mezőre, ha megtörtént / elhangzott, és idd meg a sarkában álló kortyot (🍺1–3).' : 'Koppints a mezőre, ha elhangzott — csak akkor derül ki, hány kortyot iszol (1–3).'} Teljes sor, oszlop vagy átló = BINGÓ — a teli kártya a csúcs! 🍻</div>
             {/* Állás */}
             {bingoBoard.length > 0 && (
               <div style={{ background:T.surface, borderRadius:16, padding:'12px 14px', boxShadow:T.shadow, marginTop:14 }}>

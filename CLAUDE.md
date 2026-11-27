@@ -4536,3 +4536,23 @@ festődik, ezért a négyzetes, fehér hátterű ikon (134 px, a sarka ~95 px-re
 fölött (`data-hub-ring`, `position:absolute; inset:0`, `pointerEvents:none`), a kör
 `data-hub-circle`. Teszt: `dnr_hub_test` — pixel-mérés a Bingó kör négy átlóján (a régi
 buildon fehér → HIBA).
+
+## Bingó: kártya-kinézet — Ikonos / Nagy szöveg / Kaparós (v10.477)
+Admin → DNR Bingó → „Kártya kinézete" (`data-bingo-style`) → `bingoConfig.bingoCardStyle`
+(`'icon'` alap, hiányzó mező is · `'text'` · `'scratch'`; `bingoStyleOf`). Azonnal ment (merge),
+és a `buildPayload` is viszi (a teljes Mentés merge NÉLKÜL ír).
+- **A két új változatban NINCS ikon, és a korty REJTETT** — a kipipálás fedi fel (az X helyén):
+  Nagy szöveg → `+2 🍺` mentán; Kaparós → `2 KORTY`, a mező a **tét színére** vált
+  (`BINGO_K_TONES`: zöld 1 · narancs 2 · piros 3 — FIX, mint a nehézség-színek). Felfedve a
+  szó kicsiben, egy sorban marad alul. Mezők: `data-bingo-cellstyle`, felfedés: `data-bingo-reveal`;
+  a `data-bingo-k` jelvény itt nincs (a tesztek erre építenek).
+- **A betűméret MÉRT** (`bingoFitText`): a szót canvason méri (900-as súly, `bingoWordW`), a rács
+  valódi szélességéhez (`gridRef` + ResizeObserver), és a sorszámot is nézi (a szöveg a mező
+  magasságába is beférjen). A webfont betöltése után újramér (`document.fonts.ready` → cache ürítés).
+  ⚠️ Becsült betűszélességgel „Csapatmunk|a" tört, és a hosszú szavak feleslegesen kicsik lettek.
+- **Elválasztás** (`bingoHyphenCuts`): a magyar szótag-határon (mássalhangzó + magánhangzó ELŐTT,
+  a kétjegyű betű — sz, cs, gy… — együtt marad), a legkiegyensúlyozottabb vágás, **puha
+  kötőjellel** (U+00AD): a böngésző csak akkor tör ott, ha kell. Csak ha nagyobb betűt ad.
+Teszt: `bingo_sets_test.js` 8. blokk (rejtett korty, nincs ikon, minden felirat befér, egyetlen szó
+sem törik elválasztás nélkül — a detektor kipróbálva: egy túl nagy betűs „„Micsoda" 2 sort ad —,
+felfedés + saját sáv, a kaparós szín, kontroll: az ikonos változatlan, az admin ír).

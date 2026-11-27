@@ -148,6 +148,62 @@ const txt = p => p.evaluate(() => (document.getElementById('root').innerText || 
   ok(/2\/24 kipipálva/.test(t), 'a régi jelölések megmaradnak (2/24)');
   await p.close();
 
+  console.log('\n===== 8. KÁRTYA-KINÉZET: NAGY SZÖVEG / KAPARÓS (v10.477) =====');
+  // elválasztás: a magyar szótag-határon, a kétjegyű betű együtt marad
+  const cuts = await (async () => { const q = await open(b, '', {}); const r = await q.evaluate(() => ({
+    f: bingoHyphenCuts('Fenntarthatóság'), t: bingoHyphenCuts('transzformáció'), cs: bingoHyphenCuts('Csapatmunka') })); await q.close(); return r; })();
+  ok(cuts.f.includes(8) && cuts.t.every(i => !(i === 5)) && cuts.t.includes(6), 'elválasztási pontok: „Fenntart|hatóság”, a „sz” nem vágódik ketté', JSON.stringify(cuts));
+  for (const st of ['text', 'scratch']) {
+    p = await open(b, '?screen=bingo', { bingoConfig: Object.assign({}, OTP, { center: preset.center, items: preset.items, bingoCardStyle: st }) }, { boh_bingo_who: 'p0' });
+    const g = await p.evaluate(() => ({
+      cells: document.querySelectorAll(`[data-bingo-cellstyle]`).length,
+      k: document.querySelectorAll('[data-bingo-k]').length,
+      reveal: document.querySelectorAll('[data-bingo-reveal]').length,
+      emojiInCells: [...document.querySelectorAll('[data-bingo]')].some(c => /\p{Extended_Pictographic}/u.test(c.innerText)),
+    }));
+    ok(g.cells === 25 && g.k === 0 && g.reveal === 0, `${st}: 25 mező, a korty REJTETT kipipálás előtt`, JSON.stringify(g));
+    ok(!g.emojiInCells, `${st}: nincs ikon a mezőkben`);
+    // ⚠️ nincs kilógó / szó közepén tört szöveg: minden felirat befér a mezőbe, és a (nem elválasztott)
+    // szavak egy sorban vannak
+    const over = await p.evaluate(() => [...document.querySelectorAll('[data-bingo-cellstyle] > span')].filter(sp => {
+      const c = sp.parentElement.getBoundingClientRect(), r = sp.getBoundingClientRect();
+      return r.width > c.width - 4 || r.height > c.height - 4;
+    }).map(sp => sp.textContent));
+    ok(over.length === 0, `${st}: minden felirat befér a mezőbe`, JSON.stringify(over));
+    const mid = await p.evaluate(() => [...document.querySelectorAll('[data-bingo-cellstyle] > span')].filter(sp => {
+      // szavanként: ha a szó (elválasztás nélkül) két sorba esik, az a csúnya szótörés
+      return sp.textContent.split(/\s+/).some(w => {
+        if (w.indexOf('\u00AD') >= 0) return false;
+        const rg = document.createRange(), i = sp.textContent.indexOf(w), tn = sp.firstChild;
+        rg.setStart(tn, i); rg.setEnd(tn, i + w.length);
+        return new Set([...rg.getClientRects()].map(r => Math.round(r.top))).size > 1;
+      });
+    }).map(sp => sp.textContent));
+    ok(mid.length === 0, `${st}: egyetlen szó sem törik szét elválasztás nélkül`, JSON.stringify(mid));
+    // kipipálás → kiderül a korty
+    const target = await p.evaluate(() => { const c = [...document.querySelectorAll('[data-bingo]')].find(x => x.getAttribute('data-bingo') !== '12'); return c.getAttribute('data-bingo'); });
+    await p.evaluate(c => document.querySelector(`[data-bingo="${c}"]`).click(), target); await p.waitForTimeout(500);
+    const rv = await p.evaluate(c => { const el = document.querySelector(`[data-bingo="${c}"]`), r = el.querySelector('[data-bingo-reveal]');
+      return { k: r && r.getAttribute('data-bingo-reveal'), txt: r && r.textContent, bg: getComputedStyle(el).backgroundColor, sips: document.querySelector('[data-bingo-mysips]').textContent }; }, target);
+    const tone = { 1: 'rgb(46, 158, 118)', 2: 'rgb(232, 150, 30)', 3: 'rgb(224, 83, 63)' };
+    ok(rv.k && rv.sips === rv.k && rv.txt.replace('+', '') === rv.k, `${st}: kipipálva megjelenik a korty (${rv.txt}), és ennyi kerül a saját sávba`, JSON.stringify(rv));
+    if (st === 'scratch') ok(rv.bg === tone[rv.k], 'kaparós: a felfedett mező színe a tétet mutatja', rv.bg);
+    ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+    await p.close();
+  }
+  // kontroll: az ikonos (alap) változatlan — jelvény minden mezőn
+  p = await open(b, '?screen=bingo', { bingoConfig: Object.assign({}, OTP, { center: preset.center, items: preset.items }) }, { boh_bingo_who: 'p0' });
+  ok((await p.evaluate(() => document.querySelectorAll('[data-bingo-k]').length)) === 24 && (await p.evaluate(() => document.querySelectorAll('[data-bingo-cellstyle]').length)) === 0, 'kontroll: alapból az ikonos kártya, a korty látszik');
+  await p.close();
+  // admin: a kinézet-választó azonnal ment
+  p = await open(b, '', { bingoConfig: { enabled: true, mode: 'bingo', apps: { bingo: true } } });
+  await p.evaluate(() => { const r = document.getElementById('root'); if (r) r.style.display = 'none';
+    const d = document.createElement('div'); d.id = '__adm'; document.body.appendChild(d); ReactDOM.createRoot(d).render(React.createElement(AdminBingo, { app: 'bingo' })); });
+  await p.waitForTimeout(800);
+  await p.evaluate(() => document.querySelector('#__adm [data-bingo-style="scratch"]').click()); await p.waitForTimeout(400);
+  ok(await p.evaluate(() => (window.__fbStore.config.bingoConfig || {}).bingoCardStyle) === 'scratch', 'admin: a kinézet-választó a bingoConfig.bingoCardStyle-t írja');
+  await p.close();
+
   await b.close();
   console.log(fail ? `\n${fail} HIBA` : '\nMINDEN OK');
   process.exit(fail ? 1 : 0);
