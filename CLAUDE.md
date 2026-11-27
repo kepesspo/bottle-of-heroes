@@ -4513,3 +4513,18 @@ a középső ingyen mező: 🥂 **OTP Gála 2027** (a középső mező felirata 
   szerkesztőbe (a Mentés viszi ki) — ha az OTP szett már a régi listával aktív.
 Teszt: `bingo_sets_test.js` 5b. (24 szó, 5×5, a felirat) és 5c. blokk (a régi 18 szavas
 másolat helyett a preset jön; a visszatöltés működik).
+
+### Bingó: ki léphet be — Profil + vendég / Csak vendég / Csak profil (v10.475)
+Admin → DNR Bingó, a láthatóság alatt: háromállású választó (`data-bingo-who`), a
+`bingoConfig.bingoWho`-ba (`'both'` alap — a hiányzó mező is az, `'guest'`, `'profile'`;
+egy forrás: `bingoWhoOf(cfg)`). **Azonnal ment** (`set`+`merge`, mint a láthatóság), és a
+`buildPayload` is viszi — ⚠️ a teljes Mentés `set` merge NÉLKÜL, enélkül a következő mentés
+törölné.
+- **Csak vendég** — a „Ki vagy?" csak a Vendég dobozt mutatja (`data-who-profiles` nincs);
+- **Csak profil** — a klasszikus, nyitott profil-rács (`data-who-pick` rögtön látszik), nincs
+  vendég-belépés és nincs `data-who-split`.
+- Egy elmentett, a módban nem engedett „who" (`bingoWhoAllowed` — a vendég-id `g_`-vel
+  kezdődik) **visszakerül a választóra**: „Csak profil" mellett egy régi vendég nem marad bent.
+  A már bent lévő vendégek jelölései és az Állás-soruk megmaradnak.
+Teszt: `hub_bingoguest_test.js` D. blokk (a teljes Mentés tényleges lefutását is ellenőrzi —
+a Mentés gomb csak módosítás után él, a teszt ezért előbb átír egy mezőt).

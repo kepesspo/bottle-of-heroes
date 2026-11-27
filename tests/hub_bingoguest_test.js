@@ -107,6 +107,42 @@ const cards = p => p.evaluate(() => [...document.querySelectorAll('[data-hub-car
   ok(!(await has(p, '[data-who-guestbox]')) && (await p.evaluate(() => document.querySelectorAll('[data-who-pick]').length)) === 2, 'a Tipp választója változatlan (profilok, vendég nélkül)');
   await p.close();
 
+  console.log('\n===== D. AZ ADMIN DÖNTI EL, KI LÉPHET BE (v10.475) =====');
+  p = await open(b, '?screen=bingo', { bingoConfig: Object.assign({}, BCFG.bingoConfig, { bingoWho: 'guest' }) });
+  ok(await has(p, '[data-who-guestbox]') && !(await has(p, '[data-who-profiles]')) && !(await has(p, '[data-who-pick]')), '„Csak vendég" → vendég-belépés, profil-lista nincs');
+  await p.close();
+  p = await open(b, '?screen=bingo', { bingoConfig: Object.assign({}, BCFG.bingoConfig, { bingoWho: 'profile' }) });
+  ok(!(await has(p, '[data-who-guestbox]')) && !(await has(p, '[data-who-split]')) && (await p.evaluate(() => document.querySelectorAll('[data-who-pick]').length)) === 2, '„Csak profil" → a profilok rögtön látszanak, vendég-belépés nincs');
+  ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+  await p.close();
+  // elmentett vendég „Csak profil" mellett → vissza a választóra; kontroll: „both" mellett marad
+  const GB = { _guests: { g_x1: { name:'Ottó', color:'#888', at:1 } } };
+  p = await open(b, '?screen=bingo', { bingoConfig: Object.assign({}, BCFG.bingoConfig, { bingoWho: 'profile' }), bingo: GB }, { boh_bingo_who: 'g_x1' });
+  ok(await has(p, '[data-who-pick]') && !(await p.evaluate(() => /Ottó kártyája/.test(document.getElementById('root').innerText))), 'elmentett vendég „Csak profil" mellett a választóra kerül');
+  await p.close();
+  p = await open(b, '?screen=bingo', { bingoConfig: BCFG.bingoConfig, bingo: GB }, { boh_bingo_who: 'g_x1' });
+  ok(await p.evaluate(() => /Ottó kártyája/.test(document.getElementById('root').innerText)), 'kontroll: alapból a vendég bent marad');
+  await p.close();
+  // admin: a választó azonnal ment, és egy teljes Mentés is megtartja
+  p = await open(b, '', { bingoConfig: BCFG.bingoConfig });
+  await p.evaluate(() => {
+    const r = document.getElementById('root'); if (r) r.style.display = 'none';
+    const d = document.createElement('div'); d.id = '__adm'; document.body.appendChild(d);
+    ReactDOM.createRoot(d).render(React.createElement(AdminBingo, { app: 'bingo' }));
+  });
+  await p.waitForTimeout(800);
+  ok((await p.evaluate(() => document.querySelectorAll('#__adm [data-bingo-who]').length)) === 3 && await p.evaluate(() => document.querySelector('#__adm [data-bingo-who="both"]').getAttribute('aria-pressed') === 'true'), 'az adminban háromállású választó, alapból „Profil + vendég"');
+  await p.evaluate(() => document.querySelector('#__adm [data-bingo-who="guest"]').click()); await p.waitForTimeout(400);
+  ok(await p.evaluate(() => (window.__fbStore.config.bingoConfig || {}).bingoWho) === 'guest', 'a választó azonnal a bingoConfig.bingoWho-t írja');
+  // a Mentés csak módosítás után él — egy cím-átírással kényszerítjük a TELJES (merge nélküli) írást
+  await p.fill('#__adm [data-bingo-titleemoji]', '🎤'); await p.waitForTimeout(150);
+  await p.evaluate(() => { const bt = [...document.querySelectorAll('#__adm button')].find(x => x.textContent.trim() === 'Mentés'); bt && bt.click(); }); await p.waitForTimeout(700);
+  const full = await p.evaluate(() => window.__fbStore.config.bingoConfig || {});
+  ok(Array.isArray(full.items) && full.titleEmoji === '🎤', 'a teljes Mentés tényleg lefutott (items + új emoji a store-ban)', JSON.stringify(Object.keys(full)));
+  ok(full.bingoWho === 'guest', '⚠️ a teljes Mentés (set, merge nélkül) is megtartja a bingoWho-t', full.bingoWho);
+  ok(p.__errs.length === 0, 'nincs JS hiba', p.__errs.join(' | '));
+  await p.close();
+
   await b.close();
   console.log(fail ? `\n${fail} HIBA` : '\nMINDEN OK');
   process.exit(fail ? 1 : 0);
