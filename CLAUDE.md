@@ -4578,3 +4578,18 @@ felfedés + saját sáv, a kaparós szín, kontroll: az ikonos változatlan, az 
 Teszt: `bingo_sets_test.js` 5b (36 különböző szó; két játékos más-más 24-et kap) és 9. blokk (alap /
 Nincs / +2 BINGÓ-korty a sávban és a gombon; admin; hosszváltás → új kör, kontroll: azonos darabszám
 → a kör marad).
+
+## Új téma: „OTP zöld" + Bingó használati útmutató (v10.479)
+- **`THEMES.otp`** — a háttér az OTP márkazöldje (`#52AE30`), a tinta sötétzöld (`#0C2410`: a
+  zöldön 5,9:1, fehér kártyán 16:1), az akció-szín (`mint`) mélyzöld `#1E7316` (fehér felirat
+  6:1, és elválik a zöld háttértől). A `THEME_LIST`-ben „OTP zöld" néven — így az admin
+  Általános → Témák lapján a közös és az apponkénti választóban is megjelenik. ⚠️ A nyitókép
+  ES5-ös téma-táblájába is felkerült (`otp` sor a splash-szkriptben) — az a config ELŐTT fut,
+  külön másolat; enélkül OTP témájú app a nyitóképen a meleg (warm) színt kapná.
+- **A Bingó vendég-név mező** `T.bg` helyett `T.surfaceMuted` hátteret visel: OTP témán az
+  alapszín erős zöld mezőt rajzolt a fehér kártyára.
+- **`docs/otp_gala_bingo_utmutato.png`** — 3 lépéses plakát (1920×1080 @2×, OTP zöld):
+  1. Nyomj a Bingóra (központ) · 2. Válassz nevet · 3. Mehet a játék — valódi, a buildelt
+  `index.html`-ből Playwrighttal felvett képernyőkkel (OTP téma, OTP Gála szett, Kaparós
+  kinézet). Ha a felület változik, a képernyőket újra kell venni.
+Teszt: `contrast_test.js` (az `otp` téma is a körben — nincs 2,5 alatti kontraszt).

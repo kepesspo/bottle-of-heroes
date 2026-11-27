@@ -100,7 +100,7 @@ const MEASURE = () => {
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
 
   // a Beallitasokban valaszthato mind az ot tema
-  for (const theme of ['warm', 'ice', 'jade', 'dark', 'slate']) {
+  for (const theme of ['warm', 'ice', 'jade', 'dark', 'slate', 'otp']) {
     console.log(`\n===== ${theme.toUpperCase()} =====`);
     CURRENT_MINT = MINT[theme];
     const p = await b.newPage({ viewport: { width: 390, height: 900 } });
